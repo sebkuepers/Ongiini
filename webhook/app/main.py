@@ -28,7 +28,7 @@ async def health() -> dict:
     return {"ok": True}
 
 
-@app.get("/webhooks/whatsapp")
+@app.get("/whatsapp")
 async def verify(request: Request):
     params = request.query_params
     mode = params.get("hub.mode")
@@ -39,7 +39,7 @@ async def verify(request: Request):
     return Response(status_code=403)
 
 
-@app.post("/webhooks/whatsapp")
+@app.post("/whatsapp")
 async def receive(request: Request):
     payload = await request.json()
     messages = extract_messages(payload)

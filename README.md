@@ -114,8 +114,12 @@ Then in Meta's WhatsApp Business app dashboard:
 
 ## Endpoints
 
-- `GET  /webhooks/whatsapp` — Meta verification handshake.
-- `POST /webhooks/whatsapp` — incoming WhatsApp messages.
+- `GET  /whatsapp` — Meta verification handshake.
+- `POST /whatsapp` — incoming WhatsApp messages.
+
+The public URL Meta calls is `https://<tailnet>/webhooks/whatsapp` — Tailscale
+serve strips the `/webhooks/` prefix before forwarding to the webhook
+container, so internally the routes live under `/whatsapp`.
 - `GET  /health` — liveness check.
 - `GET  /` (website container) — static landing page.
 
