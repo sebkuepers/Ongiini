@@ -372,14 +372,15 @@
       display: flex; flex-direction: column; gap: 22px; margin-top: 28px;
     }
     .og-free-stat {
-      display: flex; flex-direction: column; gap: 4px;
+      display: flex; flex-direction: column; gap: 8px;
     }
     .og-free-num {
       font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: clamp(64px, 14vw, 120px); line-height: 0.9;
-      letter-spacing: -0.03em; color: var(--ink);
+      font-size: clamp(44px, 9vw, 96px); line-height: 0.95;
+      letter-spacing: -0.025em; color: var(--ink);
+      text-wrap: balance;
     }
-    .og-free-unit { color: var(--terracotta); font-style: normal; }
+    .og-free-num-accent { color: var(--terracotta); }
     .og-free-label {
       font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px;
       letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
@@ -767,12 +768,13 @@
         <h2 class="og-h2" data-af>Gratis vir almal — binne 'n billike maandelikse limiet.</h2>
         <div class="og-free">
           <div class="og-free-stat">
-            <div class="og-free-num">1<span class="og-free-unit">M</span></div>
-            <div class="og-free-label" data-en>free tokens · per user · per month</div>
-            <div class="og-free-label" data-af>gratis tekens · per gebruiker · per maand</div>
+            <div class="og-free-num" data-en>One Million <span class="og-free-num-accent">Tokens.</span></div>
+            <div class="og-free-num" data-af>Een Miljoen <span class="og-free-num-accent">Tekens.</span></div>
+            <div class="og-free-label" data-en>Per user · per month · resets on the 1st</div>
+            <div class="og-free-label" data-af>Per gebruiker · per maand · herstel op die 1ste</div>
           </div>
-          <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. 1&nbsp;million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones over the course of a month. The cap resets on the 1st of every month. We picked this number to keep the service sustainable on a single computer; it's roughly the equivalent of €1 of compute time at market AI-API rates.</p>
-          <p class="og-free-detail" data-af>'n Teken is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. 1&nbsp;miljoen tekens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele oor 'n maand. Die limiet stel die 1ste van elke maand terug. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar; dit is rofweg gelyk aan €1 se rekenaartyd teen markpryse vir KI-API's.</p>
+          <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. One million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones, over the course of a month. We picked this number to keep the service sustainable on a single computer running in one office.</p>
+          <p class="og-free-detail" data-af>'n Teken is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. Een miljoen tekens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele, oor die loop van 'n maand. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar wat in een kantoor loop.</p>
           <p class="og-free-detail" data-en style="margin-top: 4px;"><em>If you bump into the cap and need more for a genuine educational, agricultural or community use, just message us — we'll sort it out.</em></p>
           <p class="og-free-detail" data-af style="margin-top: 4px;"><em>As jy die limiet tref en meer benodig vir 'n opvoedkundige, landbou- of gemeenskapsdoel, stuur 'n boodskap — ons reël dit.</em></p>
         </div>
