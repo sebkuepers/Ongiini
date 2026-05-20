@@ -1,5 +1,7 @@
 import json
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -7,6 +9,7 @@ from openai import AsyncOpenAI
 from . import memory
 from .config import settings
 from .search import fetch_url, web_search
+from .tracing import MessageTrace
 
 SYSTEM_PROMPT = """You are Ongiini — a free AI assistant on WhatsApp for people in Namibia.
 
@@ -165,13 +168,22 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
     messages.extend(history)
     messages.append({"role": "user", "content": user_text})
 
+    trace = MessageTrace(
+        ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        msisdn=msisdn,
+        user_msg_len=len(user_text),
+        history_len=len(history),
+    )
+
     used_search = False
     deleted_data = False
     tokens_in = 0
     tokens_out = 0
 
     # Up to 6 round-trips so the model can chain e.g. search -> fetch -> reply.
-    for _ in range(6):
+    MAX_TURNS = 6
+    for turn in range(1, MAX_TURNS + 1):
+        call_started = time.monotonic()
         resp = await client.chat.completions.create(
             model=settings.vllm_model,
             messages=messages,
@@ -180,16 +192,29 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
             temperature=0.6,
             max_tokens=600,
         )
-        if resp.usage:
-            tokens_in += resp.usage.prompt_tokens or 0
-            tokens_out += resp.usage.completion_tokens or 0
+        usage = resp.usage
+        call = trace.add_call(
+            turn=turn,
+            tokens_in=(usage.prompt_tokens if usage else 0) or 0,
+            tokens_out=(usage.completion_tokens if usage else 0) or 0,
+            finish_reason=resp.choices[0].finish_reason if resp.choices else None,
+            started_at=call_started,
+        )
+        if usage:
+            tokens_in += usage.prompt_tokens or 0
+            tokens_out += usage.completion_tokens or 0
 
         msg = resp.choices[0].message
         tool_calls = msg.tool_calls or []
 
         if not tool_calls:
+            reply = (msg.content or "").strip() or "Sorry, I couldn't come up with a reply."
+            trace.reply_len = len(reply)
+            trace.used_search = used_search
+            trace.deleted_data = deleted_data
+            trace.write()
             return LLMResult(
-                reply=(msg.content or "").strip() or "Sorry, I couldn't come up with a reply.",
+                reply=reply,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 used_search=used_search,
@@ -238,6 +263,16 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
             else:
                 result = f"Unknown tool: {name}"
 
+            # Only structural metadata makes it into the trace — not args or
+            # the result body, both of which can contain user/world content.
+            call.tool_calls.append(
+                {
+                    "name": name,
+                    "args_len": len(tc.function.arguments or ""),
+                    "result_len": len(result),
+                }
+            )
+
             messages.append(
                 {
                     "role": "tool",
@@ -246,8 +281,14 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                 }
             )
 
+    fallback = "Sorry, I'm having trouble answering that right now."
+    trace.reply_len = len(fallback)
+    trace.used_search = used_search
+    trace.deleted_data = deleted_data
+    trace.truncated = True
+    trace.write()
     return LLMResult(
-        reply="Sorry, I'm having trouble answering that right now.",
+        reply=fallback,
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         used_search=used_search,
