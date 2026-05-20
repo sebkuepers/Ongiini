@@ -1,8 +1,22 @@
+import asyncio
 import json
+from collections import defaultdict
 from typing import Any
 
 from .config import settings
 from .filters import normalize
+
+# Per-MSISDN asyncio locks so two rapid messages from the SAME user can't
+# race on load → modify → save. Different users still run concurrently.
+# The dict grows lazily; at pilot scale (small user base) the memory cost
+# is trivial. If we ever need to bound it, switch to a weakref dict or
+# add a periodic GC of unused locks.
+_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+def lock_for(msisdn: str) -> asyncio.Lock:
+    """Return the per-user lock used to serialize memory access."""
+    return _locks[normalize(msisdn)]
 
 
 def _path_for(msisdn: str):

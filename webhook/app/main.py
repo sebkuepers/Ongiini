@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from . import memory, ratelimit, usage
 from .config import settings
-from .filters import is_allowed, normalize
+from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import respond
 from .whatsapp import extract_messages, send_text, verify_signature
 
@@ -119,7 +119,14 @@ async def receive(
 
 
 async def handle_message(sender: str, text: str) -> None:
-    msisdn = normalize(sender)
+    try:
+        msisdn = normalize(sender)
+    except InvalidMsisdn as exc:
+        # The sender field didn't survive validation — could be a forged
+        # webhook before signature verification, a Meta-side oddity, or a
+        # genuine bug. Either way: drop the message without touching disk.
+        log.warning("rejected message with invalid sender field: %s", exc)
+        return
 
     if not is_allowed(msisdn):
         log.info("blocked non-Namibian sender %s", msisdn)
@@ -132,17 +139,22 @@ async def handle_message(sender: str, text: str) -> None:
         await send_text(sender, reason)
         return
 
-    history = memory.load(msisdn)
-    result = await respond(history, text, msisdn)
+    # Serialize the load → respond → save block per-user so rapid-fire
+    # messages from the same number can't race and clobber each other's
+    # memory file. Different users run concurrently.
+    async with memory.lock_for(msisdn):
+        history = memory.load(msisdn)
+        result = await respond(history, text, msisdn)
 
-    await send_text(sender, result.reply)
+        await send_text(sender, result.reply)
 
-    # When the model fires the deletion tool, leave no trace of this turn either —
-    # the file is already wiped by the tool handler, and we deliberately skip the
-    # history.append/save below so the deletion request itself isn't re-persisted.
-    if not result.deleted_data:
-        history.append({"role": "user", "content": text})
-        history.append({"role": "assistant", "content": result.reply})
-        memory.save(msisdn, history)
+        # When the model fires the deletion tool, leave no trace of this turn
+        # either — the file is already wiped by the tool handler, and we
+        # deliberately skip the history.append/save below so the deletion
+        # request itself isn't re-persisted.
+        if not result.deleted_data:
+            history.append({"role": "user", "content": text})
+            history.append({"role": "assistant", "content": result.reply})
+            memory.save(msisdn, history)
 
-    usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
+        usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
