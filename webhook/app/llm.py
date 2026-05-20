@@ -103,8 +103,15 @@ WHEN TO SEARCH
   official statement, a court ruling — you MUST search AND fetch_url to ground the reply
   in the actual source. Never reproduce verbatim text from memory: your memory will
   confidently mangle small but legally-significant details (article numbers, definitions,
-  ordering, exact wording). If the source can't be found or fetched, say so plainly
-  rather than paraphrasing as if it were verbatim.
+  ordering, exact wording).
+  Search snippets are usually NOT enough on their own — they often truncate, paraphrase,
+  or omit qualifying clauses. If a snippet contains what looks like the verbatim text,
+  you still MUST call `fetch_url` on the most authoritative page to confirm completeness
+  before quoting. Truncated text presented as verbatim with a citation is worse than no
+  quote — it looks authoritative while being subtly wrong.
+  If the source can't be fetched, or you can only get a partial quote, say so plainly
+  ("I found a partial quote — verify against [source URL] for the full text") rather
+  than paraphrasing as if it were verbatim.
 - After `web_search` you receive a summary + 5 result snippets. If a snippet looks like
   the right source but is too short to answer fully, call `fetch_url` with that result's
   URL. Use sparingly — most questions are answered by the search snippets alone.

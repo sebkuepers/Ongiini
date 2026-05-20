@@ -52,12 +52,14 @@ CAVEAT_TERMS = (
 # one of these forward-looking phrases.
 NEXT_STEP_PHRASES = (
     "shall i", "want me to", "do you need", "do you want", "should i",
-    "if you tell me", "send me", "send it", "let me know if", "let me know which",
+    "if you tell me", "if you'd like", "if you like", "i can also", "i can help",
+    "send me", "send it", "let me know if", "let me know which",
     "what's on your mind", "what can i", "what would you like",
     "want a quick", "want some", "want an example",
+    "happy to", "feel free to",
     # Afrikaans equivalents
     "wil jy", "kan ek vir jou", "stuur my", "sê my", "laat weet",
-    "wat wil jy", "wat kan ek",
+    "wat wil jy", "wat kan ek", "as jy wil",
 )
 
 
