@@ -7,12 +7,40 @@ can sanity-check it quickly.
 
 ## What we keep per user
 
-- The last 10 messages from each phone number, stored as
-  `/data/{msisdn}.json` on the Spark. Used as short-term conversational
-  memory.
-- A token-count line per message in `/data/usage.log` —
+Three tiers, all on the Spark, none shared with any third party:
+
+- **Short-term conversational memory** — last ~10 user+assistant turns at
+  `/data/{msisdn}.json`. Older messages get LLM-compressed into a leading
+  `system` "Earlier in this conversation: …" line so a long chat stays
+  bounded. PII patterns (email, IBAN, credit card, 11-digit Namibian ID)
+  are regex-scrubbed BEFORE the message is written, replaced with
+  `[REDACTED:kind]` placeholders.
+
+- **Long-term semantic memory** via mem0 — typed facts about the user
+  extracted across ALL conversations (`[PROFILE]`, `[PREFERENCE]`,
+  `[SITUATION]`, `[COMMITMENT]`, `[QUOTE]`, `[EMOTION]`), stored as
+  384-dim embeddings in an embedded qdrant at `/data/qdrant/`. Facts are
+  canonicalised to English regardless of input language. The vector store
+  AND the fact-extraction LLM (Gemma 4 via the same vLLM endpoint we use
+  for replies) both run on the Spark — no external service.
+
+- **Token-count log** — `/data/usage.log`, one line per message:
   `timestamp | msisdn | tokens_in=... tokens_out=... | search=yes|no`.
-  No message content in this file, ever.
+  **No message content in this file, ever.**
+
+Image messages: the image bytes are processed through vLLM and discarded.
+Short-term memory stores a compact "[image attached] <caption>" placeholder.
+mem0 long-term stores the assistant's own textual description of the image
+("[SITUATION] Shared photo of maize leaves with yellowing tips"), never the
+base64 bytes themselves. PII-on-images is handled by a system-prompt rule:
+the model is instructed to describe sensitive documents (ID cards, payslips,
+medical records, screenshots of OTPs) generally without reading out specific
+personal numbers, so those don't slip into long-term facts via the model's
+description.
+
+Users can inspect everything (`whats_in_my_memory`), check token usage
+(`my_token_usage`), and delete it all (`delete_my_data`) from inside
+WhatsApp — all three work in English and Afrikaans.
 
 ## What we never log
 

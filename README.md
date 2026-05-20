@@ -19,8 +19,12 @@ WhatsApp Cloud API ──▶ api.ongiini.ai/whatsapp
                        127.0.0.1:8445  ──▶  FastAPI webhook (Docker)
                                               │
                                               ├─▶ vLLM Gemma 4 (host:8124)
+                                              │       ↳ text + image (multimodal)
                                               ├─▶ Tavily (web search)
-                                              └─▶ /data (memory + log)
+                                              ├─▶ mem0 long-term semantic memory
+                                              │       ↳ embedded qdrant on /data
+                                              │       ↳ all-MiniLM-L6-v2 embedder (CPU)
+                                              └─▶ /data (short-term JSON, qdrant, usage log)
 
 Browser ──▶ ongiini.ai / www.ongiini.ai ──▶  127.0.0.1:18789  ──▶  nginx (Docker)
                               ▲
@@ -30,15 +34,22 @@ Browser ──▶ ongiini.ai / www.ongiini.ai ──▶  127.0.0.1:18789  ──
 
 Three processes on the Spark:
 1. `gemma4-vllm` — Docker container (`vllm/vllm-openai:gemma4-0505-arm64-cu130`).
+   Serves Gemma 4 26B A4B (NVFP4) for text AND image input via the OpenAI-compatible
+   chat-completions endpoint.
 2. `ongiini-webhook` + `ongiini-website` — Docker compose stack in this repo.
 3. `cloudflared` — systemd service exposing the two containers at
    `ongiini.ai` / `www.ongiini.ai` / `api.ongiini.ai`.
 
 - `webhook/` — FastAPI service. Receives WhatsApp messages, filters by country
-  code / whitelist, calls vLLM with tool-calling for `web_search`, replies,
-  persists last 10 messages per user as JSON.
+  code / whitelist, calls vLLM with tool-calling (`web_search`, `fetch_url`,
+  `delete_my_data`, `whats_in_my_memory`, `my_token_usage`). Two-tier memory: a
+  short-term JSON window per user (last ~10 turns) and a mem0 long-term layer
+  that extracts typed facts (`[PROFILE]`, `[PREFERENCE]`, `[SITUATION]`,
+  `[COMMITMENT]`, `[QUOTE]`, `[EMOTION]`) across all chats and retrieves them
+  by semantic relevance per turn.
 - `website/` — single-page static site, vanilla HTML+CSS+JS, ~14 KB gzipped.
-- `data/` — JSON memory files + `usage.log` (mounted as a volume).
+- `data/` — short-term JSON memory files + qdrant vector store + `usage.log`
+  + mem0 history sqlite (mounted as a volume; everything stays on the Spark).
 
 ## DGX Spark host setup
 
@@ -155,17 +166,58 @@ the entire `api.ongiini.ai` host into port 8445 with the path preserved.
 
 ## Data we keep
 
-Per-user JSON at `/data/{msisdn}.json` — last 10 user+assistant turns.
-Per-message line in `/data/usage.log` — token counts + timestamp, no content.
+Three things per user, all on the Spark, nothing leaves the box:
+
+1. **Short-term memory** at `/data/{msisdn}.json` — last ~10 user+assistant turns.
+   Once it crosses 14 entries the oldest fold into a single leading `system`
+   message ("Earlier in this conversation: …") and the last 8 stay verbatim.
+   Before any message is written, regex-scrubbed for obvious PII patterns
+   (email, IBAN, credit card, 11-digit Namibian ID — replaced with
+   `[REDACTED:kind]` placeholders).
+2. **Long-term memory** via mem0 — typed facts about the user extracted across
+   ALL conversations: `[PROFILE]` (location, role, family), `[PREFERENCE]`
+   (language, style), `[SITUATION]` (ongoing projects), `[COMMITMENT]`
+   (reminders, follow-ups), `[QUOTE]` (verbatim phrasing worth keeping), and
+   `[EMOTION]` (recent state). Stored as 384-dim embeddings in an embedded
+   qdrant on `/data/qdrant/`, retrieved by semantic similarity per turn.
+   Facts canonicalised to English regardless of input language so cross-language
+   recall works (user writes Afrikaans, retrieves on English query). Image
+   turns produce facts via the assistant's own image description rather than
+   passing the base64 bytes through mem0's extraction prompt.
+3. **Token-count log** at `/data/usage.log` — per-message line with token
+   counts + timestamp, **no message content ever**.
 
 ```
 2026-05-20T14:32:11 | 264811234567 | tokens_in=342 tokens_out=187 | search=yes
 ```
 
-Free-tier cap is **1 million tokens per user per month**, resetting on the
-1st (cap enforcement not yet implemented in code — Phase 2).
+Users can ask "what do you remember about me?" (any wording, English or
+Afrikaans) and the `whats_in_my_memory` tool reads both tiers back grouped
+by tag. "Delete my data" / "forget everything" / "vergeet alles" wipes both
+tiers via `delete_my_data`. Token balance: "how many tokens have I used?"
+fires `my_token_usage`, which aggregates the usage.log against the
+1 million / user / month free-tier cap.
+
+## Multimodal
+
+Gemma 4 is multimodal — the webhook accepts WhatsApp image messages, fetches
+the bytes from Meta's media API, normalises them (resize to multiples of 48
+to satisfy Gemma 4's vision pooler grid, clamp to ≤896 per side, re-encode
+as JPEG), and passes them as OpenAI-style multipart content to vLLM. The
+model describes what it sees and the resulting [SITUATION] fact lands in
+mem0 ("Shared photo of maize leaves with yellowing tips; worried about
+crop health"). Image bytes themselves are NEVER stored — only the assistant's
+textual description is persisted.
+
+Two production caveats baked into the code:
+- **Image dimensions must be multiples of 48** before they reach vLLM
+  (`main.py::_resize_for_gemma4`). Off-grid sizes crash the Gemma 4 vision
+  pooler with `cudaErrorNotPermitted`.
+- **Tools are disabled on image-bearing turns** as a workaround for
+  vLLM issue #41452 (tools + image_url in the same call desyncs the
+  prompt-replacement step). Reverts once the upstream fix lands.
 
 ## Out of scope for Phase 1
 
-Voice messages (Whisper), image understanding, Oshiwambo via a translation
-layer, hard rate-limit enforcement, Redis-backed memory, async queue.
+Voice messages (Whisper), Oshiwambo via a translation layer, hard rate-limit
+enforcement, Redis-backed memory, async queue.
