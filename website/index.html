@@ -293,20 +293,36 @@
       text-wrap: pretty;
     }
     .og-section--dark .og-card-body { color: var(--ink-faint); }
-    .og-card-fig {
-      margin: 0 0 6px;
+
+    /* Feature row: photo + 2x2 card grid (Open section) */
+    .og-feature {
+      margin-top: 32px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+    .og-feature-fig {
+      margin: 0;
       border-radius: 14px;
       overflow: hidden;
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 4 / 5;
       background: oklch(0.25 0.015 50);
+      box-shadow: 0 24px 60px -28px rgba(0,0,0,0.6);
     }
     @supports not (color: oklch(0 0 0)) {
-      .og-card-fig { background: #38332e; }
+      .og-feature-fig { background: #38332e; }
     }
-    .og-card-fig img {
+    .og-feature-fig img {
       width: 100%; height: 100%;
       object-fit: cover;
       display: block;
+    }
+    .og-feature-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+      align-items: start;
     }
 
     /* Roadmap pill list */
@@ -335,7 +351,11 @@
 
     /* Cost / Free section */
     .og-free {
-      display: flex; flex-direction: column; gap: 22px; margin-top: 28px;
+      display: grid; grid-template-columns: 1fr; gap: 28px;
+      margin-top: 28px; align-items: start;
+    }
+    .og-free-copy {
+      display: flex; flex-direction: column; gap: 22px;
     }
     .og-free-stat {
       display: flex; flex-direction: column; gap: 8px;
@@ -355,34 +375,49 @@
       font-size: 14.5px; line-height: 1.6; color: var(--ink-soft);
       max-width: 56ch;
     }
-    .og-token-viz { margin-top: 4px; }
+    .og-token-viz {
+      margin-top: 4px;
+      display: flex; flex-direction: column; gap: 14px;
+      align-items: flex-start;
+    }
     .og-token-grid {
       display: grid;
-      grid-template-columns: repeat(40, 1fr);
+      grid-template-columns: repeat(25, 1fr);
       gap: 3px;
-      max-width: 360px;
+      width: 100%;
+      max-width: 380px;
     }
     .og-token-grid > i {
       display: block;
       aspect-ratio: 1 / 1;
       background: var(--terracotta-light);
       border-radius: 2px;
+      transition: none;
+    }
+    .og-token-grid > i.is-key {
+      background: var(--terracotta-deep);
+      box-shadow: 0 0 0 2px var(--sand), 0 0 0 3px var(--terracotta-deep);
     }
     .og-token-key {
-      margin-top: 14px;
-      display: inline-flex; align-items: center; gap: 8px;
+      display: inline-flex; align-items: center; gap: 10px;
       font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--ink-soft);
+      max-width: 38ch;
+      line-height: 1.5;
     }
     .og-token-key-dot {
       display: inline-block;
       width: 10px; height: 10px;
-      background: var(--terracotta-light);
+      background: var(--terracotta-deep);
       border-radius: 2px;
+      flex-shrink: 0;
     }
     @media (min-width: 880px) {
-      .og-token-grid { max-width: 480px; }
+      .og-token-grid {
+        grid-template-columns: repeat(40, 1fr);
+        max-width: 460px;
+      }
     }
 
     /* Contribute */
@@ -701,6 +736,9 @@
       .og-card { gap: 12px; }
       .og-card-head { font-size: 18px; }
       .og-card-body { font-size: 15px; }
+      .og-feature { grid-template-columns: 5fr 7fr; gap: 48px; }
+      .og-feature-cards { grid-template-columns: 1fr 1fr; gap: 28px 32px; }
+      .og-free { grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
       .og-close { padding: 120px 0 140px; }
       .og-close-inner {
         display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end;
@@ -898,36 +936,45 @@
         </div>
         <h2 class="og-h2" data-en>No black box. No US cloud. No catch.</h2>
         <h2 class="og-h2" data-af>Geen swart boks nie. Geen US-wolk nie. Geen haakplek nie.</h2>
-        <div class="og-grid">
-          <div class="og-card">
-            <figure class="og-card-fig">
-              <img src="/assets/dgx-spark.webp"
-                   srcset="/assets/dgx-spark-480.webp 480w, /assets/dgx-spark.webp 800w"
-                   sizes="(min-width: 880px) 320px, 100vw"
-                   width="800" height="1066"
-                   alt="The NVIDIA DGX Spark (right) on a wooden shelf, next to two stacked Mac minis for scale"
-                   loading="lazy"
-                   decoding="async" />
-            </figure>
-            <div class="og-card-num">01</div>
-            <div class="og-card-head" data-en>Hardware in plain sight</div>
-            <div class="og-card-head" data-af>Hardeware in volle sig</div>
-            <p class="og-card-body" data-en>Ongiini runs on a single NVIDIA DGX Spark — a personal AI supercomputer the size of a small book, not a data centre. One petaflop of compute, 128 GB of unified memory, sitting on a shelf. Currently in Germany during the pilot; the goal is to move the hardware to Namibia once the service is sustainable.</p>
-            <p class="og-card-body" data-af>Ongiini loop op 'n enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek, nie 'n datasentrum nie. Een petaflop se rekenkrag, 128 GB verenigde geheue, op 'n rak. Tans in Duitsland gedurende die loodsfase; die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is.</p>
-          </div>
-          <div class="og-card">
-            <div class="og-card-num">02</div>
-            <div class="og-card-head" data-en>Open-source model</div>
-            <div class="og-card-head" data-af>Oopbron-model</div>
-            <p class="og-card-body" data-en>Powered by Google DeepMind's <strong>Gemma 4 26B</strong> — their latest open-weight model, released April 2026 under the Apache 2.0 license. Among the strongest open models in the world. No closed API, no upstream provider that can switch us off.</p>
-            <p class="og-card-body" data-af>Aangedryf deur Google DeepMind se <strong>Gemma 4 26B</strong> — hul nuutste oopgewig-model, vrygestel in April 2026 onder die Apache 2.0-lisensie. Onder die sterkste oop modelle in die wêreld. Geen geslote API nie, geen verskaffer wat ons kan afsluit nie.</p>
-          </div>
-          <div class="og-card">
-            <div class="og-card-num">03</div>
-            <div class="og-card-head" data-en>Open-source code</div>
-            <div class="og-card-head" data-af>Oopbron-kode</div>
-            <p class="og-card-body" data-en>Every line of the stack — the WhatsApp webhook, the prompts, the deployment recipe — is on GitHub. Read it, audit it, fork it, run your own.</p>
-            <p class="og-card-body" data-af>Elke reël van die stapel — die WhatsApp-webhook, die prompts, die ontplooiingsresep — is op GitHub. Lees dit, oudit dit, fork dit, hardloop jou eie.</p>
+        <div class="og-feature">
+          <figure class="og-feature-fig">
+            <img src="/assets/dgx-spark.webp"
+                 srcset="/assets/dgx-spark-480.webp 480w, /assets/dgx-spark.webp 800w"
+                 sizes="(min-width: 880px) 440px, 100vw"
+                 width="800" height="1066"
+                 alt="The NVIDIA DGX Spark (right) on a wooden shelf, next to two stacked Mac minis for scale"
+                 loading="lazy"
+                 decoding="async" />
+          </figure>
+          <div class="og-feature-cards">
+            <div class="og-card">
+              <div class="og-card-num">01</div>
+              <div class="og-card-head" data-en>Hardware in plain sight</div>
+              <div class="og-card-head" data-af>Hardeware in volle sig</div>
+              <p class="og-card-body" data-en>A single NVIDIA DGX Spark — a personal AI supercomputer the size of a small book, not a data centre. One petaflop of compute, 128 GB of unified memory, sitting on a shelf.</p>
+              <p class="og-card-body" data-af>'n Enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek, nie 'n datasentrum nie. Een petaflop rekenkrag, 128 GB verenigde geheue, op 'n rak.</p>
+            </div>
+            <div class="og-card">
+              <div class="og-card-num">02</div>
+              <div class="og-card-head" data-en>Open-source model</div>
+              <div class="og-card-head" data-af>Oopbron-model</div>
+              <p class="og-card-body" data-en>Powered by Google DeepMind's <strong>Gemma 4 26B</strong> — released April 2026 under the Apache 2.0 license. Among the strongest open models in the world. No closed API, no upstream provider that can switch us off.</p>
+              <p class="og-card-body" data-af>Aangedryf deur Google DeepMind se <strong>Gemma 4 26B</strong> — vrygestel in April 2026 onder die Apache 2.0-lisensie. Onder die sterkste oop modelle in die wêreld. Geen geslote API nie, geen verskaffer wat ons kan afsluit nie.</p>
+            </div>
+            <div class="og-card">
+              <div class="og-card-num">03</div>
+              <div class="og-card-head" data-en>Open-source code</div>
+              <div class="og-card-head" data-af>Oopbron-kode</div>
+              <p class="og-card-body" data-en>Every line of the stack — the WhatsApp webhook, the prompts, the deployment recipe — is on GitHub. Read it, audit it, fork it, run your own.</p>
+              <p class="og-card-body" data-af>Elke reël van die stapel — die WhatsApp-webhook, die prompts, die ontplooiingsresep — is op GitHub. Lees dit, oudit dit, fork dit, hardloop jou eie.</p>
+            </div>
+            <div class="og-card">
+              <div class="og-card-num">04</div>
+              <div class="og-card-head" data-en>No US cloud, anywhere</div>
+              <div class="og-card-head" data-af>Geen US-wolk, nêrens nie</div>
+              <p class="og-card-body" data-en>Every message is processed on hardware we operate ourselves — no OpenAI, no Anthropic, no AWS, Google Cloud or Azure in the pipeline. Your conversations never leave the network we run.</p>
+              <p class="og-card-body" data-af>Elke boodskap word verwerk op hardeware wat ons self bedryf — geen OpenAI, geen Anthropic, geen AWS, Google Cloud of Azure in die roete nie. Jou gesprekke verlaat nooit die netwerk wat ons bedryf nie.</p>
+            </div>
           </div>
         </div>
 
@@ -982,22 +1029,24 @@
         <h2 class="og-h2" data-en>Free for everyone — within a fair monthly limit.</h2>
         <h2 class="og-h2" data-af>Gratis vir almal — binne 'n billike maandelikse limiet.</h2>
         <div class="og-free">
-          <div class="og-free-stat">
-            <div class="og-free-num" data-en>One Million <span class="og-free-num-accent">Tokens.</span></div>
-            <div class="og-free-num" data-af>Een Miljoen <span class="og-free-num-accent">Tokens.</span></div>
-            <div class="og-free-label" data-en>Per user · per month · resets on the 1st</div>
-            <div class="og-free-label" data-af>Per gebruiker · per maand · herstel op die 1ste</div>
+          <div class="og-free-copy">
+            <div class="og-free-stat">
+              <div class="og-free-num" data-en>One Million <span class="og-free-num-accent">Tokens.</span></div>
+              <div class="og-free-num" data-af>Een Miljoen <span class="og-free-num-accent">Tokens.</span></div>
+              <div class="og-free-label" data-en>Per user · per month · resets on the 1st</div>
+              <div class="og-free-label" data-af>Per gebruiker · per maand · herstel op die 1ste</div>
+            </div>
+            <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. One million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones, over the course of a month. We picked this number to keep the service sustainable on a single computer running in one office.</p>
+            <p class="og-free-detail" data-af>'n Token is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. Een miljoen tokens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele, oor die loop van 'n maand. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar wat in een kantoor loop.</p>
           </div>
           <div class="og-token-viz">
             <div class="og-token-grid" id="token-grid" aria-hidden="true"></div>
             <div class="og-token-key">
               <span class="og-token-key-dot" aria-hidden="true"></span>
-              <span data-en="i">= one normal conversation · 800 of them</span>
-              <span data-af="i">= een normale gesprek · 800 van hulle</span>
+              <span data-en="i">one normal conversation · 800 of them, every month</span>
+              <span data-af="i">een normale gesprek · 800 van hulle, elke maand</span>
             </div>
           </div>
-          <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. One million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones, over the course of a month. We picked this number to keep the service sustainable on a single computer running in one office.</p>
-          <p class="og-free-detail" data-af>'n Token is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. Een miljoen tokens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele, oor die loop van 'n maand. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar wat in een kantoor loop.</p>
         </div>
       </div>
     </section>
@@ -1234,11 +1283,18 @@
       } catch (e) {}
 
       // Token grid — 800 small squares each representing one normal conversation.
-      // Rendered in JS to keep the HTML lean; degrades to nothing if JS is off.
+      // One dot is highlighted in terracotta-deep as a visual focal point for
+      // the legend ("= one normal conversation, 800 of them"). Rendered in JS
+      // to keep the HTML lean; degrades to nothing if JS is off.
       var tokenGrid = document.getElementById("token-grid");
       if (tokenGrid && !tokenGrid.children.length) {
+        var KEY_INDEX = 167;
         var frag = document.createDocumentFragment();
-        for (var t = 0; t < 800; t++) frag.appendChild(document.createElement("i"));
+        for (var t = 0; t < 800; t++) {
+          var d = document.createElement("i");
+          if (t === KEY_INDEX) d.className = "is-key";
+          frag.appendChild(d);
+        }
         tokenGrid.appendChild(frag);
       }
 

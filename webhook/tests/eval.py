@@ -53,7 +53,7 @@ CAVEAT_TERMS = (
 NEXT_STEP_PHRASES = (
     "shall i", "want me to", "do you need", "do you want", "should i",
     "if you tell me", "if you'd like", "if you like", "i can also", "i can help",
-    "send me", "send it", "let me know if", "let me know which",
+    "send me", "send it", "let me know", "let me know if", "let me know which",
     "what's on your mind", "what can i", "what would you like",
     "want a quick", "want some", "want an example",
     "happy to", "feel free to",
