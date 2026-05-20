@@ -272,6 +272,15 @@ CASES = [
     # culture and religion") but don't quote the full 50+ word passage. To
     # actually reproduce the text, the model has to fetch a page that hosts
     # the full Constitution.
+    #
+    # KNOWN LIMITATION (May 2026): Gemma 4 26B has strong training-data memory
+    # of constitutional text and overrides the explicit "MUST fetch_url" rule
+    # in roughly half of runs, producing confidently-wrong partial quotes with
+    # citations. Prompt engineering has hit diminishing returns. Fixing this
+    # reliably requires either (a) code-side regex detection of verbatim
+    # requests with forced search+fetch, or (b) reframing to refuse verbatim
+    # quotes by default. Both deferred. We keep this case in the suite so the
+    # behaviour stays visible across runs.
     {
         "id": "Q9_constitution_verbatim_en",
         "lang": "en",
