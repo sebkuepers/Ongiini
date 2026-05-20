@@ -1,7 +1,9 @@
 import logging
 
+import httpx
 from fastapi import FastAPI, Header, Request, Response
-from fastapi.responses import PlainTextResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from . import memory, ratelimit, usage
 from .config import settings
@@ -17,6 +19,19 @@ log = logging.getLogger("ongiini")
 
 app = FastAPI(title="Ongiini Webhook")
 
+# Allow the public website (which may live on Cloudflare Pages) to poll
+# /status from the browser. GET only, no credentials.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://ongiini.ai",
+        "https://www.ongiini.ai",
+    ],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
+
 NON_NAMIBIA_REPLY = (
     "Hi! Ongiini is currently only available for users in Namibia (+264 numbers). "
     "We're working on expanding — stay tuned! 🇳🇦"
@@ -26,6 +41,26 @@ NON_NAMIBIA_REPLY = (
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/status")
+async def status() -> JSONResponse:
+    """Public status probe consumed by the landing page.
+
+    Three states:
+      online    — webhook + vLLM both reachable
+      degraded  — webhook reachable, vLLM is not (model down or warming)
+      (network error / 5xx from this endpoint itself means 'offline' to the
+      caller — they decide that, we never return it)
+    """
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as c:
+            r = await c.get(f"{settings.vllm_base_url.rstrip('/')}/models")
+        if r.status_code == 200:
+            return JSONResponse({"status": "online"})
+    except Exception:
+        pass
+    return JSONResponse({"status": "degraded"}, status_code=200)
 
 
 @app.get("/whatsapp")

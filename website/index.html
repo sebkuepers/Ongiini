@@ -476,7 +476,56 @@
       font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
       letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--ink-faint);
+      display: flex; flex-wrap: wrap; gap: 16px;
+      align-items: center; justify-content: space-between;
     }
+
+    /* Service status indicator */
+    .og-status {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-faint);
+      cursor: help; position: relative;
+    }
+    .og-status-dot {
+      width: 8px; height: 8px; border-radius: 999px;
+      background: var(--ink-faint);
+      box-shadow: 0 0 0 0 rgba(0,0,0,0);
+      transition: background 220ms ease, box-shadow 220ms ease;
+    }
+    .og-status[data-state="online"] .og-status-dot {
+      background: oklch(0.68 0.18 145);
+      box-shadow: 0 0 0 4px oklch(0.68 0.18 145 / 0.18);
+    }
+    .og-status[data-state="degraded"] .og-status-dot {
+      background: oklch(0.78 0.16 75);
+      box-shadow: 0 0 0 4px oklch(0.78 0.16 75 / 0.20);
+    }
+    .og-status[data-state="offline"] .og-status-dot {
+      background: oklch(0.62 0.18 30);
+      box-shadow: 0 0 0 4px oklch(0.62 0.18 30 / 0.20);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      .og-status[data-state="online"] .og-status-dot { background: #38a169; }
+      .og-status[data-state="degraded"] .og-status-dot { background: #d69e2e; }
+      .og-status[data-state="offline"] .og-status-dot { background: #c46c3f; }
+    }
+    .og-status-tip {
+      position: absolute; bottom: 100%; right: 0;
+      margin-bottom: 10px; padding: 10px 12px;
+      background: var(--ink); color: var(--bone);
+      border: 1px solid #5a5046; border-radius: 8px;
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-size: 12px; line-height: 1.45;
+      letter-spacing: -0.005em; text-transform: none;
+      width: max-content; max-width: 280px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 160ms ease;
+      box-shadow: 0 12px 32px -10px rgba(0,0,0,0.5);
+    }
+    .og-status:hover .og-status-tip,
+    .og-status:focus-within .og-status-tip { opacity: 1; }
 
     /* Desktop */
     @media (min-width: 880px) {
@@ -821,14 +870,79 @@
         </div>
       </div>
       <div class="og-wrap og-footer-bottom">
-        <span data-en>Ongiini.ai · Pilot in Germany · Open source on GitHub</span>
-        <span data-af>Ongiini.ai · Loods in Duitsland · Oopbron op GitHub</span>
+        <span>
+          <span data-en>Ongiini.ai · Pilot in Germany · Open source on GitHub</span>
+          <span data-af>Ongiini.ai · Loods in Duitsland · Oopbron op GitHub</span>
+        </span>
+        <span class="og-status" id="og-status" data-state="checking" tabindex="0" role="status" aria-live="polite">
+          <span class="og-status-dot" aria-hidden="true"></span>
+          <span class="og-status-label" id="og-status-label">
+            <span data-en>Checking…</span>
+            <span data-af>Tjek tans…</span>
+          </span>
+          <span class="og-status-tip" id="og-status-tip">
+            <span data-en>Ongiini runs on a single computer in pilot mode. Brief outages happen — try again in a few minutes.</span>
+            <span data-af>Ongiini loop op 'n enkele rekenaar in loodsmodus. Kort onderbrekings gebeur — probeer oor 'n paar minute weer.</span>
+          </span>
+        </span>
       </div>
     </footer>
   </div>
 
   <script>
     (function () {
+      // Service status indicator — polls api.ongiini.ai/status on load and
+      // every 60s. Three visible states + a "checking" placeholder.
+      var statusEl = document.getElementById("og-status");
+      var statusLabel = document.getElementById("og-status-label");
+
+      var LABELS = {
+        checking: { en: "Checking…", af: "Tjek tans…" },
+        online:   { en: "AI online", af: "KI aanlyn" },
+        degraded: { en: "AI degraded", af: "KI verswak" },
+        offline:  { en: "AI offline", af: "KI vanlyn" },
+      };
+
+      function renderStatus(state) {
+        statusEl.setAttribute("data-state", state);
+        var pair = LABELS[state] || LABELS.checking;
+        while (statusLabel.firstChild) statusLabel.removeChild(statusLabel.firstChild);
+        var en = document.createElement("span");
+        en.setAttribute("data-en", "");
+        en.textContent = pair.en;
+        var af = document.createElement("span");
+        af.setAttribute("data-af", "");
+        af.textContent = pair.af;
+        statusLabel.appendChild(en);
+        statusLabel.appendChild(af);
+      }
+
+      function pollStatus() {
+        var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 3500) : null;
+        fetch("https://api.ongiini.ai/status", {
+          method: "GET",
+          mode: "cors",
+          cache: "no-store",
+          signal: ctrl ? ctrl.signal : undefined,
+        })
+          .then(function (r) {
+            if (timer) clearTimeout(timer);
+            if (!r.ok) throw new Error("not ok");
+            return r.json();
+          })
+          .then(function (data) {
+            renderStatus(data && data.status === "online" ? "online" : "degraded");
+          })
+          .catch(function () {
+            if (timer) clearTimeout(timer);
+            renderStatus("offline");
+          });
+      }
+
+      pollStatus();
+      setInterval(pollStatus, 60000);
+
       // Language toggle
       var root = document.documentElement;
       var segs = document.querySelectorAll("[data-set-locale]");
