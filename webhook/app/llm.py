@@ -244,6 +244,12 @@ DATA & PRIVACY
   "hoeveel tokens het ek gebruik?"), call the `my_token_usage` tool and give the answer
   in plain prose — total used, monthly allowance, roughly what percentage that is, and
   that the counter resets on the 1st of each month. Don't list numbers as bullets.
+- What COUNTS toward the monthly allowance: every reply Ongiini sends, including any
+  images the user includes; a small amount used to update the user's long-term memory
+  after each turn; the occasional rolling-summary compression once a conversation
+  grows past about 10 messages. Reading existing memory back is free. If the user
+  asks for a breakdown, the my_token_usage tool's result already lists chat / memory /
+  summary subtotals — paraphrase those naturally rather than restating numbers verbatim.
 - Stored message content is PII-sanitised before it lands on disk — emails, ID-shape
   numbers, credit cards, and IBANs are replaced with [REDACTED:kind] placeholders.
   If you see one of these placeholders in earlier memory, just refer to it as
@@ -393,8 +399,16 @@ _SUMMARIZER_SYSTEM_PROMPT = (
 _SUMMARY_PREFIX = "Earlier in this conversation: "
 
 
-async def summarize_turns(turns: list[dict], previous_summary: str = "") -> str:
-    """Cheap LLM call that compresses old turns into a short prose summary."""
+async def summarize_turns(
+    turns: list[dict], previous_summary: str = "", msisdn: str | None = None
+) -> str:
+    """Cheap LLM call that compresses old turns into a short prose summary.
+
+    When called from the live reply path, msisdn is passed through so
+    the token cost of this call is recorded against the user — keeps
+    the 1M-token monthly counter honest. Eval and direct test callers
+    that omit msisdn skip the usage record.
+    """
     if not turns:
         return previous_summary
 
@@ -416,10 +430,27 @@ async def summarize_turns(turns: list[dict], previous_summary: str = "") -> str:
         temperature=0.3,
         max_tokens=200,
     )
+
+    if msisdn:
+        try:
+            u = resp.usage
+            if u is not None:
+                usage.record(
+                    msisdn,
+                    int(u.prompt_tokens or 0),
+                    int(u.completion_tokens or 0),
+                    used_search=False,
+                    kind="summary",
+                )
+        except Exception:
+            pass   # billing is soft — never block the summary
+
     return (resp.choices[0].message.content or "").strip()
 
 
-async def maybe_summarize(history: list[dict]) -> list[dict]:
+async def maybe_summarize(
+    history: list[dict], msisdn: str | None = None
+) -> list[dict]:
     """Fold oldest turns into a leading system summary when history is long.
 
     Triggered when `len(history) > settings.memory_summary_threshold`. The
@@ -427,6 +458,9 @@ async def maybe_summarize(history: list[dict]) -> list[dict]:
     older is replaced with one system message prefixed with `_SUMMARY_PREFIX`.
     If a previous summary already sits at index 0, its content is folded
     into the new one rather than discarded.
+
+    When msisdn is provided, the token cost of the summary LLM call is
+    recorded against that user (kind=summary). Eval callers may omit it.
 
     Returns the history unchanged when under threshold or when the LLM
     call fails to produce a usable summary — never raises, never loses
@@ -453,7 +487,7 @@ async def maybe_summarize(history: list[dict]) -> list[dict]:
     keep = rest[-keep_n:]
 
     try:
-        new_summary = await summarize_turns(to_summarize, prev_summary)
+        new_summary = await summarize_turns(to_summarize, prev_summary, msisdn=msisdn)
     except Exception:
         # If the summary call fails we'd rather lose nothing and just keep
         # the raw history — memory.save will cap it at memory_window*2.
@@ -697,14 +731,23 @@ async def respond(
             elif name == "my_token_usage":
                 used_my_token_usage = True
                 stats = usage.summary_for(msisdn)
+                brk = stats.get("breakdown") or {}
+                chat = brk.get("chat") or {"tokens_in": 0, "tokens_out": 0}
+                mem_t = brk.get("memory") or {"tokens_in": 0, "tokens_out": 0}
+                sum_t = brk.get("summary") or {"tokens_in": 0, "tokens_out": 0}
+                chat_total = chat["tokens_in"] + chat["tokens_out"]
+                mem_total = mem_t["tokens_in"] + mem_t["tokens_out"]
+                sum_total = sum_t["tokens_in"] + sum_t["tokens_out"]
                 result = (
                     f"Token usage for this user, month {stats['month']} (UTC):\n"
                     f"- {stats['messages']} messages so far this month\n"
-                    f"- {stats['tokens_in']} input tokens\n"
-                    f"- {stats['tokens_out']} output tokens\n"
                     f"- {stats['tokens_total']} tokens total of {stats['limit']} "
                     f"monthly allowance ({stats['percent_used']}% used)\n"
-                    f"Counter resets on the 1st of next month."
+                    f"  · chat (replies, incl. any images you sent): {chat_total} tokens\n"
+                    f"  · long-term memory updates: {mem_total} tokens\n"
+                    f"  · rolling-summary compressions: {sum_total} tokens\n"
+                    f"Everything counts toward the monthly allowance, including the "
+                    f"behind-the-scenes memory work. Counter resets on the 1st of next month."
                 )
             else:
                 result = f"Unknown tool: {name}"

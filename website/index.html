@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light" />
   <meta name="theme-color" content="#f5efe4" />
-  <title>Ongiini — AI for everyone, on WhatsApp</title>
-  <meta name="description" content="Ongiini is a free AI assistant on WhatsApp for people in Namibia. Open source, no US cloud. Powered by Google's Gemma 4 running on a single computer." />
-  <meta property="og:title" content="Ongiini — AI for everyone, on WhatsApp" />
-  <meta property="og:description" content="Free AI assistant for Namibia. Open source. Powered by Gemma 4. On the phone you already have." />
+  <title>Ongiini — Help for life's questions, on WhatsApp</title>
+  <meta name="description" content="Life is full of questions. Ongiini is a free AI helper on WhatsApp for school, farming, health, contracts and daily life in Namibia — ask in text or send a photo. Open source, no US cloud. Powered by Google's Gemma 4 running on a single computer." />
+  <meta property="og:title" content="Ongiini — Help for life's questions, on WhatsApp" />
+  <meta property="og:description" content="Life is full of questions. Ongiini is here to help — ask in text or send a photo. Free, on WhatsApp, in English & Afrikaans." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://ongiini.ai/" />
   <meta property="og:image" content="/assets/ongiini-icon-512-v2.png" />
@@ -193,8 +193,8 @@
     }
     .og-hero-tag { display: flex; flex-direction: column; gap: 6px; }
     .og-tag-line1, .og-tag-line2 {
-      font-size: clamp(34px, 6.6vw, 64px); line-height: 1.02;
-      letter-spacing: -0.028em; font-weight: 400;
+      font-size: clamp(28px, 4vw, 38px); line-height: 1.08;
+      letter-spacing: -0.022em; font-weight: 400;
       text-wrap: balance;
     }
     .og-tag-line2 { color: var(--terracotta-deep); }
@@ -231,16 +231,10 @@
     .og-cta--lg .og-cta-ic { width: 34px; height: 34px; }
     .og-cta-hint {
       font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
-      letter-spacing: 0.06em; color: var(--ink-soft); padding-left: 4px;
+      letter-spacing: 0.06em; color: var(--ink-soft);
+      text-align: center;
     }
 
-    /* Disclaimer line under hero */
-    .og-disclaimer {
-      margin-top: 12px;
-      font-family: 'Geist Mono', ui-monospace, monospace;
-      font-size: 10px; letter-spacing: 0.06em; line-height: 1.55;
-      color: var(--ink-faint); max-width: 56ch;
-    }
 
     /* Try-asking */
     .og-try { list-style: none; margin: 22px 0 0; padding: 0; }
@@ -427,7 +421,6 @@
     .og-token-key-dot--free { background: var(--terracotta-light); }
     @media (min-width: 880px) {
       .og-token-grid {
-        grid-template-columns: repeat(40, 1fr);
         max-width: 460px;
       }
     }
@@ -580,7 +573,7 @@
       align-items: center; justify-content: space-between;
     }
 
-    /* Mission chat mockup */
+    /* Mission section: copy left, modes (tabs + mockup + caption) right */
     .og-mission-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -588,7 +581,58 @@
       align-items: start;
     }
     .og-mission-copy { display: flex; flex-direction: column; gap: 16px; }
-    .og-mission-mock { width: 100%; order: -1; }
+
+    .og-modes {
+      display: flex; flex-direction: column; gap: 14px;
+      align-items: center;
+    }
+    .og-modes-tabs {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      justify-content: center;
+    }
+    .og-modes-tab {
+      background: transparent;
+      border: 1px solid var(--rule);
+      color: var(--ink-soft);
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-size: 13px; font-weight: 500;
+      letter-spacing: -0.005em;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 7px;
+      transition: background 160ms, border-color 160ms, color 160ms;
+    }
+    .og-modes-tab:hover { color: var(--ink); border-color: var(--ink-faint); }
+    .og-modes-tab.is-active {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--bone);
+    }
+    .og-modes-tab .og-modes-pill {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 8.5px; letter-spacing: 0.16em;
+      padding: 2px 5px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+    .og-modes-panel {
+      display: none; flex-direction: column; gap: 12px;
+      width: 100%; align-items: center;
+    }
+    .og-modes-panel.is-active { display: flex; }
+    .og-modes-caption {
+      margin: 0;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.08em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      max-width: 420px;
+      line-height: 1.5;
+      text-align: center;
+    }
 
     .og-chat {
       background: oklch(0.98 0.008 75);
@@ -673,11 +717,59 @@
       .og-msg--out { background: #d9f1b9; }
     }
 
+    /* Photo bubble inside the chat-mockup (used by Photo tab) */
+    .og-msg--photo {
+      padding: 4px 4px 18px;
+      max-width: 62%;
+    }
+    .og-msg-photo {
+      margin: 0 0 6px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--rule-faint);
+      aspect-ratio: 3 / 2;
+    }
+    .og-msg-photo img {
+      display: block;
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .og-msg--photo p { margin: 0 8px; padding-right: 38px; }
+
+    /* Voice bubble inside the chat-mockup (used by Voice tab) */
+    .og-msg--voice {
+      display: flex; align-items: center;
+      gap: 10px;
+      padding: 10px 14px 20px;
+      min-width: 220px; max-width: 84%;
+    }
+    .og-msg-voice-play {
+      width: 28px; height: 28px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.18);
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: var(--ink);
+    }
+    .og-msg-voice-bars {
+      flex: 1;
+      height: 16px;
+      color: var(--ink);
+      opacity: 0.55;
+    }
+    .og-msg-voice-dur {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.04em;
+      color: var(--ink);
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
     @media (min-width: 880px) {
       .og-mission-grid {
-        grid-template-columns: 0.85fr 1.15fr;
-        gap: 64px;
-        align-items: center;
+        grid-template-columns: 0.95fr 1.05fr;
+        gap: 56px;
+        align-items: start;
       }
     }
 
@@ -737,7 +829,7 @@
       .og-hero { padding: 64px 0 96px; }
       .og-hero-row {
         margin-top: 64px;
-        display: grid; grid-template-columns: 1.2fr 1fr; gap: 64px;
+        display: grid; grid-template-columns: 1.4fr 1fr; gap: 64px;
         align-items: end;
       }
       .og-hero-cta { max-width: none; }
@@ -782,10 +874,10 @@
         </a>
         <nav class="og-bar-nav">
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
-          <a href="#open"><span data-en="i">Open &amp; transparent</span><span data-af="i">Oop &amp; deursigtig</span></a>
+          <a href="#open"><span data-en="i">Commitment</span><span data-af="i">Toewyding</span></a>
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
           <a href="#contribute"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
-          <a href="#faq"><span data-en="i">Questions</span><span data-af="i">Vrae</span></a>
+          <a href="#faq"><span data-en="i">FAQs</span><span data-af="i">FAQs</span></a>
         </nav>
         <div class="og-lang" role="group" aria-label="Language">
           <button type="button" class="og-lang-seg is-active" data-set-locale="en">EN</button>
@@ -807,12 +899,12 @@
 
         <div class="og-hero-row">
           <div class="og-hero-tag">
-            <div class="og-tag-line1" data-en>Ask me anything.</div>
-            <div class="og-tag-line1" data-af>Vra my enigiets.</div>
-            <div class="og-tag-line2" data-en>AI for everyone.</div>
-            <div class="og-tag-line2" data-af>KI vir almal.</div>
-            <div class="og-tag-sub" data-en>Schoolwork, health, contracts, farming, daily life. Free, in English &amp; Afrikaans — Oshiwambo coming soon.</div>
-            <div class="og-tag-sub" data-af>Skoolwerk, gesondheid, kontrakte, boerdery, alledaagse lewe. Gratis, in Engels &amp; Afrikaans — Oshiwambo binnekort.</div>
+            <div class="og-tag-line1" data-en>Life is full of questions.</div>
+            <div class="og-tag-line1" data-af>Die lewe is vol vrae.</div>
+            <div class="og-tag-line2" data-en>We're here to help.</div>
+            <div class="og-tag-line2" data-af>Ons is hier om te help.</div>
+            <div class="og-tag-sub" data-en>School, farming, health, contracts, daily life — ask any time. Free, in English &amp; Afrikaans. Oshiwambo coming soon.</div>
+            <div class="og-tag-sub" data-af>Skool, boerdery, gesondheid, kontrakte, die alledaagse — vra enige tyd. Gratis, in Engels &amp; Afrikaans. Oshiwambo binnekort.</div>
           </div>
 
           <div class="og-hero-cta">
@@ -826,7 +918,7 @@
                     <circle cx="15.5" cy="11.75" r="1.05" fill="currentColor"/>
                   </svg>
                 </span>
-                <span data-en="i">Chat on WhatsApp</span><span data-af="i">Gesels op WhatsApp</span>
+                <span data-en="i">Ask on WhatsApp</span><span data-af="i">Vra op WhatsApp</span>
               </span>
               <span class="og-cta-arrow">→</span>
             </a>
@@ -834,17 +926,12 @@
               <span data-en="i">Opens WhatsApp · no app to install</span>
               <span data-af="i">Maak WhatsApp oop · geen app om af te laai nie</span>
             </div>
-
-            <div class="og-disclaimer">
-              <span data-en>Ongiini is an AI — it can be confidently wrong. Always check a qualified person for health, money or legal decisions.</span>
-              <span data-af>Ongiini is 'n KI — dit kan met vertroue verkeerd wees. Kontroleer altyd 'n gekwalifiseerde persoon vir gesondheid-, geld- of regsbesluite.</span>
-            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="og-section" id="mission">
+    <section class="og-section og-section--sand" id="mission">
       <div class="og-wrap og-mission-grid">
         <div class="og-mission-copy">
           <div class="og-eyebrow">
@@ -853,39 +940,170 @@
           </div>
           <h2 class="og-h2" data-en>Intelligence belongs to all of us.</h2>
           <h2 class="og-h2" data-af>Intelligensie behoort aan ons almal.</h2>
-          <p class="og-body" data-en>AI has quickly become one of the most useful new tools any of us has — for learning, health, work, daily life. Open-source models like Gemma 4 and personal hardware like the DGX Spark have made it cheap enough to be universally available, not just to the paying customers of a few large clouds. Ongiini is what that means in practice for Namibia: free, on the phone you already own, in the language you already speak — no app, no account.</p>
-          <p class="og-body" data-af>KI het vinnig een van die nuttigste nuwe hulpmiddels geword wat enige van ons het — vir leer, gesondheid, werk, die alledaagse lewe. Oopbron-modelle soos Gemma 4 en persoonlike hardeware soos die DGX Spark het dit goedkoop genoeg gemaak om universeel beskikbaar te wees, nie net vir die betalende kliënte van 'n paar groot wolke nie. Ongiini is wat dit in die praktyk vir Namibië beteken: gratis, op die foon wat jy reeds het, in die taal wat jy reeds praat — geen app, geen rekening nie.</p>
+          <p class="og-body" data-en>AI has quickly become one of the most useful tools any of us has — for school, work, health, daily life. Until now, getting to it usually meant paying a monthly subscription. Ongiini changes that for Namibia: free, on the phone you already own, in the language you already speak — no app, no account.</p>
+          <p class="og-body" data-af>KI het vinnig een van die nuttigste hulpmiddels geword wat enige van ons het — vir skool, werk, gesondheid, die alledaagse lewe. Tot nou moes jy gewoonlik 'n maandelikse intekening betaal om dit te gebruik. Ongiini verander dit vir Namibië: gratis, op die foon wat jy reeds het, in die taal wat jy reeds praat — geen app, geen rekening nie.</p>
         </div>
-        <div class="og-mission-mock">
-          <div class="og-chat">
-            <div class="og-chat-head">
-              <span class="og-chat-avatar" aria-hidden="true">
-                <img src="/assets/ongiini-icon-192-v2.png" alt="" width="34" height="34" />
-              </span>
-              <div class="og-chat-meta">
-                <div class="og-chat-name">Ongiini</div>
-                <div class="og-chat-status">
-                  <span data-en="i">online</span>
-                  <span data-af="i">aanlyn</span>
+
+        <div class="og-modes">
+          <div class="og-modes-tabs" role="tablist">
+            <button type="button" class="og-modes-tab is-active" data-mode="text" role="tab" aria-selected="true" aria-controls="mode-text">
+              <span data-en="i">Text</span><span data-af="i">Teks</span>
+            </button>
+            <button type="button" class="og-modes-tab" data-mode="photo" role="tab" aria-selected="false" aria-controls="mode-photo">
+              <span data-en="i">Photo</span><span data-af="i">Foto</span>
+            </button>
+            <button type="button" class="og-modes-tab" data-mode="voice" role="tab" aria-selected="false" aria-controls="mode-voice">
+              <span data-en="i">Voice</span><span data-af="i">Stem</span>
+              <span class="og-modes-pill">SOON</span>
+            </button>
+          </div>
+
+          <div class="og-modes-panel is-active" id="mode-text" data-mode="text" role="tabpanel">
+            <div class="og-chat">
+              <div class="og-chat-head">
+                <span class="og-chat-avatar" aria-hidden="true">
+                  <img src="/assets/ongiini-icon-192-v2.png" alt="" width="34" height="34" />
+                </span>
+                <div class="og-chat-meta">
+                  <div class="og-chat-name">Ongiini</div>
+                  <div class="og-chat-status">
+                    <span data-en="i">online</span>
+                    <span data-af="i">aanlyn</span>
+                  </div>
+                </div>
+              </div>
+              <div class="og-chat-body">
+                <div class="og-msg og-msg--out">
+                  <p>
+                    <span data-en="i">My 18-month-old only wants to eat pap. How do I get more nutrients in?</span>
+                    <span data-af="i">My 18 maande oue kind wil net pap eet. Hoe kry ek meer voedingstowwe in?</span>
+                  </p>
+                  <span class="og-msg-time" aria-hidden="true">14:32</span>
+                </div>
+                <div class="og-msg og-msg--in">
+                  <p>
+                    <span data-en="i">Pap is a great base. Mash in pumpkin for vitamins, add a spoon of peanut paste for protein, or a boiled egg. Five small meals a day work better than three big ones. If she's always tired or her hair turns reddish, take her to the clinic.</span>
+                    <span data-af="i">Pap is 'n goeie basis. Stamp pampoen in vir vitamiene, voeg 'n lepel grondboontjiebotter by vir proteïen, of 'n gekookte eier. Vyf klein maaltye 'n dag werk beter as drie grotes. As sy heeltyd moeg is of haar hare rooierig word, vat haar kliniek toe.</span>
+                  </p>
+                  <span class="og-msg-time" aria-hidden="true">14:32</span>
                 </div>
               </div>
             </div>
-            <div class="og-chat-body">
-              <div class="og-msg og-msg--out">
-                <p>
-                  <span data-en="i">My 18-month-old only wants to eat pap. How do I get more nutrients in?</span>
-                  <span data-af="i">My 18 maande oue kind wil net pap eet. Hoe kry ek meer voedingstowwe in?</span>
-                </p>
-                <span class="og-msg-time" aria-hidden="true">14:32</span>
+            <p class="og-modes-caption">
+              <span data-en="i">Type a question, get a useful answer back.</span>
+              <span data-af="i">Tik 'n vraag, kry 'n nuttige antwoord terug.</span>
+            </p>
+          </div>
+
+          <div class="og-modes-panel" id="mode-photo" data-mode="photo" role="tabpanel">
+            <div class="og-chat">
+              <div class="og-chat-head">
+                <span class="og-chat-avatar" aria-hidden="true">
+                  <img src="/assets/ongiini-icon-192-v2.png" alt="" width="34" height="34" />
+                </span>
+                <div class="og-chat-meta">
+                  <div class="og-chat-name">Ongiini</div>
+                  <div class="og-chat-status">
+                    <span data-en="i">online</span>
+                    <span data-af="i">aanlyn</span>
+                  </div>
+                </div>
               </div>
-              <div class="og-msg og-msg--in">
-                <p>
-                  <span data-en="i">Pap is a great base. Mash in pumpkin or sweet potato for vitamins A and C, a spoon of peanut paste for protein and fats, or a boiled egg — about the most complete food going. Five small meals a day beat three big ones at this age. If she's always tired or her hair turns reddish, take her to the clinic.</span>
-                  <span data-af="i">Pap is 'n goeie basis. Stamp pampoen of patat in vir vitamiene A en C, 'n lepel grondboontjiebotter vir proteïen en vette, of 'n gekookte eier — omtrent die volledigste kos wat daar is. Vyf klein maaltye 'n dag is beter as drie grotes op hierdie ouderdom. As sy heeltyd moeg is of haar hare rooierig word, vat haar kliniek toe.</span>
-                </p>
-                <span class="og-msg-time" aria-hidden="true">14:32</span>
+              <div class="og-chat-body">
+                <div class="og-msg og-msg--out og-msg--photo">
+                  <figure class="og-msg-photo">
+                    <img src="/assets/maize.webp"
+                         srcset="/assets/maize-480.webp 480w, /assets/maize.webp 800w"
+                         sizes="(min-width: 880px) 260px, 70vw"
+                         width="800" height="600"
+                         alt="Maize leaf with yellowing from the tip — a sign of nitrogen deficiency"
+                         loading="lazy"
+                         decoding="async" />
+                  </figure>
+                  <span class="og-msg-time" aria-hidden="true">10:14</span>
+                </div>
+                <div class="og-msg og-msg--in">
+                  <p>
+                    <span data-en="i">Looks like nitrogen deficiency — yellow that starts at the tip and works back. A side-dressing of urea, watered in well, usually turns it around in a week or two.</span>
+                    <span data-af="i">Lyk soos stikstoftekort — die geel begin by die punt en werk terug. 'n Sykos van ureum, goed ingewater, draai dit gewoonlik binne 'n week of twee om.</span>
+                  </p>
+                  <span class="og-msg-time" aria-hidden="true">10:14</span>
+                </div>
               </div>
             </div>
+            <p class="og-modes-caption">
+              <span data-en="i">Hard to describe? Send a picture instead.</span>
+              <span data-af="i">Sukkel om te beskryf? Stuur eerder 'n foto.</span>
+            </p>
+          </div>
+
+          <div class="og-modes-panel" id="mode-voice" data-mode="voice" role="tabpanel">
+            <div class="og-chat">
+              <div class="og-chat-head">
+                <span class="og-chat-avatar" aria-hidden="true">
+                  <img src="/assets/ongiini-icon-192-v2.png" alt="" width="34" height="34" />
+                </span>
+                <div class="og-chat-meta">
+                  <div class="og-chat-name">Ongiini</div>
+                  <div class="og-chat-status">
+                    <span data-en="i">online</span>
+                    <span data-af="i">aanlyn</span>
+                  </div>
+                </div>
+              </div>
+              <div class="og-chat-body">
+                <div class="og-msg og-msg--out og-msg--voice">
+                  <span class="og-msg-voice-play" aria-hidden="true">
+                    <svg width="10" height="11" viewBox="0 0 10 11" fill="currentColor"><path d="M1 1 L9 5.5 L1 10 Z"/></svg>
+                  </span>
+                  <svg class="og-msg-voice-bars" viewBox="0 0 120 16" preserveAspectRatio="none" aria-hidden="true">
+                    <rect x="0" y="6" width="2" height="4" fill="currentColor"/>
+                    <rect x="4" y="3" width="2" height="10" fill="currentColor"/>
+                    <rect x="8" y="5" width="2" height="6" fill="currentColor"/>
+                    <rect x="12" y="1" width="2" height="14" fill="currentColor"/>
+                    <rect x="16" y="4" width="2" height="8" fill="currentColor"/>
+                    <rect x="20" y="2" width="2" height="12" fill="currentColor"/>
+                    <rect x="24" y="6" width="2" height="4" fill="currentColor"/>
+                    <rect x="28" y="5" width="2" height="6" fill="currentColor"/>
+                    <rect x="32" y="3" width="2" height="10" fill="currentColor"/>
+                    <rect x="36" y="4" width="2" height="8" fill="currentColor"/>
+                    <rect x="40" y="1" width="2" height="14" fill="currentColor"/>
+                    <rect x="44" y="6" width="2" height="4" fill="currentColor"/>
+                    <rect x="48" y="3" width="2" height="10" fill="currentColor"/>
+                    <rect x="52" y="5" width="2" height="6" fill="currentColor"/>
+                    <rect x="56" y="2" width="2" height="12" fill="currentColor"/>
+                    <rect x="60" y="4" width="2" height="8" fill="currentColor"/>
+                    <rect x="64" y="1" width="2" height="14" fill="currentColor"/>
+                    <rect x="68" y="3" width="2" height="10" fill="currentColor"/>
+                    <rect x="72" y="6" width="2" height="4" fill="currentColor"/>
+                    <rect x="76" y="4" width="2" height="8" fill="currentColor"/>
+                    <rect x="80" y="5" width="2" height="6" fill="currentColor"/>
+                    <rect x="84" y="2" width="2" height="12" fill="currentColor"/>
+                    <rect x="88" y="6" width="2" height="4" fill="currentColor"/>
+                    <rect x="92" y="3" width="2" height="10" fill="currentColor"/>
+                    <rect x="96" y="1" width="2" height="14" fill="currentColor"/>
+                    <rect x="100" y="4" width="2" height="8" fill="currentColor"/>
+                    <rect x="104" y="5" width="2" height="6" fill="currentColor"/>
+                    <rect x="108" y="3" width="2" height="10" fill="currentColor"/>
+                    <rect x="112" y="6" width="2" height="4" fill="currentColor"/>
+                    <rect x="116" y="7" width="2" height="2" fill="currentColor"/>
+                  </svg>
+                  <span class="og-msg-voice-dur" aria-hidden="true">0:23</span>
+                  <span class="og-msg-time" aria-hidden="true">09:48</span>
+                </div>
+                <div class="og-msg og-msg--in">
+                  <p>
+                    <span data-en="i">From what I heard — the "basic charge" is the fixed monthly fee, even if you use no power. The "energy charge" is what changes with how much you use. This month's spike looks like extra units, not extra fees.</span>
+                    <span data-af="i">Van wat ek gehoor het — die "basiese koste" is die vaste maandelikse fooi, selfs as jy geen krag gebruik nie. Die "energie-koste" verander met hoeveel jy gebruik. Hierdie maand se styging lyk soos ekstra eenhede, nie ekstra fooie nie.</span>
+                  </p>
+                  <span class="og-msg-time" aria-hidden="true">09:49</span>
+                </div>
+              </div>
+            </div>
+            <p class="og-modes-caption">
+              <span data-en="i">Coming soon — send a voice note when speaking is easier.</span>
+              <span data-af="i">Binnekort — stuur 'n stemnota wanneer praat makliker is.</span>
+            </p>
           </div>
         </div>
       </div>
@@ -897,27 +1115,21 @@
           <span data-en>Try asking</span>
           <span data-af>Probeer vra</span>
         </div>
-        <h2 class="og-h2" data-en>What people are using it for.</h2>
-        <h2 class="og-h2" data-af>Waarvoor mense dit gebruik.</h2>
+        <h2 class="og-h2" data-en>Questions people are asking.</h2>
+        <h2 class="og-h2" data-af>Vrae wat mense vra.</h2>
         <ul class="og-try" data-en>
           <li class="og-try-item"><span class="og-try-num">01</span><span class="og-try-q">Explain photosynthesis like I'm 12.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
           <li class="og-try-item"><span class="og-try-num">02</span><span class="og-try-q">My maize leaves are turning yellow — what could be wrong?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
           <li class="og-try-item"><span class="og-try-num">03</span><span class="og-try-q">I've had a fever and headache for two days. What might it be?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
           <li class="og-try-item"><span class="og-try-num">04</span><span class="og-try-q">Translate this rental contract clause into plain English.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Help me revise for my Grade 12 maths exam.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">06</span><span class="og-try-q">Help my om 'n CV vir my eerste werksaansoek te skryf.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">07</span><span class="og-try-q">How do I register a small business in Namibia?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">08</span><span class="og-try-q">Verduidelik fotosintese vir my eenvoudig.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">How do I register a small business in Namibia?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
         </ul>
         <ul class="og-try" data-af>
           <li class="og-try-item"><span class="og-try-num">01</span><span class="og-try-q">Verduidelik fotosintese vir my asof ek 12 is.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
           <li class="og-try-item"><span class="og-try-num">02</span><span class="og-try-q">My mielieblare word geel — wat kan verkeerd wees?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
           <li class="og-try-item"><span class="og-try-num">03</span><span class="og-try-q">Ek het al twee dae lank koors en hoofpyn. Wat kan dit wees?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
           <li class="og-try-item"><span class="og-try-num">04</span><span class="og-try-q">Vertaal hierdie huurkontrak-klousule in eenvoudige Afrikaans.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Help my om vir my Graad 12 wiskunde-eksamen te leer.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">06</span><span class="og-try-q">Help me write a CV for my first job application.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">07</span><span class="og-try-q">Hoe registreer ek 'n klein besigheid in Namibië?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">08</span><span class="og-try-q">Summarise this news article in three sentences.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Hoe registreer ek 'n klein besigheid in Namibië?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
         </ul>
 
         <div class="og-try-cta">
@@ -939,12 +1151,11 @@
 
         <div class="og-try-soon">
           <span class="og-try-soon-label">
-            <span data-en="i">Still to come</span><span data-af="i">Nog op pad</span>
+            <span data-en="i">Features still to come</span><span data-af="i">Funksies nog op pad</span>
           </span>
           <ul class="og-roadmap" aria-label="Coming soon">
             <li><span data-en="i">Voice messages</span><span data-af="i">Stemboodskappe</span><span class="og-roadmap-pill">SOON</span></li>
-            <li><span data-en="i">Image understanding</span><span data-af="i">Beeldherkenning</span><span class="og-roadmap-pill">SOON</span></li>
-            <li><span data-en="i">Oshiwambo (via translation)</span><span data-af="i">Oshiwambo (via vertaling)</span><span class="og-roadmap-pill">SOON</span></li>
+            <li><span data-en="i">Oshiwambo</span><span data-af="i">Oshiwambo</span><span class="og-roadmap-pill">SOON</span></li>
           </ul>
         </div>
       </div>
@@ -953,11 +1164,11 @@
     <section class="og-section og-section--dark" id="open">
       <div class="og-wrap og-section-inner">
         <div class="og-eyebrow" style="color: var(--ink-faint)">
-          <span data-en>Open · Transparent · Yours</span>
-          <span data-af>Oop · Deursigtig · Joune</span>
+          <span data-en>Commitment</span>
+          <span data-af>Toewyding</span>
         </div>
-        <h2 class="og-h2" data-en>No black box. No US cloud. No catch.</h2>
-        <h2 class="og-h2" data-af>Geen swart boks nie. Geen US-wolk nie. Geen haakplek nie.</h2>
+        <h2 class="og-h2" data-en>Nothing hidden. Nothing sold.</h2>
+        <h2 class="og-h2" data-af>Niks weggesteek nie. Niks verkoop nie.</h2>
         <div class="og-feature">
           <figure class="og-feature-fig">
             <img src="/assets/dgx-spark.webp"
@@ -973,22 +1184,22 @@
               <div class="og-card-num">01</div>
               <div class="og-card-head" data-en>Hardware in plain sight</div>
               <div class="og-card-head" data-af>Hardeware in volle sig</div>
-              <p class="og-card-body" data-en>A single NVIDIA DGX Spark — a personal AI supercomputer the size of a small book, not a data centre. One petaflop of compute, 128 GB of unified memory, sitting on a shelf.</p>
-              <p class="og-card-body" data-af>'n Enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek, nie 'n datasentrum nie. Een petaflop rekenkrag, 128 GB verenigde geheue, op 'n rak.</p>
+              <p class="og-card-body" data-en>It runs on one small computer — about the size of a thick book — sitting on a shelf in our office. Not a data centre. Not thousands of servers somewhere.</p>
+              <p class="og-card-body" data-af>Dit loop op een klein rekenaar — omtrent so groot soos 'n dik boek — wat op 'n rak in ons kantoor staan. Nie 'n datasentrum nie. Nie duisende bedieners iewers nie.</p>
             </div>
             <div class="og-card">
               <div class="og-card-num">02</div>
-              <div class="og-card-head" data-en>Open-source model</div>
-              <div class="og-card-head" data-af>Oopbron-model</div>
-              <p class="og-card-body" data-en>Powered by Google DeepMind's <strong>Gemma 4 26B</strong> — released April 2026 under the Apache 2.0 license. Among the strongest open models in the world. No closed API, no upstream provider that can switch us off.</p>
-              <p class="og-card-body" data-af>Aangedryf deur Google DeepMind se <strong>Gemma 4 26B</strong> — vrygestel in April 2026 onder die Apache 2.0-lisensie. Onder die sterkste oop modelle in die wêreld. Geen geslote API nie, geen verskaffer wat ons kan afsluit nie.</p>
+              <div class="og-card-head" data-en>AI anyone can use</div>
+              <div class="og-card-head" data-af>KI wat enigeen kan gebruik</div>
+              <p class="og-card-body" data-en>The AI that powers Ongiini is shared freely by its makers — anyone is allowed to use it, including us. That means nobody can flip a switch and take it away.</p>
+              <p class="og-card-body" data-af>Die KI wat Ongiini aandryf word vrylik deur sy makers gedeel — enigeen mag dit gebruik, ons ingesluit. Dit beteken niemand kan 'n skakelaar omdraai en dit van ons af wegneem nie.</p>
             </div>
             <div class="og-card">
               <div class="og-card-num">03</div>
-              <div class="og-card-head" data-en>Open-source code</div>
-              <div class="og-card-head" data-af>Oopbron-kode</div>
-              <p class="og-card-body" data-en>Every line of the stack — the WhatsApp webhook, the prompts, the deployment recipe — is on GitHub. Read it, audit it, fork it, run your own.</p>
-              <p class="og-card-body" data-af>Elke reël van die stapel — die WhatsApp-webhook, die prompts, die ontplooiingsresep — is op GitHub. Lees dit, oudit dit, fork dit, hardloop jou eie.</p>
+              <div class="og-card-head" data-en>Built in the open</div>
+              <div class="og-card-head" data-af>In die oop gebou</div>
+              <p class="og-card-body" data-en>Every part of how Ongiini works is published online. Anyone can look, anyone can check, anyone can build their own version.</p>
+              <p class="og-card-body" data-af>Elke deel van hoe Ongiini werk is aanlyn gepubliseer. Enigeen kan kyk, enigeen kan kontroleer, enigeen kan hul eie weergawe bou.</p>
             </div>
             <div class="og-card">
               <div class="og-card-num">04</div>
@@ -1016,15 +1227,15 @@
             <div class="og-card-num">01</div>
             <div class="og-card-head" data-en>What we keep</div>
             <div class="og-card-head" data-af>Wat ons stoor</div>
-            <p class="og-card-body" data-en>About the last 10 messages from your number, so the assistant can follow a conversation. Older messages are compressed into a short summary line. Obvious personal data — email, ID, IBAN, card — is scrubbed before anything is written.</p>
-            <p class="og-card-body" data-af>Sowat die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg. Ouer boodskappe word in 'n kort opsommingsreël saamgepers. Voor-die-hand-liggende persoonlike data — e-pos, ID, IBAN, kaart — word verwyder voor enige berging.</p>
+            <p class="og-card-body" data-en>The last 10 messages so Ongiini can follow the current chat, plus a small set of facts it picks up across conversations (like your location or what you're working on). Personal data — email, ID, bank card — is removed before anything is saved.</p>
+            <p class="og-card-body" data-af>Die laaste 10 boodskappe sodat Ongiini die huidige gesprek kan volg, plus 'n klein versameling feite wat oor gesprekke heen opgetel word (soos jou ligging of waarmee jy besig is). Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">02</div>
             <div class="og-card-head" data-en>What we don't</div>
             <div class="og-card-head" data-af>Wat ons nie doen nie</div>
-            <p class="og-card-body" data-en>No selling. No advertising. No training anyone's model on your conversations. No US cloud anywhere in the pipeline — your messages stay on a single computer we operate.</p>
-            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen opleiding van iemand se model op jou gesprekke nie. Geen US-wolk in die roete nie — jou boodskappe bly op 'n enkele rekenaar wat ons self bedryf.</p>
+            <p class="og-card-body" data-en>No selling. No advertising. No training anyone's AI on your conversations. No big tech company anywhere in the path — your messages stay on the small computer we run ourselves.</p>
+            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen opleiding van iemand se KI op jou gesprekke nie. Geen groot tegnologiemaatskappy in die roete nie — jou boodskappe bly op die klein rekenaar wat ons self bedryf.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">03</div>
@@ -1053,8 +1264,8 @@
               <div class="og-free-label" data-en>Per user · per month · resets on the 1st</div>
               <div class="og-free-label" data-af>Per gebruiker · per maand · herstel op die 1ste</div>
             </div>
-            <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. One million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones, over the course of a month. We picked this number to keep the service sustainable on a single computer running in one office.</p>
-            <p class="og-free-detail" data-af>'n Token is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. Een miljoen tokens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele, oor die loop van 'n maand. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar wat in een kantoor loop.</p>
+            <p class="og-free-detail" data-en>That's about <strong>500 conversations</strong> over the course of a month — plenty for normal use. We picked this number so the service stays sustainable on a single small computer. <em>(What's a token? See the questions below.)</em></p>
+            <p class="og-free-detail" data-af>Dis omtrent <strong>500 gesprekke</strong> oor die loop van 'n maand — genoeg vir normale gebruik. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele klein rekenaar. <em>(Wat is 'n token? Sien die vrae hieronder.)</em></p>
           </div>
           <div class="og-token-viz">
             <div class="og-token-grid" id="token-grid" aria-hidden="true"></div>
@@ -1081,8 +1292,8 @@
           <span data-en>Questions</span>
           <span data-af>Vrae</span>
         </div>
-        <h2 class="og-h2" data-en>Things people ask.</h2>
-        <h2 class="og-h2" data-af>Wat mense vra.</h2>
+        <h2 class="og-h2" data-en>Frequently Asked Questions.</h2>
+        <h2 class="og-h2" data-af>Veelgestelde Vrae.</h2>
         <div class="og-faq" id="faq-list"></div>
       </div>
     </section>
@@ -1096,8 +1307,8 @@
         <h2 class="og-h2" data-en>Help shape this.</h2>
         <h2 class="og-h2" data-af>Help vorm dit.</h2>
 
-        <p class="og-contribute-lead" data-en>I'm paying for the hardware, the electricity, the tokens — myself. That's part of the point: to show this can be done by <em>one person on one computer</em>, without a billion-dollar cloud. If Ongiini is useful to you, there are three good ways to help.</p>
-        <p class="og-contribute-lead" data-af>Ek betaal self vir die hardeware, die elektrisiteit, die tokens. Dit is deel van die punt: om te wys dit kan gedoen word deur <em>een persoon op een rekenaar</em>, sonder 'n miljard-dollar wolk. As Ongiini vir jou nuttig is, is daar drie goeie maniere om te help.</p>
+        <p class="og-contribute-lead" data-en>I'm paying for the computer, the electricity, the running costs — myself. That's part of the point: to show this can be done by <em>one person on one computer</em>, without a giant company behind it. If Ongiini is useful to you, there are three good ways to help.</p>
+        <p class="og-contribute-lead" data-af>Ek betaal self vir die rekenaar, die elektrisiteit, die bedryfskoste. Dit is deel van die punt: om te wys dit kan gedoen word deur <em>een persoon op een rekenaar</em>, sonder 'n reuse-maatskappy daaragter. As Ongiini vir jou nuttig is, is daar drie goeie maniere om te help.</p>
 
         <div class="og-grid">
           <div class="og-card">
@@ -1111,8 +1322,8 @@
             <div class="og-card-num">02</div>
             <div class="og-card-head" data-en>Tell someone</div>
             <div class="og-card-head" data-af>Vertel iemand</div>
-            <p class="og-card-body" data-en>Most Namibians still don't know there's a free AI assistant on WhatsApp. Sharing the number with one person who could use it is the biggest help anyone can give.</p>
-            <p class="og-card-body" data-af>Die meeste Namibiërs weet nog nie daar's 'n gratis KI-assistent op WhatsApp nie. Om die nommer met een persoon te deel wat dit kan gebruik, is die grootste hulp.</p>
+            <p class="og-card-body" data-en>Most Namibians still don't know there's a free AI helper for everyday questions on WhatsApp. Sharing the number with one person who could use it is the biggest help anyone can give.</p>
+            <p class="og-card-body" data-af>Die meeste Namibiërs weet nog nie daar's 'n gratis KI-hulpmiddel vir alledaagse vrae op WhatsApp nie. Om die nommer met een persoon te deel wat dit kan gebruik, is die grootste hulp.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">03</div>
@@ -1160,7 +1371,7 @@
                 <circle cx="15.5" cy="11.75" r="1.05" fill="currentColor"/>
               </svg>
             </span>
-            <span data-en="i">Chat on WhatsApp</span><span data-af="i">Gesels op WhatsApp</span>
+            <span data-en="i">Ask on WhatsApp</span><span data-af="i">Vra op WhatsApp</span>
           </span>
           <span class="og-cta-arrow">→</span>
         </a>
@@ -1195,10 +1406,10 @@
           </div>
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
           <a href="#try"><span data-en="i">Try asking</span><span data-af="i">Probeer vra</span></a>
-          <a href="#open"><span data-en="i">Open &amp; transparent</span><span data-af="i">Oop &amp; deursigtig</span></a>
+          <a href="#open"><span data-en="i">Commitment</span><span data-af="i">Toewyding</span></a>
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
           <a href="#free"><span data-en="i">Free, with limits</span><span data-af="i">Gratis, met limiet</span></a>
-          <a href="#faq"><span data-en="i">Questions</span><span data-af="i">Vrae</span></a>
+          <a href="#faq"><span data-en="i">FAQs</span><span data-af="i">FAQs</span></a>
           <a href="#contribute"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
         </nav>
 
@@ -1306,16 +1517,35 @@
         else if (navigator.language && navigator.language.toLowerCase().indexOf("af") === 0) setLocale("af");
       } catch (e) {}
 
-      // Token grid — 800 small squares each representing one normal conversation.
+      // Mission modes — three tabs (Text / Photo / Voice) swap their content panel.
+      var modeTabs = document.querySelectorAll('.og-modes-tab');
+      var modePanels = document.querySelectorAll('.og-modes-panel');
+      function activateMode(mode) {
+        for (var i = 0; i < modeTabs.length; i++) {
+          var active = (modeTabs[i].getAttribute('data-mode') === mode);
+          modeTabs[i].classList.toggle('is-active', active);
+          modeTabs[i].setAttribute('aria-selected', active ? 'true' : 'false');
+        }
+        for (var j = 0; j < modePanels.length; j++) {
+          modePanels[j].classList.toggle('is-active', modePanels[j].getAttribute('data-mode') === mode);
+        }
+      }
+      for (var i = 0; i < modeTabs.length; i++) {
+        (function (t) {
+          t.addEventListener('click', function () { activateMode(t.getAttribute('data-mode')); });
+        })(modeTabs[i]);
+      }
+
+      // Token grid — 500 small squares each representing one normal conversation.
       // The first 150 are highlighted darker, representing "5 conversations a day
-      // for a 30-day month" — i.e. heavy daily use. The remaining ~650 dots are
+      // for a 30-day month" — i.e. solid daily use. The remaining 350 dots are
       // the buffer left in your monthly cap. Rendered in JS to keep HTML lean;
       // degrades to nothing if JS is off.
       var tokenGrid = document.getElementById("token-grid");
       if (tokenGrid && !tokenGrid.children.length) {
         var USED = 150;
         var frag = document.createDocumentFragment();
-        for (var t = 0; t < 800; t++) {
+        for (var t = 0; t < 500; t++) {
           var d = document.createElement("i");
           if (t < USED) d.className = "is-used";
           frag.appendChild(d);
@@ -1325,22 +1555,28 @@
 
       // FAQ (safe DOM construction)
       var FAQ = [
-        { en: ["What is Ongiini?", "A free AI assistant you chat with on WhatsApp. Send it a question — about anything — and you get a useful answer back. Built on a simple idea: a tool this useful belongs to all of us, not just to whoever can afford a subscription."],
-          af: ["Wat is Ongiini?", "'n Gratis KI-assistent waarmee jy op WhatsApp gesels. Stuur 'n vraag — oor enigiets — en kry 'n nuttige antwoord. Gebou op 'n eenvoudige idee: so 'n nuttige hulpmiddel behoort aan ons almal, nie net aan dié wat 'n intekening kan bekostig nie."] },
-        { en: ["Why 'Ongiini'?", "It's the everyday Oshiwambo greeting — literally 'How are you?', used the way English speakers use 'Hello'. It's the first word many Namibians hear and say each day. Naming the assistant after it felt right: the brand name is the assistant's own first message to you, said in a language of the country it serves."],
-          af: ["Hoekom 'Ongiini'?", "Dit is die alledaagse Oshiwambo-groet — letterlik 'Hoe gaan dit?', gebruik soos Engelssprekendes 'Hello' gebruik. Dit is die eerste woord wat baie Namibiërs elke dag hoor en sê. Om die assistent daarna te noem het reg gevoel: die handelsmerknaam is die assistent se eie eerste boodskap aan jou, gesê in 'n taal van die land wat dit bedien."] },
+        { en: ["What is Ongiini?", "A free AI helper on WhatsApp. Send a question — about learning, work, health, daily life — and you get a useful answer back. Built on a simple idea: a tool this useful belongs to all of us, not just to whoever can afford a subscription."],
+          af: ["Wat is Ongiini?", "'n Gratis KI-hulpmiddel op WhatsApp. Stuur 'n vraag — oor leer, werk, gesondheid, die alledaagse lewe — en kry 'n nuttige antwoord. Gebou op 'n eenvoudige idee: so 'n nuttige hulpmiddel behoort aan ons almal, nie net aan dié wat 'n intekening kan bekostig nie."] },
+        { en: ["Why 'Ongiini'?", "It's the everyday Oshiwambo greeting — literally 'How are you?', used the way English speakers use 'Hello'. It's the first word many Namibians hear and say each day. Naming the project after it felt right: the brand name is its own first message to you, said in a language of the country it serves."],
+          af: ["Hoekom 'Ongiini'?", "Dit is die alledaagse Oshiwambo-groet — letterlik 'Hoe gaan dit?', gebruik soos Engelssprekendes 'Hello' gebruik. Dit is die eerste woord wat baie Namibiërs elke dag hoor en sê. Om die projek daarna te noem het reg gevoel: die handelsmerknaam is sy eie eerste boodskap aan jou, gesê in 'n taal van die land wat dit bedien."] },
         { en: ["Why Namibia?", "A few reasons that fit. Almost everyone uses WhatsApp on the phone they already have — nothing to install, no account to make. English and Afrikaans are widely spoken, and they're the two languages Gemma 4 handles well today. The country is small enough (~3 million people) that one DGX Spark can realistically serve a meaningful share of users on a generous one-million-token-per-month cap each. And the mix of urban and rural, multilingual, formal and informal use cases makes Namibia a real test of whether free AI on WhatsApp can be a genuine game-changer for everyday life — schoolwork, farming, contracts, health, small business — and not just a demo. If it proves itself here, it'll probably prove itself elsewhere too."],
           af: ["Hoekom Namibië?", "'n Paar redes wat pas. Byna almal gebruik WhatsApp op die foon wat hulle reeds dra — niks om te installeer nie, geen rekening om te skep nie. Engels en Afrikaans word wyd gepraat, en dit is die twee tale wat Gemma 4 vandag goed hanteer. Die land is klein genoeg (~3 miljoen mense) dat een DGX Spark werklik 'n betekenisvolle deel van gebruikers kan bedien op 'n ruim limiet van een miljoen tokens per maand elk. En die mengsel van stedelik en landelik, meertalig, formeel en informeel maak Namibië 'n werklike toets van of gratis KI op WhatsApp 'n egte spelveranderaar vir die alledaagse lewe kan wees — skoolwerk, boerdery, kontrakte, gesondheid, klein besigheid — en nie net 'n demo nie. As dit hier sy waarde bewys, sal dit waarskynlik ook elders werk."] },
-        { en: ["Does it cost anything?", "No. Each user gets one million free tokens per month, which covers about 800 normal conversations — easily more than typical daily use. The cap resets on the 1st of every month. WhatsApp's normal data charges from your mobile provider still apply, but Ongiini itself is free."],
-          af: ["Kos dit iets?", "Nee. Elke gebruiker kry een miljoen gratis tokens per maand, wat sowat 800 normale gesprekke dek — heelwat meer as tipiese daaglikse gebruik. Die limiet stel die 1ste van elke maand terug. WhatsApp se gewone dataheffings van jou mobiele verskaffer geld steeds, maar Ongiini self is gratis."] },
+        { en: ["Does it cost anything?", "No. Each user gets one million free tokens per month, which covers about 500 normal conversations — easily more than typical daily use. The cap resets on the 1st of every month. WhatsApp's normal data charges from your mobile provider still apply, but Ongiini itself is free."],
+          af: ["Kos dit iets?", "Nee. Elke gebruiker kry een miljoen gratis tokens per maand, wat sowat 500 normale gesprekke dek — heelwat meer as tipiese daaglikse gebruik. Die limiet stel die 1ste van elke maand terug. WhatsApp se gewone dataheffings van jou mobiele verskaffer geld steeds, maar Ongiini self is gratis."] },
+        { en: ["What is a token?", "It's how AI measures the text it reads and writes — roughly three-quarters of a word, including punctuation. \"How are you?\" is about 4 tokens. \"My maize leaves are turning yellow\" is about 9. One million tokens — your free monthly cap — works out to roughly 500 normal back-and-forth conversations over a month."],
+          af: ["Wat is 'n token?", "Dit is hoe KI die teks meet wat dit lees en skryf — sowat drie-kwart van 'n woord, leestekens ingesluit. \"Hoe gaan dit?\" is omtrent 4 tokens. \"My mielieblare word geel\" is omtrent 7. Een miljoen tokens — jou gratis maandlimiet — kom neer op sowat 500 normale heen-en-weer-gesprekke oor 'n maand."] },
+        { en: ["What exactly counts toward my monthly tokens?", "Every reply Ongiini sends you, including the tokens used to read any photo you attach. Plus a small amount for the behind-the-scenes work of keeping your long-term memory in sync after each message, and the occasional summary that compresses old turns of a long conversation. Reading existing memory back to you is free. Asking 'how many tokens have I used this month?' on WhatsApp gives you a breakdown across all three."],
+          af: ["Wat tel presies teen my maandelikse tokens?", "Elke antwoord wat Ongiini stuur, insluitend die tokens om enige foto wat jy aanstuur te lees. Plus 'n klein bietjie vir die agtergrondwerk om jou langtermyngeheue ná elke boodskap by te werk, en die nou en dan opsomming wat ou dele van 'n lang gesprek saampers. Om bestaande geheue terug te lees, is gratis. Vra 'hoeveel tokens het ek hierdie maand gebruik?' op WhatsApp en jy kry 'n uiteensetting oor al drie."] },
         { en: ["Which languages can I use?", "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it (that's unlikely to happen soon) but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."],
           af: ["Watter tale kan ek gebruik?", "Engels en Afrikaans werk vandag goed. Oshiwambo kom binnekort — nie deur te wag vir 'n model wat dit van nature verstaan nie (dit gebeur waarskynlik nie binnekort nie), maar deur 'n vertaallaag wat onder die enjinkap na en van Engels omskakel, terwyl Gemma 4 die brein bly. Otjiherero en Damara-Nama is op dieselfde pad."] },
-        { en: ["What can I ask it?", "Anything you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice — learning and everyday questions of every kind."],
-          af: ["Wat kan ek dit vra?", "Enigiets wat jy 'n kundige vriend sou vra. Verduidelik 'n skoolvak, help jou 'n kontrak of nuusartikel verstaan, vertaal, stel 'n CV of e-pos op, werk deur 'n wiskundeprobleem, som 'n dokument op, vra oor 'n siek mielieplant, 'n koors, 'n regskennisgewing — leer en alledaagse vrae van elke soort."] },
-        { en: ["How accurate is it?", "Sometimes very accurate. Sometimes confidently wrong — that's the nature of large language models today. Treat its answers like advice from a knowledgeable friend who can also make mistakes. Never make decisions about your health, money or legal status based on Ongiini's answer alone. Verify with a doctor, lawyer or other qualified person."],
-          af: ["Hoe akkuraat is dit?", "Soms baie akkuraat. Soms met selfvertroue verkeerd — dit is die aard van groot taalmodelle vandag. Behandel sy antwoorde soos raad van 'n kundige vriend wat ook foute kan maak. Moet nooit besluite oor jou gesondheid, geld of regstatus net op grond van Ongiini se antwoord maak nie. Kontroleer altyd met 'n dokter, prokureur of ander gekwalifiseerde persoon."] },
-        { en: ["What exactly do you store about me?", "Two things. (1) Roughly the last 10 messages from your phone number, so the assistant can follow a conversation — anything older is compressed into a short summary line. Before each message lands on disk, obvious personal data (email, ID-shape numbers, IBANs, card numbers) is auto-scrubbed and replaced with placeholders. (2) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No location, no contacts, no profile. Want to see what's stored? Ask 'what do you remember about me?' on WhatsApp. Want it deleted? Send 'delete my data' — both work in English and Afrikaans."],
-          af: ["Wat presies stoor julle van my?", "Twee dinge. (1) Ongeveer die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg — enigiets ouer word in 'n kort opsommingsreël saamgepers. Voordat elke boodskap geberg word, word voor-die-hand-liggende persoonlike data (e-pos, ID-nommers, IBANs, kaartnommers) outomaties verwyder en met plekhouers vervang. (2) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen ligging, geen kontakte, geen profiel. Wil jy sien wat gestoor is? Vra 'wat onthou jy oor my?' op WhatsApp. Wil jy dit verwyder? Stuur 'verwyder my data' — albei werk in Engels en Afrikaans."] },
+        { en: ["What can I ask it?", "Lots of the things you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice — learning and everyday questions of many kinds. You can also send a photo if it's easier to show than tell."],
+          af: ["Wat kan ek dit vra?", "Baie van die goed wat jy 'n kundige vriend sou vra. Verduidelik 'n skoolvak, help jou 'n kontrak of nuusartikel verstaan, vertaal, stel 'n CV of e-pos op, werk deur 'n wiskundeprobleem, som 'n dokument op, vra oor 'n siek mielieplant, 'n koors, 'n regskennisgewing — leer en alledaagse vrae van baie soorte. Jy kan ook 'n foto stuur as dit makliker is om te wys as om te beskryf."] },
+        { en: ["Can I send photos?", "Yes. Take a photo on WhatsApp like normal, add a question as the caption, and send. Ongiini can look at the picture and answer questions about it — useful for a sick plant, a strange rash, an ingredient label, a contract page you can't quite read, or a handwritten note. It works the same way in English and Afrikaans."],
+          af: ["Kan ek foto's stuur?", "Ja. Neem 'n foto op WhatsApp soos gewoonlik, voeg 'n vraag as die onderskrif by, en stuur. Ongiini kan die prentjie bekyk en vrae daaroor beantwoord — handig vir 'n siek plant, 'n vreemde uitslag, 'n bestanddele-etiket, 'n kontrakbladsy wat jy nie heeltemal kan lees nie, of 'n handgeskrewe nota. Dit werk dieselfde in Engels en Afrikaans."] },
+        { en: ["How accurate is it?", "Sometimes very accurate. Sometimes confidently wrong — that's the nature of AI today. Treat its answers like advice from a knowledgeable friend who can also make mistakes. Never make decisions about your health, money or legal status based on Ongiini's answer alone. Verify with a doctor, lawyer or other qualified person."],
+          af: ["Hoe akkuraat is dit?", "Soms baie akkuraat. Soms met selfvertroue verkeerd — dit is die aard van KI vandag. Behandel sy antwoorde soos raad van 'n kundige vriend wat ook foute kan maak. Moet nooit besluite oor jou gesondheid, geld of regstatus net op grond van Ongiini se antwoord maak nie. Kontroleer altyd met 'n dokter, prokureur of ander gekwalifiseerde persoon."] },
+        { en: ["What exactly do you store about me?", "Three things. (1) Roughly the last 10 messages from your phone number, so Ongiini can follow the current conversation — older messages are compressed into a short summary line, and obvious personal data (email, ID, IBAN, card) is auto-scrubbed and replaced with placeholders before saving. (2) A small set of durable facts about you that Ongiini extracts across all our chats — things like 'lives in Oshakati', 'farms maize', 'prefers Afrikaans replies' — stored as a tiny vector database on the same computer. This is what lets it actually feel like talking to someone who remembers you between sessions. (3) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No precise location, no contacts list, no Meta profile data. Want to see what's stored? Ask 'what do you remember about me?' on WhatsApp. Want it all gone? Send 'delete my data' — both work in English and Afrikaans, both wipe all three layers."],
+          af: ["Wat presies stoor julle van my?", "Drie dinge. (1) Ongeveer die laaste 10 boodskappe vanaf jou nommer, sodat Ongiini die huidige gesprek kan volg — ouer boodskappe word in 'n kort opsommingsreël saamgepers, en voor-die-hand-liggende persoonlike data (e-pos, ID, IBAN, kaart) word outomaties verwyder en met plekhouers vervang voordat gestoor word. (2) 'n Klein versameling blywende feite oor jou wat Ongiini oor al ons gesprekke heen onttrek — dinge soos 'woon in Oshakati', 'verbou mielies', 'verkies Afrikaanse antwoorde' — gestoor as 'n klein vektor-databasis op dieselfde rekenaar. Dit is wat dit laat voel asof jy met iemand praat wat jou tussen sessies onthou. (3) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen presiese ligging, geen kontaklys, geen Meta-profieldata. Wil jy sien wat gestoor is? Vra 'wat onthou jy oor my?' op WhatsApp. Wil jy alles uitvee? Stuur 'verwyder my data' — albei werk in Engels en Afrikaans, albei verwyder al drie lae."] },
         { en: ["Where is it physically running?", "On a single NVIDIA DGX Spark — a personal AI supercomputer about the size of a small book (one petaflop of compute, 128 GB of unified memory), not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."],
           af: ["Waar loop dit fisies?", "Op 'n enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek (een petaflop rekenkrag, 128 GB verenigde geheue), nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase. Die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is. Geen US-wolkverskaffer is op enige punt deel van die roete nie."] },
         { en: ["Why a German number, hosted in Germany?", "Honest answer: convenience. This is a personal project, in pilot phase, and Germany is where I live and where the hardware currently sits. A German WhatsApp Business number on a German broadband line was the fastest way to get something real running and put it in front of users. The service itself is locked to Namibian numbers (+264) — that's the audience this is built for. If the pilot earns traction and becomes sustainable, the plan is to physically move the hardware to Namibia and switch to a Namibian number."],

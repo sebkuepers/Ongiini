@@ -28,10 +28,16 @@ import logging
 from threading import Lock
 from typing import Any
 
+from . import mem_llm
 from .config import settings
 from .filters import normalize
 
 log = logging.getLogger("ongiini.mem")
+
+# Patch mem0's LlmFactory so its "vllm" provider resolves to our
+# TrackedVllmLLM, which records token usage against the calling user.
+# Must run BEFORE Memory.from_config builds the LLM instance.
+mem_llm.install()
 
 _memory_singleton: Any = None
 _init_lock = Lock()
@@ -350,18 +356,26 @@ def add_turn(msisdn: str, user_content, assistant_text: str) -> None:
     practice. add_image_turn synthesises a text-only version that the
     extractor handles cleanly.
 
+    The internal LLM calls mem0 makes are tracked against the caller's
+    msisdn via the _current_msisdn context var, so every token mem0
+    spends counts toward the user's monthly allowance.
+
     Never raises — long-term memory is a soft enhancement; if mem0
     hiccups we don't want to break the live reply path.
     """
+    norm = normalize(msisdn)
+    cv_token = mem_llm._current_msisdn.set(norm)
     try:
         m = _client()
         msgs = [
             {"role": "user", "content": user_content},
             {"role": "assistant", "content": assistant_text},
         ]
-        m.add(msgs, user_id=normalize(msisdn))
+        m.add(msgs, user_id=norm)
     except Exception as exc:
         log.warning("mem0 add_turn failed for %s: %s", msisdn, exc)
+    finally:
+        mem_llm._current_msisdn.reset(cv_token)
 
 
 def add_image_turn(msisdn: str, caption: str, assistant_text: str) -> None:

@@ -297,7 +297,7 @@ async def handle_image_message(
             history.append(
                 pii.sanitize_message({"role": "assistant", "content": result.reply})
             )
-            history = await maybe_summarize(history)
+            history = await maybe_summarize(history, msisdn=msisdn)
             memory.save(msisdn, history)
 
             # Long-term: feed mem0 a synthesised text-only version of
@@ -354,7 +354,7 @@ async def handle_message(sender: str, text: str) -> None:
             # is the scrubbed version.
             history.append(pii.sanitize_message({"role": "user", "content": text}))
             history.append(pii.sanitize_message({"role": "assistant", "content": result.reply}))
-            history = await maybe_summarize(history)
+            history = await maybe_summarize(history, msisdn=msisdn)
             memory.save(msisdn, history)
 
             # Long-term semantic memory: feed the just-completed turn to

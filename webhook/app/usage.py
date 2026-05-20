@@ -6,35 +6,72 @@ from .config import settings
 LOG_PATH = settings.data_dir / "usage.log"
 
 # Parses the lines written by record(); kept in lockstep with the format below.
+# The trailing `| kind=...` field is optional so old log lines (pre-v3) still
+# match — they implicitly count as kind=chat for the summary_for() rollup.
 _LINE_RE = re.compile(
     r"^(?P<ts>\S+)\s\|\s(?P<msisdn>\S+)\s\|\stokens_in=(?P<in>\d+)\s"
     r"tokens_out=(?P<out>\d+)\s\|\ssearch=(?P<search>yes|no)"
 )
 
 
-def record(msisdn: str, tokens_in: int, tokens_out: int, used_search: bool) -> None:
+def record(
+    msisdn: str,
+    tokens_in: int,
+    tokens_out: int,
+    used_search: bool,
+    kind: str = "chat",
+) -> None:
+    """Append one accounting line to usage.log.
+
+    `kind` distinguishes WHERE the tokens were spent so we can answer the
+    "what counts toward my monthly allowance" question precisely:
+
+        chat     — the user-facing reply call (everything in respond())
+                   AND any image-content tokens (Gemma 4 vision is part
+                   of the same prompt, billed in prompt_tokens).
+        memory   — mem0's internal extraction + reconciliation calls
+                   that turn a chat turn into typed long-term facts.
+        summary  — the rolling-summary LLM call that compresses old
+                   turns into a leading system message when history
+                   crosses the soft threshold.
+
+    summary_for() sums everything, so the user sees one combined number
+    against their 1M/month allowance — but the kind tag is useful for
+    auditing and for the FAQ explanation.
+    """
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     search = "yes" if used_search else "no"
     line = (
         f"{ts} | {msisdn} | tokens_in={tokens_in} tokens_out={tokens_out} | "
-        f"search={search}\n"
+        f"search={search} | kind={kind}\n"
     )
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(line)
 
 
+_KIND_RE = re.compile(r"\skind=(?P<kind>[a-zA-Z_]+)")
+
+
 def summary_for(msisdn: str) -> dict:
     """Aggregate this user's token usage for the current calendar month (UTC).
 
-    Returns a flat dict the LLM can turn into prose. Missing log file or
-    empty match is treated as zero usage — never raises.
+    Splits by `kind` so the user can see how their monthly allowance is
+    spent: the bulk goes to `chat` (their replies, with image content
+    folded in via prompt_tokens), a smaller share goes to `memory`
+    (mem0's typed-fact extraction across all turns), and `summary` is
+    the occasional rolling-summary call that compresses old turns.
+
+    "messages" counts only `chat` lines so it reflects what the USER
+    sent, not how many internal calls the assistant made handling it.
+    `tokens_total` sums across all kinds so it accurately reports the
+    full month's spend against the 1M allowance.
+
+    Missing log file / empty match → zero usage, never raises.
     """
     now = datetime.now(timezone.utc)
     month_prefix = now.strftime("%Y-%m")
 
-    messages = 0
-    tokens_in = 0
-    tokens_out = 0
+    breakdown: dict[str, dict[str, int]] = {}
 
     if LOG_PATH.exists():
         with LOG_PATH.open("r", encoding="utf-8") as f:
@@ -46,10 +83,18 @@ def summary_for(msisdn: str) -> dict:
                     continue
                 if not m["ts"].startswith(month_prefix):
                     continue
-                messages += 1
-                tokens_in += int(m["in"])
-                tokens_out += int(m["out"])
+                kind_m = _KIND_RE.search(line)
+                kind = kind_m.group("kind") if kind_m else "chat"
+                slot = breakdown.setdefault(
+                    kind, {"count": 0, "tokens_in": 0, "tokens_out": 0}
+                )
+                slot["count"] += 1
+                slot["tokens_in"] += int(m["in"])
+                slot["tokens_out"] += int(m["out"])
 
+    tokens_in = sum(s["tokens_in"] for s in breakdown.values())
+    tokens_out = sum(s["tokens_out"] for s in breakdown.values())
+    messages = breakdown.get("chat", {}).get("count", 0)
     total = tokens_in + tokens_out
     limit = settings.monthly_token_limit
     pct = (total / limit * 100) if limit else 0.0
@@ -61,4 +106,5 @@ def summary_for(msisdn: str) -> dict:
         "tokens_total": total,
         "limit": limit,
         "percent_used": round(pct, 2),
+        "breakdown": breakdown,
     }
