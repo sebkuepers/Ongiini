@@ -988,6 +988,14 @@
             <div class="og-free-label" data-en>Per user · per month · resets on the 1st</div>
             <div class="og-free-label" data-af>Per gebruiker · per maand · herstel op die 1ste</div>
           </div>
+          <div class="og-token-viz">
+            <div class="og-token-grid" id="token-grid" aria-hidden="true"></div>
+            <div class="og-token-key">
+              <span class="og-token-key-dot" aria-hidden="true"></span>
+              <span data-en="i">= one normal conversation · 800 of them</span>
+              <span data-af="i">= een normale gesprek · 800 van hulle</span>
+            </div>
+          </div>
           <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. One million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones, over the course of a month. We picked this number to keep the service sustainable on a single computer running in one office.</p>
           <p class="og-free-detail" data-af>'n Token is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. Een miljoen tokens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele, oor die loop van 'n maand. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar wat in een kantoor loop.</p>
         </div>
@@ -1224,6 +1232,15 @@
         if (saved === "af" || saved === "en") setLocale(saved);
         else if (navigator.language && navigator.language.toLowerCase().indexOf("af") === 0) setLocale("af");
       } catch (e) {}
+
+      // Token grid — 800 small squares each representing one normal conversation.
+      // Rendered in JS to keep the HTML lean; degrades to nothing if JS is off.
+      var tokenGrid = document.getElementById("token-grid");
+      if (tokenGrid && !tokenGrid.children.length) {
+        var frag = document.createDocumentFragment();
+        for (var t = 0; t < 800; t++) frag.appendChild(document.createElement("i"));
+        tokenGrid.appendChild(frag);
+      }
 
       // FAQ (safe DOM construction)
       var FAQ = [
