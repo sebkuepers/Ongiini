@@ -40,26 +40,38 @@ full unified GB10 memory pool.
 hf download bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4 \
   --local-dir ~/models/gemma-4-26b-a4b-nvfp4
 
-# 2. Run vLLM
+# 2. Run vLLM (validated on the Spark — boots in ~3-4 min cold)
 docker run -d \
   --name gemma4-vllm \
   --restart unless-stopped \
   --gpus all --ipc host --shm-size 64gb \
   -p 8124:8000 \
   -v ~/models/gemma-4-26b-a4b-nvfp4:/models/gemma4 \
-  -v ~/models/gemma-4-26b-a4b-nvfp4/gemma4_patched.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/gemma4.py \
   vllm/vllm-openai:gemma4-0505-arm64-cu130 \
   --model /models/gemma4 \
   --served-model-name gemma-4-26b \
   --host 0.0.0.0 --port 8000 \
   --quantization modelopt \
   --kv-cache-dtype fp8 \
-  --max-model-len 131072 \
-  --gpu-memory-utilization 0.85 \
+  --max-model-len 65536 \
+  --max-num-batched-tokens 8192 \
+  --gpu-memory-utilization 0.70 \
   --moe-backend marlin \
   --reasoning-parser gemma4 \
-  --enable-auto-tool-choice --tool-call-parser pythonic
+  --enable-auto-tool-choice --tool-call-parser gemma4
 ```
+
+Notes on the flags:
+- The `gemma4-0505-arm64-cu130` image already includes the Gemma4 model
+  loader fixes, so **no** `gemma4_patched.py` overlay is needed.
+- `--max-num-batched-tokens 8192` is required because Gemma 4 is multimodal
+  and the default (2048) is smaller than a single image token block (2496).
+- `--gpu-memory-utilization 0.70` leaves headroom for the rest of the host.
+  0.85 from the ai-muninn blog crashes here because background services
+  (k3s, openshell, Docker, signal-cli, Grafana, Prometheus) consume ~40 GB
+  of unified memory before vLLM starts.
+- The community `pythonic` parser does NOT match this build's output format;
+  use `gemma4` (the model emits `<|tool_call>call:func{key:<|"|>val<|"|>}<tool_call|>`).
 
 Quick check:
 ```sh
