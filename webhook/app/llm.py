@@ -584,32 +584,21 @@ async def respond(
     MAX_TURNS = 6
     for turn in range(1, MAX_TURNS + 1):
         call_started = time.monotonic()
-        # vLLM #41452 — combining `tools=` and an `image_url` part in the
-        # same chat.completions call crashes the prompt-replacement step
-        # ("Failed to apply prompt replacement for mm_items['image'][0]")
-        # or, on Gemma 4 26B NVFP4, the vision pooler with
-        # cudaErrorNotPermitted. Until that lands a fix, drop tools on
-        # the FIRST turn of an image-bearing conversation. Once the model
-        # has responded and we loop back for follow-up tool turns, the
-        # image is no longer in the new messages — `has_image` is set
-        # from the original user_content, so it stays True for the whole
-        # respond() loop, keeping tool dispatch off for this turn.
-        if has_image:
-            resp = await client.chat.completions.create(
-                model=settings.vllm_model,
-                messages=messages,
-                temperature=0.6,
-                max_tokens=600,
-            )
-        else:
-            resp = await client.chat.completions.create(
-                model=settings.vllm_model,
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-                temperature=0.6,
-                max_tokens=600,
-            )
+        # Historically dropped tools= on image turns to dodge vLLM #41452
+        # ("Failed to apply prompt replacement for mm_items['image'][0]").
+        # The vLLM startup now ships --chat-template tool_chat_template_gemma4.jinja
+        # — the upstream prescribed fix for that issue — so we pass tools
+        # on every call, image or not. If the chat-template path regresses,
+        # respond() returns a crash-induced 5xx, the per-user lock releases,
+        # and Meta will redeliver — same failure mode as any other vLLM blip.
+        resp = await client.chat.completions.create(
+            model=settings.vllm_model,
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto",
+            temperature=0.6,
+            max_tokens=600,
+        )
         call_usage = resp.usage
         call = trace.add_call(
             turn=turn,
