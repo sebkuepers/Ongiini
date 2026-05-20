@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import io
 import logging
 from contextlib import asynccontextmanager
 
@@ -6,12 +8,13 @@ import httpx
 from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from PIL import Image
 
 from . import mem, memory, pii, ratelimit, usage
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import maybe_summarize, respond
-from .whatsapp import extract_messages, send_text, verify_signature
+from .whatsapp import download_media, extract_messages, send_text, verify_signature
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +53,64 @@ NON_NAMIBIA_REPLY = (
     "Hi! Ongiini is currently only available for users in Namibia (+264 numbers). "
     "We're working on expanding — stay tuned! 🇳🇦"
 )
+
+# Sent when an image message couldn't be downloaded from Meta (expired URL,
+# auth failure, transient 5xx). Kept short on purpose — the user just
+# resends. We deliberately do NOT include the Meta error in the reply.
+IMAGE_FETCH_FAILED_REPLY = (
+    "I couldn't load the image you sent — could you try again? "
+    "If it keeps failing, a text description of what you're looking at also works."
+)
+
+# Largest image payload we'll accept from Meta. WhatsApp Cloud API's own
+# server-side cap is 5 MB; anything larger is either a relayed file we
+# don't want to process or a misbehaving client. The Bearer-authed
+# download URL doesn't expose Content-Length pre-flight, so this is a
+# post-download guard.
+_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+
+# Gemma 4's vision tower requires BOTH image dimensions to be exact
+# multiples of 48 (patch 16 × pool kernel 3). Anything off-grid crashes
+# `_avg_pool_by_positions` with a CUDA "operation not permitted" inside
+# the pooler. We resize every inbound image to clean 48-aligned bounds
+# BEFORE sending to vLLM. Min 336×192 keeps quality usable; max 896×896
+# matches the model's effective input budget at max_soft_tokens=1120.
+_GEMMA4_PATCH_GRID = 48
+_GEMMA4_MIN_W = 336
+_GEMMA4_MIN_H = 192
+_GEMMA4_MAX_DIM = 896
+
+
+def _resize_for_gemma4(image_bytes: bytes) -> bytes:
+    """Snap an image's W and H to multiples of 48, clamped to Gemma 4's
+    supported input range, and re-encode as JPEG.
+
+    Returns the original bytes unchanged if PIL can't open them — the
+    caller will pass them downstream where vLLM may or may not cope.
+    Never raises.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img = img.convert("RGB")   # Gemma 4 rejects palette / 1-bit PNGs
+    except Exception:
+        log.warning("PIL couldn't open inbound image; passing through raw")
+        return image_bytes
+
+    w, h = img.size
+
+    # 1) clamp to max box, preserving aspect ratio
+    if max(w, h) > _GEMMA4_MAX_DIM:
+        scale = _GEMMA4_MAX_DIM / max(w, h)
+        w, h = int(w * scale), int(h * scale)
+
+    # 2) snap down to multiples of 48
+    w = max(_GEMMA4_MIN_W, (w // _GEMMA4_PATCH_GRID) * _GEMMA4_PATCH_GRID)
+    h = max(_GEMMA4_MIN_H, (h // _GEMMA4_PATCH_GRID) * _GEMMA4_PATCH_GRID)
+
+    img = img.resize((w, h), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
 
 
 @app.get("/health")
@@ -111,25 +172,142 @@ async def receive(
 
     for m in messages:
         sender = m["from"]
-        text = (m["text"] or "").strip()
-        if not text:
-            continue
+        kind = m.get("type", "text")
 
-        # Defensive: WhatsApp's own text limit is 4096 chars. Anything larger
-        # is either a bug or an abuse attempt — drop it without spending tokens.
-        if len(text) > settings.message_max_chars:
-            log.warning(
-                "dropping oversize message from %s (%d chars)", sender, len(text)
-            )
-            continue
+        if kind == "text":
+            text = (m.get("text") or "").strip()
+            if not text:
+                continue
+            # Defensive: WhatsApp's own text limit is 4096 chars. Anything
+            # larger is either a bug or an abuse attempt — drop it without
+            # spending tokens.
+            if len(text) > settings.message_max_chars:
+                log.warning(
+                    "dropping oversize message from %s (%d chars)", sender, len(text)
+                )
+                continue
+            try:
+                await handle_message(sender, text)
+            except Exception:
+                log.exception("Failed to handle message from %s", sender)
 
-        try:
-            await handle_message(sender, text)
-        except Exception:
-            log.exception("Failed to handle message from %s", sender)
+        elif kind == "image":
+            media_id = m.get("media_id") or ""
+            if not media_id:
+                continue
+            try:
+                await handle_image_message(
+                    sender=sender,
+                    media_id=media_id,
+                    mime_type=m.get("mime_type") or "image/jpeg",
+                    caption=(m.get("caption") or "").strip(),
+                )
+            except Exception:
+                log.exception("Failed to handle image message from %s", sender)
 
     # WhatsApp expects a fast 200 OK acknowledgement.
     return {"status": "ok"}
+
+
+async def handle_image_message(
+    sender: str, media_id: str, mime_type: str, caption: str
+) -> None:
+    """Inbound WhatsApp image — same overall flow as text messages
+    (normalise → allow check → rate limit → load history → respond →
+    send → save → record usage), with an extra step to pull the bytes
+    from Meta and an OpenAI-style multipart user content payload.
+
+    The image itself is NOT persisted. Short-term memory stores a
+    compact "[image] <caption>" placeholder so the model on the next
+    text turn knows an image was shared, while mem0 (vision-enabled)
+    extracts a durable typed fact like '[SITUATION] Shared photo of
+    yellowing maize leaves' that persists across all future sessions.
+    """
+    try:
+        msisdn = normalize(sender)
+    except InvalidMsisdn as exc:
+        log.warning("rejected image message with invalid sender field: %s", exc)
+        return
+
+    if not is_allowed(msisdn):
+        log.info("blocked non-Namibian sender %s (image)", msisdn)
+        await send_text(sender, NON_NAMIBIA_REPLY)
+        return
+
+    allowed, reason = ratelimit.check(msisdn)
+    if not allowed:
+        log.info("rate-limited %s: %s (image)", msisdn, reason)
+        await send_text(sender, reason)
+        return
+
+    media = await download_media(media_id)
+    if media is None:
+        await send_text(sender, IMAGE_FETCH_FAILED_REPLY)
+        return
+
+    image_bytes, actual_mime = media
+    if len(image_bytes) > _IMAGE_MAX_BYTES:
+        log.warning(
+            "dropping oversize image from %s (%d bytes > %d)",
+            sender, len(image_bytes), _IMAGE_MAX_BYTES,
+        )
+        await send_text(sender, IMAGE_FETCH_FAILED_REPLY)
+        return
+
+    # Preprocess to Gemma 4's 48-multiple grid BEFORE sending to vLLM.
+    # Off-grid dimensions crash the vision pooler with cudaErrorNotPermitted
+    # (vLLM/transformers Gemma 4 #45482). Output is always re-encoded as
+    # JPEG so the data URL mime is predictable from here on.
+    image_bytes = _resize_for_gemma4(image_bytes)
+    data_url = (
+        f"data:image/jpeg;base64,"
+        f"{base64.standard_b64encode(image_bytes).decode('ascii')}"
+    )
+
+    # OpenAI-style multipart content. When the caller didn't provide a
+    # caption we steer the model with a tiny default — Gemma 4 with no
+    # text prompt and only an image will sometimes just describe the
+    # image without next-step or context awareness.
+    user_text_part = caption or (
+        "I just sent you a photo. Have a look and tell me what you see — "
+        "if there's something specific worth pointing out, mention it."
+    )
+    user_content = [
+        {"type": "text", "text": user_text_part},
+        {"type": "image_url", "image_url": {"url": data_url}},
+    ]
+
+    async with memory.lock_for(msisdn):
+        history = memory.load(msisdn)
+        result = await respond(history, user_content, msisdn)
+        await send_text(sender, result.reply)
+
+        if not result.deleted_data:
+            # Short-term memory: compact textual placeholder, NOT the
+            # base64 image bytes. The model on future turns sees that
+            # an image was shared (and the caption if any) — enough
+            # context to continue the conversation. Durable image-aware
+            # facts live in mem0 from the add_turn call below.
+            placeholder = "[image attached]"
+            if caption:
+                placeholder += f" {caption}"
+            history.append(
+                pii.sanitize_message({"role": "user", "content": placeholder})
+            )
+            history.append(
+                pii.sanitize_message({"role": "assistant", "content": result.reply})
+            )
+            history = await maybe_summarize(history)
+            memory.save(msisdn, history)
+
+            # Long-term: full multipart content to mem0 so the
+            # vision-enabled extractor can describe the image and store
+            # typed facts about what was shown.
+            await asyncio.to_thread(
+                mem.add_turn, msisdn, user_content, pii.sanitize(result.reply)
+            )
+
+        usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
 
 
 async def handle_message(sender: str, text: str) -> None:

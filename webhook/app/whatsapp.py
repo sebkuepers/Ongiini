@@ -109,21 +109,97 @@ async def send_text(to: str, body: str) -> None:
 def extract_messages(payload: dict) -> list[dict]:
     """Yield simplified message dicts from a WhatsApp webhook payload.
 
-    Each item: {"from": msisdn, "text": str, "id": message_id}
+    Each item is one of:
+      {"from": msisdn, "type": "text",  "text": str,                       "id": ...}
+      {"from": msisdn, "type": "image", "media_id": str, "mime_type": str,
+                                        "caption": str,                    "id": ...}
+
+    Non-text, non-image types are dropped silently — we'll add audio /
+    document handling separately when the model is ready for them.
     """
     out: list[dict] = []
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             value = change.get("value", {})
             for msg in value.get("messages", []) or []:
-                if msg.get("type") != "text":
-                    continue
-                text = (msg.get("text") or {}).get("body", "")
-                out.append(
-                    {
-                        "from": msg.get("from", ""),
-                        "text": text,
-                        "id": msg.get("id", ""),
-                    }
-                )
+                msg_type = msg.get("type")
+                if msg_type == "text":
+                    text = (msg.get("text") or {}).get("body", "")
+                    out.append(
+                        {
+                            "from": msg.get("from", ""),
+                            "type": "text",
+                            "text": text,
+                            "id": msg.get("id", ""),
+                        }
+                    )
+                elif msg_type == "image":
+                    image = msg.get("image") or {}
+                    out.append(
+                        {
+                            "from": msg.get("from", ""),
+                            "type": "image",
+                            "media_id": image.get("id", ""),
+                            "mime_type": image.get("mime_type", "image/jpeg"),
+                            "caption": image.get("caption", "") or "",
+                            "id": msg.get("id", ""),
+                        }
+                    )
     return out
+
+
+async def download_media(media_id: str) -> tuple[bytes, str] | None:
+    """Two-step Meta media download: resolve the short-lived URL, then fetch.
+
+    Returns (bytes, mime_type) on success, or None if anything goes wrong.
+    Never raises — caller decides how to respond when media is unavailable
+    (typically: send a "couldn't load your image" reply to the user).
+
+    Meta's media API requires the WHATSAPP_TOKEN even on the download URL
+    (the URL points at lookaside.fbsbx.com and rejects unauthenticated
+    requests), so we re-use the same auth header for both calls.
+    """
+    if not settings.whatsapp_token:
+        log.warning("WhatsApp token not configured — can't download media %s", media_id)
+        return None
+
+    headers = {"Authorization": f"Bearer {settings.whatsapp_token}"}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Step 1: resolve the short-lived signed URL for this media id.
+        try:
+            r = await client.get(f"{GRAPH_URL}/{media_id}", headers=headers)
+        except httpx.RequestError as exc:
+            log.warning("Meta media metadata fetch failed for %s: %s", media_id, exc)
+            return None
+        if r.status_code >= 400:
+            log.warning(
+                "Meta media metadata %s for %s: %s", r.status_code, media_id, r.text
+            )
+            return None
+
+        try:
+            data = r.json()
+        except Exception:
+            log.warning("Meta media metadata for %s was not JSON", media_id)
+            return None
+
+        url = data.get("url")
+        mime = data.get("mime_type") or "application/octet-stream"
+        if not url:
+            log.warning("Meta media metadata for %s missing url field", media_id)
+            return None
+
+        # Step 2: pull the bytes. Same Bearer auth required.
+        try:
+            r = await client.get(url, headers=headers)
+        except httpx.RequestError as exc:
+            log.warning("Meta media bytes fetch failed for %s: %s", media_id, exc)
+            return None
+        if r.status_code >= 400:
+            log.warning(
+                "Meta media bytes %s for %s: %s", r.status_code, media_id, r.text[:200]
+            )
+            return None
+
+    return r.content, mime

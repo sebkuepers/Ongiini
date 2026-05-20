@@ -301,12 +301,18 @@ def format_grouped_by_tag(memories: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def add_turn(msisdn: str, user_text: str, assistant_text: str) -> None:
+def add_turn(msisdn: str, user_content, assistant_text: str) -> None:
     """Feed one completed turn to mem0 so it can extract / update facts.
+
+    `user_content` may be either a plain string (text-only turn) or the
+    OpenAI-style multipart list — e.g. text + image_url parts — when the
+    user sent an image. mem0's enable_vision config routes multipart
+    content to Gemma 4's vision pathway and stores the resulting
+    description as a typed fact.
 
     mem0 itself decides what (if anything) is worth remembering. Most
     turns will be no-ops (e.g. "what's 2+2?" yields no durable facts).
-    A turn like "I'm a farmer in Oshakati" produces one or two facts.
+    A turn like "I'm a farmer in Oshakati" produces several typed facts.
 
     Never raises — long-term memory is a soft enhancement; if mem0 hiccups
     we don't want to break the live reply path.
@@ -314,7 +320,7 @@ def add_turn(msisdn: str, user_text: str, assistant_text: str) -> None:
     try:
         m = _client()
         msgs = [
-            {"role": "user", "content": user_text},
+            {"role": "user", "content": user_content},
             {"role": "assistant", "content": assistant_text},
         ]
         m.add(msgs, user_id=normalize(msisdn))

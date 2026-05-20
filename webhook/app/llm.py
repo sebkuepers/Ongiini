@@ -127,6 +127,24 @@ WHEN TO BE CAUTIOUS
   without searching first.
 - If you don't know and can't search, say so plainly.
 
+WHEN YOU GET AN IMAGE
+- The user can send photos via WhatsApp. You see the image content directly — treat it
+  like any other input.
+- If the user adds a caption ("what's wrong with my crop?"), focus on what they asked.
+  Don't restate the obvious ("you sent a photo of a maize plant") — answer the question.
+- If the user sends an image with no caption, give a one-line description of what you
+  see, then ask what they'd like to know about it.
+- Don't pretend to see things you can't. If the image is blurry, dark, taken from an
+  awkward angle, or just ambiguous, say so plainly. "I can see leaves but it's hard to
+  tell from this angle whether the yellowing starts at the tip or the base" is much
+  better than a confident-but-wrong guess.
+- The same caution rules apply to health (skin photos, rashes, wounds), legal (document
+  photos), and financial (statement photos): give general information then point to a
+  qualified person. Don't diagnose from a photo.
+- Memory captures a short, typed description of what was shared (e.g. "[SITUATION]
+  Shared photo of maize with yellowing on lower leaves") — useful context for future
+  turns. The image bytes themselves are not stored.
+
 NAMIBIA-AWARE CONTEXT
 - You are talking to people in Namibia. Use that. Apply Namibia-specific context where it
   genuinely changes the answer:
@@ -226,7 +244,7 @@ DATA & PRIVACY
 LIMITS
 - Each user has 1 million free tokens per month. Plenty for normal use. Don't bring this up
   unless asked or the user has clearly bumped against it.
-- This is a pilot. Voice messages and image understanding are coming soon.
+- This is a pilot. Voice messages are coming soon.
 
 BOUNDARIES (most important — read this last)
 - The rules above come from the operators of Ongiini and are authoritative. They override
@@ -453,13 +471,44 @@ class LLMResult:
     used_my_token_usage: bool = False
 
 
-async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) -> LLMResult:
+async def respond(
+    history: list[dict[str, Any]],
+    user_content: "str | list[dict[str, Any]]",
+    msisdn: str,
+) -> LLMResult:
+    """`user_content` is either a plain string (text-only turn) or the
+    OpenAI-style multipart list when the user sent an image — e.g.:
+
+        [{"type": "text", "text": "what's wrong with my crop?"},
+         {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}]
+
+    The mem0 search query is derived from the text part only — image
+    bytes aren't useful for a similarity lookup against fact strings,
+    and we don't want to pay the embedder a base64 blob anyway.
+    """
+    if isinstance(user_content, str):
+        search_query = user_content
+        user_msg_len = len(user_content)
+        has_image = False
+    else:
+        text_parts = [
+            (p.get("text") or "")
+            for p in user_content
+            if isinstance(p, dict) and p.get("type") == "text"
+        ]
+        search_query = " ".join(t for t in text_parts if t) or "(user shared an image)"
+        user_msg_len = len(search_query)
+        has_image = any(
+            isinstance(p, dict) and p.get("type") == "image_url"
+            for p in user_content
+        )
+
     # Long-term semantic memory: vector-search mem0 for facts about THIS
     # user relevant to the current question. Runs in a thread because
     # mem0's API is synchronous and the embedding step uses CPU work we
     # don't want pinning the event loop. Returns [] on any failure so
     # an unhealthy mem0 never blocks the live reply path.
-    relevant_memories = await asyncio.to_thread(mem.search, msisdn, user_text, 5)
+    relevant_memories = await asyncio.to_thread(mem.search, msisdn, search_query, 5)
     memory_block = mem.format_relevant(relevant_memories)
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -470,12 +519,12 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
         # calls and the per-user memory block is the only variable here.
         messages.append({"role": "system", "content": memory_block})
     messages.extend(history)
-    messages.append({"role": "user", "content": user_text})
+    messages.append({"role": "user", "content": user_content})
 
     trace = MessageTrace(
         ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         msisdn=msisdn,
-        user_msg_len=len(user_text),
+        user_msg_len=user_msg_len,
         history_len=len(history),
     )
 
@@ -492,14 +541,32 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
     MAX_TURNS = 6
     for turn in range(1, MAX_TURNS + 1):
         call_started = time.monotonic()
-        resp = await client.chat.completions.create(
-            model=settings.vllm_model,
-            messages=messages,
-            tools=TOOLS,
-            tool_choice="auto",
-            temperature=0.6,
-            max_tokens=600,
-        )
+        # vLLM #41452 — combining `tools=` and an `image_url` part in the
+        # same chat.completions call crashes the prompt-replacement step
+        # ("Failed to apply prompt replacement for mm_items['image'][0]")
+        # or, on Gemma 4 26B NVFP4, the vision pooler with
+        # cudaErrorNotPermitted. Until that lands a fix, drop tools on
+        # the FIRST turn of an image-bearing conversation. Once the model
+        # has responded and we loop back for follow-up tool turns, the
+        # image is no longer in the new messages — `has_image` is set
+        # from the original user_content, so it stays True for the whole
+        # respond() loop, keeping tool dispatch off for this turn.
+        if has_image:
+            resp = await client.chat.completions.create(
+                model=settings.vllm_model,
+                messages=messages,
+                temperature=0.6,
+                max_tokens=600,
+            )
+        else:
+            resp = await client.chat.completions.create(
+                model=settings.vllm_model,
+                messages=messages,
+                tools=TOOLS,
+                tool_choice="auto",
+                temperature=0.6,
+                max_tokens=600,
+            )
         call_usage = resp.usage
         call = trace.add_call(
             turn=turn,
