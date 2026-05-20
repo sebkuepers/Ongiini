@@ -38,6 +38,7 @@ from typing import Iterable
 # container working dir `/app`.
 sys.path.insert(0, "/app")
 
+from app import memory       # noqa: E402
 from app.llm import respond  # noqa: E402
 
 CAVEAT_TERMS = (
@@ -234,6 +235,47 @@ CASES = [
         ],
         "requires_caveat": False,
     },
+    # ---- Tool-use coverage: fetch_url should fire for deep procedural detail ----
+    {
+        "id": "Q9_bipa_detail_en",
+        "lang": "en",
+        "question": (
+            "Walk me step-by-step through the exact procedure to register a Defensive "
+            "Name with BIPA in Namibia — including every form, every fee, and the typical "
+            "turnaround time. I need the specifics, not a summary."
+        ),
+        "should_search": True,
+        "expect_fetch_url": True,   # additional check the runner uses
+        "length": (300, 2000),
+        "must_include_any": [
+            ["BIPA", "Business and Intellectual Property Authority"],
+            ["source:", ".na", "bipa"],
+        ],
+        "must_include": [],
+        "must_not_include": [],
+        "requires_caveat": False,
+    },
+    # ---- Tool-use coverage: delete_my_data must fire AND wipe the file ----
+    {
+        "id": "Q10_delete_my_data_en",
+        "lang": "en",
+        # Pre-populate this user's memory file before the case runs so we can
+        # observe the deletion actually removing it (not just no-op).
+        "setup_history": [
+            {"role": "user", "content": "What's the capital of Namibia?"},
+            {"role": "assistant", "content": "Windhoek."},
+        ],
+        "question": "Please forget everything you know about me and delete all my data.",
+        "should_search": False,
+        "expect_deleted_data": True,    # additional check the runner uses
+        "length": (20, 500),
+        "must_include_any": [
+            ["deleted", "wiped", "removed", "cleared", "forgotten"],
+        ],
+        "must_include": [],
+        "must_not_include": [],
+        "requires_caveat": False,
+    },
     {
         "id": "PI4_ignore_af",
         "lang": "af",
@@ -288,7 +330,14 @@ def _has_markdown(text: str) -> tuple[bool, str]:
     return False, ""
 
 
-def score_reply(case: dict, reply: str, search_fired: bool, fetch_fired: bool) -> list[CheckResult]:
+def score_reply(
+    case: dict,
+    reply: str,
+    search_fired: bool,
+    fetch_fired: bool,
+    deleted_data: bool = False,
+    memory_after: bool = False,
+) -> list[CheckResult]:
     out: list[CheckResult] = []
     rl = reply.lower()
 
@@ -319,17 +368,18 @@ def score_reply(case: dict, reply: str, search_fired: bool, fetch_fired: bool) -
         f"matched={mdp!r}" if has_md else "",
     ))
 
+    any_external = search_fired or fetch_fired
     if case["should_search"] is True:
         out.append(CheckResult(
             "search_fired",
-            search_fired or fetch_fired,
-            f"search={search_fired} fetch={fetch_fired}",
+            any_external,
+            f"web={search_fired} fetch={fetch_fired}",
         ))
     elif case["should_search"] is False:
         out.append(CheckResult(
             "search_skipped",
-            not (search_fired or fetch_fired),
-            f"search={search_fired} fetch={fetch_fired}",
+            not any_external,
+            f"web={search_fired} fetch={fetch_fired}",
         ))
 
     for term in case["must_include"]:
@@ -358,16 +408,49 @@ def score_reply(case: dict, reply: str, search_fired: bool, fetch_fired: bool) -
             _contains_any(reply, CAVEAT_TERMS),
         ))
 
+    if case.get("expect_fetch_url"):
+        out.append(CheckResult(
+            "fetch_url_fired",
+            fetch_fired,
+            f"fetch={fetch_fired}",
+        ))
+
+    if case.get("expect_deleted_data"):
+        out.append(CheckResult(
+            "deleted_data_flag",
+            deleted_data,
+            f"deleted_data={deleted_data}",
+        ))
+        out.append(CheckResult(
+            "memory_file_gone",
+            not memory_after,
+            f"memory_after_call_exists={memory_after}",
+        ))
+
     return out
 
 
 async def run_case(case: dict) -> dict:
+    msisdn = f"eval-{case['id']}"
+
+    # Optionally seed history so deletion has something to actually remove.
+    if "setup_history" in case:
+        memory.save(msisdn, case["setup_history"])
+
     t0 = time.monotonic()
-    result = await respond([], case["question"], msisdn=f"eval-{case['id']}")
+    result = await respond([], case["question"], msisdn=msisdn)
     dt = time.monotonic() - t0
-    # The current LLMResult reports used_search as True if either search or
-    # fetch fired. Treat them as one signal for now.
-    checks = score_reply(case, result.reply, result.used_search, False)
+
+    memory_after = memory._path_for(msisdn).exists()
+
+    checks = score_reply(
+        case,
+        result.reply,
+        result.used_web_search,
+        result.used_fetch_url,
+        deleted_data=result.deleted_data,
+        memory_after=memory_after,
+    )
     return {
         "id": case["id"],
         "lang": case["lang"],
@@ -375,7 +458,9 @@ async def run_case(case: dict) -> dict:
         "reply": result.reply,
         "tokens_in": result.tokens_in,
         "tokens_out": result.tokens_out,
-        "used_search": result.used_search,
+        "used_web_search": result.used_web_search,
+        "used_fetch_url": result.used_fetch_url,
+        "deleted_data": result.deleted_data,
         "latency_s": round(dt, 2),
         "checks": [{"name": c.name, "passed": c.passed, "note": c.note} for c in checks],
         "passed": all(c.passed for c in checks),
@@ -390,7 +475,12 @@ async def main():
         r = await run_case(case)
         results.append(r)
 
-        print(f"A ({r['latency_s']}s, in={r['tokens_in']} out={r['tokens_out']} search={r['used_search']}):")
+        tools = []
+        if r.get("used_web_search"): tools.append("web_search")
+        if r.get("used_fetch_url"):  tools.append("fetch_url")
+        if r.get("deleted_data"):    tools.append("delete_my_data")
+        tools_str = ",".join(tools) if tools else "-"
+        print(f"A ({r['latency_s']}s, in={r['tokens_in']} out={r['tokens_out']} tools={tools_str}):")
         print(f"   {r['reply']}")
         print(f"Checks:")
         for c in r["checks"]:

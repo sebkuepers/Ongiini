@@ -517,6 +517,107 @@
       align-items: center; justify-content: space-between;
     }
 
+    /* Mission chat mockup */
+    .og-mission-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 36px;
+      align-items: start;
+    }
+    .og-mission-copy { display: flex; flex-direction: column; gap: 16px; }
+    .og-mission-mock { width: 100%; }
+
+    .og-chat {
+      background: oklch(0.98 0.008 75);
+      border: 1px solid var(--rule-faint);
+      border-radius: 22px;
+      padding: 16px 14px 14px;
+      box-shadow:
+        0 1px 0 rgba(0,0,0,0.03),
+        0 24px 60px -28px rgba(42, 37, 34, 0.30);
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      .og-chat { background: #fbf8f0; }
+    }
+
+    .og-chat-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 6px 12px;
+      border-bottom: 1px solid var(--rule-faint);
+    }
+    .og-chat-avatar {
+      width: 34px; height: 34px;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .og-chat-avatar img { width: 34px; height: 34px; display: block; }
+    .og-chat-meta { display: flex; flex-direction: column; gap: 1px; }
+    .og-chat-name {
+      font-size: 14px; font-weight: 500; color: var(--ink);
+      letter-spacing: -0.005em; line-height: 1.15;
+    }
+    .og-chat-status {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 9.5px; letter-spacing: 0.08em;
+      color: oklch(0.62 0.13 145);
+      line-height: 1.15;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      .og-chat-status { color: #4a9c5e; }
+    }
+
+    .og-chat-body {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 14px 2px 4px;
+    }
+    .og-msg {
+      position: relative;
+      max-width: 84%;
+      padding: 8px 12px 18px;
+      border-radius: 14px;
+      font-size: 13.5px;
+      line-height: 1.42;
+      color: var(--ink);
+      text-wrap: pretty;
+    }
+    .og-msg p {
+      margin: 0;
+      padding-right: 38px;
+    }
+    .og-msg-time {
+      position: absolute;
+      bottom: 5px;
+      right: 10px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.04em;
+      color: var(--ink-faint);
+    }
+    .og-msg--out {
+      align-self: flex-end;
+      background: oklch(0.92 0.085 145);
+      border-bottom-right-radius: 4px;
+    }
+    .og-msg--in {
+      align-self: flex-start;
+      background: var(--bone);
+      border: 1px solid var(--rule-faint);
+      border-bottom-left-radius: 4px;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      .og-msg--out { background: #d9f1b9; }
+    }
+
+    @media (min-width: 880px) {
+      .og-mission-grid {
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 64px;
+        align-items: center;
+      }
+    }
+
     /* Service status indicator */
     .og-status {
       display: inline-flex; align-items: center; gap: 8px;
@@ -690,15 +791,47 @@
     </section>
 
     <section class="og-section" id="mission">
-      <div class="og-wrap og-section-inner">
-        <div class="og-eyebrow">
-          <span data-en>Mission</span>
-          <span data-af>Missie</span>
+      <div class="og-wrap og-mission-grid">
+        <div class="og-mission-copy">
+          <div class="og-eyebrow">
+            <span data-en>Mission</span>
+            <span data-af>Missie</span>
+          </div>
+          <h2 class="og-h2" data-en>Intelligence belongs to all of us.</h2>
+          <h2 class="og-h2" data-af>Intelligensie behoort aan ons almal.</h2>
+          <p class="og-body" data-en>AI has quickly become one of the most useful new tools any of us has — for learning, health, work, daily life. Open-source models like Gemma 4 and personal hardware like the DGX Spark have made it cheap enough to be universally available, not just to the paying customers of a few large clouds. Ongiini is what that means in practice for Namibia: free, on the phone you already own, in the language you already speak — no app, no account.</p>
+          <p class="og-body" data-af>KI het vinnig een van die nuttigste nuwe hulpmiddels geword wat enige van ons het — vir leer, gesondheid, werk, die alledaagse lewe. Oopbron-modelle soos Gemma 4 en persoonlike hardeware soos die DGX Spark het dit goedkoop genoeg gemaak om universeel beskikbaar te wees, nie net vir die betalende kliënte van 'n paar groot wolke nie. Ongiini is wat dit in die praktyk vir Namibië beteken: gratis, op die foon wat jy reeds het, in die taal wat jy reeds praat — geen app, geen rekening nie.</p>
         </div>
-        <h2 class="og-h2" data-en>Intelligence belongs to all of us.</h2>
-        <h2 class="og-h2" data-af>Intelligensie behoort aan ons almal.</h2>
-        <p class="og-body" data-en>AI has quickly become one of the most useful new tools any of us has — for learning, health, work, daily life. Open-source models like Gemma 4 and personal hardware like the DGX Spark have made it cheap enough to be universally available, not just to the paying customers of a few large clouds. Ongiini is what that means in practice for Namibia: free, on the phone you already own, in the language you already speak — no app, no account.</p>
-        <p class="og-body" data-af>KI het vinnig een van die nuttigste nuwe hulpmiddels geword wat enige van ons het — vir leer, gesondheid, werk, die alledaagse lewe. Oopbron-modelle soos Gemma 4 en persoonlike hardeware soos die DGX Spark het dit goedkoop genoeg gemaak om universeel beskikbaar te wees, nie net vir die betalende kliënte van 'n paar groot wolke nie. Ongiini is wat dit in die praktyk vir Namibië beteken: gratis, op die foon wat jy reeds het, in die taal wat jy reeds praat — geen app, geen rekening nie.</p>
+        <div class="og-mission-mock">
+          <div class="og-chat">
+            <div class="og-chat-head">
+              <span class="og-chat-avatar" aria-hidden="true">O</span>
+              <div class="og-chat-meta">
+                <div class="og-chat-name">Ongiini</div>
+                <div class="og-chat-status">
+                  <span data-en="i">online</span>
+                  <span data-af="i">aanlyn</span>
+                </div>
+              </div>
+            </div>
+            <div class="og-chat-body">
+              <div class="og-msg og-msg--out">
+                <p>
+                  <span data-en="i">My 18-month-old only wants to eat pap. How do I get more nutrients in?</span>
+                  <span data-af="i">My 18 maande oue kind wil net pap eet. Hoe kry ek meer voedingstowwe in?</span>
+                </p>
+                <span class="og-msg-time" aria-hidden="true">14:32</span>
+              </div>
+              <div class="og-msg og-msg--in">
+                <p>
+                  <span data-en="i">Pap is a great base. Mash in pumpkin or sweet potato for vitamins A and C, a spoon of peanut paste for protein and fats, or a boiled egg — about the most complete food going. Five small meals a day beat three big ones at this age. If she's always tired or her hair turns reddish, take her to the clinic.</span>
+                  <span data-af="i">Pap is 'n goeie basis. Stamp pampoen of patat in vir vitamiene A en C, 'n lepel grondboontjiebotter vir proteïen en vette, of 'n gekookte eier — omtrent die volledigste kos wat daar is. Vyf klein maaltye 'n dag is beter as drie grotes op hierdie ouderdom. As sy heeltyd moeg is of haar hare rooierig word, vat haar kliniek toe.</span>
+                </p>
+                <span class="og-msg-time" aria-hidden="true">14:32</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 

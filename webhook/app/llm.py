@@ -188,7 +188,9 @@ class LLMResult:
     reply: str
     tokens_in: int
     tokens_out: int
-    used_search: bool
+    used_search: bool          # True if EITHER web_search or fetch_url fired
+    used_web_search: bool = False
+    used_fetch_url: bool = False
     deleted_data: bool = False
 
 
@@ -205,6 +207,8 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
     )
 
     used_search = False
+    used_web_search = False
+    used_fetch_url = False
     deleted_data = False
     tokens_in = 0
     tokens_out = 0
@@ -247,6 +251,8 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 used_search=used_search,
+                used_web_search=used_web_search,
+                used_fetch_url=used_fetch_url,
                 deleted_data=deleted_data,
             )
 
@@ -277,9 +283,11 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
 
             if name == "web_search":
                 used_search = True
+                used_web_search = True
                 result = await web_search(args.get("query", ""))
             elif name == "fetch_url":
                 used_search = True
+                used_fetch_url = True
                 result = await fetch_url(args.get("url", ""))
             elif name == "delete_my_data":
                 removed = memory.delete(msisdn)
@@ -321,5 +329,7 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         used_search=used_search,
+        used_web_search=used_web_search,
+        used_fetch_url=used_fetch_url,
         deleted_data=deleted_data,
     )
