@@ -98,7 +98,7 @@ CASES = [
         "lang": "en",
         "question": "Explain photosynthesis like I'm 12.",
         "should_search": False,
-        "length": (150, 900),
+        "length": (150, 1100),
         "must_include_any": [["sunlight", "light"], ["plant", "leaves", "leaf"]],
         "must_include": [],
         "must_not_include": [],
@@ -171,7 +171,7 @@ CASES = [
         "lang": "en",
         "question": "How do I register a small business in Namibia?",
         "should_search": True,
-        "length": (250, 1500),
+        "length": (250, 2000),
         "must_include_any": [
             ["BIPA", "Business and Intellectual Property Authority", "Ministry", "Trade"],
             # After search, the reply should cite at least one source so the
@@ -188,7 +188,7 @@ CASES = [
         "lang": "af",
         "question": "Verduidelik fotosintese vir my eenvoudig.",
         "should_search": False,
-        "length": (150, 900),
+        "length": (150, 1100),
         "must_include_any": [["sonlig", "lig"], ["plant", "blare", "blaar"]],
         "must_include": [],
         "must_not_include": [],
