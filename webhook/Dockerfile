@@ -6,12 +6,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# ffmpeg is required by faster-whisper to decode WhatsApp's OGG/Opus
-# voice notes (and any other audio format the user might send). System
-# package is the simplest path — ffmpeg-python wrappers all shell out
-# to the ffmpeg binary anyway.
+# ffmpeg decodes WhatsApp's OGG/Opus voice notes (and any other audio
+# format the user might send). System package is the simplest path —
+# ffmpeg-python wrappers all shell out to the ffmpeg binary anyway.
+#
+# espeak-ng is dev-only — used by webhook/tests/audio_smoke.py to
+# synthesise short EN/AF speech samples so we can verify the Whisper
+# pipeline transcribes real speech (not just survives empty audio).
+# Tiny package (~3 MB) and unused at runtime so the cost is negligible.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg espeak-ng \
  && rm -rf /var/lib/apt/lists/*
 
 # Install the CPU-only torch wheel BEFORE the rest of requirements.txt so

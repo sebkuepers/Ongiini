@@ -54,16 +54,20 @@ def _make_silence_ogg(duration_s: float = 1.5) -> bytes:
         return f.read()
 
 
-def _make_speechlike_ogg() -> bytes:
-    """If espeak-ng is available, render a short EN phrase to OGG/Opus.
-    Otherwise raise FileNotFoundError so the caller can fall back."""
-    text = "Hello, I am a small scale farmer in Oshakati."
+def _make_speechlike_ogg(text: str, voice: str = "en") -> bytes:
+    """Render a short phrase to OGG/Opus via espeak-ng + ffmpeg.
+
+    espeak-ng's robotic voice is far from natural speech, but
+    large-v3-turbo is trained on enough varied data that it still
+    transcribes the WORDS reliably — which is all the smoke needs.
+    Raises FileNotFoundError if espeak-ng isn't installed.
+    """
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         wav_path = f.name
     with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
         ogg_path = f.name
     subprocess.run(
-        ["espeak-ng", "-v", "en", "-s", "150", "-w", wav_path, text],
+        ["espeak-ng", "-v", voice, "-s", "150", "-w", wav_path, text],
         check=True, capture_output=True,
     )
     subprocess.run(
@@ -94,19 +98,58 @@ async def main() -> None:
     # transcript may be empty (no speech) or some Whisper hallucination —
     # both are acceptable. We only insist that transcribe() returned.
 
-    print("\n--- case B: synthesised speech (espeak-ng → OGG/Opus) ---")
+    # Case B - EN: real synthesised speech. Whisper should transcribe it
+    # and the transcript should contain the salient nouns. We don't
+    # require an exact match (espeak's robotic voice yields some word
+    # variance) — just that the key content survived.
+    print("\n--- case B (EN): 'I am a maize farmer in Oshakati' via espeak-ng ---")
     try:
-        speech = _make_speechlike_ogg()
+        speech = _make_speechlike_ogg(
+            "Hello, I am a maize farmer in Oshakati.", voice="en"
+        )
         print(f"  generated {len(speech)} bytes")
+        transcript, lang, duration = await asyncio.to_thread(audio.transcribe, speech)
+        _summarize("EN speech", transcript, lang, duration)
+        assert duration > 0, f"expected non-zero duration, got {duration}"
+        low = transcript.lower()
+        en_hits = sum(1 for word in ("maize", "farmer", "oshakati") if word in low)
+        assert en_hits >= 2, (
+            f"expected ≥2 of [maize, farmer, oshakati] in EN transcript, "
+            f"got {en_hits}: {transcript!r}"
+        )
+        print(f"  ✓ transcript captured {en_hits}/3 expected keywords")
     except FileNotFoundError:
-        print("  espeak-ng not installed — falling back to another silence clip")
-        speech = _make_silence_ogg(2.5)
+        print("  espeak-ng not installed — skipping EN content check")
 
-    transcript, lang, duration = await asyncio.to_thread(audio.transcribe, speech)
-    _summarize("speech ", transcript, lang, duration)
-    assert duration > 0, f"expected non-zero duration, got {duration}"
+    # Case C - AF: same flow with an Afrikaans phrase. espeak-ng's AF
+    # voice is too robotic for Whisper to reliably reconstruct exact
+    # words — it captures the phonemes but tokenises them oddly
+    # (e.g. "Oshakati" → "osha kati"). Real WhatsApp speech is
+    # natural-voice and works fine. So this case is a SOFT check:
+    # we print the result for visual inspection and only assert that
+    # Whisper produced *some* recognisable output rather than crashing.
+    print("\n--- case C (AF): 'Ek is 'n mielie boer in Oshakati' via espeak-ng ---")
+    try:
+        speech_af = _make_speechlike_ogg(
+            "Hallo, ek is 'n mielie boer in Oshakati.", voice="af"
+        )
+        print(f"  generated {len(speech_af)} bytes")
+        transcript_af, lang_af, duration_af = await asyncio.to_thread(
+            audio.transcribe, speech_af
+        )
+        _summarize("AF speech", transcript_af, lang_af, duration_af)
+        assert duration_af > 0
+        # Soft check: the Oshakati phonemes ('osha') must survive even
+        # when tokenisation is off. Anything weaker than that suggests
+        # the audio pipeline didn't actually decode the speech.
+        assert "osha" in transcript_af.lower(), (
+            f"expected 'osha' phonemes in AF transcript, got {transcript_af!r}"
+        )
+        print(f"  ✓ Oshakati phonemes survived (lang detected: {lang_af!r})")
+    except FileNotFoundError:
+        print("  espeak-ng not installed — skipping AF content check")
 
-    print("\n=== smoke passed (no exceptions) ===")
+    print("\n=== smoke passed ===")
 
 
 if __name__ == "__main__":
