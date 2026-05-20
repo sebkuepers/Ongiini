@@ -268,6 +268,7 @@
     }
     .og-try-lang--af { color: var(--terracotta-deep); border: 1px solid var(--terracotta); }
     .og-try-lang--en { color: var(--ink-soft); border: 1px solid var(--rule); }
+    .og-try-cta { margin-top: 32px; max-width: 380px; }
 
     /* Three-card grid (used by Open/Transparent + Privacy) */
     .og-grid {
@@ -824,6 +825,23 @@
           <li class="og-try-item"><span class="og-try-num">07</span><span class="og-try-q">Hoe registreer ek 'n klein besigheid in Namibië?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
           <li class="og-try-item"><span class="og-try-num">08</span><span class="og-try-q">Summarise this news article in three sentences.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
         </ul>
+
+        <div class="og-try-cta">
+          <a class="og-cta" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
+            <span class="og-cta-l">
+              <span class="og-cta-ic">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2.5c-5.247 0-9.5 4.142-9.5 9.25 0 1.63.43 3.16 1.19 4.49L2.5 21.5l5.4-1.16A9.6 9.6 0 0 0 12 21c5.247 0 9.5-4.142 9.5-9.25S17.247 2.5 12 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  <circle cx="8.5" cy="11.75" r="1.05" fill="currentColor"/>
+                  <circle cx="12" cy="11.75" r="1.05" fill="currentColor"/>
+                  <circle cx="15.5" cy="11.75" r="1.05" fill="currentColor"/>
+                </svg>
+              </span>
+              <span data-en="i">Ask your own first question</span><span data-af="i">Vra jou eerste eie vraag</span>
+            </span>
+            <span class="og-cta-arrow">→</span>
+          </a>
+        </div>
       </div>
     </section>
 
@@ -1159,6 +1177,8 @@
           af: ["Wat is Ongiini?", "'n Gratis KI-assistent waarmee jy op WhatsApp gesels. Stuur 'n vraag — oor enigiets — en kry 'n nuttige antwoord. Gebou op 'n eenvoudige idee: so 'n nuttige hulpmiddel behoort aan ons almal, nie net aan dié wat 'n intekening kan bekostig nie."] },
         { en: ["Why 'Ongiini'?", "It's the everyday Oshiwambo greeting — literally 'How are you?', used the way English speakers use 'Hello'. It's the first word many Namibians hear and say each day. Naming the assistant after it felt right: the brand name is the assistant's own first message to you, said in a language of the country it serves."],
           af: ["Hoekom 'Ongiini'?", "Dit is die alledaagse Oshiwambo-groet — letterlik 'Hoe gaan dit?', gebruik soos Engelssprekendes 'Hello' gebruik. Dit is die eerste woord wat baie Namibiërs elke dag hoor en sê. Om die assistent daarna te noem het reg gevoel: die handelsmerknaam is die assistent se eie eerste boodskap aan jou, gesê in 'n taal van die land wat dit bedien."] },
+        { en: ["Why Namibia?", "A few reasons that fit. Almost everyone uses WhatsApp on the phone they already have — nothing to install, no account to make. English and Afrikaans are widely spoken, and they're the two languages Gemma 4 handles well today. The country is small enough (~2.6M people) that one DGX Spark can realistically serve a meaningful share of users on a generous one-million-token-per-month cap each. And the mix of urban and rural, multilingual, formal and informal use cases makes Namibia a real test of whether free AI on WhatsApp can be a genuine game-changer for everyday life — schoolwork, farming, contracts, health, small business — and not just a demo. If it proves itself here, it'll probably prove itself elsewhere too."],
+          af: ["Hoekom Namibië?", "'n Paar redes wat pas. Byna almal gebruik WhatsApp op die foon wat hulle reeds dra — niks om te installeer nie, geen rekening om te skep nie. Engels en Afrikaans word wyd gepraat, en dit is die twee tale wat Gemma 4 vandag goed hanteer. Die land is klein genoeg (~2.6 miljoen mense) dat een DGX Spark werklik 'n betekenisvolle deel van gebruikers kan bedien op 'n ruim limiet van een miljoen tokens per maand elk. En die mengsel van stedelik en landelik, meertalig, formeel en informeel maak Namibië 'n werklike toets van of gratis KI op WhatsApp 'n egte spelveranderaar vir die alledaagse lewe kan wees — skoolwerk, boerdery, kontrakte, gesondheid, klein besigheid — en nie net 'n demo nie. As dit hier sy waarde bewys, sal dit waarskynlik ook elders werk."] },
         { en: ["Does it cost anything?", "No. Each user gets one million free tokens per month, which covers about 800 normal conversations — easily more than typical daily use. The cap resets on the 1st of every month. WhatsApp's normal data charges from your mobile provider still apply, but Ongiini itself is free."],
           af: ["Kos dit iets?", "Nee. Elke gebruiker kry een miljoen gratis tokens per maand, wat sowat 800 normale gesprekke dek — heelwat meer as tipiese daaglikse gebruik. Die limiet stel die 1ste van elke maand terug. WhatsApp se gewone dataheffings van jou mobiele verskaffer geld steeds, maar Ongiini self is gratis."] },
         { en: ["Which languages can I use?", "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it (that's unlikely to happen soon) but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."],
