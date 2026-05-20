@@ -588,7 +588,7 @@
       align-items: start;
     }
     .og-mission-copy { display: flex; flex-direction: column; gap: 16px; }
-    .og-mission-mock { width: 100%; }
+    .og-mission-mock { width: 100%; order: -1; }
 
     .og-chat {
       background: oklch(0.98 0.008 75);
@@ -679,7 +679,6 @@
         gap: 64px;
         align-items: center;
       }
-      .og-mission-mock { order: -1; }
     }
 
     /* Service status indicator */
@@ -1017,8 +1016,8 @@
             <div class="og-card-num">01</div>
             <div class="og-card-head" data-en>What we keep</div>
             <div class="og-card-head" data-af>Wat ons stoor</div>
-            <p class="og-card-body" data-en>The last 10 messages from your phone number, so the assistant can follow a conversation. Plus a token-count entry per message in an internal log (numbers only, no message content). That's it.</p>
-            <p class="og-card-body" data-af>Die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg. Plus 'n inskrywing per boodskap in 'n interne log met die aantal tokens (slegs getalle, geen inhoud nie). Dis al.</p>
+            <p class="og-card-body" data-en>Roughly the last 10 messages from your phone number kept verbatim, so the assistant can follow a conversation. Older messages get compressed into one short summary line. Before any message is written to disk, obvious personal patterns — email addresses, ID-shape numbers, IBANs, credit card numbers — are auto-scrubbed and replaced with placeholders. Plus a token-count entry per message in an internal log (numbers only, no message content). That's it.</p>
+            <p class="og-card-body" data-af>Ongeveer die laaste 10 boodskappe vanaf jou nommer woord-vir-woord, sodat die assistent 'n gesprek kan volg. Ouer boodskappe word in een kort opsommingsreël saamgepers. Voordat enige boodskap geberg word, word voor-die-hand-liggende persoonlike patrone — e-pos-adresse, ID-nommers, IBANs, kredietkaartnommers — outomaties verwyder en met plekhouers vervang. Plus 'n inskrywing per boodskap in 'n interne log met die aantal tokens (slegs getalle, geen inhoud nie). Dis al.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">02</div>
@@ -1029,10 +1028,10 @@
           </div>
           <div class="og-card">
             <div class="og-card-num">03</div>
-            <div class="og-card-head" data-en>Delete anytime</div>
-            <div class="og-card-head" data-af>Verwyder enige tyd</div>
-            <p class="og-card-body" data-en>Just message "delete my data" on WhatsApp (any wording works — the assistant understands). Your memory and any internal traces of your messages are wiped within minutes.</p>
-            <p class="og-card-body" data-af>Stuur net "delete my data" of "verwyder my data" op WhatsApp (enige bewoording werk — die assistent verstaan). Jou geheue en enige interne spore word binne minute uitgewis.</p>
+            <div class="og-card-head" data-en>See it, delete it</div>
+            <div class="og-card-head" data-af>Sien dit, verwyder dit</div>
+            <p class="og-card-body" data-en>Ask "what do you remember about me?" on WhatsApp and the assistant reads its own memory back to you. Ask "delete my data" (any wording works) and your memory is wiped within minutes. Both work in English and Afrikaans.</p>
+            <p class="og-card-body" data-af>Vra "wat onthou jy oor my?" op WhatsApp en die assistent lees sy eie geheue aan jou voor. Vra "verwyder my data" (enige bewoording werk) en jou geheue word binne minute uitgewis. Albei werk in Engels en Afrikaans.</p>
           </div>
         </div>
       </div>
@@ -1340,8 +1339,8 @@
           af: ["Wat kan ek dit vra?", "Enigiets wat jy 'n kundige vriend sou vra. Verduidelik 'n skoolvak, help jou 'n kontrak of nuusartikel verstaan, vertaal, stel 'n CV of e-pos op, werk deur 'n wiskundeprobleem, som 'n dokument op, vra oor 'n siek mielieplant, 'n koors, 'n regskennisgewing — leer en alledaagse vrae van elke soort."] },
         { en: ["How accurate is it?", "Sometimes very accurate. Sometimes confidently wrong — that's the nature of large language models today. Treat its answers like advice from a knowledgeable friend who can also make mistakes. Never make decisions about your health, money or legal status based on Ongiini's answer alone. Verify with a doctor, lawyer or other qualified person."],
           af: ["Hoe akkuraat is dit?", "Soms baie akkuraat. Soms met selfvertroue verkeerd — dit is die aard van groot taalmodelle vandag. Behandel sy antwoorde soos raad van 'n kundige vriend wat ook foute kan maak. Moet nooit besluite oor jou gesondheid, geld of regstatus net op grond van Ongiini se antwoord maak nie. Kontroleer altyd met 'n dokter, prokureur of ander gekwalifiseerde persoon."] },
-        { en: ["What exactly do you store about me?", "Two things. (1) The last 10 messages from your phone number, so the assistant can follow a conversation. (2) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No location, no contacts, no profile. Want it deleted? Just message 'delete my data' on WhatsApp."],
-          af: ["Wat presies stoor julle van my?", "Twee dinge. (1) Die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg. (2) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen ligging, geen kontakte, geen profiel. Wil jy dit verwyder? Stuur net 'delete my data' op WhatsApp."] },
+        { en: ["What exactly do you store about me?", "Two things. (1) Roughly the last 10 messages from your phone number, so the assistant can follow a conversation — anything older is compressed into a short summary line. Before each message lands on disk, obvious personal data (email, ID-shape numbers, IBANs, card numbers) is auto-scrubbed and replaced with placeholders. (2) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No location, no contacts, no profile. Want to see what's stored? Ask 'what do you remember about me?' on WhatsApp. Want it deleted? Send 'delete my data' — both work in English and Afrikaans."],
+          af: ["Wat presies stoor julle van my?", "Twee dinge. (1) Ongeveer die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg — enigiets ouer word in 'n kort opsommingsreël saamgepers. Voordat elke boodskap geberg word, word voor-die-hand-liggende persoonlike data (e-pos, ID-nommers, IBANs, kaartnommers) outomaties verwyder en met plekhouers vervang. (2) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen ligging, geen kontakte, geen profiel. Wil jy sien wat gestoor is? Vra 'wat onthou jy oor my?' op WhatsApp. Wil jy dit verwyder? Stuur 'verwyder my data' — albei werk in Engels en Afrikaans."] },
         { en: ["Where is it physically running?", "On a single NVIDIA DGX Spark — a personal AI supercomputer about the size of a small book (one petaflop of compute, 128 GB of unified memory), not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."],
           af: ["Waar loop dit fisies?", "Op 'n enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek (een petaflop rekenkrag, 128 GB verenigde geheue), nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase. Die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is. Geen US-wolkverskaffer is op enige punt deel van die roete nie."] },
         { en: ["Why a German number, hosted in Germany?", "Honest answer: convenience. This is a personal project, in pilot phase, and Germany is where I live and where the hardware currently sits. A German WhatsApp Business number on a German broadband line was the fastest way to get something real running and put it in front of users. The service itself is locked to Namibian numbers (+264) — that's the audience this is built for. If the pilot earns traction and becomes sustainable, the plan is to physically move the hardware to Namibia and switch to a Namibian number."],
