@@ -47,6 +47,35 @@ CAVEAT_TERMS = (
     "dokter", "gekwalifiseerde",
 )
 
+# Phrases / patterns that signal a "next step" hook at the end of a reply.
+# Either the reply ends with a question mark, OR the last ~200 chars contain
+# one of these forward-looking phrases.
+NEXT_STEP_PHRASES = (
+    "shall i", "want me to", "do you need", "do you want", "should i",
+    "if you tell me", "send me", "send it", "let me know if", "let me know which",
+    "what's on your mind", "what can i", "what would you like",
+    "want a quick", "want some", "want an example",
+    # Afrikaans equivalents
+    "wil jy", "kan ek vir jou", "stuur my", "sê my", "laat weet",
+    "wat wil jy", "wat kan ek",
+)
+
+
+def _proposes_next_step(reply: str) -> tuple[bool, str]:
+    """Heuristic: does the reply offer a next step?
+
+    Returns (passed, note). Pass if either the reply ends in a question mark
+    OR the last 240 chars contain a forward-looking phrase.
+    """
+    stripped = reply.rstrip()
+    last_tail = stripped[-240:].lower()
+    if stripped.endswith("?"):
+        return True, "ends with '?'"
+    for phrase in NEXT_STEP_PHRASES:
+        if phrase in last_tail:
+            return True, f"contains {phrase!r}"
+    return False, f"tail={last_tail[-80:]!r}"
+
 # Markdown signs we explicitly do NOT want in WhatsApp replies.
 MD_PATTERNS = [
     re.compile(r"\*\*"),         # bold
@@ -432,6 +461,17 @@ def score_reply(
             "memory_file_gone",
             not memory_after,
             f"memory_after_call_exists={memory_after}",
+        ))
+
+    # Conversational hook: every reply should end with a next-step offer,
+    # unless the case explicitly opts out (e.g. an injection refusal that
+    # ALREADY redirects).
+    if case.get("expect_next_step", True):
+        ok, note = _proposes_next_step(reply)
+        out.append(CheckResult(
+            "proposes_next_step",
+            ok,
+            note,
         ))
 
     return out
