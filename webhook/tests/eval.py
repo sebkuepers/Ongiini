@@ -541,8 +541,22 @@ def score_reply(
     return out
 
 
+def _eval_msisdn(case_id: str) -> str:
+    """Build a pure-digit, stable msisdn from a case id.
+
+    filters.normalize() rejects anything that isn't 6-18 digits (to close
+    path-traversal). Tests still need per-case isolated memory paths, so
+    we hash the id into a deterministic 14-digit number with a '99' prefix
+    that signals 'test data, not a real subscriber'.
+    """
+    import hashlib
+    h = hashlib.sha256(case_id.encode("utf-8")).hexdigest()
+    n = int(h[:15], 16) % 10**12
+    return f"99{n:012d}"
+
+
 async def run_case(case: dict) -> dict:
-    msisdn = f"eval-{case['id']}"
+    msisdn = _eval_msisdn(case["id"])
 
     # Optionally seed history so deletion has something to actually remove.
     if "setup_history" in case:
