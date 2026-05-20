@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 
 import httpx
@@ -7,6 +9,28 @@ from .config import settings
 log = logging.getLogger("ongiini.whatsapp")
 
 GRAPH_URL = "https://graph.facebook.com/v21.0"
+
+
+def verify_signature(body: bytes, signature_header: str | None) -> bool:
+    """Verify Meta's X-Hub-Signature-256 against the App Secret.
+
+    When WHATSAPP_APP_SECRET is unset we accept the request and log a
+    warning — useful for local dev. In production the env var MUST be set.
+    """
+    if not settings.whatsapp_app_secret:
+        log.warning("WHATSAPP_APP_SECRET not set — skipping webhook signature check")
+        return True
+
+    if not signature_header or not signature_header.startswith("sha256="):
+        return False
+
+    expected = signature_header[len("sha256="):]
+    digest = hmac.new(
+        settings.whatsapp_app_secret.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, digest)
 
 
 async def send_text(to: str, body: str) -> None:

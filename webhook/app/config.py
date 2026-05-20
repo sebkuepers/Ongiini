@@ -11,6 +11,10 @@ class Settings:
     whatsapp_token: str = os.getenv("WHATSAPP_TOKEN", "")
     whatsapp_phone_id: str = os.getenv("WHATSAPP_PHONE_ID", "")
     whatsapp_verify_token: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+    # Meta App Secret — used to verify the X-Hub-Signature-256 header on
+    # every incoming webhook POST. When empty we log a warning and accept
+    # unsigned requests (dev mode).
+    whatsapp_app_secret: str = os.getenv("WHATSAPP_APP_SECRET", "")
 
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
@@ -22,6 +26,11 @@ class Settings:
 
     memory_window: int = 10
     namibia_country_code: str = "264"
+
+    # Abuse / cost protection
+    message_max_chars: int = 4096          # WhatsApp's own per-text limit
+    rate_limit_per_5min: int = 20
+    rate_limit_per_day: int = 200
 
 
 settings = Settings()

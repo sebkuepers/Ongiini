@@ -1,13 +1,13 @@
 import logging
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.responses import PlainTextResponse
 
-from . import memory, usage
+from . import memory, ratelimit, usage
 from .config import settings
 from .filters import is_allowed, normalize
 from .llm import respond
-from .whatsapp import extract_messages, send_text
+from .whatsapp import extract_messages, send_text, verify_signature
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,14 +40,38 @@ async def verify(request: Request):
 
 
 @app.post("/whatsapp")
-async def receive(request: Request):
-    payload = await request.json()
+async def receive(
+    request: Request,
+    x_hub_signature_256: str | None = Header(default=None),
+):
+    raw_body = await request.body()
+
+    # Reject forged webhook posts. Meta signs every body with the App Secret;
+    # an attacker without the secret can't produce a valid signature.
+    if not verify_signature(raw_body, x_hub_signature_256):
+        log.warning("rejected webhook POST with invalid/missing signature")
+        return Response(status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        log.warning("rejected webhook POST with non-JSON body")
+        return Response(status_code=400)
+
     messages = extract_messages(payload)
 
     for m in messages:
         sender = m["from"]
         text = (m["text"] or "").strip()
         if not text:
+            continue
+
+        # Defensive: WhatsApp's own text limit is 4096 chars. Anything larger
+        # is either a bug or an abuse attempt — drop it without spending tokens.
+        if len(text) > settings.message_max_chars:
+            log.warning(
+                "dropping oversize message from %s (%d chars)", sender, len(text)
+            )
             continue
 
         try:
@@ -65,6 +89,12 @@ async def handle_message(sender: str, text: str) -> None:
     if not is_allowed(msisdn):
         log.info("blocked non-Namibian sender %s", msisdn)
         await send_text(sender, NON_NAMIBIA_REPLY)
+        return
+
+    allowed, reason = ratelimit.check(msisdn)
+    if not allowed:
+        log.info("rate-limited %s: %s", msisdn, reason)
+        await send_text(sender, reason)
         return
 
     history = memory.load(msisdn)

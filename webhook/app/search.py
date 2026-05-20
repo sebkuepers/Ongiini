@@ -1,3 +1,6 @@
+import ipaddress
+from urllib.parse import urlparse
+
 import httpx
 
 from .config import settings
@@ -8,6 +11,57 @@ TAVILY_EXTRACT_URL = "https://api.tavily.com/extract"
 # Generous but bounded — ~1500 tokens of page text per fetch is plenty for
 # WhatsApp replies and keeps the prompt small.
 FETCH_MAX_CHARS = 6000
+
+# Block fetch_url calls that target internal/private networks. These would
+# generally fail at Tavily's end anyway (their fetcher runs on the public
+# internet), but defence-in-depth: refuse before we even send the URL out.
+_BLOCKED_HOSTNAMES = {
+    "localhost",
+    "spark-dccf",
+    "spark-dccf.local",
+    "host.docker.internal",
+}
+_BLOCKED_IP_NETS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),    # AWS/GCP/Azure metadata
+    ipaddress.ip_network("100.64.0.0/10"),     # carrier-grade NAT / Tailscale
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+
+def _safe_url(url: str) -> tuple[bool, str]:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "URL could not be parsed."
+
+    if parsed.scheme not in ("http", "https"):
+        return False, f"URL must use http or https (got {parsed.scheme!r})."
+
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False, "URL has no hostname."
+
+    if host in _BLOCKED_HOSTNAMES:
+        return False, "Refusing to fetch internal hostname."
+
+    # If the hostname is an IP literal, check it against the private blocks.
+    # Non-literal hostnames are forwarded to Tavily, which resolves and fetches
+    # on the public internet.
+    try:
+        ip = ipaddress.ip_address(host)
+        for net in _BLOCKED_IP_NETS:
+            if ip in net:
+                return False, f"Refusing to fetch private/internal address {ip}."
+    except ValueError:
+        pass
+
+    return True, ""
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
@@ -55,8 +109,9 @@ async def fetch_url(url: str, max_chars: int = FETCH_MAX_CHARS) -> str:
         return "URL fetch is not configured."
 
     url = (url or "").strip()
-    if not (url.startswith("http://") or url.startswith("https://")):
-        return "Error: URL must start with http:// or https://"
+    ok, reason = _safe_url(url)
+    if not ok:
+        return f"Error: {reason}"
 
     payload = {
         "api_key": settings.tavily_api_key,
