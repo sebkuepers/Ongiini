@@ -55,6 +55,7 @@ async def turn(label: str, user_text: str) -> None:
     if result.used_fetch_url:            tools.append("fetch_url")
     if result.deleted_data:              tools.append("delete_my_data")
     if result.used_whats_in_my_memory:   tools.append("whats_in_my_memory")
+    if result.used_my_token_usage:       tools.append("my_token_usage")
     print(f"      tools={tools or '-'}  in={result.tokens_in} out={result.tokens_out}")
 
     if not result.deleted_data:
