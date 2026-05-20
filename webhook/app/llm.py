@@ -6,7 +6,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from . import memory
+from . import memory, usage
 from .config import settings
 from .search import fetch_url, web_search
 from .tracing import MessageTrace
@@ -202,6 +202,11 @@ DATA & PRIVACY
   call the `whats_in_my_memory` tool and present the result naturally — summarise the
   contents in your own words, don't dump it raw. This is a trust-building moment;
   treat it that way.
+- If the user asks how much they have used / how many tokens are left / how close they
+  are to their monthly limit ("how many tokens have I used?", "am I close to the limit?",
+  "hoeveel tokens het ek gebruik?"), call the `my_token_usage` tool and give the answer
+  in plain prose — total used, monthly allowance, roughly what percentage that is, and
+  that the counter resets on the 1st of each month. Don't list numbers as bullets.
 - Stored message content is PII-sanitised before it lands on disk — emails, ID-shape
   numbers, credit cards, and IBANs are replaced with [REDACTED:kind] placeholders.
   If you see one of these placeholders in earlier memory, just refer to it as
@@ -303,6 +308,23 @@ TOOLS = [
                 "'wat het julle gestoor?' or any equivalent. After the tool returns, "
                 "present the result to the user in plain, natural language — don't dump "
                 "raw JSON. Takes no arguments."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "my_token_usage",
+            "description": (
+                "Look up THIS user's token usage for the current calendar month. Call this "
+                "whenever the user asks how many tokens they've used, how close they are to "
+                "the monthly limit, what their balance / quota / allowance is, or any "
+                "equivalent in English or Afrikaans ('how many tokens have I used?', "
+                "'am I close to the limit?', 'hoeveel tokens het ek gebruik?', "
+                "'hoe naby is ek aan die limiet?'). After the tool returns, summarise the "
+                "numbers in plain language — don't dump them as a list or JSON. Mention "
+                "that the counter resets on the 1st of each month. Takes no arguments."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -412,6 +434,7 @@ class LLMResult:
     used_fetch_url: bool = False
     deleted_data: bool = False
     used_whats_in_my_memory: bool = False
+    used_my_token_usage: bool = False
 
 
 async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) -> LLMResult:
@@ -431,6 +454,7 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
     used_fetch_url = False
     deleted_data = False
     used_whats_in_my_memory = False
+    used_my_token_usage = False
     tokens_in = 0
     tokens_out = 0
 
@@ -446,17 +470,17 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
             temperature=0.6,
             max_tokens=600,
         )
-        usage = resp.usage
+        call_usage = resp.usage
         call = trace.add_call(
             turn=turn,
-            tokens_in=(usage.prompt_tokens if usage else 0) or 0,
-            tokens_out=(usage.completion_tokens if usage else 0) or 0,
+            tokens_in=(call_usage.prompt_tokens if call_usage else 0) or 0,
+            tokens_out=(call_usage.completion_tokens if call_usage else 0) or 0,
             finish_reason=resp.choices[0].finish_reason if resp.choices else None,
             started_at=call_started,
         )
-        if usage:
-            tokens_in += usage.prompt_tokens or 0
-            tokens_out += usage.completion_tokens or 0
+        if call_usage:
+            tokens_in += call_usage.prompt_tokens or 0
+            tokens_out += call_usage.completion_tokens or 0
 
         msg = resp.choices[0].message
         tool_calls = msg.tool_calls or []
@@ -476,6 +500,7 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                 used_fetch_url=used_fetch_url,
                 deleted_data=deleted_data,
                 used_whats_in_my_memory=used_whats_in_my_memory,
+                used_my_token_usage=used_my_token_usage,
             )
 
         messages.append(
@@ -541,6 +566,18 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                             content = content[:240] + "…"
                         lines.append(f"- [{role}] {content}")
                     result = "\n".join(lines)
+            elif name == "my_token_usage":
+                used_my_token_usage = True
+                stats = usage.summary_for(msisdn)
+                result = (
+                    f"Token usage for this user, month {stats['month']} (UTC):\n"
+                    f"- {stats['messages']} messages so far this month\n"
+                    f"- {stats['tokens_in']} input tokens\n"
+                    f"- {stats['tokens_out']} output tokens\n"
+                    f"- {stats['tokens_total']} tokens total of {stats['limit']} "
+                    f"monthly allowance ({stats['percent_used']}% used)\n"
+                    f"Counter resets on the 1st of next month."
+                )
             else:
                 result = f"Unknown tool: {name}"
 
@@ -577,4 +614,5 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
         used_fetch_url=used_fetch_url,
         deleted_data=deleted_data,
         used_whats_in_my_memory=used_whats_in_my_memory,
+        used_my_token_usage=used_my_token_usage,
     )

@@ -423,6 +423,25 @@ CASES = [
         "must_not_include": [],
         "requires_caveat": False,
     },
+    # ---- Memory v2: my_token_usage tool ----
+    # User asks how much of their monthly token quota they've used. The model
+    # must call the tool and translate the numbers into prose that names the
+    # monthly allowance and the reset cadence (1st of the month).
+    {
+        "id": "M4_token_usage_en",
+        "lang": "en",
+        "question": "How many tokens have I used this month?",
+        "should_search": False,
+        "expect_my_token_usage": True,
+        "length": (40, 800),
+        "must_include_any": [
+            ["million", "1,000,000", "1000000", "limit", "allowance", "quota"],
+            ["month", "reset", "1st"],
+        ],
+        "must_include": [],
+        "must_not_include": ["{", "\"tokens_in\""],   # no raw JSON dump
+        "requires_caveat": False,
+    },
     # ---- Memory v2: rolling summary ----
     # Pre-seed enough history (16 entries = 8 turn pairs) that, after the
     # new user+assistant turn is appended, the on-write maybe_summarize
@@ -520,6 +539,7 @@ def score_reply(
     memory_after: bool = False,
     memory_on_disk: list[dict] | None = None,
     whats_in_my_memory_fired: bool = False,
+    my_token_usage_fired: bool = False,
 ) -> list[CheckResult]:
     out: list[CheckResult] = []
     rl = reply.lower()
@@ -618,6 +638,13 @@ def score_reply(
             f"fired={whats_in_my_memory_fired}",
         ))
 
+    if case.get("expect_my_token_usage"):
+        out.append(CheckResult(
+            "my_token_usage_fired",
+            my_token_usage_fired,
+            f"fired={my_token_usage_fired}",
+        ))
+
     if case.get("expect_rolling_summary"):
         # On-disk memory MUST start with a system summary message and be
         # bounded in length (proves the fold-in actually happened).
@@ -711,6 +738,7 @@ async def run_case(case: dict) -> dict:
         memory_after=memory_after,
         memory_on_disk=memory_on_disk,
         whats_in_my_memory_fired=result.used_whats_in_my_memory,
+        my_token_usage_fired=result.used_my_token_usage,
     )
     return {
         "id": case["id"],
@@ -723,6 +751,7 @@ async def run_case(case: dict) -> dict:
         "used_fetch_url": result.used_fetch_url,
         "deleted_data": result.deleted_data,
         "used_whats_in_my_memory": result.used_whats_in_my_memory,
+        "used_my_token_usage": result.used_my_token_usage,
         "latency_s": round(dt, 2),
         "checks": [{"name": c.name, "passed": c.passed, "note": c.note} for c in checks],
         "passed": all(c.passed for c in checks),
@@ -742,6 +771,7 @@ async def main():
         if r.get("used_fetch_url"):           tools.append("fetch_url")
         if r.get("deleted_data"):             tools.append("delete_my_data")
         if r.get("used_whats_in_my_memory"):  tools.append("whats_in_my_memory")
+        if r.get("used_my_token_usage"):      tools.append("my_token_usage")
         tools_str = ",".join(tools) if tools else "-"
         print(f"A ({r['latency_s']}s, in={r['tokens_in']} out={r['tokens_out']} tools={tools_str}):")
         print(f"   {r['reply']}")

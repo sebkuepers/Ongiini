@@ -31,6 +31,10 @@ class Settings:
     # conversations bounded without losing earlier context entirely.
     memory_summary_threshold: int = 14
     memory_keep_recent: int = 8
+    # Free-tier monthly token allowance per user. Surfaced via the
+    # my_token_usage tool and quoted on the website's "Free, with a fair
+    # limit" section.
+    monthly_token_limit: int = 1_000_000
     namibia_country_code: str = "264"
 
     # Abuse / cost protection
