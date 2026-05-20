@@ -6,6 +6,13 @@ TAVILY_URL = "https://api.tavily.com/search"
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
+    """Query Tavily with a Namibia bias and return a compact text block.
+
+    Tavily's `country` parameter weights results toward sources from that
+    country. We use it unconditionally because the audience is in Namibia —
+    even queries that are not obviously local (e.g. "exchange rate", "current
+    weather") almost always mean *in Namibia* for our users.
+    """
     if not settings.tavily_api_key:
         return "Web search is not configured."
 
@@ -14,6 +21,7 @@ async def web_search(query: str, max_results: int = 5) -> str:
         "query": query,
         "max_results": max_results,
         "search_depth": "basic",
+        "country": "namibia",
         "include_answer": True,
     }
     async with httpx.AsyncClient(timeout=15.0) as client:

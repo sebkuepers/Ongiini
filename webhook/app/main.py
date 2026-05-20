@@ -68,12 +68,16 @@ async def handle_message(sender: str, text: str) -> None:
         return
 
     history = memory.load(msisdn)
-    result = await respond(history, text)
+    result = await respond(history, text, msisdn)
 
     await send_text(sender, result.reply)
 
-    history.append({"role": "user", "content": text})
-    history.append({"role": "assistant", "content": result.reply})
-    memory.save(msisdn, history)
+    # When the model fires the deletion tool, leave no trace of this turn either —
+    # the file is already wiped by the tool handler, and we deliberately skip the
+    # history.append/save below so the deletion request itself isn't re-persisted.
+    if not result.deleted_data:
+        history.append({"role": "user", "content": text})
+        history.append({"role": "assistant", "content": result.reply})
+        memory.save(msisdn, history)
 
     usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
