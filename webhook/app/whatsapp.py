@@ -35,7 +35,12 @@ def verify_signature(body: bytes, signature_header: str | None) -> bool:
 
 async def send_text(to: str, body: str) -> None:
     if not settings.whatsapp_token or not settings.whatsapp_phone_id:
-        log.warning("WhatsApp not configured; would send to %s: %s", to, body)
+        # Deliberately do NOT log the body — we never log message content.
+        # The eval harness in webhook/tests/eval.py is the right tool for
+        # inspecting actual replies during development.
+        log.warning(
+            "WhatsApp not configured — would send to %s (%d chars)", to, len(body)
+        )
         return
 
     url = f"{GRAPH_URL}/{settings.whatsapp_phone_id}/messages"

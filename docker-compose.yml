@@ -4,6 +4,18 @@ services:
     container_name: ongiini-webhook
     restart: unless-stopped
     env_file: .env
+    # Match the Dockerfile's `ongiini` user (UID/GID 1000), which lines up
+    # with the host's `nexus` user that owns ./data. Files written via the
+    # bind mount stay owned by nexus instead of root.
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      # uvicorn / starlette occasionally need a writable /tmp for spooled
+      # multipart bodies; httpx connection pool also benefits from it.
+      - /tmp:size=64M,mode=1777
     volumes:
       - ./data:/data
     ports:
