@@ -2,35 +2,47 @@
 
 > "Ongiini" — "How are you?" in Oshiwambo.
 
-A free WhatsApp AI assistant for Namibia. English & Afrikaans, powered by
-**Gemma 4 26B A4B** (NVFP4) on a local NVIDIA DGX Spark, exposed via
-Tailscale Funnel.
+A free WhatsApp AI assistant for people in Namibia. English & Afrikaans today,
+Oshiwambo via a translation layer coming soon. Powered by
+**Gemma 4 26B A4B** (NVFP4) running locally on an NVIDIA DGX Spark, exposed via
+a Cloudflare Tunnel.
 
-## Architecture (Phase 1)
+Pilot currently runs in Germany; the goal is to move the hardware to Namibia
+once the service is sustainable.
+
+## Architecture
 
 ```
-WhatsApp Cloud API ──┐
-                     │ /webhooks/whatsapp
-                     ▼
-        Tailscale Funnel  ──▶  127.0.0.1:8445  ──▶  FastAPI webhook (Docker)
-                                                      │
-                                                      ├─▶ vLLM Gemma 4 (host:8124)
-                                                      ├─▶ Tavily (web search)
-                                                      └─▶ /data (memory + log)
+WhatsApp Cloud API ──▶ api.ongiini.ai/whatsapp
+                              │  (Cloudflare Tunnel)
+                              ▼
+                       127.0.0.1:8445  ──▶  FastAPI webhook (Docker)
+                                              │
+                                              ├─▶ vLLM Gemma 4 (host:8124)
+                                              ├─▶ Tavily (web search)
+                                              └─▶ /data (memory + log)
 
-Browser  ──▶  Tailscale Serve  ──▶  127.0.0.1:18789  ──▶  static website (Docker)
+Browser ──▶ ongiini.ai / www.ongiini.ai ──▶  127.0.0.1:18789  ──▶  nginx (Docker)
+                              ▲
+                              │  (Cloudflare Tunnel)
+                              │
 ```
 
-Two containers, no in-repo nginx — Tailscale serve/funnel provides the public
-HTTPS surface and path routing.
+Three processes on the Spark:
+1. `gemma4-vllm` — Docker container (`vllm/vllm-openai:gemma4-0505-arm64-cu130`).
+2. `ongiini-webhook` + `ongiini-website` — Docker compose stack in this repo.
+3. `cloudflared` — systemd service exposing the two containers at
+   `ongiini.ai` / `www.ongiini.ai` / `api.ongiini.ai`.
 
 - `webhook/` — FastAPI service. Receives WhatsApp messages, filters by country
   code / whitelist, calls vLLM with tool-calling for `web_search`, replies,
   persists last 10 messages per user as JSON.
-- `website/` — single-page static site with a "Chat on WhatsApp" button & QR.
+- `website/` — single-page static site, vanilla HTML+CSS+JS, ~14 KB gzipped.
 - `data/` — JSON memory files + `usage.log` (mounted as a volume).
 
 ## DGX Spark host setup
+
+### Gemma 4 vLLM
 
 The vLLM container runs **on the host**, not under compose, so it can use the
 full unified GB10 memory pool.
@@ -67,9 +79,6 @@ Notes on the flags:
 - `--max-num-batched-tokens 8192` is required because Gemma 4 is multimodal
   and the default (2048) is smaller than a single image token block (2496).
 - `--gpu-memory-utilization 0.70` leaves headroom for the rest of the host.
-  0.85 from the ai-muninn blog crashes here because background services
-  (k3s, openshell, Docker, signal-cli, Grafana, Prometheus) consume ~40 GB
-  of unified memory before vLLM starts.
 - The community `pythonic` parser does NOT match this build's output format;
   use `gemma4` (the model emits `<|tool_call>call:func{key:<|"|>val<|"|>}<tool_call|>`).
 
@@ -78,70 +87,84 @@ Quick check:
 curl -s http://127.0.0.1:8124/v1/models | jq
 ```
 
-## Ongiini stack setup
+### Ongiini compose stack
 
 ```sh
 cd ~/dev/Ongiini
 cp .env.example .env
-# Edit .env with WhatsApp + Tavily creds + PUBLIC_WHATSAPP_NUMBER
-
-# Bake the public number into the static site (one-off per number change)
-sed -i.bak "s/__WA_NUMBER__/$(grep '^PUBLIC_WHATSAPP_NUMBER=' .env | cut -d= -f2)/" website/index.html
-
+# Edit .env with WhatsApp + Tavily creds
 docker compose up -d --build
 ```
 
-## Tailscale exposure
+The hero WhatsApp number is hard-coded in `website/index.html` (currently
+`+49 15888 635886`, the pilot number). To change it, edit the `wa.me/...`
+links and the `+49 15888 635886` display strings directly in the HTML.
 
-The Spark already has these routes provisioned via `tailscale serve`:
+### Cloudflare Tunnel
 
-```
-https://spark-dccf.tailac3921.ts.net/             → 127.0.0.1:18789  (website)
-https://spark-dccf.tailac3921.ts.net/webhooks/    → 127.0.0.1:8445   (webhook)
-```
+Public DNS for `ongiini.ai` lives on Cloudflare. A tunnel named
+`ongiini-spark` (UUID `6ff62805-71c9-4d78-acf2-b76095b87310`) runs as a
+systemd service on the Spark and routes:
 
-For Meta's WhatsApp Cloud API to reach the webhook over the public internet,
-enable Funnel on the webhook path:
+| Hostname | Backend |
+|---|---|
+| `ongiini.ai` | `http://localhost:18789` (website) |
+| `www.ongiini.ai` | `http://localhost:18789` (via CNAME chain) |
+| `api.ongiini.ai` | `http://localhost:8445` (webhook) |
+
+Config: `/etc/cloudflared/config.yml` + credentials at
+`/etc/cloudflared/<UUID>.json`. Both are root-owned. To inspect:
 
 ```sh
-tailscale funnel --bg --set-path=/webhooks/ http://127.0.0.1:8445
+sudo systemctl status cloudflared
+sudo journalctl -u cloudflared -f
+sudo cat /etc/cloudflared/config.yml
 ```
 
-Then in Meta's WhatsApp Business app dashboard:
+To restart after a config change:
+```sh
+sudo systemctl restart cloudflared
+```
 
-- Callback URL: `https://spark-dccf.tailac3921.ts.net/webhooks/whatsapp`
-- Verify token: same as `WHATSAPP_VERIFY_TOKEN` in `.env`
+### Meta WhatsApp Cloud API config
+
+In the Meta WhatsApp Business dashboard:
+
+- Callback URL: `https://api.ongiini.ai/whatsapp`
+- Verify token: whatever you set as `WHATSAPP_VERIFY_TOKEN` in `.env`
+
+The webhook returns 403 until both the verify token in `.env` and the value
+configured in Meta match.
 
 ## Endpoints
 
-- `GET  /whatsapp` — Meta verification handshake.
-- `POST /whatsapp` — incoming WhatsApp messages.
-
-The public URL Meta calls is `https://<tailnet>/webhooks/whatsapp` — Tailscale
-serve strips the `/webhooks/` prefix before forwarding to the webhook
-container, so internally the routes live under `/whatsapp`.
-- `GET  /health` — liveness check.
+- `GET  /whatsapp` (webhook container) — Meta verification handshake.
+- `POST /whatsapp` (webhook container) — incoming WhatsApp messages.
+- `GET  /health` (webhook container) — liveness check.
 - `GET  /` (website container) — static landing page.
+
+Internally the webhook only listens on `/whatsapp`. Cloudflare Tunnel routes
+the entire `api.ongiini.ai` host into port 8445 with the path preserved.
 
 ## Filter behaviour
 
-- `+264...` numbers → processed normally.
-- Other numbers → friendly auto-reply (English) saying Ongiini is Namibia-only.
+- `+264…` numbers → processed normally.
+- Other numbers → friendly auto-reply (English) explaining Namibia-only scope.
 - Numbers in `WHITELIST` (comma-separated, no `+`) → bypass the country check.
 
-## Memory
+## Data we keep
 
-- Per-user JSON at `/data/{msisdn}.json`. Last 10 user+assistant turns kept.
-
-## Usage log
-
-`/data/usage.log`, one line per handled message:
+Per-user JSON at `/data/{msisdn}.json` — last 10 user+assistant turns.
+Per-message line in `/data/usage.log` — token counts + timestamp, no content.
 
 ```
 2026-05-20T14:32:11 | 264811234567 | tokens_in=342 tokens_out=187 | search=yes
 ```
 
+Free-tier cap is **1 million tokens per user per month**, resetting on the
+1st (cap enforcement not yet implemented in code — Phase 2).
+
 ## Out of scope for Phase 1
 
-Redis, async queues, Whisper, image input, rate limiting, dashboards — see
-project briefing for the Phase 2 roadmap.
+Voice messages (Whisper), image understanding, Oshiwambo via a translation
+layer, hard rate-limit enforcement, Redis-backed memory, async queue.
