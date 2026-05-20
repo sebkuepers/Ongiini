@@ -39,6 +39,13 @@ medical records, screenshots of OTPs) generally without reading out specific
 personal numbers, so those don't slip into long-term facts via the model's
 description.
 
+Voice notes: WhatsApp audio is downloaded from Meta, transcribed on the Spark
+via `faster-whisper` (CTranslate2 Whisper-large-v3-turbo, INT8 on CPU), and
+the audio bytes are discarded immediately after transcription. The transcript
+flows through the same text path — PII scrub, short-term memory, mem0
+long-term, tools dispatch, EN/AF language redirect — so the storage and
+privacy guarantees match exactly. No audio is ever persisted.
+
 Users can inspect everything (`whats_in_my_memory`), check token usage
 (`my_token_usage`), and delete it all (`delete_my_data`) from inside
 WhatsApp — all three work in English and Afrikaans.

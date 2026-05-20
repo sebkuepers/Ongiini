@@ -13,3 +13,10 @@ pydantic==2.9.2
 mem0ai>=0.1.110,<0.2
 qdrant-client>=1.12,<2
 sentence-transformers>=3.0,<4
+
+# Memory v3 Phase D: faster-whisper for WhatsApp voice notes.
+# CTranslate2-backed Whisper that runs INT8 on CPU comfortably —
+# transcribes a 30s voice note in 2-5s without competing with Gemma
+# for GPU memory. Audio decode goes through ffmpeg (system package,
+# installed via Dockerfile).
+faster-whisper>=1.1,<2

@@ -6,6 +6,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# ffmpeg is required by faster-whisper to decode WhatsApp's OGG/Opus
+# voice notes (and any other audio format the user might send). System
+# package is the simplest path — ffmpeg-python wrappers all shell out
+# to the ffmpeg binary anyway.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
 # Install the CPU-only torch wheel BEFORE the rest of requirements.txt so
 # that sentence-transformers (transitively pulled by mem0's huggingface
 # embedder) doesn't accidentally pull the CUDA torch build. We want all

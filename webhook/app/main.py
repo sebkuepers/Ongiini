@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from PIL import Image
 
-from . import mem, memory, pii, ratelimit, usage
+from . import audio, mem, memory, pii, ratelimit, usage
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import maybe_summarize, respond
@@ -32,6 +32,12 @@ async def lifespan(app: FastAPI):
     log.info("warming mem0 (loading embedding model)…")
     await asyncio.to_thread(mem.warmup)
     log.info("mem0 ready")
+    # Whisper init downloads ~1GB on first container start and takes a
+    # few seconds even when cached. Doing it now keeps the first real
+    # voice note from paying the cold cost on top of transcription.
+    log.info("warming faster-whisper…")
+    await asyncio.to_thread(audio.warmup)
+    log.info("faster-whisper ready")
     yield
 
 
@@ -69,6 +75,28 @@ IMAGE_FETCH_FAILED_REPLY = (
 # download URL doesn't expose Content-Length pre-flight, so this is a
 # post-download guard.
 _IMAGE_MAX_BYTES = 8 * 1024 * 1024
+
+# Largest audio payload we'll accept. WhatsApp voice notes are usually
+# 50-300 KB for typical durations; files can be larger. 16 MB covers
+# realistic uploads and refuses anything looking like a transcription
+# DoS. The transcribe() function additionally caps by audio DURATION
+# (90s) — that's the real ceiling on compute, this is just an early
+# size-based reject.
+_AUDIO_MAX_BYTES = 16 * 1024 * 1024
+
+
+AUDIO_FETCH_FAILED_REPLY = (
+    "I couldn't load the voice note you sent — could you try again? "
+    "Typing the message out also works if it keeps failing."
+)
+AUDIO_TRANSCRIBE_FAILED_REPLY = (
+    "I tried to listen to your voice note but couldn't make it out. "
+    "Could you try again, or type your message instead?"
+)
+AUDIO_TOO_LONG_REPLY = (
+    "Your voice note is a bit long for me to listen to in one go — "
+    "could you split it up or type the question instead?"
+)
 
 # Gemma 4's vision tower requires BOTH image dimensions to be exact
 # multiples of 48 (patch 16 × pool kernel 3). Anything off-grid crashes
@@ -259,6 +287,19 @@ async def receive(
             except Exception:
                 log.exception("Failed to handle image message from %s", sender)
 
+        elif kind == "audio":
+            media_id = m.get("media_id") or ""
+            if not media_id:
+                continue
+            try:
+                await handle_audio_message(
+                    sender=sender,
+                    media_id=media_id,
+                    mime_type=m.get("mime_type") or "audio/ogg",
+                )
+            except Exception:
+                log.exception("Failed to handle audio message from %s", sender)
+
     # WhatsApp expects a fast 200 OK acknowledgement.
     return {"status": "ok"}
 
@@ -375,6 +416,93 @@ async def handle_image_message(
             )
 
         usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
+
+
+async def handle_audio_message(
+    sender: str, media_id: str, mime_type: str
+) -> None:
+    """Inbound WhatsApp voice note / audio file.
+
+    Pipeline: download bytes from Meta → faster-whisper CPU transcribe →
+    route the transcript through `handle_message` so it shares the text
+    path's memory writes, tool dispatch, EN/AF language redirect, and
+    PII scrub. Audio bytes are NEVER stored — only the transcript flows
+    further and only the transcript hits mem0 / disk.
+    """
+    try:
+        msisdn = normalize(sender)
+    except InvalidMsisdn as exc:
+        log.warning("rejected audio message with invalid sender field: %s", exc)
+        return
+
+    if not is_allowed(msisdn):
+        log.info("blocked non-Namibian sender %s (audio)", msisdn)
+        await send_text(sender, NON_NAMIBIA_REPLY)
+        return
+
+    allowed, reason = ratelimit.check(msisdn)
+    if not allowed:
+        log.info("rate-limited %s: %s (audio)", msisdn, reason)
+        await send_text(sender, reason)
+        return
+
+    media = await download_media(media_id)
+    if media is None:
+        await send_text(sender, AUDIO_FETCH_FAILED_REPLY)
+        return
+
+    audio_bytes, _actual_mime = media
+    if len(audio_bytes) > _AUDIO_MAX_BYTES:
+        log.warning(
+            "dropping oversize audio from %s (%d bytes > %d)",
+            sender, len(audio_bytes), _AUDIO_MAX_BYTES,
+        )
+        await send_text(sender, AUDIO_TOO_LONG_REPLY)
+        return
+
+    # Whisper is CPU-bound — run in a worker thread so we don't pin the
+    # asyncio event loop for the 2-5s typical transcription window.
+    transcript, lang, duration_s = await asyncio.to_thread(
+        audio.transcribe, audio_bytes
+    )
+
+    if duration_s > 0 and not transcript:
+        # transcribe() returns "" with a non-zero duration when the
+        # audio was too long for our cap — distinguish that from the
+        # generic transcription failure so the user gets the right hint.
+        if duration_s > 90.0:
+            await send_text(sender, AUDIO_TOO_LONG_REPLY)
+        else:
+            await send_text(sender, AUDIO_TRANSCRIBE_FAILED_REPLY)
+        return
+
+    if not transcript:
+        await send_text(sender, AUDIO_TRANSCRIBE_FAILED_REPLY)
+        return
+
+    # Defensive: reject transcripts that somehow exceed the text-path
+    # length cap. WhatsApp's own voice-note limit plus our 90s duration
+    # cap makes this unlikely, but a chatty Whisper output on background
+    # noise could be lengthy.
+    if len(transcript) > settings.message_max_chars:
+        log.warning(
+            "dropping oversize transcript from %s (%d chars)",
+            msisdn, len(transcript),
+        )
+        await send_text(sender, AUDIO_TRANSCRIBE_FAILED_REPLY)
+        return
+
+    log.info(
+        "voice note from %s — %.1fs, lang=%s, %d chars",
+        msisdn, duration_s, lang or "?", len(transcript),
+    )
+
+    # Route through the text handler so the transcript benefits from the
+    # full pipeline: per-user lock, memory load/save, mem0 fact extraction,
+    # tools dispatch, EN/AF-only redirect (the language rule in
+    # SYSTEM_PROMPT fires on the transcript text itself — no separate
+    # gating needed here). Reply is text-only for v1.
+    await handle_message(sender, transcript)
 
 
 async def handle_message(sender: str, text: str) -> None:

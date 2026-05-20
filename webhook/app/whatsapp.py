@@ -145,6 +145,22 @@ def extract_messages(payload: dict) -> list[dict]:
                             "id": msg.get("id", ""),
                         }
                     )
+                elif msg_type in ("audio", "voice"):
+                    # WhatsApp sends both `audio` (file upload) and `voice`
+                    # (in-app voice note) — same payload shape with a
+                    # `voice: true` flag on the latter. faster-whisper
+                    # handles both via ffmpeg.
+                    audio = msg.get("audio") or {}
+                    out.append(
+                        {
+                            "from": msg.get("from", ""),
+                            "type": "audio",
+                            "media_id": audio.get("id", ""),
+                            "mime_type": audio.get("mime_type", "audio/ogg"),
+                            "voice": bool(audio.get("voice", False)),
+                            "id": msg.get("id", ""),
+                        }
+                    )
     return out
 
 

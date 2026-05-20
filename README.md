@@ -248,7 +248,27 @@ caption-router in `main.py` that detects admin-intent captions
 them as text-only as defence-in-depth, but the underlying vLLM
 restriction it worked around is gone.
 
+## Voice notes
+
+WhatsApp voice notes are transcribed on the Spark via `faster-whisper`
+(CTranslate2 INT8 Whisper-large-v3-turbo) and routed through the same
+text path as a typed message — same memory writes, same tools, same
+EN/AF language redirect. The model runs on CPU so it doesn't compete
+with Gemma 4 for GPU memory. Typical 30s voice note transcribes in 2-5s.
+
+Audio bytes are NEVER persisted. Short-term memory and mem0 only ever
+see the transcript text, which goes through the same PII scrub the text
+path uses (email / IBAN / card / 11-digit ID → placeholders before
+write).
+
+Code: `webhook/app/audio.py` (transcribe wrapper),
+`webhook/app/main.py::handle_audio_message` (download → transcribe →
+delegate to `handle_message`).
+
+Voice replies (TTS) are not yet supported — Ongiini answers voice notes
+in text. That's the only intentional asymmetry.
+
 ## Out of scope for Phase 1
 
-Voice messages (Whisper), Oshiwambo via a translation layer, hard rate-limit
+Voice replies (TTS), Oshiwambo via a translation layer, hard rate-limit
 enforcement, Redis-backed memory, async queue.
