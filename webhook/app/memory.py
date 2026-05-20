@@ -37,7 +37,13 @@ def load(msisdn: str) -> list[dict[str, Any]]:
 
 
 def save(msisdn: str, messages: list[dict[str, Any]]) -> None:
-    trimmed = messages[-settings.memory_window * 2 :]
+    cap = settings.memory_window * 2
+    # A leading system message is the rolling-summary placeholder. Preserve
+    # it across trims — losing it defeats the entire point of summarization.
+    if messages and messages[0].get("role") == "system":
+        trimmed = [messages[0]] + messages[1:][-cap:]
+    else:
+        trimmed = messages[-cap:]
     p = _path_for(msisdn)
     p.write_text(json.dumps(trimmed, ensure_ascii=False, indent=2))
 

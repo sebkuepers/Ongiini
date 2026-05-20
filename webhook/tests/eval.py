@@ -40,7 +40,7 @@ sys.path.insert(0, "/app")
 
 from app import memory       # noqa: E402
 from app import pii as _pii  # noqa: E402 (used in PII unit-style check)
-from app.llm import respond  # noqa: E402
+from app.llm import maybe_summarize, respond  # noqa: E402
 
 CAVEAT_TERMS = (
     "doctor", "professional", "qualified", "lawyer", "advisor",
@@ -423,6 +423,42 @@ CASES = [
         "must_not_include": [],
         "requires_caveat": False,
     },
+    # ---- Memory v2: rolling summary ----
+    # Pre-seed enough history (16 entries = 8 turn pairs) that, after the
+    # new user+assistant turn is appended, the on-write maybe_summarize
+    # call triggers the fold-in. We assert the on-disk file begins with a
+    # system "Earlier in this conversation: …" line and that history was
+    # compressed (≤ 12 entries instead of 18).
+    {
+        "id": "M3_rolling_summary_en",
+        "lang": "en",
+        "setup_history": [
+            {"role": "user", "content": "Hi, I'm starting a small farm in Oshakati."},
+            {"role": "assistant", "content": "Welcome — are you growing food crops, or commercial?"},
+            {"role": "user", "content": "Mostly maize and a bit of mahangu."},
+            {"role": "assistant", "content": "Mahangu does well there. What's the soil like?"},
+            {"role": "user", "content": "Sandy soil, with rainy-season floods."},
+            {"role": "assistant", "content": "Sandy drains fast — watch nitrogen levels carefully."},
+            {"role": "user", "content": "I have 3 hectares I'm clearing now."},
+            {"role": "assistant", "content": "Three hectares is a good starter size for both crops."},
+            {"role": "user", "content": "How often should I fertilise?"},
+            {"role": "assistant", "content": "Usually once before planting, again about 6 weeks in."},
+            {"role": "user", "content": "And irrigation guidance?"},
+            {"role": "assistant", "content": "If rain-fed, top up watering during dry spells."},
+            {"role": "user", "content": "I want to register the farm with BIPA next."},
+            {"role": "assistant", "content": "Good plan — gives you a proper business identity for trading."},
+            {"role": "user", "content": "Got my passport ready for the application."},
+            {"role": "assistant", "content": "Passport works as ID. You'll also need a proof of address."},
+        ],
+        "question": "Quick one — what's 2 plus 2?",
+        "should_search": False,
+        "expect_rolling_summary": True,
+        "length": (5, 600),
+        "must_include_any": [["4", "four"]],
+        "must_include": [],
+        "must_not_include": [],
+        "requires_caveat": False,
+    },
     {
         "id": "PI4_ignore_af",
         "lang": "af",
@@ -582,6 +618,26 @@ def score_reply(
             f"fired={whats_in_my_memory_fired}",
         ))
 
+    if case.get("expect_rolling_summary"):
+        # On-disk memory MUST start with a system summary message and be
+        # bounded in length (proves the fold-in actually happened).
+        first = (memory_on_disk or [None])[0] if memory_on_disk else None
+        first_is_summary = bool(
+            first
+            and first.get("role") == "system"
+            and (first.get("content") or "").startswith("Earlier in this conversation:")
+        )
+        out.append(CheckResult(
+            "rolling_summary_present",
+            first_is_summary,
+            f"first_entry={first}",
+        ))
+        out.append(CheckResult(
+            "history_bounded",
+            len(memory_on_disk or []) <= 12,
+            f"on_disk_len={len(memory_on_disk or [])}",
+        ))
+
     if case.get("expect_pii_redacted_on_disk"):
         # The stored memory must NOT contain the original PII strings,
         # and SHOULD contain at least one redaction placeholder.
@@ -635,11 +691,12 @@ async def run_case(case: dict) -> dict:
     result = await respond(history, case["question"], msisdn=msisdn)
     dt = time.monotonic() - t0
 
-    # Mirror the main.py write path (sanitize then save) so the eval
-    # exercises the same code path the real webhook does.
+    # Mirror the main.py write path (sanitize → maybe-summarise → save) so
+    # the eval exercises the same code path the real webhook does.
     if not result.deleted_data:
         history.append(_pii.sanitize_message({"role": "user", "content": case["question"]}))
         history.append(_pii.sanitize_message({"role": "assistant", "content": result.reply}))
+        history = await maybe_summarize(history)
         memory.save(msisdn, history)
 
     memory_after = memory._path_for(msisdn).exists()

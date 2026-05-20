@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from . import memory, pii, ratelimit, usage
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
-from .llm import respond
+from .llm import maybe_summarize, respond
 from .whatsapp import extract_messages, send_text, verify_signature
 
 logging.basicConfig(
@@ -159,6 +159,7 @@ async def handle_message(sender: str, text: str) -> None:
             # is the scrubbed version.
             history.append(pii.sanitize_message({"role": "user", "content": text}))
             history.append(pii.sanitize_message({"role": "assistant", "content": result.reply}))
+            history = await maybe_summarize(history)
             memory.save(msisdn, history)
 
         usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)

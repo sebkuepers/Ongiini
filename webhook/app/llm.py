@@ -189,8 +189,11 @@ ALWAYS OFFER A NEXT STEP
 - Don't stack two next-step offers. Pick the single most useful one.
 
 DATA & PRIVACY
-- You remember the last 10 messages from this user. You don't have access to anything else
-  about them — no name, no location, no past chats from other users.
+- You remember roughly the last 10 messages from this user verbatim. Anything older has
+  been LLM-compressed into a short summary line ("Earlier in this conversation: …") that
+  appears at the top of the history when present — treat it as background context, not a
+  perfect transcript. You don't have access to anything else about them — no name, no
+  location, no past chats from other users.
 - If the user asks you to delete their data (in any language, any phrasing — "delete my
   data", "forget everything", "vergeet alles", "wis my data", etc.), call the
   `delete_my_data` tool. Don't argue, don't ask why, just do it.
@@ -307,6 +310,96 @@ TOOLS = [
 ]
 
 client = AsyncOpenAI(base_url=settings.vllm_base_url, api_key="not-needed")
+
+
+# Used by main.py when memory overflows the soft threshold — keep this
+# prompt very small to keep summary calls cheap. Output is ≤ 150 tokens.
+_SUMMARIZER_SYSTEM_PROMPT = (
+    "You compress conversation history into 1–3 short sentences so a future "
+    "AI assistant can continue helping the same user. Focus on:\n"
+    "- stable facts the user shared (where they live, what they're working on, "
+    "  their situation, what kinds of questions they ask)\n"
+    "- topics the assistant has already covered, so we don't re-explain\n"
+    "Write plain text, third person ('the user…'), no greeting, no markdown. "
+    "When given a previous summary, fold its useful content into the new one — "
+    "don't repeat or list both. Keep it tight."
+)
+
+
+_SUMMARY_PREFIX = "Earlier in this conversation: "
+
+
+async def summarize_turns(turns: list[dict], previous_summary: str = "") -> str:
+    """Cheap LLM call that compresses old turns into a short prose summary."""
+    if not turns:
+        return previous_summary
+
+    body = ""
+    if previous_summary:
+        body += f"Previous summary:\n{previous_summary}\n\n"
+    body += "New turns to fold in:\n"
+    for m in turns:
+        role = m.get("role", "?")
+        content = (m.get("content") or "")[:400]
+        body += f"{role}: {content}\n"
+
+    resp = await client.chat.completions.create(
+        model=settings.vllm_model,
+        messages=[
+            {"role": "system", "content": _SUMMARIZER_SYSTEM_PROMPT},
+            {"role": "user", "content": body},
+        ],
+        temperature=0.3,
+        max_tokens=200,
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
+async def maybe_summarize(history: list[dict]) -> list[dict]:
+    """Fold oldest turns into a leading system summary when history is long.
+
+    Triggered when `len(history) > settings.memory_summary_threshold`. The
+    last `settings.memory_keep_recent` entries stay verbatim; everything
+    older is replaced with one system message prefixed with `_SUMMARY_PREFIX`.
+    If a previous summary already sits at index 0, its content is folded
+    into the new one rather than discarded.
+
+    Returns the history unchanged when under threshold or when the LLM
+    call fails to produce a usable summary — never raises, never loses
+    data on the failure path.
+    """
+    if len(history) <= settings.memory_summary_threshold:
+        return history
+
+    if history and history[0].get("role") == "system":
+        leading = (history[0].get("content") or "")
+        if leading.startswith(_SUMMARY_PREFIX):
+            prev_summary = leading[len(_SUMMARY_PREFIX):].strip()
+        else:
+            prev_summary = leading.strip()
+        rest = history[1:]
+    else:
+        prev_summary = ""
+        rest = history
+
+    keep_n = settings.memory_keep_recent
+    if len(rest) <= keep_n:
+        return history
+    to_summarize = rest[:-keep_n]
+    keep = rest[-keep_n:]
+
+    try:
+        new_summary = await summarize_turns(to_summarize, prev_summary)
+    except Exception:
+        # If the summary call fails we'd rather lose nothing and just keep
+        # the raw history — memory.save will cap it at memory_window*2.
+        return history
+    if not new_summary:
+        return history
+
+    return [
+        {"role": "system", "content": _SUMMARY_PREFIX + new_summary}
+    ] + keep
 
 
 @dataclass

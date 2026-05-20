@@ -25,6 +25,12 @@ class Settings:
     whitelist: set[str] = _whitelist()
 
     memory_window: int = 10
+    # Rolling-summary trigger: when len(history) exceeds the threshold, the
+    # oldest entries are LLM-compressed into a leading system message and the
+    # last `memory_keep_recent` entries are kept verbatim. Keeps long-running
+    # conversations bounded without losing earlier context entirely.
+    memory_summary_threshold: int = 14
+    memory_keep_recent: int = 8
     namibia_country_code: str = "264"
 
     # Abuse / cost protection
