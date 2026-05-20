@@ -141,6 +141,42 @@ user: what is photosynthesis?
 assistant: [long explanation]
 Output:
 {"facts": []}
+
+IMAGES specifically:
+- When the user's message includes a shared photo (a "[image attached]" placeholder
+  in their text and/or image content), extract a [SITUATION] fact capturing WHAT they
+  showed you AND their apparent CONCERN. Use the assistant's described observation
+  in its reply as your ground truth — that's the model's own description of the image.
+- Do NOT paraphrase the assistant's whole reply into a fact. Capture the SUBJECT and
+  the user's apparent intent in one tight sentence.
+- Do NOT extract [QUOTE] facts from the assistant's image-description text — those
+  came from the bot, not the user.
+
+Input:
+user: [image attached] I think my maize leaves look off. Anything you notice?
+assistant: I see four green leaves with some yellowing at the tips. In maize,
+that can mean a nitrogen or potassium deficiency, water stress, or early pest damage.
+Is the yellowing on the older leaves or the new growth?
+Output:
+{"facts": [
+  "[SITUATION] Shared photo of maize leaves with yellowing at the tips; worried about crop health"
+]}
+
+Input:
+user: [image attached]
+assistant: I see a printed letter that looks like a rental contract clause. It says
+the tenant agrees to pay an annual escalation of 8%.
+Output:
+{"facts": [
+  "[SITUATION] Shared photo of a rental contract clause about an 8% annual escalation"
+]}
+
+Input:
+user: [image attached] just wanted to show you
+assistant: That's a nice photo of a sunset over what looks like the coast. Anything
+specific you wanted to chat about?
+Output:
+{"facts": []}
 """
 
 
@@ -304,18 +340,18 @@ def format_grouped_by_tag(memories: list[dict]) -> str:
 def add_turn(msisdn: str, user_content, assistant_text: str) -> None:
     """Feed one completed turn to mem0 so it can extract / update facts.
 
-    `user_content` may be either a plain string (text-only turn) or the
-    OpenAI-style multipart list — e.g. text + image_url parts — when the
-    user sent an image. mem0's enable_vision config routes multipart
-    content to Gemma 4's vision pathway and stores the resulting
-    description as a typed fact.
+    `user_content` is a plain string for text-only turns. mem0 runs its
+    extraction + reconciliation pipeline (two LLM calls) and may store
+    zero or more typed facts depending on whether the turn warrants it.
 
-    mem0 itself decides what (if anything) is worth remembering. Most
-    turns will be no-ops (e.g. "what's 2+2?" yields no durable facts).
-    A turn like "I'm a farmer in Oshakati" produces several typed facts.
+    For IMAGE turns, use add_image_turn() instead — feeding a multipart
+    list containing a multi-KB base64 data URL into mem0's extraction
+    LLM wastes tokens on garbage and reliably produces zero facts in
+    practice. add_image_turn synthesises a text-only version that the
+    extractor handles cleanly.
 
-    Never raises — long-term memory is a soft enhancement; if mem0 hiccups
-    we don't want to break the live reply path.
+    Never raises — long-term memory is a soft enhancement; if mem0
+    hiccups we don't want to break the live reply path.
     """
     try:
         m = _client()
@@ -326,6 +362,30 @@ def add_turn(msisdn: str, user_content, assistant_text: str) -> None:
         m.add(msgs, user_id=normalize(msisdn))
     except Exception as exc:
         log.warning("mem0 add_turn failed for %s: %s", msisdn, exc)
+
+
+def add_image_turn(msisdn: str, caption: str, assistant_text: str) -> None:
+    """Feed an image-bearing turn to mem0 as text only.
+
+    The user's actual image bytes are NOT useful to mem0's extractor —
+    they show up as kilobytes of base64 noise that distracts the model
+    and pushes the real conversation out of its attention window. What
+    IS useful is:
+      - the caption (or its absence), so we know what the user wanted
+      - the assistant's reply, which contains its own description of the
+        image (e.g. "I see four green leaves with yellowing tips…")
+
+    From those two strings the extraction prompt's IMAGES examples can
+    derive a clean [SITUATION] fact like "Shared photo of maize leaves
+    with yellowing tips; worried about crop health". The image example
+    block in _FACT_EXTRACTION_PROMPT is calibrated for exactly this shape.
+
+    Never raises.
+    """
+    placeholder = "[image attached]"
+    if caption:
+        placeholder += f" {caption}"
+    add_turn(msisdn, placeholder, assistant_text)
 
 
 def search(msisdn: str, query: str, limit: int = 5) -> list[dict]:

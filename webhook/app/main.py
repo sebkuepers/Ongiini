@@ -300,11 +300,14 @@ async def handle_image_message(
             history = await maybe_summarize(history)
             memory.save(msisdn, history)
 
-            # Long-term: full multipart content to mem0 so the
-            # vision-enabled extractor can describe the image and store
-            # typed facts about what was shown.
+            # Long-term: feed mem0 a synthesised text-only version of
+            # the image turn. mem0's extraction LLM never sees the raw
+            # base64 bytes — its prompt is calibrated for "[image
+            # attached] <caption>" + the assistant's textual description
+            # of what it saw, which is far more reliable than asking
+            # mem0's vision path to do another visual pass.
             await asyncio.to_thread(
-                mem.add_turn, msisdn, user_content, pii.sanitize(result.reply)
+                mem.add_image_turn, msisdn, caption, pii.sanitize(result.reply)
             )
 
         usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
