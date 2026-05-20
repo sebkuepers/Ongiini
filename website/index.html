@@ -236,12 +236,10 @@
 
     /* Disclaimer line under hero */
     .og-disclaimer {
-      margin-top: 18px;
+      margin-top: 12px;
       font-family: 'Geist Mono', ui-monospace, monospace;
-      font-size: 10.5px; letter-spacing: 0.06em; line-height: 1.55;
-      color: var(--ink-soft); max-width: 60ch;
-      padding: 12px 14px; border: 1px dashed var(--rule);
-      border-radius: 10px; background: rgba(255,255,255,0.4);
+      font-size: 10px; letter-spacing: 0.06em; line-height: 1.55;
+      color: var(--ink-faint); max-width: 56ch;
     }
 
     /* Try-asking */
@@ -269,6 +267,17 @@
     .og-try-lang--af { color: var(--terracotta-deep); border: 1px solid var(--terracotta); }
     .og-try-lang--en { color: var(--ink-soft); border: 1px solid var(--rule); }
     .og-try-cta { margin-top: 32px; max-width: 380px; }
+    .og-try-soon {
+      margin-top: 40px; padding-top: 24px;
+      border-top: 1px solid var(--rule-faint);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .og-try-soon-label {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .og-try-soon .og-roadmap { margin-top: 0; }
 
     /* Three-card grid (used by Open/Transparent + Privacy) */
     .og-grid {
@@ -377,7 +386,7 @@
     }
     .og-token-viz {
       margin-top: 4px;
-      display: flex; flex-direction: column; gap: 14px;
+      display: flex; flex-direction: column; gap: 16px;
       align-items: flex-start;
     }
     .og-token-grid {
@@ -392,27 +401,30 @@
       aspect-ratio: 1 / 1;
       background: var(--terracotta-light);
       border-radius: 2px;
-      transition: none;
     }
-    .og-token-grid > i.is-key {
+    .og-token-grid > i.is-used {
       background: var(--terracotta-deep);
-      box-shadow: 0 0 0 2px var(--sand), 0 0 0 3px var(--terracotta-deep);
     }
     .og-token-key {
-      display: inline-flex; align-items: center; gap: 10px;
+      display: flex; flex-direction: column; gap: 8px;
       font-family: 'Geist Mono', ui-monospace, monospace;
-      font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--ink-soft);
-      max-width: 38ch;
       line-height: 1.5;
+      max-width: 44ch;
+    }
+    .og-token-key-row {
+      display: inline-flex; align-items: baseline; gap: 10px;
     }
     .og-token-key-dot {
       display: inline-block;
-      width: 10px; height: 10px;
-      background: var(--terracotta-deep);
+      width: 9px; height: 9px;
       border-radius: 2px;
       flex-shrink: 0;
+      transform: translateY(1px);
     }
+    .og-token-key-dot--used { background: var(--terracotta-deep); }
+    .og-token-key-dot--free { background: var(--terracotta-light); }
     @media (min-width: 880px) {
       .og-token-grid {
         grid-template-columns: repeat(40, 1fr);
@@ -825,8 +837,8 @@
             </div>
 
             <div class="og-disclaimer">
-              <span data-en>Ongiini is an AI. It can be confidently wrong. Don't make decisions about your health, money or legal status based on its answers alone — always check with a qualified person.</span>
-              <span data-af>Ongiini is 'n KI. Dit kan met vertroue verkeerd wees. Moenie besluite oor jou gesondheid, geld of regstatus net op grond van sy antwoorde neem nie — kontroleer altyd met 'n gekwalifiseerde persoon.</span>
+              <span data-en>Ongiini is an AI — it can be confidently wrong. Always check a qualified person for health, money or legal decisions.</span>
+              <span data-af>Ongiini is 'n KI — dit kan met vertroue verkeerd wees. Kontroleer altyd 'n gekwalifiseerde persoon vir gesondheid-, geld- of regsbesluite.</span>
             </div>
           </div>
         </div>
@@ -925,6 +937,17 @@
             <span class="og-cta-arrow">→</span>
           </a>
         </div>
+
+        <div class="og-try-soon">
+          <span class="og-try-soon-label">
+            <span data-en="i">Still to come</span><span data-af="i">Nog op pad</span>
+          </span>
+          <ul class="og-roadmap" aria-label="Coming soon">
+            <li><span data-en="i">Voice messages</span><span data-af="i">Stemboodskappe</span><span class="og-roadmap-pill">SOON</span></li>
+            <li><span data-en="i">Image understanding</span><span data-af="i">Beeldherkenning</span><span class="og-roadmap-pill">SOON</span></li>
+            <li><span data-en="i">Oshiwambo (via translation)</span><span data-af="i">Oshiwambo (via vertaling)</span><span class="og-roadmap-pill">SOON</span></li>
+          </ul>
+        </div>
       </div>
     </section>
 
@@ -970,19 +993,14 @@
             </div>
             <div class="og-card">
               <div class="og-card-num">04</div>
-              <div class="og-card-head" data-en>No US cloud, anywhere</div>
-              <div class="og-card-head" data-af>Geen US-wolk, nêrens nie</div>
-              <p class="og-card-body" data-en>Every message is processed on hardware we operate ourselves — no OpenAI, no Anthropic, no AWS, Google Cloud or Azure in the pipeline. Your conversations never leave the network we run.</p>
-              <p class="og-card-body" data-af>Elke boodskap word verwerk op hardeware wat ons self bedryf — geen OpenAI, geen Anthropic, geen AWS, Google Cloud of Azure in die roete nie. Jou gesprekke verlaat nooit die netwerk wat ons bedryf nie.</p>
+              <div class="og-card-head" data-en>Your data isn't a product</div>
+              <div class="og-card-head" data-af>Jou data is nie 'n produk nie</div>
+              <p class="og-card-body" data-en>Ongiini doesn't make money from your conversations. No ads, no profile-building, no training someone else's model on what you say. OpenAI, Google, Meta — their business models are built on user data. This one isn't.</p>
+              <p class="og-card-body" data-af>Ongiini maak nie geld uit jou gesprekke nie. Geen advertensies, geen profielbou, geen opleiding van ander modelle op wat jy sê nie. OpenAI, Google, Meta — hul besigheidsmodelle is op gebruikerdata gebou. Hierdie een nie.</p>
             </div>
           </div>
         </div>
 
-        <ul class="og-roadmap" aria-label="Coming soon">
-          <li><span data-en="i">Voice messages</span><span data-af="i">Stemboodskappe</span><span class="og-roadmap-pill">SOON</span></li>
-          <li><span data-en="i">Image understanding</span><span data-af="i">Beeldherkenning</span><span class="og-roadmap-pill">SOON</span></li>
-          <li><span data-en="i">Oshiwambo (via translation)</span><span data-af="i">Oshiwambo (via vertaling)</span><span class="og-roadmap-pill">SOON</span></li>
-        </ul>
       </div>
     </section>
 
@@ -1042,9 +1060,16 @@
           <div class="og-token-viz">
             <div class="og-token-grid" id="token-grid" aria-hidden="true"></div>
             <div class="og-token-key">
-              <span class="og-token-key-dot" aria-hidden="true"></span>
-              <span data-en="i">one normal conversation · 800 of them, every month</span>
-              <span data-af="i">een normale gesprek · 800 van hulle, elke maand</span>
+              <div class="og-token-key-row">
+                <span class="og-token-key-dot og-token-key-dot--used" aria-hidden="true"></span>
+                <span data-en="i">5 conversations a day, every day, for a month</span>
+                <span data-af="i">5 gesprekke 'n dag, elke dag, vir 'n maand</span>
+              </div>
+              <div class="og-token-key-row">
+                <span class="og-token-key-dot og-token-key-dot--free" aria-hidden="true"></span>
+                <span data-en="i">your buffer — plenty more for the big days</span>
+                <span data-af="i">jou buffer — baie meer vir die groot dae</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1283,16 +1308,17 @@
       } catch (e) {}
 
       // Token grid — 800 small squares each representing one normal conversation.
-      // One dot is highlighted in terracotta-deep as a visual focal point for
-      // the legend ("= one normal conversation, 800 of them"). Rendered in JS
-      // to keep the HTML lean; degrades to nothing if JS is off.
+      // The first 150 are highlighted darker, representing "5 conversations a day
+      // for a 30-day month" — i.e. heavy daily use. The remaining ~650 dots are
+      // the buffer left in your monthly cap. Rendered in JS to keep HTML lean;
+      // degrades to nothing if JS is off.
       var tokenGrid = document.getElementById("token-grid");
       if (tokenGrid && !tokenGrid.children.length) {
-        var KEY_INDEX = 167;
+        var USED = 150;
         var frag = document.createDocumentFragment();
         for (var t = 0; t < 800; t++) {
           var d = document.createElement("i");
-          if (t === KEY_INDEX) d.className = "is-key";
+          if (t < USED) d.className = "is-used";
           frag.appendChild(d);
         }
         tokenGrid.appendChild(frag);

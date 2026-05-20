@@ -5,7 +5,7 @@ from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from . import memory, ratelimit, usage
+from . import memory, pii, ratelimit, usage
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import respond
@@ -153,8 +153,12 @@ async def handle_message(sender: str, text: str) -> None:
         # deliberately skip the history.append/save below so the deletion
         # request itself isn't re-persisted.
         if not result.deleted_data:
-            history.append({"role": "user", "content": text})
-            history.append({"role": "assistant", "content": result.reply})
+            # PII sanitisation happens at WRITE time: the LLM call above
+            # already saw the un-redacted user text (so it could answer the
+            # actual question). What lands on disk for future-turn replay
+            # is the scrubbed version.
+            history.append(pii.sanitize_message({"role": "user", "content": text}))
+            history.append(pii.sanitize_message({"role": "assistant", "content": result.reply}))
             memory.save(msisdn, history)
 
         usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
