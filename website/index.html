@@ -122,24 +122,12 @@
       display: flex; align-items: center; justify-content: space-between;
       gap: 16px; height: 60px;
     }
-    .og-brand { display: inline-flex; align-items: center; gap: 8px; }
+    .og-brand { display: inline-flex; align-items: center; }
     .og-brand-icon {
-      width: 30px; height: 30px;
+      width: 36px; height: 36px;
       display: inline-flex; align-items: center; justify-content: center;
     }
-    .og-brand-icon img { width: 30px; height: 30px; }
-    .og-brand-name {
-      display: inline-flex; align-items: baseline; gap: 2px;
-      font-family: 'Instrument Serif', serif; font-size: 22px;
-      color: var(--ink); letter-spacing: -0.01em;
-    }
-    .og-brand-mark { font-style: italic; }
-    .og-brand-dot { color: var(--terracotta); }
-    .og-brand-tld {
-      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px;
-      letter-spacing: 0.14em; color: var(--ink-soft);
-      transform: translateY(-7px); margin-left: 4px; text-transform: uppercase;
-    }
+    .og-brand-icon img { width: 36px; height: 36px; }
     .og-bar-nav { display: none; gap: 28px; }
     .og-bar-nav a {
       font-size: 13.5px; color: var(--ink-soft); font-weight: 500;
@@ -538,10 +526,7 @@
     <header class="og-bar">
       <div class="og-wrap og-bar-inner">
         <a class="og-brand" href="#top" aria-label="Ongiini.ai">
-          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192.png" alt="" width="30" height="30" /></span>
-          <span class="og-brand-name">
-            <span class="og-brand-mark">Ongiini</span><span class="og-brand-dot">.</span><span class="og-brand-tld">ai</span>
-          </span>
+          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192.png" alt="Ongiini" width="36" height="36" /></span>
         </a>
         <nav class="og-bar-nav">
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
