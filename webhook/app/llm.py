@@ -194,8 +194,15 @@ DATA & PRIVACY
 - If the user asks you to delete their data (in any language, any phrasing — "delete my
   data", "forget everything", "vergeet alles", "wis my data", etc.), call the
   `delete_my_data` tool. Don't argue, don't ask why, just do it.
-- If asked what you store, be honest: the last 10 messages, plus an internal token-count log
-  (numbers only, no message content).
+- If the user asks what you remember / what is stored / what data you have on them
+  ("what do you remember about me?", "wat onthou jy?", "show me what you've stored"),
+  call the `whats_in_my_memory` tool and present the result naturally — summarise the
+  contents in your own words, don't dump it raw. This is a trust-building moment;
+  treat it that way.
+- Stored message content is PII-sanitised before it lands on disk — emails, ID-shape
+  numbers, credit cards, and IBANs are replaced with [REDACTED:kind] placeholders.
+  If you see one of these placeholders in earlier memory, just refer to it as
+  "the email you shared earlier" or similar; don't try to reconstruct the original.
 
 LIMITS
 - Each user has 1 million free tokens per month. Plenty for normal use. Don't bring this up
@@ -281,6 +288,22 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "whats_in_my_memory",
+            "description": (
+                "Surface what is currently stored about THIS user — their last few "
+                "conversation turns plus any earlier-conversation summary, if one exists. "
+                "Call this whenever the user asks 'what do you remember about me?', "
+                "'what have you stored?', 'show me my data', 'wat onthou jy oor my?', "
+                "'wat het julle gestoor?' or any equivalent. After the tool returns, "
+                "present the result to the user in plain, natural language — don't dump "
+                "raw JSON. Takes no arguments."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 client = AsyncOpenAI(base_url=settings.vllm_base_url, api_key="not-needed")
@@ -295,6 +318,7 @@ class LLMResult:
     used_web_search: bool = False
     used_fetch_url: bool = False
     deleted_data: bool = False
+    used_whats_in_my_memory: bool = False
 
 
 async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) -> LLMResult:
@@ -313,6 +337,7 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
     used_web_search = False
     used_fetch_url = False
     deleted_data = False
+    used_whats_in_my_memory = False
     tokens_in = 0
     tokens_out = 0
 
@@ -357,6 +382,7 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                 used_web_search=used_web_search,
                 used_fetch_url=used_fetch_url,
                 deleted_data=deleted_data,
+                used_whats_in_my_memory=used_whats_in_my_memory,
             )
 
         messages.append(
@@ -400,6 +426,28 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                     if removed
                     else "There was nothing stored for this user. Memory is empty."
                 )
+            elif name == "whats_in_my_memory":
+                used_whats_in_my_memory = True
+                stored = memory.load(msisdn)
+                if not stored:
+                    result = (
+                        "Memory for this user is currently empty — either this is the "
+                        "first message, or they recently asked to have it deleted."
+                    )
+                else:
+                    lines = [
+                        f"Memory contents for this user: {len(stored)} entries "
+                        f"(most recent last).",
+                    ]
+                    for m in stored:
+                        role = m.get("role", "?")
+                        content = (m.get("content") or "").strip()
+                        # Trim long entries for the tool result, but keep
+                        # enough for the model to summarize meaningfully.
+                        if len(content) > 240:
+                            content = content[:240] + "…"
+                        lines.append(f"- [{role}] {content}")
+                    result = "\n".join(lines)
             else:
                 result = f"Unknown tool: {name}"
 
@@ -435,4 +483,5 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
         used_web_search=used_web_search,
         used_fetch_url=used_fetch_url,
         deleted_data=deleted_data,
+        used_whats_in_my_memory=used_whats_in_my_memory,
     )

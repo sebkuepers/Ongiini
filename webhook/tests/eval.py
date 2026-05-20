@@ -378,6 +378,31 @@ CASES = [
         "must_not_include": [],
         "requires_caveat": False,
     },
+    # ---- Memory v2: whats_in_my_memory tool ----
+    # User asks what's stored about them. We pre-seed a short history so
+    # there's something to surface. The model must call whats_in_my_memory
+    # and present the result naturally — must not dump raw JSON.
+    {
+        "id": "M2_whats_remembered_en",
+        "lang": "en",
+        "setup_history": [
+            {"role": "user", "content": "What's the capital of Namibia?"},
+            {"role": "assistant", "content": "Windhoek."},
+            {"role": "user", "content": "I'm trying to grow maize in Oshakati."},
+            {"role": "assistant", "content": "That's helpful context — Oshakati gets seasonal rain. Let me know if you need help with the crop."},
+        ],
+        "question": "What do you actually remember about me?",
+        "should_search": False,
+        "expect_whats_in_my_memory": True,   # new check the runner consumes
+        "length": (80, 1500),
+        "must_include_any": [
+            ["Windhoek", "capital"],
+            ["maize", "Oshakati", "grow"],
+        ],
+        "must_include": [],
+        "must_not_include": ["[", "{", "\"role\""],   # no raw JSON dump
+        "requires_caveat": False,
+    },
     # ---- Memory v2: PII sanitisation ----
     # When the user sends PII (email, credit card, IBAN, ID-shape number)
     # the live reply may reference it, but what lands in memory MUST be
@@ -458,6 +483,7 @@ def score_reply(
     deleted_data: bool = False,
     memory_after: bool = False,
     memory_on_disk: list[dict] | None = None,
+    whats_in_my_memory_fired: bool = False,
 ) -> list[CheckResult]:
     out: list[CheckResult] = []
     rl = reply.lower()
@@ -549,6 +575,13 @@ def score_reply(
             f"memory_after_call_exists={memory_after}",
         ))
 
+    if case.get("expect_whats_in_my_memory"):
+        out.append(CheckResult(
+            "whats_in_my_memory_fired",
+            whats_in_my_memory_fired,
+            f"fired={whats_in_my_memory_fired}",
+        ))
+
     if case.get("expect_pii_redacted_on_disk"):
         # The stored memory must NOT contain the original PII strings,
         # and SHOULD contain at least one redaction placeholder.
@@ -620,6 +653,7 @@ async def run_case(case: dict) -> dict:
         deleted_data=result.deleted_data,
         memory_after=memory_after,
         memory_on_disk=memory_on_disk,
+        whats_in_my_memory_fired=result.used_whats_in_my_memory,
     )
     return {
         "id": case["id"],
@@ -631,6 +665,7 @@ async def run_case(case: dict) -> dict:
         "used_web_search": result.used_web_search,
         "used_fetch_url": result.used_fetch_url,
         "deleted_data": result.deleted_data,
+        "used_whats_in_my_memory": result.used_whats_in_my_memory,
         "latency_s": round(dt, 2),
         "checks": [{"name": c.name, "passed": c.passed, "note": c.note} for c in checks],
         "passed": all(c.passed for c in checks),
@@ -646,9 +681,10 @@ async def main():
         results.append(r)
 
         tools = []
-        if r.get("used_web_search"): tools.append("web_search")
-        if r.get("used_fetch_url"):  tools.append("fetch_url")
-        if r.get("deleted_data"):    tools.append("delete_my_data")
+        if r.get("used_web_search"):          tools.append("web_search")
+        if r.get("used_fetch_url"):           tools.append("fetch_url")
+        if r.get("deleted_data"):             tools.append("delete_my_data")
+        if r.get("used_whats_in_my_memory"):  tools.append("whats_in_my_memory")
         tools_str = ",".join(tools) if tools else "-"
         print(f"A ({r['latency_s']}s, in={r['tokens_in']} out={r['tokens_out']} tools={tools_str}):")
         print(f"   {r['reply']}")
