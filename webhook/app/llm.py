@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 
 from . import memory
 from .config import settings
-from .search import web_search
+from .search import fetch_url, web_search
 
 SYSTEM_PROMPT = """You are Ongiini — a free AI assistant on WhatsApp for people in Namibia.
 
@@ -34,6 +34,10 @@ WHEN TO SEARCH
 - For Namibia-specific local questions (a place, a service, a news story), always search.
 - Don't search for things that don't change (basic facts, definitions, well-known history,
   how-to questions, schoolwork explanations).
+- After a `web_search`, you receive a summary + 5 result snippets. If a snippet looks like
+  it has the answer but is too short, call `fetch_url` with that result's URL to read the
+  full cleaned page. Only fetch when the snippet is clearly insufficient — most of the time
+  the snippet + summary is enough.
 
 WHEN TO BE CAUTIOUS
 - If the user asks for medical, legal or financial advice, be useful AND honest: give what
@@ -85,6 +89,28 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "fetch_url",
+            "description": (
+                "Read the full cleaned text of a single web page. Call this only after a "
+                "`web_search` when a result snippet looks like the right source but is too "
+                "short to answer fully. Pass exactly one URL from a previous search result. "
+                "Use sparingly — most questions are answered by the search snippets alone."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The full URL to fetch (must start with http:// or https://).",
+                    }
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_my_data",
             "description": (
                 "Wipe the user's conversation history with Ongiini. Call this when the user "
@@ -119,7 +145,8 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
     tokens_in = 0
     tokens_out = 0
 
-    for _ in range(4):
+    # Up to 6 round-trips so the model can chain e.g. search -> fetch -> reply.
+    for _ in range(6):
         resp = await client.chat.completions.create(
             model=settings.vllm_model,
             messages=messages,
@@ -172,6 +199,9 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
             if name == "web_search":
                 used_search = True
                 result = await web_search(args.get("query", ""))
+            elif name == "fetch_url":
+                used_search = True
+                result = await fetch_url(args.get("url", ""))
             elif name == "delete_my_data":
                 removed = memory.delete(msisdn)
                 deleted_data = True
