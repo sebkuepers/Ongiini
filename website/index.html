@@ -274,6 +274,7 @@
     .og-grid {
       margin-top: 32px;
       display: grid; grid-template-columns: 1fr; gap: 22px;
+      align-items: start;
     }
     .og-card { display: flex; flex-direction: column; gap: 8px; }
     .og-card-num {
@@ -292,6 +293,21 @@
       text-wrap: pretty;
     }
     .og-section--dark .og-card-body { color: var(--ink-faint); }
+    .og-card-fig {
+      margin: 0 0 6px;
+      border-radius: 14px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      background: oklch(0.25 0.015 50);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      .og-card-fig { background: #38332e; }
+    }
+    .og-card-fig img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
 
     /* Roadmap pill list */
     .og-roadmap {
@@ -338,6 +354,35 @@
     .og-free-detail {
       font-size: 14.5px; line-height: 1.6; color: var(--ink-soft);
       max-width: 56ch;
+    }
+    .og-token-viz { margin-top: 4px; }
+    .og-token-grid {
+      display: grid;
+      grid-template-columns: repeat(40, 1fr);
+      gap: 3px;
+      max-width: 360px;
+    }
+    .og-token-grid > i {
+      display: block;
+      aspect-ratio: 1 / 1;
+      background: var(--terracotta-light);
+      border-radius: 2px;
+    }
+    .og-token-key {
+      margin-top: 14px;
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .og-token-key-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      background: var(--terracotta-light);
+      border-radius: 2px;
+    }
+    @media (min-width: 880px) {
+      .og-token-grid { max-width: 480px; }
     }
 
     /* Contribute */
@@ -855,6 +900,15 @@
         <h2 class="og-h2" data-af>Geen swart boks nie. Geen US-wolk nie. Geen haakplek nie.</h2>
         <div class="og-grid">
           <div class="og-card">
+            <figure class="og-card-fig">
+              <img src="/assets/dgx-spark.webp"
+                   srcset="/assets/dgx-spark-480.webp 480w, /assets/dgx-spark.webp 800w"
+                   sizes="(min-width: 880px) 320px, 100vw"
+                   width="800" height="1066"
+                   alt="The NVIDIA DGX Spark (right) on a wooden shelf, next to two stacked Mac minis for scale"
+                   loading="lazy"
+                   decoding="async" />
+            </figure>
             <div class="og-card-num">01</div>
             <div class="og-card-head" data-en>Hardware in plain sight</div>
             <div class="og-card-head" data-af>Hardeware in volle sig</div>
