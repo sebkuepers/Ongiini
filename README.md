@@ -78,11 +78,32 @@ docker run -d \
   --kv-cache-dtype fp8 \
   --max-model-len 65536 \
   --max-num-batched-tokens 8192 \
+  --max-num-seqs 16 \
   --gpu-memory-utilization 0.70 \
   --moe-backend marlin \
   --reasoning-parser gemma4 \
-  --enable-auto-tool-choice --tool-call-parser gemma4
+  --enable-auto-tool-choice --tool-call-parser gemma4 \
+  --chat-template /vllm-workspace/examples/tool_chat_template_gemma4.jinja \
+  --limit-mm-per-prompt '{"image":4,"audio":0}' \
+  --mm-processor-kwargs '{"max_soft_tokens":280}' \
+  --hf-overrides '{"vision_config":{"torch_dtype":"bfloat16"}}' \
+  --async-scheduling
 ```
+
+The multimodal flags (`--chat-template`, `--limit-mm-per-prompt`,
+`--mm-processor-kwargs`, `--hf-overrides`) are required for the vision
+pathway:
+- The chat template fixes vLLM #41452 (mixing `tools=` with `image_url`
+  in one call). Without it the prompt-replacement step desyncs.
+- `--limit-mm-per-prompt` explicitly disables the audio tower (we don't
+  use it) and caps image inputs at 4 per call.
+- `--hf-overrides` forces the vision tower to bf16. The NVFP4 quant
+  doesn't cover vision_tower, and vLLM's loader would otherwise re-cast
+  to fp16 and overflow (vLLM #40290).
+
+See `deploy/spark/restart-vllm-with-mm-flags.sh` for the exact command
+documented as a runnable script, including the safety checks for the
+~3 minute cold restart.
 
 Notes on the flags:
 - The `gemma4-0505-arm64-cu130` image already includes the Gemma4 model
@@ -211,13 +232,21 @@ mem0 ("Shared photo of maize leaves with yellowing tips; worried about
 crop health"). Image bytes themselves are NEVER stored — only the assistant's
 textual description is persisted.
 
-Two production caveats baked into the code:
+One production caveat baked into the code:
 - **Image dimensions must be multiples of 48** before they reach vLLM
   (`main.py::_resize_for_gemma4`). Off-grid sizes crash the Gemma 4 vision
-  pooler with `cudaErrorNotPermitted`.
-- **Tools are disabled on image-bearing turns** as a workaround for
-  vLLM issue #41452 (tools + image_url in the same call desyncs the
-  prompt-replacement step). Reverts once the upstream fix lands.
+  pooler with `cudaErrorNotPermitted`. The webhook resizes every inbound
+  image to 48-aligned bounds clamped to `[336×192, 896×896]` and
+  re-encodes as JPEG before sending. Captions are PII-scrubbed up front
+  so credentials in image text never reach mem0 or the on-disk placeholder.
+
+Tools (`web_search`, `delete_my_data`, etc.) fire on image-bearing
+calls too — the `--chat-template tool_chat_template_gemma4.jinja` flag
+in the vLLM startup is the upstream fix for #41452. There's still a
+caption-router in `main.py` that detects admin-intent captions
+("delete my data", "wat onthou jy", "how many tokens") and processes
+them as text-only as defence-in-depth, but the underlying vLLM
+restriction it worked around is gone.
 
 ## Out of scope for Phase 1
 
