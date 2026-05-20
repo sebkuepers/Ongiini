@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -9,6 +10,11 @@ from .config import settings
 log = logging.getLogger("ongiini.whatsapp")
 
 GRAPH_URL = "https://graph.facebook.com/v21.0"
+
+# Retry policy for send_text. Three attempts total — first immediate, then
+# 0.5s, then 2.5s after that. Covers most transient Meta 5xx / network
+# blips without holding the webhook open for >3s on the failure path.
+_SEND_RETRY_DELAYS_S: tuple[float, ...] = (0.0, 0.5, 2.0)
 
 
 def verify_signature(body: bytes, signature_header: str | None) -> bool:
@@ -55,11 +61,49 @@ async def send_text(to: str, body: str) -> None:
         "type": "text",
         "text": {"preview_url": False, "body": body[:4096]},
     }
+
+    last_error: Exception | None = None
     async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.post(url, headers=headers, json=payload)
-        if r.status_code >= 400:
-            log.error("WhatsApp send failed (%s): %s", r.status_code, r.text)
-        r.raise_for_status()
+        for attempt, delay in enumerate(_SEND_RETRY_DELAYS_S, start=1):
+            if delay > 0:
+                await asyncio.sleep(delay)
+            try:
+                r = await client.post(url, headers=headers, json=payload)
+            except httpx.RequestError as exc:
+                # Transport-level failure (DNS, connection reset, timeout).
+                # Transient by nature — retry.
+                last_error = exc
+                log.warning(
+                    "WhatsApp send transport error (attempt %d/%d): %s",
+                    attempt, len(_SEND_RETRY_DELAYS_S), exc,
+                )
+                continue
+
+            # 4xx is a permanent error — bad token, blocked recipient,
+            # malformed body. Retrying won't help; surface immediately.
+            if 400 <= r.status_code < 500:
+                log.error("WhatsApp send 4xx (%s): %s", r.status_code, r.text)
+                r.raise_for_status()
+
+            if r.status_code >= 500:
+                last_error = httpx.HTTPStatusError(
+                    f"server error {r.status_code}", request=r.request, response=r
+                )
+                log.warning(
+                    "WhatsApp send 5xx (attempt %d/%d, %s): %s",
+                    attempt, len(_SEND_RETRY_DELAYS_S), r.status_code, r.text,
+                )
+                continue
+
+            # 2xx — success.
+            return
+
+    log.error(
+        "WhatsApp send failed after %d attempts: %s",
+        len(_SEND_RETRY_DELAYS_S), last_error,
+    )
+    if last_error is not None:
+        raise last_error
 
 
 def extract_messages(payload: dict) -> list[dict]:

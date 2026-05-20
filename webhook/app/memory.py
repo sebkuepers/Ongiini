@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from collections import defaultdict
 from typing import Any
 
@@ -45,7 +46,14 @@ def save(msisdn: str, messages: list[dict[str, Any]]) -> None:
     else:
         trimmed = messages[-cap:]
     p = _path_for(msisdn)
-    p.write_text(json.dumps(trimmed, ensure_ascii=False, indent=2))
+    # Atomic write: serialize to a sibling tempfile then rename. On POSIX
+    # os.replace is atomic — readers see either the old file or the new
+    # one, never a half-written truncated state. Crash-safe under SIGKILL
+    # and power loss. The tempfile is in the same directory so the rename
+    # never crosses filesystem boundaries.
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(trimmed, ensure_ascii=False, indent=2))
+    os.replace(tmp, p)
 
 
 def delete(msisdn: str) -> bool:
