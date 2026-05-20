@@ -96,9 +96,10 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-The hero WhatsApp number is hard-coded in `website/index.html` (currently
-`+49 15888 635886`, the pilot number). To change it, edit the `wa.me/...`
-links and the `+49 15888 635886` display strings directly in the HTML.
+The WhatsApp link is hard-coded in `website/index.html` (currently
+`wa.me/4915888635886`, the pilot number). To change it, edit the
+`wa.me/...` `href` values directly in the HTML — the number is no
+longer displayed on the page, only the CTA buttons that open WhatsApp.
 
 ### Cloudflare Tunnel
 
