@@ -247,10 +247,14 @@ TOOLS = [
         "function": {
             "name": "fetch_url",
             "description": (
-                "Read the full cleaned text of a single web page. Call this only after a "
-                "`web_search` when a result snippet looks like the right source but is too "
-                "short to answer fully. Pass exactly one URL from a previous search result. "
-                "Use sparingly — most questions are answered by the search snippets alone."
+                "Read the full cleaned text of a single web page. Call this after a "
+                "`web_search` whenever you need more than a short summary — especially "
+                "for VERBATIM TEXT requests (a constitutional article, a law section, "
+                "a contract clause, an exact quote from a press release). Search snippets "
+                "are routinely TRUNCATED and will omit qualifying clauses; only fetching "
+                "the full page gives you the actual wording. Pass exactly one URL from a "
+                "previous search result. If you are about to quote anything as verbatim, "
+                "you MUST have called fetch_url first — no exceptions."
             ),
             "parameters": {
                 "type": "object",
