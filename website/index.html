@@ -234,32 +234,6 @@
       letter-spacing: 0.06em; color: var(--ink-soft); padding-left: 4px;
     }
 
-    /* Number chip */
-    .og-number {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 10px 12px 10px 16px; border-radius: 14px;
-      background: var(--sand); border: 1px solid var(--rule);
-    }
-    .og-number-l { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .og-number-label {
-      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--ink-soft);
-    }
-    .og-number-val {
-      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13.5px;
-      letter-spacing: 0.02em; color: var(--ink);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .og-number-tap {
-      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-      color: var(--terracotta-deep); background: var(--bone);
-      border: 1px solid var(--rule); padding: 6px 10px; border-radius: 999px;
-      cursor: pointer; font-weight: 500; white-space: nowrap;
-      transition: background 160ms, color 160ms;
-    }
-    .og-number-tap:hover { background: var(--terracotta); color: var(--bone); border-color: var(--terracotta); }
-    .og-number-tap.is-copied { background: var(--ink); color: var(--bone); border-color: var(--ink); }
-
     /* Disclaimer line under hero */
     .og-disclaimer {
       margin-top: 18px;
@@ -612,10 +586,11 @@
 
     @media (min-width: 880px) {
       .og-mission-grid {
-        grid-template-columns: 1.15fr 0.85fr;
+        grid-template-columns: 0.85fr 1.15fr;
         gap: 64px;
         align-items: center;
       }
+      .og-mission-mock { order: -1; }
     }
 
     /* Service status indicator */
@@ -770,17 +745,6 @@
               <span data-af="i">Maak WhatsApp oop · geen app om af te laai nie</span>
             </div>
 
-            <div class="og-number">
-              <div class="og-number-l">
-                <span class="og-number-label" data-en>Pilot number (Germany)</span>
-                <span class="og-number-label" data-af>Loodsnommer (Duitsland)</span>
-                <span class="og-number-val">+49 15888 635886</span>
-              </div>
-              <button type="button" class="og-number-tap" id="num-copy">
-                <span class="og-tap-label" data-en="i">TAP TO SAVE</span><span class="og-tap-label" data-af="i">TIK OM TE STOOR</span>
-              </button>
-            </div>
-
             <div class="og-disclaimer">
               <span data-en>Ongiini is an AI. It can be confidently wrong. Don't make decisions about your health, money or legal status based on its answers alone — always check with a qualified person.</span>
               <span data-af>Ongiini is 'n KI. Dit kan met vertroue verkeerd wees. Moenie besluite oor jou gesondheid, geld of regstatus net op grond van sy antwoorde neem nie — kontroleer altyd met 'n gekwalifiseerde persoon.</span>
@@ -805,7 +769,9 @@
         <div class="og-mission-mock">
           <div class="og-chat">
             <div class="og-chat-head">
-              <span class="og-chat-avatar" aria-hidden="true">O</span>
+              <span class="og-chat-avatar" aria-hidden="true">
+                <img src="/assets/ongiini-icon-192-v2.png" alt="" width="34" height="34" />
+              </span>
               <div class="og-chat-meta">
                 <div class="og-chat-name">Ongiini</div>
                 <div class="og-chat-status">
@@ -1050,7 +1016,6 @@
           </span>
           <span class="og-cta-arrow">→</span>
         </a>
-        <div class="og-close-num">+49 15888 635886</div>
       </div>
     </section>
 
@@ -1193,30 +1158,6 @@
         else if (navigator.language && navigator.language.toLowerCase().indexOf("af") === 0) setLocale("af");
       } catch (e) {}
 
-      // Tap to copy number
-      var copyBtn = document.getElementById("num-copy");
-      copyBtn.addEventListener("click", function () {
-        function flashCopied() {
-          copyBtn.classList.add("is-copied");
-          var enLabel = copyBtn.querySelector('[data-en="i"]');
-          var afLabel = copyBtn.querySelector('[data-af="i"]');
-          var enOrig = enLabel.textContent;
-          var afOrig = afLabel.textContent;
-          enLabel.textContent = "COPIED";
-          afLabel.textContent = "GESTOOR";
-          setTimeout(function () {
-            copyBtn.classList.remove("is-copied");
-            enLabel.textContent = enOrig;
-            afLabel.textContent = afOrig;
-          }, 1600);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText("+4915888635886").then(flashCopied).catch(flashCopied);
-        } else {
-          flashCopied();
-        }
-      });
-
       // FAQ (safe DOM construction)
       var FAQ = [
         { en: ["What is Ongiini?", "A free AI assistant you chat with on WhatsApp. Send it a question — about anything — and you get a useful answer back. Built on a simple idea: a tool this useful belongs to all of us, not just to whoever can afford a subscription."],
@@ -1235,6 +1176,8 @@
           af: ["Wat presies stoor julle van my?", "Twee dinge. (1) Die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg. (2) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen ligging, geen kontakte, geen profiel. Wil jy dit verwyder? Stuur net 'delete my data' op WhatsApp."] },
         { en: ["Where is it physically running?", "On a single NVIDIA DGX Spark — a personal AI supercomputer about the size of a small book (one petaflop of compute, 128 GB of unified memory), not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."],
           af: ["Waar loop dit fisies?", "Op 'n enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek (een petaflop rekenkrag, 128 GB verenigde geheue), nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase. Die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is. Geen US-wolkverskaffer is op enige punt deel van die roete nie."] },
+        { en: ["Why a German number, hosted in Germany?", "Honest answer: convenience. This is a personal project, in pilot phase, and Germany is where I live and where the hardware currently sits. A German WhatsApp Business number on a German broadband line was the fastest way to get something real running and put it in front of users. The service itself is locked to Namibian numbers (+264) — that's the audience this is built for. If the pilot earns traction and becomes sustainable, the plan is to physically move the hardware to Namibia and switch to a Namibian number."],
+          af: ["Hoekom 'n Duitse nommer en hardeware in Duitsland?", "Eerlike antwoord: gerief. Dit is 'n persoonlike projek, in loodsfase, en Duitsland is waar ek woon en waar die hardeware tans staan. 'n Duitse WhatsApp Business-nommer op 'n Duitse breëband-lyn was die vinnigste manier om iets eg aan die gang te kry en voor gebruikers te plaas. Die diens self is beperk tot Namibiese nommers (+264) — dis die gehoor waarvoor dit gebou is. As die loods aanslaan en volhoubaar word, is die plan om die hardeware fisies na Namibië te skuif en oor te skakel na 'n Namibiese nommer."] },
         { en: ["Why WhatsApp?", "Because almost everyone in Namibia already has it. No download, no sign-up, no learning curve. You write, it writes back."],
           af: ["Hoekom WhatsApp?", "Omdat byna almal in Namibië dit reeds het. Geen aflaai, geen aanmelding, geen leerkurwe nie. Jy skryf, dit skryf terug."] },
         { en: ["Who built this?", "An independent project by Sebastian Küpers. Solo, with help from open-source models and tools. The code is on GitHub — read it, audit it, fork it.",

@@ -235,21 +235,28 @@ CASES = [
         ],
         "requires_caveat": False,
     },
-    # ---- Tool-use coverage: fetch_url should fire for deep procedural detail ----
+    # ---- Tool-use coverage: fetch_url required (snippets can't carry verbatim text) ----
+    # Asking for the WORD-FOR-WORD text of a constitutional article. Tavily's
+    # search snippets typically reference the article ("Article 19 covers
+    # culture and religion") but don't quote the full 50+ word passage. To
+    # actually reproduce the text, the model has to fetch a page that hosts
+    # the full Constitution.
     {
-        "id": "Q9_bipa_detail_en",
+        "id": "Q9_constitution_verbatim_en",
         "lang": "en",
         "question": (
-            "Walk me step-by-step through the exact procedure to register a Defensive "
-            "Name with BIPA in Namibia — including every form, every fee, and the typical "
-            "turnaround time. I need the specifics, not a summary."
+            "What is the exact text of Article 19 of the Namibian Constitution? "
+            "I need it verbatim, word for word."
         ),
         "should_search": True,
-        "expect_fetch_url": True,   # additional check the runner uses
-        "length": (300, 2000),
+        "expect_fetch_url": True,
+        "length": (200, 2000),
         "must_include_any": [
-            ["BIPA", "Business and Intellectual Property Authority"],
-            ["source:", ".na", "bipa"],
+            # The article is about culture/language/tradition/religion;
+            # reply should contain at least one of these from the actual text.
+            ["culture", "language", "tradition", "religion"],
+            # And a source citation
+            ["source:", ".na", "constitution", "wipo", "lac"],
         ],
         "must_include": [],
         "must_not_include": [],
