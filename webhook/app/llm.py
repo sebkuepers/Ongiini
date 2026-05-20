@@ -593,18 +593,16 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                     )
                 else:
                     parts: list[str] = []
-                    # Section A — durable facts from mem0.
+                    # Section A — durable facts from mem0, grouped by type
+                    # tag so the surfaced output is readable. The model
+                    # uses these as the spine of its reply to the user
+                    # ("I remember you live in Oshakati, you're growing
+                    # maize, and you prefer Afrikaans replies…").
                     if long_term:
                         parts.append(
-                            f"Long-term facts ({len(long_term)} stored about this user):"
+                            f"Long-term memory ({len(long_term)} facts about this user):"
                         )
-                        for m in long_term:
-                            fact = (m.get("memory") or "").strip()
-                            if not fact:
-                                continue
-                            if len(fact) > 240:
-                                fact = fact[:240] + "…"
-                            parts.append(f"- {fact}")
+                        parts.append(mem.format_grouped_by_tag(long_term))
 
                     # Section B — recent raw conversation history.
                     if stored:

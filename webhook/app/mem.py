@@ -37,6 +37,113 @@ _memory_singleton: Any = None
 _init_lock = Lock()
 
 
+# Replaces mem0's default FACT_RETRIEVAL_PROMPT. Drives WHAT we extract
+# and HOW we tag it. Returns one JSON list of typed third-person facts.
+#
+# The output contract mem0 cares about is exactly {"facts": [str, ...]}
+# (see mem0/memory/main.py::_add_to_vector_store — it json.loads the LLM
+# response and reads response["facts"]). The TAG prefix is our own
+# convention; mem0 treats the whole string as one memory.
+#
+# Why English-only output regardless of input language:
+#   - cross-language retrieval works (embedding similarity holds)
+#   - one canonical phrasing per fact prevents duplicates across languages
+#
+# Why no absolute-date resolution: the prompt is set at startup, so
+# "today" inside it is frozen at process-start. Keep relative dates as
+# the user said them; the retrieval / next-turn layer can resolve.
+_FACT_EXTRACTION_PROMPT = """You are the memory keeper for Ongiini, a free WhatsApp AI assistant for Namibians.
+
+Extract user-specific information from this conversation that will help in FUTURE conversations.
+Be generous, not minimalist — capture preferences, life context, ongoing situations, emotional
+state, and verbatim phrasing when memorable. Not every turn warrants a fact: small talk and
+pure how-to questions usually don't.
+
+For each fact, output ONE short, third-person ENGLISH statement prefixed with a type tag:
+
+  [PROFILE]     Stable identity, location, family, role
+                Example: "Lives in Oshakati", "Has a daughter named Anna",
+                         "Works as a teacher", "Native Afrikaans speaker"
+  [PREFERENCE]  What they like / dislike / how they want to be addressed
+                Example: "Prefers Afrikaans replies", "Likes step-by-step explanations",
+                         "Dislikes mielie pap"
+  [SITUATION]   Ongoing context: current job, project, problem they're working through
+                Example: "Registering farm with BIPA as a (Pty) Ltd",
+                         "Maize has yellowing on lower leaves",
+                         "Looking for a new job after redundancy"
+  [COMMITMENT]  Reminders, follow-ups, things to track over time
+                Example: "Wants reminder on Friday to call the clinic",
+                         "Promised to share CV draft tomorrow"
+  [QUOTE]       Striking verbatim phrasing in the user's own words (use sparingly —
+                only when paraphrase would lose something real)
+                Example: 'User said: "I just want to know my child won\\'t go to bed hungry tonight."'
+  [EMOTION]     Notable emotional state at the time
+                Example: "Frustrated with the school principal",
+                         "Recently relieved after diagnosis came back clear"
+
+Rules:
+- Output facts in ENGLISH regardless of input language. The user may write in Afrikaans
+  ("Ek hou nie van mielie pap nie"); store as "[PREFERENCE] Dislikes mielie pap (maize porridge)".
+- When the user uses a relative date ("Friday", "tomorrow", "next week"), keep it relative —
+  do NOT compute an absolute date. Storing "Friday" is fine; the retrieval layer resolves.
+- DO NOT store: small talk, the assistant's own replies, generic factual queries
+  ("what is photosynthesis", "capital of France"), schoolwork problem solutions,
+  hypotheticals, weather lookups, current-events queries.
+- DO NOT store anything that looks like personal credentials (passwords, full card numbers,
+  pure ID numbers) — those should already be redacted upstream as [REDACTED:kind].
+- If nothing in this turn is worth remembering, return an empty list.
+
+Output ONLY valid JSON, no markdown, no commentary:
+  {"facts": ["[TAG] fact 1", "[TAG] fact 2", ...]}
+
+Empty case:
+  {"facts": []}
+
+Examples:
+
+Input:
+user: Hi! Im Taraneh, just moved to Oshakati. I'm a farmer.
+assistant: Welcome! What crops are you growing?
+user: maize and a bit of mahangu on 3 hectares
+Output:
+{"facts": [
+  "[PROFILE] Name is Taraneh",
+  "[PROFILE] Recently moved to Oshakati",
+  "[PROFILE] Works as a small-scale farmer",
+  "[SITUATION] Currently growing maize and mahangu on 3 hectares"
+]}
+
+Input:
+user: please remind me on Friday to call BIPA about my form
+assistant: I'll mention BIPA when you message me on Friday.
+Output:
+{"facts": [
+  "[COMMITMENT] Wants reminder on Friday to call BIPA about a form"
+]}
+
+Input:
+user: ek hou nie van mielie pap nie
+assistant: Reg so, sal dit onthou.
+Output:
+{"facts": [
+  "[PREFERENCE] Dislikes mielie pap (maize porridge)",
+  "[PROFILE] Speaks Afrikaans"
+]}
+
+Input:
+user: lol thanks
+assistant: anytime!
+Output:
+{"facts": []}
+
+Input:
+user: what is photosynthesis?
+assistant: [long explanation]
+Output:
+{"facts": []}
+"""
+
+
 def _qdrant_storage_path() -> str:
     p = settings.data_dir / "qdrant"
     p.mkdir(parents=True, exist_ok=True)
@@ -53,7 +160,14 @@ def _build_config() -> dict:
                 "api_key": "not-needed",
                 # Keep fact-extraction calls cheap and deterministic.
                 "temperature": 0.1,
-                "max_tokens": 400,
+                "max_tokens": 600,
+                # Gemma 4 is multimodal. Turning vision on here means
+                # mem0's extraction call will pass through image_url
+                # content parts unchanged when we send them. Text-only
+                # turns are unaffected — mem0 only adds vision payload
+                # when the message actually contains image content.
+                "enable_vision": True,
+                "vision_details": "auto",
             },
         },
         "vector_store": {
@@ -71,6 +185,14 @@ def _build_config() -> dict:
                 "embedding_dims": 384,
             },
         },
+        # Custom extraction prompt: replaces mem0's default minimal
+        # fact-stripping prompt with a Namibia-tuned, type-tagged version
+        # that captures preferences, situations, commitments, quotes,
+        # and emotional state — not just bald identity facts.
+        "custom_fact_extraction_prompt": _FACT_EXTRACTION_PROMPT,
+        # Persistent SQLite history of all memory mutations. Lets
+        # whats_in_my_memory potentially surface "when did I learn this".
+        "history_db_path": str(settings.data_dir / "mem0_history.db"),
     }
 
 
@@ -105,7 +227,9 @@ def format_relevant(memories: list[dict]) -> str:
 
     Returns "" when there's nothing worth injecting — caller should skip
     adding the system message in that case rather than passing an empty
-    block that costs tokens for no signal.
+    block that costs tokens for no signal. Type tags ([PROFILE], etc.)
+    are kept inline so the model can use them as semantic hints
+    (a [COMMITMENT] warrants proactive follow-up; a [QUOTE] is verbatim).
     """
     facts = [
         (m.get("memory") or "").strip()
@@ -118,6 +242,63 @@ def format_relevant(memories: list[dict]) -> str:
     for fact in facts:
         lines.append(f"- {fact}")
     return "\n".join(lines)
+
+
+# Order matches the priority for surfacing in whats_in_my_memory:
+# identity first, then long-running situations, then how they want to be
+# talked to, then trackables, then voice / mood.
+_TAG_ORDER = ("PROFILE", "SITUATION", "PREFERENCE", "COMMITMENT", "QUOTE", "EMOTION")
+_TAG_HEADINGS = {
+    "PROFILE":    "About you",
+    "PREFERENCE": "Your preferences",
+    "SITUATION":  "Things you're currently working on",
+    "COMMITMENT": "Things to follow up on",
+    "QUOTE":      "Things you've said in your own words",
+    "EMOTION":    "Recent emotional context",
+}
+
+
+def format_grouped_by_tag(memories: list[dict]) -> str:
+    """Group typed facts under per-tag headings for whats_in_my_memory.
+
+    Untagged facts (e.g. those written by earlier mem0 prompt versions)
+    land in a trailing "Other" group rather than being dropped.
+    """
+    buckets: dict[str, list[str]] = {}
+    other: list[str] = []
+    for m in memories:
+        text = (m.get("memory") or "").strip() if isinstance(m, dict) else ""
+        if not text:
+            continue
+        # Trim long entries so the tool result stays readable.
+        if len(text) > 240:
+            text = text[:240] + "…"
+        if text.startswith("[") and "]" in text:
+            tag = text[1:text.index("]")].strip().upper()
+            body = text[text.index("]") + 1:].strip()
+            buckets.setdefault(tag, []).append(body)
+        else:
+            other.append(text)
+
+    parts: list[str] = []
+    for tag in _TAG_ORDER:
+        items = buckets.pop(tag, None)
+        if not items:
+            continue
+        parts.append(f"{_TAG_HEADINGS[tag]}:")
+        for item in items:
+            parts.append(f"  - {item}")
+    # Any unexpected tags we didn't enumerate (defensive — prompt could
+    # invent a new tag) get their own sections too.
+    for tag in sorted(buckets):
+        parts.append(f"{tag.title()}:")
+        for item in buckets[tag]:
+            parts.append(f"  - {item}")
+    if other:
+        parts.append("Other:")
+        for item in other:
+            parts.append(f"  - {item}")
+    return "\n".join(parts)
 
 
 def add_turn(msisdn: str, user_text: str, assistant_text: str) -> None:
