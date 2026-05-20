@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import logging
+import re
 from contextlib import asynccontextmanager
 
 import httpx
@@ -79,6 +80,32 @@ _GEMMA4_PATCH_GRID = 48
 _GEMMA4_MIN_W = 336
 _GEMMA4_MIN_H = 192
 _GEMMA4_MAX_DIM = 896
+
+
+# Words / phrases in EN + AF that signal the user wants to do an
+# ADMIN action against their own data — deletion, memory inspection, or
+# token-balance check. These can't be served via the image path because
+# we strip `tools=` from image-bearing calls (vLLM #41452 workaround),
+# so the model can't fire delete_my_data / whats_in_my_memory /
+# my_token_usage even if the caption clearly asks for it. If the caption
+# matches, we IGNORE the image and route the caption text through the
+# normal text handler so the right tool fires.
+_ADMIN_INTENT_RE = re.compile(
+    r"\b("
+    r"delete\s+(?:my|all)\s+data|forget\s+(?:everything|all|me|my)|wipe\s+(?:my|all)|"
+    r"vergeet\s+(?:alles|my)|wis\s+(?:my|alle)|verwyder\s+(?:my|alle)|"
+    r"what\s+do\s+you\s+remember|what\s+have\s+you\s+stored|show\s+me\s+(?:my\s+)?data|"
+    r"wat\s+onthou\s+jy|wat\s+het\s+(?:julle|jy)\s+gestoor|"
+    r"how\s+many\s+tokens|hoeveel\s+tokens|my\s+(?:token|monthly)\s+(?:usage|limit|balance)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _caption_is_admin_intent(caption: str) -> bool:
+    """True iff the caption clearly asks for an admin operation that
+    requires tools (delete_my_data / whats_in_my_memory / my_token_usage)."""
+    return bool(caption and _ADMIN_INTENT_RE.search(caption))
 
 
 def _resize_for_gemma4(image_bytes: bytes) -> bytes:
@@ -195,12 +222,39 @@ async def receive(
             media_id = m.get("media_id") or ""
             if not media_id:
                 continue
+            caption = (m.get("caption") or "").strip()
+            # WhatsApp's image caption limit is 1024 chars. Anything more
+            # is either a buggy client or an abuse attempt — drop on the
+            # floor like we do oversize text. Use the same general cap so
+            # there's one number to remember.
+            if len(caption) > settings.message_max_chars:
+                log.warning(
+                    "dropping image with oversize caption from %s (%d chars)",
+                    sender, len(caption),
+                )
+                continue
+            # Admin-intent captions (delete / recall / usage) can't be
+            # served by the image path because we drop tools= for vLLM
+            # #41452. Route the CAPTION through the text handler instead
+            # so the proper tool fires — and skip the image entirely.
+            if _caption_is_admin_intent(caption):
+                log.info(
+                    "image caption matched admin intent — handling as text from %s",
+                    sender,
+                )
+                try:
+                    await handle_message(sender, caption)
+                except Exception:
+                    log.exception(
+                        "Failed to handle admin-intent caption from %s", sender
+                    )
+                continue
             try:
                 await handle_image_message(
                     sender=sender,
                     media_id=media_id,
                     mime_type=m.get("mime_type") or "image/jpeg",
-                    caption=(m.get("caption") or "").strip(),
+                    caption=caption,
                 )
             except Exception:
                 log.exception("Failed to handle image message from %s", sender)
@@ -268,7 +322,14 @@ async def handle_image_message(
     # caption we steer the model with a tiny default — Gemma 4 with no
     # text prompt and only an image will sometimes just describe the
     # image without next-step or context awareness.
-    user_text_part = caption or (
+    #
+    # PII scrub: the caption text is treated like any other user message
+    # — emails / IDs / IBANs / card numbers go through the same redaction
+    # the text path uses, BEFORE it reaches the LLM, mem0, or the on-disk
+    # placeholder. This closes a gap noted in code review where the raw
+    # caption could leak PII into long-term memory.
+    safe_caption = pii.sanitize(caption) if caption else ""
+    user_text_part = safe_caption or (
         "I just sent you a photo. Have a look and tell me what you see — "
         "if there's something specific worth pointing out, mention it."
     )
@@ -285,12 +346,13 @@ async def handle_image_message(
         if not result.deleted_data:
             # Short-term memory: compact textual placeholder, NOT the
             # base64 image bytes. The model on future turns sees that
-            # an image was shared (and the caption if any) — enough
-            # context to continue the conversation. Durable image-aware
-            # facts live in mem0 from the add_turn call below.
+            # an image was shared (and the PII-scrubbed caption if any)
+            # — enough context to continue the conversation. Durable
+            # image-aware facts live in mem0 from the add_image_turn
+            # call below.
             placeholder = "[image attached]"
-            if caption:
-                placeholder += f" {caption}"
+            if safe_caption:
+                placeholder += f" {safe_caption}"
             history.append(
                 pii.sanitize_message({"role": "user", "content": placeholder})
             )
@@ -305,9 +367,11 @@ async def handle_image_message(
             # base64 bytes — its prompt is calibrated for "[image
             # attached] <caption>" + the assistant's textual description
             # of what it saw, which is far more reliable than asking
-            # mem0's vision path to do another visual pass.
+            # mem0's vision path to do another visual pass. The caption
+            # is passed PII-sanitised (closes the gap that mem0 could
+            # otherwise persist raw user data as a typed fact).
             await asyncio.to_thread(
-                mem.add_image_turn, msisdn, caption, pii.sanitize(result.reply)
+                mem.add_image_turn, msisdn, safe_caption, pii.sanitize(result.reply)
             )
 
         usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)

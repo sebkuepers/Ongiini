@@ -45,22 +45,22 @@ async def main() -> None:
     print("\nadding conversational turns…")
     mem.add_turn(
         MSISDN,
-        user_text="Hi! I'm Taraneh, I live in Oshakati and farm maize.",
+        user_content="Hi! I'm Taraneh, I live in Oshakati and farm maize.",
         assistant_text="Nice to meet you, Taraneh. Oshakati gets seasonal rain — useful for maize.",
     )
     mem.add_turn(
         MSISDN,
-        user_text="I have 3 hectares and the soil is sandy.",
+        user_content="I have 3 hectares and the soil is sandy.",
         assistant_text="Sandy soil drains fast — watch nitrogen levels.",
     )
     mem.add_turn(
         MSISDN,
-        user_text="I'm trying to register the farm with BIPA as a (Pty) Ltd.",
+        user_content="I'm trying to register the farm with BIPA as a (Pty) Ltd.",
         assistant_text="(Pty) Ltd is the more formal structure — good for growth and outside investment.",
     )
     mem.add_turn(
         MSISDN,
-        user_text="By the way I prefer answers in Afrikaans where possible.",
+        user_content="By the way I prefer answers in Afrikaans where possible.",
         assistant_text="Geen probleem — ek antwoord in Afrikaans waar dit pas.",
     )
 

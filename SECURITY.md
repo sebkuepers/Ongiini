@@ -9,8 +9,9 @@ can sanity-check it quickly.
 
 Three tiers, all on the Spark, none shared with any third party:
 
-- **Short-term conversational memory** — last ~10 user+assistant turns at
-  `/data/{msisdn}.json`. Older messages get LLM-compressed into a leading
+- **Short-term conversational memory** — about the last 50 turns of
+  user+assistant back-and-forth at `/data/{msisdn}.json` (capped at 100
+  entries on disk). Marathon chats fold their oldest turns into a leading
   `system` "Earlier in this conversation: …" line so a long chat stays
   bounded. PII patterns (email, IBAN, credit card, 11-digit Namibian ID)
   are regex-scrubbed BEFORE the message is written, replaced with

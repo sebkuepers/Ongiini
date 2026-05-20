@@ -261,17 +261,6 @@
     .og-try-lang--af { color: var(--terracotta-deep); border: 1px solid var(--terracotta); }
     .og-try-lang--en { color: var(--ink-soft); border: 1px solid var(--rule); }
     .og-try-cta { margin-top: 32px; max-width: 380px; }
-    .og-try-soon {
-      margin-top: 40px; padding-top: 24px;
-      border-top: 1px solid var(--rule-faint);
-      display: flex; flex-direction: column; gap: 14px;
-    }
-    .og-try-soon-label {
-      font-family: 'Geist Mono', ui-monospace, monospace;
-      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--ink-faint);
-    }
-    .og-try-soon .og-roadmap { margin-top: 0; }
 
     /* Three-card grid (used by Open/Transparent + Privacy) */
     .og-grid {
@@ -1148,16 +1137,6 @@
             <span class="og-cta-arrow">→</span>
           </a>
         </div>
-
-        <div class="og-try-soon">
-          <span class="og-try-soon-label">
-            <span data-en="i">Features still to come</span><span data-af="i">Funksies nog op pad</span>
-          </span>
-          <ul class="og-roadmap" aria-label="Coming soon">
-            <li><span data-en="i">Voice messages</span><span data-af="i">Stemboodskappe</span><span class="og-roadmap-pill">SOON</span></li>
-            <li><span data-en="i">Oshiwambo</span><span data-af="i">Oshiwambo</span><span class="og-roadmap-pill">SOON</span></li>
-          </ul>
-        </div>
       </div>
     </section>
 
@@ -1227,8 +1206,8 @@
             <div class="og-card-num">01</div>
             <div class="og-card-head" data-en>What we keep</div>
             <div class="og-card-head" data-af>Wat ons stoor</div>
-            <p class="og-card-body" data-en>The last 10 messages so Ongiini can follow the current chat, plus a small set of facts it picks up across conversations (like your location or what you're working on). Personal data — email, ID, bank card — is removed before anything is saved.</p>
-            <p class="og-card-body" data-af>Die laaste 10 boodskappe sodat Ongiini die huidige gesprek kan volg, plus 'n klein versameling feite wat oor gesprekke heen opgetel word (soos jou ligging of waarmee jy besig is). Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word.</p>
+            <p class="og-card-body" data-en>About 50 turns of back-and-forth so Ongiini can follow a real conversation, plus a small set of facts it picks up across chats (like your location or what you're working on). Personal data — email, ID, bank card — is removed before anything is saved.</p>
+            <p class="og-card-body" data-af>Sowat 50 heen-en-weer gespreksdele sodat Ongiini 'n regte gesprek kan volg, plus 'n klein versameling feite wat oor gesprekke opgetel word (soos jou ligging of waarmee jy besig is). Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">02</div>
@@ -1425,8 +1404,8 @@
       </div>
       <div class="og-wrap og-footer-bottom">
         <span>
-          <span data-en>Ongiini.ai · Pilot in Germany · Open source on GitHub</span>
-          <span data-af>Ongiini.ai · Loods in Duitsland · Oopbron op GitHub</span>
+          <span data-en>Ongiini.ai · Open source on GitHub</span>
+          <span data-af>Ongiini.ai · Oopbron op GitHub</span>
         </span>
         <span class="og-status" id="og-status" data-state="checking" tabindex="0" role="status" aria-live="polite">
           <span class="og-status-dot" aria-hidden="true"></span>
@@ -1575,8 +1554,8 @@
           af: ["Kan ek foto's stuur?", "Ja. Neem 'n foto op WhatsApp soos gewoonlik, voeg 'n vraag as die onderskrif by, en stuur. Ongiini kan die prentjie bekyk en vrae daaroor beantwoord — handig vir 'n siek plant, 'n vreemde uitslag, 'n bestanddele-etiket, 'n kontrakbladsy wat jy nie heeltemal kan lees nie, of 'n handgeskrewe nota. Dit werk dieselfde in Engels en Afrikaans."] },
         { en: ["How accurate is it?", "Sometimes very accurate. Sometimes confidently wrong — that's the nature of AI today. Treat its answers like advice from a knowledgeable friend who can also make mistakes. Never make decisions about your health, money or legal status based on Ongiini's answer alone. Verify with a doctor, lawyer or other qualified person."],
           af: ["Hoe akkuraat is dit?", "Soms baie akkuraat. Soms met selfvertroue verkeerd — dit is die aard van KI vandag. Behandel sy antwoorde soos raad van 'n kundige vriend wat ook foute kan maak. Moet nooit besluite oor jou gesondheid, geld of regstatus net op grond van Ongiini se antwoord maak nie. Kontroleer altyd met 'n dokter, prokureur of ander gekwalifiseerde persoon."] },
-        { en: ["What exactly do you store about me?", "Three things. (1) Roughly the last 10 messages from your phone number, so Ongiini can follow the current conversation — older messages are compressed into a short summary line, and obvious personal data (email, ID, IBAN, card) is auto-scrubbed and replaced with placeholders before saving. (2) A small set of durable facts about you that Ongiini extracts across all our chats — things like 'lives in Oshakati', 'farms maize', 'prefers Afrikaans replies' — stored as a tiny vector database on the same computer. This is what lets it actually feel like talking to someone who remembers you between sessions. (3) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No precise location, no contacts list, no Meta profile data. Want to see what's stored? Ask 'what do you remember about me?' on WhatsApp. Want it all gone? Send 'delete my data' — both work in English and Afrikaans, both wipe all three layers."],
-          af: ["Wat presies stoor julle van my?", "Drie dinge. (1) Ongeveer die laaste 10 boodskappe vanaf jou nommer, sodat Ongiini die huidige gesprek kan volg — ouer boodskappe word in 'n kort opsommingsreël saamgepers, en voor-die-hand-liggende persoonlike data (e-pos, ID, IBAN, kaart) word outomaties verwyder en met plekhouers vervang voordat gestoor word. (2) 'n Klein versameling blywende feite oor jou wat Ongiini oor al ons gesprekke heen onttrek — dinge soos 'woon in Oshakati', 'verbou mielies', 'verkies Afrikaanse antwoorde' — gestoor as 'n klein vektor-databasis op dieselfde rekenaar. Dit is wat dit laat voel asof jy met iemand praat wat jou tussen sessies onthou. (3) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen presiese ligging, geen kontaklys, geen Meta-profieldata. Wil jy sien wat gestoor is? Vra 'wat onthou jy oor my?' op WhatsApp. Wil jy alles uitvee? Stuur 'verwyder my data' — albei werk in Engels en Afrikaans, albei verwyder al drie lae."] },
+        { en: ["What exactly do you store about me?", "Three things. (1) Roughly the last 50 turns of back-and-forth from your phone number so Ongiini can follow a real conversation — anything older gets compressed into a short summary line, and obvious personal data (email, ID, IBAN, card) is auto-scrubbed and replaced with placeholders before saving. (2) A small set of durable facts about you that Ongiini extracts across all our chats — things like 'lives in Oshakati', 'farms maize', 'prefers Afrikaans replies' — stored as a tiny vector database on the same computer. This is what lets it actually feel like talking to someone who remembers you between sessions. (3) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No precise location, no contacts list, no Meta profile data. Want to see what's stored? Ask 'what do you remember about me?' on WhatsApp. Want it all gone? Send 'delete my data' — both work in English and Afrikaans, both wipe all three layers."],
+          af: ["Wat presies stoor julle van my?", "Drie dinge. (1) Ongeveer die laaste 50 heen-en-weer gespreksdele vanaf jou nommer sodat Ongiini 'n regte gesprek kan volg — enigiets ouer word in 'n kort opsommingsreël saamgepers, en voor-die-hand-liggende persoonlike data (e-pos, ID, IBAN, kaart) word outomaties verwyder en met plekhouers vervang voordat gestoor word. (2) 'n Klein versameling blywende feite oor jou wat Ongiini oor al ons gesprekke heen onttrek — dinge soos 'woon in Oshakati', 'verbou mielies', 'verkies Afrikaanse antwoorde' — gestoor as 'n klein vektor-databasis op dieselfde rekenaar. Dit is wat dit laat voel asof jy met iemand praat wat jou tussen sessies onthou. (3) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen presiese ligging, geen kontaklys, geen Meta-profieldata. Wil jy sien wat gestoor is? Vra 'wat onthou jy oor my?' op WhatsApp. Wil jy alles uitvee? Stuur 'verwyder my data' — albei werk in Engels en Afrikaans, albei verwyder al drie lae."] },
         { en: ["Where is it physically running?", "On a single NVIDIA DGX Spark — a personal AI supercomputer about the size of a small book (one petaflop of compute, 128 GB of unified memory), not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."],
           af: ["Waar loop dit fisies?", "Op 'n enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek (een petaflop rekenkrag, 128 GB verenigde geheue), nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase. Die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is. Geen US-wolkverskaffer is op enige punt deel van die roete nie."] },
         { en: ["Why a German number, hosted in Germany?", "Honest answer: convenience. This is a personal project, in pilot phase, and Germany is where I live and where the hardware currently sits. A German WhatsApp Business number on a German broadband line was the fastest way to get something real running and put it in front of users. The service itself is locked to Namibian numbers (+264) — that's the audience this is built for. If the pilot earns traction and becomes sustainable, the plan is to physically move the hardware to Namibia and switch to a Namibian number."],

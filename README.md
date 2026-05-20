@@ -43,7 +43,7 @@ Three processes on the Spark:
 - `webhook/` — FastAPI service. Receives WhatsApp messages, filters by country
   code / whitelist, calls vLLM with tool-calling (`web_search`, `fetch_url`,
   `delete_my_data`, `whats_in_my_memory`, `my_token_usage`). Two-tier memory: a
-  short-term JSON window per user (last ~10 turns) and a mem0 long-term layer
+  short-term JSON window per user (about 50 turns) and a mem0 long-term layer
   that extracts typed facts (`[PROFILE]`, `[PREFERENCE]`, `[SITUATION]`,
   `[COMMITMENT]`, `[QUOTE]`, `[EMOTION]`) across all chats and retrieves them
   by semantic relevance per turn.
@@ -168,9 +168,11 @@ the entire `api.ongiini.ai` host into port 8445 with the path preserved.
 
 Three things per user, all on the Spark, nothing leaves the box:
 
-1. **Short-term memory** at `/data/{msisdn}.json` — last ~10 user+assistant turns.
-   Once it crosses 14 entries the oldest fold into a single leading `system`
-   message ("Earlier in this conversation: …") and the last 8 stay verbatim.
+1. **Short-term memory** at `/data/{msisdn}.json` — about the last 50 turns of
+   user+assistant back-and-forth (capped at 100 entries on disk). Marathon chats
+   that cross 70 entries fold their oldest turns into a single leading `system`
+   message ("Earlier in this conversation: …") and keep the last 40 entries
+   verbatim.
    Before any message is written, regex-scrubbed for obvious PII patterns
    (email, IBAN, credit card, 11-digit Namibian ID — replaced with
    `[REDACTED:kind]` placeholders).

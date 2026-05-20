@@ -24,13 +24,19 @@ class Settings:
     data_dir: Path = Path(os.getenv("DATA_DIR", "/data"))
     whitelist: set[str] = _whitelist()
 
-    memory_window: int = 10
+    # Short-term verbatim history. memory.save caps at memory_window*2
+    # entries (each turn = 1 user + 1 assistant message = 2 entries).
+    # 50 means we keep about 50 turns of back-and-forth verbatim before
+    # the rolling summary starts compressing the oldest.
+    memory_window: int = 50
     # Rolling-summary trigger: when len(history) exceeds the threshold, the
     # oldest entries are LLM-compressed into a leading system message and the
-    # last `memory_keep_recent` entries are kept verbatim. Keeps long-running
-    # conversations bounded without losing earlier context entirely.
-    memory_summary_threshold: int = 14
-    memory_keep_recent: int = 8
+    # last `memory_keep_recent` entries are kept verbatim. Threshold sits
+    # above the working window so most conversations never trigger it;
+    # only marathon chats fold. keep_recent stays large so even after a
+    # fold the user has plenty of immediate context.
+    memory_summary_threshold: int = 70
+    memory_keep_recent: int = 40
     # Free-tier monthly token allowance per user. Surfaced via the
     # my_token_usage tool and quoted on the website's "Free, with a fair
     # limit" section.

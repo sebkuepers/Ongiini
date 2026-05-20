@@ -444,32 +444,37 @@ CASES = [
         "requires_caveat": False,
     },
     # ---- Memory v2: rolling summary ----
-    # Pre-seed enough history (16 entries = 8 turn pairs) that, after the
-    # new user+assistant turn is appended, the on-write maybe_summarize
-    # call triggers the fold-in. We assert the on-disk file begins with a
-    # system "Earlier in this conversation: …" line and that history was
-    # compressed (≤ 12 entries instead of 18).
+    # Pre-seeds 72 entries (36 turn pairs) so the on-write maybe_summarize
+    # call actually crosses the v3 threshold (settings.memory_summary_threshold
+    # = 70) once the new user+assistant turn pushes total to 74. After the
+    # fold the on-disk file should start with a system "Earlier in this
+    # conversation: …" line and shrink to roughly memory_keep_recent + 1.
+    # The seed loops through a small farming chat to keep the LLM-generated
+    # summary readable.
     {
         "id": "M3_rolling_summary_en",
         "lang": "en",
-        "setup_history": [
-            {"role": "user", "content": "Hi, I'm starting a small farm in Oshakati."},
-            {"role": "assistant", "content": "Welcome — are you growing food crops, or commercial?"},
-            {"role": "user", "content": "Mostly maize and a bit of mahangu."},
-            {"role": "assistant", "content": "Mahangu does well there. What's the soil like?"},
-            {"role": "user", "content": "Sandy soil, with rainy-season floods."},
-            {"role": "assistant", "content": "Sandy drains fast — watch nitrogen levels carefully."},
-            {"role": "user", "content": "I have 3 hectares I'm clearing now."},
-            {"role": "assistant", "content": "Three hectares is a good starter size for both crops."},
-            {"role": "user", "content": "How often should I fertilise?"},
-            {"role": "assistant", "content": "Usually once before planting, again about 6 weeks in."},
-            {"role": "user", "content": "And irrigation guidance?"},
-            {"role": "assistant", "content": "If rain-fed, top up watering during dry spells."},
-            {"role": "user", "content": "I want to register the farm with BIPA next."},
-            {"role": "assistant", "content": "Good plan — gives you a proper business identity for trading."},
-            {"role": "user", "content": "Got my passport ready for the application."},
-            {"role": "assistant", "content": "Passport works as ID. You'll also need a proof of address."},
-        ],
+        "setup_history": (
+            [
+                {"role": "user", "content": "Hi, I'm starting a small farm in Oshakati."},
+                {"role": "assistant", "content": "Welcome — are you growing food crops, or commercial?"},
+                {"role": "user", "content": "Mostly maize and a bit of mahangu."},
+                {"role": "assistant", "content": "Mahangu does well there. What's the soil like?"},
+                {"role": "user", "content": "Sandy soil, with rainy-season floods."},
+                {"role": "assistant", "content": "Sandy drains fast — watch nitrogen levels carefully."},
+                {"role": "user", "content": "I have 3 hectares I'm clearing now."},
+                {"role": "assistant", "content": "Three hectares is a good starter size for both crops."},
+                {"role": "user", "content": "How often should I fertilise?"},
+                {"role": "assistant", "content": "Usually once before planting, again about 6 weeks in."},
+                {"role": "user", "content": "And irrigation guidance?"},
+                {"role": "assistant", "content": "If rain-fed, top up watering during dry spells."},
+                {"role": "user", "content": "I want to register the farm with BIPA next."},
+                {"role": "assistant", "content": "Good plan — gives you a proper business identity for trading."},
+                {"role": "user", "content": "Got my passport ready for the application."},
+                {"role": "assistant", "content": "Passport works as ID. You'll also need a proof of address."},
+            ]
+            * 5   # 16 entries × 5 reps = 80 entries, well above the 70 threshold
+        )[:72],
         "question": "Quick one — what's 2 plus 2?",
         "should_search": False,
         "expect_rolling_summary": True,
@@ -660,9 +665,13 @@ def score_reply(
             first_is_summary,
             f"first_entry={first}",
         ))
+        # After a successful fold, on-disk size should be roughly
+        # memory_keep_recent + 1 (the leading summary). Pad the upper
+        # bound a little — mem0's reconciliation may add a stray entry
+        # under some conditions.
         out.append(CheckResult(
             "history_bounded",
-            len(memory_on_disk or []) <= 12,
+            len(memory_on_disk or []) <= 50,
             f"on_disk_len={len(memory_on_disk or [])}",
         ))
 
