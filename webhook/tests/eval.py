@@ -38,6 +38,7 @@ from typing import Iterable
 # container working dir `/app`.
 sys.path.insert(0, "/app")
 
+from app import mem          # noqa: E402
 from app import memory       # noqa: E402
 from app import pii as _pii  # noqa: E402 (used in PII unit-style check)
 from app.llm import maybe_summarize, respond  # noqa: E402
@@ -710,6 +711,10 @@ async def run_case(case: dict) -> dict:
 
     # Each case starts from a clean memory file, unless setup_history is set.
     memory.delete(msisdn)
+    # Also wipe any long-term mem0 state so the case doesn't get
+    # contaminated by leftover facts from previous runs of this same
+    # synthetic msisdn.
+    mem.delete_all(msisdn)
     if "setup_history" in case:
         memory.save(msisdn, case["setup_history"])
 

@@ -1,11 +1,13 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from . import memory, pii, ratelimit, usage
+from . import mem, memory, pii, ratelimit, usage
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import maybe_summarize, respond
@@ -17,7 +19,19 @@ logging.basicConfig(
 )
 log = logging.getLogger("ongiini")
 
-app = FastAPI(title="Ongiini Webhook")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Eagerly initialise the mem0 client + embedding model on startup
+    # so the first real message doesn't pay the ~10s cold-load cost.
+    # mem.warmup() is no-op-on-failure; if it fails, search/add calls
+    # will retry the lazy init on demand.
+    log.info("warming mem0 (loading embedding model)…")
+    await asyncio.to_thread(mem.warmup)
+    log.info("mem0 ready")
+    yield
+
+
+app = FastAPI(title="Ongiini Webhook", lifespan=lifespan)
 
 # Allow the public website (which may live on Cloudflare Pages) to poll
 # /status from the browser. GET only, no credentials.
@@ -161,5 +175,18 @@ async def handle_message(sender: str, text: str) -> None:
             history.append(pii.sanitize_message({"role": "assistant", "content": result.reply}))
             history = await maybe_summarize(history)
             memory.save(msisdn, history)
+
+            # Long-term semantic memory: feed the just-completed turn to
+            # mem0 so it can extract or update durable facts about this
+            # user. Done AFTER send_text so it never blocks the live
+            # reply. We pass the PII-sanitised text — mem0 should not see
+            # raw emails or ID numbers any more than the disk does.
+            #
+            # Awaited inside the per-user lock so the next message from
+            # this same user starts with fresh memory; different users
+            # never block each other (their locks are independent).
+            await asyncio.to_thread(
+                mem.add_turn, msisdn, pii.sanitize(text), pii.sanitize(result.reply)
+            )
 
         usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)

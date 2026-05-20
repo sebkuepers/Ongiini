@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from dataclasses import dataclass
@@ -6,7 +7,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from . import memory, usage
+from . import mem, memory, usage
 from .config import settings
 from .search import fetch_url, web_search
 from .tracing import MessageTrace
@@ -189,19 +190,29 @@ ALWAYS OFFER A NEXT STEP
 - Don't stack two next-step offers. Pick the single most useful one.
 
 DATA & PRIVACY
-- You remember roughly the last 10 messages from this user verbatim. Anything older has
-  been LLM-compressed into a short summary line ("Earlier in this conversation: …") that
-  appears at the top of the history when present — treat it as background context, not a
-  perfect transcript. You don't have access to anything else about them — no name, no
-  location, no past chats from other users.
+- You have TWO kinds of memory about this user, used together every turn:
+  1. Short-term — roughly the last 10 messages, verbatim. Older messages in this same
+     conversation have been LLM-compressed into a leading "Earlier in this conversation:
+     …" line. Treat that line as background context, not a perfect transcript.
+  2. Long-term — durable facts extracted across ALL prior conversations with this user
+     (their location, language preference, what they're working on, recurring topics).
+     If a "What you know about this user from prior conversations:" system message
+     appears at the top of this turn, those bullet points are the relevant facts mem0
+     surfaced for the current question. Use them naturally — don't quote them back
+     literally or announce "according to my notes…", just let them shape your answer
+     like a friend who remembers what you told them last time.
+- You don't have access to anything else about them — no full name, no precise location,
+  no past chats from OTHER users.
 - If the user asks you to delete their data (in any language, any phrasing — "delete my
   data", "forget everything", "vergeet alles", "wis my data", etc.), call the
   `delete_my_data` tool. Don't argue, don't ask why, just do it.
 - If the user asks what you remember / what is stored / what data you have on them
   ("what do you remember about me?", "wat onthou jy?", "show me what you've stored"),
-  call the `whats_in_my_memory` tool and present the result naturally — summarise the
-  contents in your own words, don't dump it raw. This is a trust-building moment;
-  treat it that way.
+  call the `whats_in_my_memory` tool. The result is split into two sections — long-term
+  facts and the recent conversation — and you should present BOTH naturally in your own
+  words. Lead with the durable facts ("I remember that you live in Oshakati and grow
+  maize…") and only mention recent chat if it adds something. Never dump the raw tool
+  output. This is a trust-building moment; treat it that way.
 - If the user asks how much they have used / how many tokens are left / how close they
   are to their monthly limit ("how many tokens have I used?", "am I close to the limit?",
   "hoeveel tokens het ek gebruik?"), call the `my_token_usage` tool and give the answer
@@ -288,10 +299,12 @@ TOOLS = [
         "function": {
             "name": "delete_my_data",
             "description": (
-                "Wipe the user's conversation history with Ongiini. Call this when the user "
-                "asks to delete their data, forget what they've said, or any equivalent in "
-                "English or Afrikaans (e.g. 'delete my data', 'forget everything', "
-                "'vergeet alles', 'wis my data'). Takes no arguments."
+                "Wipe EVERYTHING Ongiini has stored about this user — both the recent "
+                "conversation history AND every long-term fact ever extracted. Call this "
+                "when the user asks to delete their data, forget what they've said, "
+                "wipe their record, or any equivalent in English or Afrikaans "
+                "(e.g. 'delete my data', 'forget everything', 'vergeet alles', "
+                "'wis my data'). Takes no arguments."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -301,13 +314,16 @@ TOOLS = [
         "function": {
             "name": "whats_in_my_memory",
             "description": (
-                "Surface what is currently stored about THIS user — their last few "
-                "conversation turns plus any earlier-conversation summary, if one exists. "
-                "Call this whenever the user asks 'what do you remember about me?', "
-                "'what have you stored?', 'show me my data', 'wat onthou jy oor my?', "
-                "'wat het julle gestoor?' or any equivalent. After the tool returns, "
-                "present the result to the user in plain, natural language — don't dump "
-                "raw JSON. Takes no arguments."
+                "Surface EVERYTHING currently stored about THIS user across BOTH memory "
+                "tiers: the long-term facts mem0 has extracted across all prior "
+                "conversations (location, language preference, projects, recurring "
+                "topics) PLUS the recent short-term conversation history. Call this "
+                "whenever the user asks 'what do you remember about me?', 'what have "
+                "you stored?', 'show me my data', 'wat onthou jy oor my?', 'wat het "
+                "julle gestoor?' or any equivalent. After the tool returns, present "
+                "the result naturally — lead with the durable facts in your own words, "
+                "then only mention recent chat if it adds something. Never dump raw "
+                "JSON or the bullet list verbatim. Takes no arguments."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -438,7 +454,21 @@ class LLMResult:
 
 
 async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) -> LLMResult:
+    # Long-term semantic memory: vector-search mem0 for facts about THIS
+    # user relevant to the current question. Runs in a thread because
+    # mem0's API is synchronous and the embedding step uses CPU work we
+    # don't want pinning the event loop. Returns [] on any failure so
+    # an unhealthy mem0 never blocks the live reply path.
+    relevant_memories = await asyncio.to_thread(mem.search, msisdn, user_text, 5)
+    memory_block = mem.format_relevant(relevant_memories)
+
     messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if memory_block:
+        # Separate system message rather than concatenated into SYSTEM_PROMPT
+        # so the model sees it as derived context, not policy. Also keeps
+        # the prefix cache hot — the policy prompt is byte-identical across
+        # calls and the per-user memory block is the only variable here.
+        messages.append({"role": "system", "content": memory_block})
     messages.extend(history)
     messages.append({"role": "user", "content": user_text})
 
@@ -537,35 +567,60 @@ async def respond(history: list[dict[str, Any]], user_text: str, msisdn: str) ->
                 used_fetch_url = True
                 result = await fetch_url(args.get("url", ""))
             elif name == "delete_my_data":
-                removed = memory.delete(msisdn)
+                removed_short = memory.delete(msisdn)
+                removed_long = await asyncio.to_thread(mem.delete_all, msisdn)
                 deleted_data = True
-                result = (
-                    "Done. The user's conversation memory has been wiped."
-                    if removed
-                    else "There was nothing stored for this user. Memory is empty."
-                )
+                if removed_short or removed_long:
+                    result = (
+                        "Done. The user's short-term conversation history "
+                        "AND every stored long-term fact about them have "
+                        "been wiped."
+                    )
+                else:
+                    result = (
+                        "There was nothing stored for this user — short-term "
+                        "history and long-term memory are both empty."
+                    )
             elif name == "whats_in_my_memory":
                 used_whats_in_my_memory = True
                 stored = memory.load(msisdn)
-                if not stored:
+                long_term = await asyncio.to_thread(mem.list_all, msisdn)
+
+                if not stored and not long_term:
                     result = (
                         "Memory for this user is currently empty — either this is the "
                         "first message, or they recently asked to have it deleted."
                     )
                 else:
-                    lines = [
-                        f"Memory contents for this user: {len(stored)} entries "
-                        f"(most recent last).",
-                    ]
-                    for m in stored:
-                        role = m.get("role", "?")
-                        content = (m.get("content") or "").strip()
-                        # Trim long entries for the tool result, but keep
-                        # enough for the model to summarize meaningfully.
-                        if len(content) > 240:
-                            content = content[:240] + "…"
-                        lines.append(f"- [{role}] {content}")
-                    result = "\n".join(lines)
+                    parts: list[str] = []
+                    # Section A — durable facts from mem0.
+                    if long_term:
+                        parts.append(
+                            f"Long-term facts ({len(long_term)} stored about this user):"
+                        )
+                        for m in long_term:
+                            fact = (m.get("memory") or "").strip()
+                            if not fact:
+                                continue
+                            if len(fact) > 240:
+                                fact = fact[:240] + "…"
+                            parts.append(f"- {fact}")
+
+                    # Section B — recent raw conversation history.
+                    if stored:
+                        if parts:
+                            parts.append("")  # blank line between sections
+                        parts.append(
+                            f"Recent conversation ({len(stored)} entries, oldest first):"
+                        )
+                        for m in stored:
+                            role = m.get("role", "?")
+                            content = (m.get("content") or "").strip()
+                            if len(content) > 240:
+                                content = content[:240] + "…"
+                            parts.append(f"- [{role}] {content}")
+
+                    result = "\n".join(parts)
             elif name == "my_token_usage":
                 used_my_token_usage = True
                 stats = usage.summary_for(msisdn)

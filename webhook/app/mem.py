@@ -90,6 +90,36 @@ def _client():
     return _memory_singleton
 
 
+def warmup() -> None:
+    """Eagerly initialise mem0 so the first real request doesn't pay
+    the ~10s embedding-model load cost. Called from FastAPI's lifespan
+    handler at startup."""
+    try:
+        _client()
+    except Exception as exc:
+        log.warning("mem0 warmup failed: %s", exc)
+
+
+def format_relevant(memories: list[dict]) -> str:
+    """Render mem0 search hits as a system-prompt snippet the LLM can use.
+
+    Returns "" when there's nothing worth injecting — caller should skip
+    adding the system message in that case rather than passing an empty
+    block that costs tokens for no signal.
+    """
+    facts = [
+        (m.get("memory") or "").strip()
+        for m in memories
+        if isinstance(m, dict) and (m.get("memory") or "").strip()
+    ]
+    if not facts:
+        return ""
+    lines = ["What you know about this user from prior conversations:"]
+    for fact in facts:
+        lines.append(f"- {fact}")
+    return "\n".join(lines)
+
+
 def add_turn(msisdn: str, user_text: str, assistant_text: str) -> None:
     """Feed one completed turn to mem0 so it can extract / update facts.
 
