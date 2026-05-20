@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light" />
   <meta name="theme-color" content="#f5efe4" />
-  <title>Ongiini — AI for Namibia, on WhatsApp</title>
-  <meta name="description" content="Ongiini is a free AI assistant for Namibia. Chat on WhatsApp in English or Afrikaans. Runs locally in Namibia, on a single computer." />
-  <meta property="og:title" content="Ongiini — AI for Namibia, on WhatsApp" />
-  <meta property="og:description" content="Free AI assistant for Namibia. Chat on WhatsApp in English or Afrikaans." />
+  <title>Ongiini — AI for everyone, on WhatsApp</title>
+  <meta name="description" content="Ongiini is a free AI assistant on WhatsApp for people in Namibia. Open source, no US cloud. Powered by Google's Gemma 4 running on a single computer." />
+  <meta property="og:title" content="Ongiini — AI for everyone, on WhatsApp" />
+  <meta property="og:description" content="Free AI assistant for Namibia. Open source. Powered by Gemma 4. On the phone you already have." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://ongiini.ai/" />
   <meta property="og:image" content="/assets/ongiini-icon-512.png" />
   <meta name="twitter:card" content="summary" />
 
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/assets/ongiini-icon-192.png" />
   <link rel="apple-touch-icon" sizes="512x512" href="/assets/ongiini-icon-512.png" />
 
@@ -38,7 +39,6 @@
       --gutter: 22px;
       --maxw:   1180px;
     }
-    /* Fallback for browsers without OKLCH support — preserves the look */
     @supports not (color: oklch(0 0 0)) {
       :root {
         --bone: #f5efe4;
@@ -72,7 +72,6 @@
     button { font: inherit; color: inherit; }
     a { color: inherit; text-decoration: none; }
 
-    /* Locale visibility */
     [data-en], [data-af] { display: none; }
     html[data-locale="en"] [data-en] { display: revert; }
     html[data-locale="af"] [data-af] { display: revert; }
@@ -85,6 +84,7 @@
     .og-section-inner { display: flex; flex-direction: column; gap: 16px; }
     .og-section--dark { background: var(--ink); color: var(--bone); border-top: none; }
     .og-section--dark .og-h2 { color: var(--bone); }
+    .og-section--sand { background: var(--sand); }
 
     .og-eyebrow {
       font-family: 'Geist Mono', ui-monospace, monospace;
@@ -105,6 +105,19 @@
     }
     .og-section--dark .og-body { color: var(--ink-faint); }
 
+    /* Pilot banner — narrow strip just under the topbar */
+    .og-pilot {
+      background: var(--ink); color: var(--bone);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 8px 0; text-align: center;
+    }
+    .og-pilot-dot {
+      display: inline-block; width: 7px; height: 7px; border-radius: 999px;
+      background: var(--terracotta); margin-right: 8px; vertical-align: 1px;
+      box-shadow: 0 0 0 4px rgba(196, 108, 63, 0.18);
+    }
+
     /* Top bar */
     .og-bar {
       position: sticky; top: 0; z-index: 50;
@@ -124,11 +137,10 @@
     }
     .og-brand { display: inline-flex; align-items: center; gap: 8px; }
     .og-brand-icon {
-      width: 28px; height: 28px; border-radius: 7px;
-      background: var(--bone-deep);
+      width: 30px; height: 30px;
       display: inline-flex; align-items: center; justify-content: center;
     }
-    .og-brand-icon img { width: 22px; height: 22px; }
+    .og-brand-icon img { width: 30px; height: 30px; }
     .og-brand-name {
       display: inline-flex; align-items: baseline; gap: 2px;
       font-family: 'Instrument Serif', serif; font-size: 22px;
@@ -204,7 +216,7 @@
       margin-top: 36px;
       display: flex; flex-direction: column; gap: 32px;
     }
-    .og-hero-tag { display: flex; flex-direction: column; gap: 6px; max-width: 20ch; }
+    .og-hero-tag { display: flex; flex-direction: column; gap: 6px; max-width: 22ch; }
     .og-tag-line1, .og-tag-line2 {
       font-size: clamp(26px, 5.2vw, 40px); line-height: 1.05;
       letter-spacing: -0.025em; font-weight: 400;
@@ -213,7 +225,7 @@
     .og-tag-sub {
       margin-top: 12px;
       font-size: clamp(14px, 2vw, 16px); line-height: 1.5;
-      color: var(--ink-soft); max-width: 38ch;
+      color: var(--ink-soft); max-width: 42ch;
     }
     .og-hero-cta { display: flex; flex-direction: column; gap: 14px; max-width: 360px; }
 
@@ -245,10 +257,6 @@
       font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
       letter-spacing: 0.06em; color: var(--ink-soft); padding-left: 4px;
     }
-    .og-cta.is-disabled {
-      background: var(--sand-deep); color: var(--ink-soft); cursor: default;
-      box-shadow: none; pointer-events: none;
-    }
 
     /* Number chip */
     .og-number {
@@ -276,6 +284,16 @@
     .og-number-tap:hover { background: var(--terracotta); color: var(--bone); border-color: var(--terracotta); }
     .og-number-tap.is-copied { background: var(--ink); color: var(--bone); border-color: var(--ink); }
 
+    /* Disclaimer line under hero */
+    .og-disclaimer {
+      margin-top: 18px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.06em; line-height: 1.55;
+      color: var(--ink-soft); max-width: 60ch;
+      padding: 12px 14px; border: 1px dashed var(--rule);
+      border-radius: 10px; background: rgba(255,255,255,0.4);
+    }
+
     /* Try-asking */
     .og-try { list-style: none; margin: 22px 0 0; padding: 0; }
     .og-try-item {
@@ -301,24 +319,73 @@
     .og-try-lang--af { color: var(--terracotta-deep); border: 1px solid var(--terracotta); }
     .og-try-lang--en { color: var(--ink-soft); border: 1px solid var(--rule); }
 
-    /* Local (dark) */
-    .og-local-grid {
+    /* Three-card grid (used by Open/Transparent + Privacy) */
+    .og-grid {
       margin-top: 32px;
       display: grid; grid-template-columns: 1fr; gap: 22px;
     }
-    .og-local-card { display: flex; flex-direction: column; gap: 8px; }
-    .og-local-num {
+    .og-card { display: flex; flex-direction: column; gap: 8px; }
+    .og-card-num {
       font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px;
-      letter-spacing: 0.16em; color: var(--terracotta-light);
+      letter-spacing: 0.16em; color: var(--terracotta-deep);
     }
-    .og-local-head {
+    .og-section--dark .og-card-num { color: var(--terracotta-light); }
+    .og-card-head {
       font-size: 16px; font-weight: 500; letter-spacing: -0.005em;
-      color: var(--bone);
+      color: var(--ink);
     }
-    .og-local-body {
+    .og-section--dark .og-card-head { color: var(--bone); }
+    .og-card-body {
       margin: 0;
-      font-size: 14.5px; line-height: 1.55; color: var(--ink-faint);
+      font-size: 14.5px; line-height: 1.55; color: var(--ink-soft);
       text-wrap: pretty;
+    }
+    .og-section--dark .og-card-body { color: var(--ink-faint); }
+
+    /* Roadmap pill list */
+    .og-roadmap {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-top: 24px; padding: 0; list-style: none;
+    }
+    .og-roadmap li {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bone); color: var(--ink);
+      border: 1px solid var(--rule);
+      padding: 8px 14px; border-radius: 999px;
+      font-size: 13px;
+    }
+    .og-section--dark .og-roadmap li {
+      background: transparent; color: var(--bone);
+      border-color: #5a5046;
+    }
+    .og-roadmap-pill {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 8.5px; letter-spacing: 0.16em; padding: 2px 6px;
+      border: 1px solid var(--terracotta); color: var(--terracotta-deep);
+      border-radius: 4px; text-transform: uppercase;
+    }
+    .og-section--dark .og-roadmap-pill { color: var(--terracotta-light); }
+
+    /* Cost / Free section */
+    .og-free {
+      display: flex; flex-direction: column; gap: 22px; margin-top: 28px;
+    }
+    .og-free-stat {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .og-free-num {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(64px, 14vw, 120px); line-height: 0.9;
+      letter-spacing: -0.03em; color: var(--ink);
+    }
+    .og-free-unit { color: var(--terracotta); font-style: normal; }
+    .og-free-label {
+      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
+    }
+    .og-free-detail {
+      font-size: 14.5px; line-height: 1.6; color: var(--ink-soft);
+      max-width: 56ch;
     }
 
     /* FAQ */
@@ -349,7 +416,7 @@
       max-height: 0; overflow: hidden;
       transition: max-height 280ms cubic-bezier(.6,.1,.3,1);
     }
-    .og-faq-item.is-open .og-faq-body-wrap { max-height: 600px; }
+    .og-faq-item.is-open .og-faq-body-wrap { max-height: 800px; }
     .og-faq-body {
       margin: 0; padding: 0 0 22px 40px;
       font-size: 15px; line-height: 1.6; color: var(--ink-soft); text-wrap: pretty;
@@ -419,6 +486,13 @@
       margin: 0; font-size: 12.5px; line-height: 1.55;
       color: var(--ink-faint); max-width: 38ch;
     }
+    .og-footer-creator {
+      margin-top: 8px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.04em;
+      color: var(--ink-faint);
+    }
+    .og-footer-creator a { color: var(--bone); border-bottom: 1px dotted var(--ink-faint); }
     .og-footer-bottom {
       margin-top: 48px; padding-top: 22px;
       border-top: 1px solid #4a423b;
@@ -442,10 +516,10 @@
       .og-hero-cta { max-width: none; }
       .og-try { margin-top: 32px; }
       .og-try-item { padding: 22px 0; }
-      .og-local-grid { grid-template-columns: repeat(3, 1fr); gap: 40px; }
-      .og-local-card { gap: 12px; }
-      .og-local-head { font-size: 18px; }
-      .og-local-body { font-size: 15px; }
+      .og-grid { grid-template-columns: repeat(3, 1fr); gap: 40px; }
+      .og-card { gap: 12px; }
+      .og-card-head { font-size: 18px; }
+      .og-card-body { font-size: 15px; }
       .og-close { padding: 120px 0 140px; }
       .og-close-inner {
         display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end;
@@ -472,23 +546,32 @@
 
 <body>
   <div class="og-page">
+    <div class="og-pilot">
+      <div class="og-wrap">
+        <span class="og-pilot-dot"></span>
+        <span data-en>Pilot phase · Hardware currently in Germany · Moving to Namibia once sustainable</span>
+        <span data-af>Loodsfase · Hardeware tans in Duitsland · Verskuif na Namibië sodra dit volhoubaar is</span>
+      </div>
+    </div>
+
     <header class="og-bar">
       <div class="og-wrap og-bar-inner">
         <a class="og-brand" href="#top" aria-label="Ongiini.ai">
-          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192.png" alt="" width="22" height="22" /></span>
+          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192.png" alt="" width="30" height="30" /></span>
           <span class="og-brand-name">
             <span class="og-brand-mark">Ongiini</span><span class="og-brand-dot">.</span><span class="og-brand-tld">ai</span>
           </span>
         </a>
         <nav class="og-bar-nav">
-          <a href="#mission"><span data-en="i">What it does</span><span data-af="i">Wat dit doen</span></a>
-          <a href="#local"><span data-en="i">Hosted in Namibia</span><span data-af="i">In Namibië</span></a>
+          <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
+          <a href="#open"><span data-en="i">Open &amp; transparent</span><span data-af="i">Oop &amp; deursigtig</span></a>
+          <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
           <a href="#faq"><span data-en="i">Questions</span><span data-af="i">Vrae</span></a>
         </nav>
         <div class="og-lang" role="group" aria-label="Language">
           <button type="button" class="og-lang-seg is-active" data-set-locale="en">EN</button>
           <button type="button" class="og-lang-seg" data-set-locale="af">AF</button>
-          <span class="og-lang-seg og-lang-soon" title="Oshiwambo coming soon">OW <span class="og-soon-pill">SOON</span></span>
+          <span class="og-lang-seg og-lang-soon" title="Oshiwambo coming soon via a translation layer">OW <span class="og-soon-pill">SOON</span></span>
         </div>
       </div>
     </header>
@@ -507,16 +590,16 @@
 
         <div class="og-hero-row">
           <div class="og-hero-tag">
-            <div class="og-tag-line1" data-en>An AI assistant</div>
-            <div class="og-tag-line1" data-af>’n AI-assistent</div>
-            <div class="og-tag-line2" data-en>for Namibia.</div>
-            <div class="og-tag-line2" data-af>vir Namibië.</div>
-            <div class="og-tag-sub" data-en>Free. On WhatsApp. In English &amp; Afrikaans — Oshiwambo coming soon.</div>
-            <div class="og-tag-sub" data-af>Gratis. Op WhatsApp. In Engels &amp; Afrikaans — Oshiwambo binnekort.</div>
+            <div class="og-tag-line1" data-en>AI for everyone.</div>
+            <div class="og-tag-line1" data-af>AI vir almal.</div>
+            <div class="og-tag-line2" data-en>On WhatsApp.</div>
+            <div class="og-tag-line2" data-af>Op WhatsApp.</div>
+            <div class="og-tag-sub" data-en>Free. Open source. On the phone you already have. English &amp; Afrikaans today — Oshiwambo, voice and images coming soon.</div>
+            <div class="og-tag-sub" data-af>Gratis. Oopbron. Op die foon wat jy reeds het. Engels &amp; Afrikaans vandag — Oshiwambo, stem en beelde binnekort.</div>
           </div>
 
           <div class="og-hero-cta">
-            <a class="og-cta" id="cta-primary" target="_blank" rel="noopener noreferrer">
+            <a class="og-cta" id="cta-primary" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
               <span class="og-cta-l">
                 <span class="og-cta-ic">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -537,12 +620,18 @@
 
             <div class="og-number">
               <div class="og-number-l">
-                <span class="og-number-label">WhatsApp</span>
-                <span class="og-number-val" id="num-display">+— — —</span>
+                <span class="og-number-label" data-en>Pilot number (Germany)</span>
+                <span class="og-number-label" data-af>Loodsnommer (Duitsland)</span>
+                <span class="og-number-val">+49 15888 635886</span>
               </div>
               <button type="button" class="og-number-tap" id="num-copy">
                 <span class="og-tap-label" data-en="i">TAP TO SAVE</span><span class="og-tap-label" data-af="i">TIK OM TE STOOR</span>
               </button>
+            </div>
+
+            <div class="og-disclaimer">
+              <span data-en>Ongiini is an AI. It can be confidently wrong. Don't make decisions about your health, money or legal status based on its answers alone — always check with a qualified person.</span>
+              <span data-af>Ongiini is 'n KI. Dit kan met vertroue verkeerd wees. Moenie besluite oor jou gesondheid, geld of regstatus net op grond van sy antwoorde neem nie — kontroleer altyd met 'n gekwalifiseerde persoon.</span>
             </div>
           </div>
         </div>
@@ -552,13 +641,13 @@
     <section class="og-section" id="mission">
       <div class="og-wrap og-section-inner">
         <div class="og-eyebrow">
-          <span data-en>Why we built this</span>
-          <span data-af>Hoekom ons dit gebou het</span>
+          <span data-en>Mission</span>
+          <span data-af>Missie</span>
         </div>
-        <h2 class="og-h2" data-en>AI is happening to everyone — so it should belong to everyone.</h2>
-        <h2 class="og-h2" data-af>AI raak almal — dus moet dit aan almal behoort.</h2>
-        <p class="og-body" data-en>Ongiini is a free assistant you reach on WhatsApp, the app most Namibians already use every day. Ask it anything in English or Afrikaans. No app to install, no account, no fee. Built so that access to knowledge does not depend on who can afford it.</p>
-        <p class="og-body" data-af>Ongiini is ’n gratis assistent wat jy via WhatsApp bereik, die app wat die meeste Namibiërs reeds elke dag gebruik. Vra dit enigiets in Engels of Afrikaans. Geen app om af te laai nie, geen rekening, geen koste. Gebou sodat toegang tot kennis nie afhang van wie dit kan bekostig nie.</p>
+        <h2 class="og-h2" data-en>The most powerful tool ever invented for accessing knowledge is the phone in your pocket.</h2>
+        <h2 class="og-h2" data-af>Die kragtigste hulpmiddel ooit uitgevind om kennis te bekom, is die foon in jou sak.</h2>
+        <p class="og-body" data-en>Most people in Namibia already carry it, and already use WhatsApp every day. Ongiini connects that phone to a state-of-the-art open-source AI model. No app to install, no account, no fee. Education, health questions, legal help, farming advice, day-to-day know-how — all one message away. We are showing that low-barrier access to great open-source AI, on the device people already have, can unlock real things in people's lives.</p>
+        <p class="og-body" data-af>Die meeste mense in Namibië dra dit reeds, en gebruik reeds elke dag WhatsApp. Ongiini verbind daardie foon met 'n toonaangewende oopbron KI-model. Geen app om af te laai nie, geen rekening nie, geen koste nie. Onderwys, gesondheidsvrae, regshulp, boerdery-raad, alledaagse kundigheid — alles net een boodskap weg. Ons wys dat lae-drempel toegang tot uitstekende oopbron KI, op die toestel wat mense reeds het, regtig 'n verskil kan maak in mense se lewens.</p>
       </div>
     </section>
 
@@ -568,57 +657,123 @@
           <span data-en>Try asking</span>
           <span data-af>Probeer vra</span>
         </div>
-        <h2 class="og-h2" data-en>Things people are using it for.</h2>
+        <h2 class="og-h2" data-en>What people are using it for.</h2>
         <h2 class="og-h2" data-af>Waarvoor mense dit gebruik.</h2>
         <ul class="og-try" data-en>
-          <li class="og-try-item"><span class="og-try-num">01</span><span class="og-try-q">I don’t understand fractions — can you explain simply?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">02</span><span class="og-try-q">Verduidelik hierdie kontrak-klousule in eenvoudige woorde.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">03</span><span class="og-try-q">Help me revise for my Grade 12 history exam.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">04</span><span class="og-try-q">Vertaal hierdie brief vir my in Engels.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Summarise this news article in three sentences.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">06</span><span class="og-try-q">Help me write a CV for my first job application.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">01</span><span class="og-try-q">Explain photosynthesis like I'm 12.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">02</span><span class="og-try-q">My maize leaves are turning yellow — what could be wrong?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">03</span><span class="og-try-q">I've had a fever and headache for two days. What might it be?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">04</span><span class="og-try-q">Translate this rental contract clause into plain English.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Help me revise for my Grade 12 maths exam.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">06</span><span class="og-try-q">Help my om 'n CV vir my eerste werksaansoek te skryf.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">07</span><span class="og-try-q">How do I register a small business in Namibia?</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">08</span><span class="og-try-q">Verduidelik fotosintese vir my eenvoudig.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
         </ul>
         <ul class="og-try" data-af>
-          <li class="og-try-item"><span class="og-try-num">01</span><span class="og-try-q">Ek verstaan nie breuke nie — kan jy dit eenvoudig verduidelik?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">02</span><span class="og-try-q">Explain this contract clause to me in simple words.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">03</span><span class="og-try-q">Help my om vir my Graad 12 geskiedenis-eksamen te leer.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">04</span><span class="og-try-q">Translate this letter into English for me.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
-          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Som hierdie nuusartikel in drie sinne op.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
-          <li class="og-try-item"><span class="og-try-num">06</span><span class="og-try-q">Help my om ’n CV vir my eerste werksaansoek te skryf.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">01</span><span class="og-try-q">Verduidelik fotosintese vir my asof ek 12 is.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">02</span><span class="og-try-q">My mielieblare word geel — wat kan verkeerd wees?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">03</span><span class="og-try-q">Ek het al twee dae lank koors en hoofpyn. Wat kan dit wees?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">04</span><span class="og-try-q">Vertaal hierdie huurkontrak-klousule in eenvoudige Afrikaans.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">05</span><span class="og-try-q">Help my om vir my Graad 12 wiskunde-eksamen te leer.</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">06</span><span class="og-try-q">Help me write a CV for my first job application.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
+          <li class="og-try-item"><span class="og-try-num">07</span><span class="og-try-q">Hoe registreer ek 'n klein besigheid in Namibië?</span><span class="og-try-lang og-try-lang--af">AF</span></li>
+          <li class="og-try-item"><span class="og-try-num">08</span><span class="og-try-q">Summarise this news article in three sentences.</span><span class="og-try-lang og-try-lang--en">EN</span></li>
         </ul>
       </div>
     </section>
 
-    <section class="og-section og-section--dark" id="local">
+    <section class="og-section og-section--dark" id="open">
       <div class="og-wrap og-section-inner">
         <div class="og-eyebrow" style="color: var(--ink-faint)">
-          <span data-en>Made &amp; hosted in Namibia</span>
-          <span data-af>Gemaak &amp; gehuisves in Namibië</span>
+          <span data-en>Open · Transparent · Yours</span>
+          <span data-af>Oop · Deursigtig · Joune</span>
         </div>
-        <h2 class="og-h2" data-en>Runs on one computer. In the country it serves.</h2>
-        <h2 class="og-h2" data-af>Loop op een rekenaar. In die land wat dit bedien.</h2>
-        <div class="og-local-grid">
-          <div class="og-local-card">
-            <div class="og-local-num">01</div>
-            <div class="og-local-head" data-en>In Namibia, for Namibia</div>
-            <div class="og-local-head" data-af>In Namibië, vir Namibië</div>
-            <p class="og-local-body" data-en>Ongiini lives on a single NVIDIA DGX Spark in Windhoek. Your messages don’t cross oceans to be answered.</p>
-            <p class="og-local-body" data-af>Ongiini lewe op ’n enkele NVIDIA DGX Spark in Windhoek. Jou boodskappe steek nie oseane oor om beantwoord te word nie.</p>
+        <h2 class="og-h2" data-en>No black box. No US cloud. No catch.</h2>
+        <h2 class="og-h2" data-af>Geen swart boks nie. Geen US-wolk nie. Geen haakplek nie.</h2>
+        <div class="og-grid">
+          <div class="og-card">
+            <div class="og-card-num">01</div>
+            <div class="og-card-head" data-en>Hardware in plain sight</div>
+            <div class="og-card-head" data-af>Hardeware in volle sig</div>
+            <p class="og-card-body" data-en>Ongiini runs on a single NVIDIA DGX Spark — a desktop computer that costs about as much as a laptop, not a data centre. Currently in Germany during the pilot; the goal is to move the hardware to Namibia once the service is sustainable.</p>
+            <p class="og-card-body" data-af>Ongiini loop op 'n enkele NVIDIA DGX Spark — 'n rekenaar wat omtrent soveel kos soos 'n skootrekenaar, nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase; die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is.</p>
           </div>
-          <div class="og-local-card">
-            <div class="og-local-num">02</div>
-            <div class="og-local-head" data-en>Built openly</div>
-            <div class="og-local-head" data-af>Oop gebou</div>
-            <p class="og-local-body" data-en>The code is on GitHub. Anyone can read it, audit it, or run their own version. No black box.</p>
-            <p class="og-local-body" data-af>Die kode is op GitHub. Enigeen kan dit lees, oudit of hul eie weergawe laat loop. Geen swart boks nie.</p>
+          <div class="og-card">
+            <div class="og-card-num">02</div>
+            <div class="og-card-head" data-en>Open-source model</div>
+            <div class="og-card-head" data-af>Oopbron-model</div>
+            <p class="og-card-body" data-en>Powered by Google DeepMind's <strong>Gemma 4 26B</strong> — their latest open-weight model, released April 2026 under the Apache 2.0 license. Among the strongest open models in the world. No closed API, no upstream provider that can switch us off.</p>
+            <p class="og-card-body" data-af>Aangedryf deur Google DeepMind se <strong>Gemma 4 26B</strong> — hul nuutste oopgewig-model, vrygestel in April 2026 onder die Apache 2.0-lisensie. Onder die sterkste oop modelle in die wêreld. Geen geslote API nie, geen verskaffer wat ons kan afsluit nie.</p>
           </div>
-          <div class="og-local-card">
-            <div class="og-local-num">03</div>
-            <div class="og-local-head" data-en>Free, with no catch</div>
-            <div class="og-local-head" data-af>Gratis, sonder ’n haakplek</div>
-            <p class="og-local-body" data-en>No ads. No paid tier. No selling of your conversations. If WhatsApp is free for you, Ongiini is free for you.</p>
-            <p class="og-local-body" data-af>Geen advertensies. Geen betaalde vlak. Geen verkoop van jou gesprekke. As WhatsApp gratis vir jou is, is Ongiini gratis vir jou.</p>
+          <div class="og-card">
+            <div class="og-card-num">03</div>
+            <div class="og-card-head" data-en>Open-source code</div>
+            <div class="og-card-head" data-af>Oopbron-kode</div>
+            <p class="og-card-body" data-en>Every line of the stack — the WhatsApp webhook, the prompts, the deployment recipe — is on GitHub. Read it, audit it, fork it, run your own.</p>
+            <p class="og-card-body" data-af>Elke reël van die stapel — die WhatsApp-webhook, die opdragte, die ontplooiingsresep — is op GitHub. Lees dit, oudit dit, vurk dit, hardloop jou eie.</p>
           </div>
+        </div>
+
+        <ul class="og-roadmap" aria-label="Coming soon">
+          <li><span data-en="i">Voice messages</span><span data-af="i">Stemboodskappe</span><span class="og-roadmap-pill">SOON</span></li>
+          <li><span data-en="i">Image understanding</span><span data-af="i">Beeldherkenning</span><span class="og-roadmap-pill">SOON</span></li>
+          <li><span data-en="i">Oshiwambo (via translation)</span><span data-af="i">Oshiwambo (via vertaling)</span><span class="og-roadmap-pill">SOON</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="og-section" id="privacy">
+      <div class="og-wrap og-section-inner">
+        <div class="og-eyebrow">
+          <span data-en>Privacy</span>
+          <span data-af>Privaatheid</span>
+        </div>
+        <h2 class="og-h2" data-en>Your data. Your control.</h2>
+        <h2 class="og-h2" data-af>Jou data. Jou beheer.</h2>
+        <div class="og-grid">
+          <div class="og-card">
+            <div class="og-card-num">01</div>
+            <div class="og-card-head" data-en>What we keep</div>
+            <div class="og-card-head" data-af>Wat ons hou</div>
+            <p class="og-card-body" data-en>The last 10 messages from your phone number, so the assistant can follow a conversation. Plus a token-count entry per message in an internal log (numbers only, no message content). That's it.</p>
+            <p class="og-card-body" data-af>Die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg. Plus 'n teltelling-inskrywing per boodskap in 'n interne log (slegs syfers, geen inhoud nie). Dis al.</p>
+          </div>
+          <div class="og-card">
+            <div class="og-card-num">02</div>
+            <div class="og-card-head" data-en>What we don't</div>
+            <div class="og-card-head" data-af>Wat ons nie doen nie</div>
+            <p class="og-card-body" data-en>No selling. No advertising. No training anyone's model on your conversations. No US cloud anywhere in the pipeline — your messages stay on a single computer we operate.</p>
+            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen opleiding van iemand se model op jou gesprekke nie. Geen US-wolk in die roete nie — jou boodskappe bly op 'n enkele rekenaar wat ons self bedryf.</p>
+          </div>
+          <div class="og-card">
+            <div class="og-card-num">03</div>
+            <div class="og-card-head" data-en>Delete anytime</div>
+            <div class="og-card-head" data-af>Verwyder enige tyd</div>
+            <p class="og-card-body" data-en>Just message "delete my data" on WhatsApp (any wording works — the assistant understands). Your memory and any internal traces of your messages are wiped within minutes.</p>
+            <p class="og-card-body" data-af>Stuur net "delete my data" of "verwyder my data" op WhatsApp (enige bewoording werk — die assistent verstaan). Jou geheue en enige interne spore word binne minute uitgewis.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="og-section og-section--sand" id="free">
+      <div class="og-wrap og-section-inner">
+        <div class="og-eyebrow">
+          <span data-en>Free, with a fair limit</span>
+          <span data-af>Gratis, met 'n billike limiet</span>
+        </div>
+        <h2 class="og-h2" data-en>Free for everyone — within a fair monthly limit.</h2>
+        <h2 class="og-h2" data-af>Gratis vir almal — binne 'n billike maandelikse limiet.</h2>
+        <div class="og-free">
+          <div class="og-free-stat">
+            <div class="og-free-num">1<span class="og-free-unit">M</span></div>
+            <div class="og-free-label" data-en>free tokens · per user · per month</div>
+            <div class="og-free-label" data-af>gratis tekens · per gebruiker · per maand</div>
+          </div>
+          <p class="og-free-detail" data-en>A token is a short fragment of text — roughly three-quarters of a word. 1&nbsp;million tokens is about <strong>800 normal conversations</strong>, or several dozen long ones over the course of a month. The cap resets on the 1st of every month. We picked this number to keep the service sustainable on a single computer; it's roughly the equivalent of €1 of compute time at market AI-API rates.</p>
+          <p class="og-free-detail" data-af>'n Teken is 'n kort fragment teks — ongeveer drie-kwart van 'n woord. 1&nbsp;miljoen tekens is sowat <strong>800 normale gesprekke</strong>, of 'n paar dosyn lang dele oor 'n maand. Die limiet stel die 1ste van elke maand terug. Ons het hierdie getal gekies sodat die diens volhoubaar bly op 'n enkele rekenaar; dit is rofweg gelyk aan €1 se rekenaartyd teen markpryse vir KI-API's.</p>
+          <p class="og-free-detail" data-en style="margin-top: 4px;"><em>If you bump into the cap and need more for a genuine educational, agricultural or community use, just message us — we'll sort it out.</em></p>
+          <p class="og-free-detail" data-af style="margin-top: 4px;"><em>As jy die limiet tref en meer benodig vir 'n opvoedkundige, landbou- of gemeenskapsdoel, stuur 'n boodskap — ons reël dit.</em></p>
         </div>
       </div>
     </section>
@@ -640,7 +795,7 @@
         <div class="og-close-mark">Ongiini<span class="og-mark-dot">.</span></div>
         <div class="og-close-tag" data-en>Free. On WhatsApp.<br/>In English &amp; Afrikaans.</div>
         <div class="og-close-tag" data-af>Gratis. Op WhatsApp.<br/>In Engels &amp; Afrikaans.</div>
-        <a class="og-cta og-cta--lg" id="cta-closing" target="_blank" rel="noopener noreferrer">
+        <a class="og-cta og-cta--lg" id="cta-closing" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
           <span class="og-cta-l">
             <span class="og-cta-ic">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -654,7 +809,7 @@
           </span>
           <span class="og-cta-arrow">→</span>
         </a>
-        <div class="og-close-num" id="num-display-close">+— — —</div>
+        <div class="og-close-num">+49 15888 635886</div>
       </div>
     </section>
 
@@ -662,15 +817,19 @@
       <div class="og-wrap og-footer-inner">
         <div class="og-footer-brand">
           <div class="og-footer-mark">Ongiini<span class="og-mark-dot">.</span></div>
-          <p class="og-footer-small" data-en>Ongiini means “How are you?” in Oshiwambo.</p>
-          <p class="og-footer-small" data-af>Ongiini beteken “Hoe gaan dit?” in Oshiwambo.</p>
+          <p class="og-footer-small" data-en>Ongiini means "How are you?" in Oshiwambo.</p>
+          <p class="og-footer-small" data-af>Ongiini beteken "Hoe gaan dit?" in Oshiwambo.</p>
           <div class="og-footer-links">
             <a class="og-footer-link" href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">
               GitHub<span class="og-footer-arrow">↗</span>
             </a>
-            <a class="og-footer-link" href="mailto:hi@ongiini.ai">
-              <span data-en="i">Email</span><span data-af="i">E-pos</span><span class="og-footer-arrow">↗</span>
+            <a class="og-footer-link" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
+              WhatsApp<span class="og-footer-arrow">↗</span>
             </a>
+          </div>
+          <div class="og-footer-creator">
+            <span data-en>Built by</span><span data-af>Gebou deur</span>
+            <a href="mailto:sebastian.kuepers@gmail.com">Sebastian Küpers</a>
           </div>
         </div>
 
@@ -678,67 +837,34 @@
           <div class="og-footer-navtitle">
             <span data-en>On this page</span><span data-af>Op hierdie blad</span>
           </div>
-          <a href="#mission"><span data-en="i">What it does</span><span data-af="i">Wat dit doen</span></a>
+          <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
           <a href="#try"><span data-en="i">Try asking</span><span data-af="i">Probeer vra</span></a>
-          <a href="#local"><span data-en="i">Hosted in Namibia</span><span data-af="i">Gehuisves in Namibië</span></a>
+          <a href="#open"><span data-en="i">Open &amp; transparent</span><span data-af="i">Oop &amp; deursigtig</span></a>
+          <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
+          <a href="#free"><span data-en="i">Free, with limits</span><span data-af="i">Gratis, met limiet</span></a>
           <a href="#faq"><span data-en="i">Questions</span><span data-af="i">Vrae</span></a>
         </nav>
 
         <div class="og-footer-legal">
           <div class="og-footer-navtitle">
-            <span data-en>About</span><span data-af>Oor ons</span>
+            <span data-en>Important</span><span data-af>Belangrik</span>
           </div>
-          <p data-en>An independent project. Not affiliated with WhatsApp or Meta. The trademarks WhatsApp and Meta belong to their owners.</p>
-          <p data-af>’n Onafhanklike projek. Nie verbonde aan WhatsApp of Meta nie. Die handelsmerke WhatsApp en Meta behoort aan hul eienaars.</p>
+          <p data-en>Ongiini is an AI. Its answers can be wrong. Do not rely on it for medical, legal or financial decisions without checking with a qualified person.</p>
+          <p data-af>Ongiini is 'n KI. Sy antwoorde kan verkeerd wees. Moet nie op dit staatmaak vir mediese, regs- of finansiële besluite sonder om met 'n gekwalifiseerde persoon te kyk nie.</p>
+          <p data-en style="margin-top: 12px;">An independent project. Not affiliated with WhatsApp or Meta. The trademarks WhatsApp and Meta belong to their owners.</p>
+          <p data-af style="margin-top: 12px;">'n Onafhanklike projek. Nie verbonde aan WhatsApp of Meta nie. Die handelsmerke WhatsApp en Meta behoort aan hul eienaars.</p>
         </div>
       </div>
       <div class="og-wrap og-footer-bottom">
-        <span data-en>Ongiini.ai · Made in Namibia · Open source on GitHub</span>
-        <span data-af>Ongiini.ai · Gemaak in Namibië · Oopbron op GitHub</span>
+        <span data-en>Ongiini.ai · Pilot in Germany · Open source on GitHub</span>
+        <span data-af>Ongiini.ai · Loods in Duitsland · Oopbron op GitHub</span>
       </div>
     </footer>
   </div>
 
   <script>
     (function () {
-      // ── WhatsApp number (baked in at deploy via sed) ────────────────────────
-      var RAW = "__WA_NUMBER__";
-      var hasNumber = RAW && RAW.indexOf("__") === -1;
-      var digits = hasNumber ? RAW.replace(/\D/g, "") : "";
-
-      function formatNumber(d) {
-        if (!d) return "Coming soon";
-        var ccLen = d.length > 11 ? 2 : 1;
-        var cc = d.slice(0, ccLen);
-        var rest = d.slice(ccLen);
-        var groups = [];
-        var i = 0;
-        while (i < rest.length) {
-          var take = rest.length - i > 5 ? 4 : (rest.length - i);
-          groups.push(rest.slice(i, i + take));
-          i += take;
-        }
-        return "+" + cc + " " + groups.join(" ");
-      }
-
-      var display = formatNumber(digits);
-      var numDisplay = document.getElementById("num-display");
-      var numDisplayClose = document.getElementById("num-display-close");
-      if (numDisplay) numDisplay.textContent = display;
-      if (numDisplayClose) numDisplayClose.textContent = display;
-
-      var waUrl = digits ? "https://wa.me/" + digits : "";
-      var primaryCta = document.getElementById("cta-primary");
-      var closingCta = document.getElementById("cta-closing");
-      if (digits) {
-        primaryCta.href = waUrl;
-        closingCta.href = waUrl;
-      } else {
-        primaryCta.classList.add("is-disabled");
-        closingCta.classList.add("is-disabled");
-      }
-
-      // ── Language toggle ────────────────────────────────────────────────────
+      // Language toggle
       var root = document.documentElement;
       var segs = document.querySelectorAll("[data-set-locale]");
       function setLocale(l) {
@@ -758,13 +884,11 @@
         else if (navigator.language && navigator.language.toLowerCase().indexOf("af") === 0) setLocale("af");
       } catch (e) {}
 
-      // ── Tap to save / copy number ──────────────────────────────────────────
+      // Tap to copy number
       var copyBtn = document.getElementById("num-copy");
       copyBtn.addEventListener("click", function () {
-        if (!digits) return;
         function flashCopied() {
           copyBtn.classList.add("is-copied");
-          var lang = root.getAttribute("data-locale") || "en";
           var enLabel = copyBtn.querySelector('[data-en="i"]');
           var afLabel = copyBtn.querySelector('[data-af="i"]');
           var enOrig = enLabel.textContent;
@@ -778,30 +902,34 @@
           }, 1600);
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText("+" + digits).then(flashCopied).catch(flashCopied);
+          navigator.clipboard.writeText("+4915888635886").then(flashCopied).catch(flashCopied);
         } else {
           flashCopied();
         }
       });
 
-      // ── FAQ (safe DOM construction) ────────────────────────────────────────
+      // FAQ (safe DOM construction)
       var FAQ = [
-        { en: ["What is Ongiini?", "A small AI assistant you chat with on WhatsApp. Send it a question, get a useful answer. That’s the whole thing."],
-          af: ["Wat is Ongiini?", "’n Klein AI-assistent waarmee jy op WhatsApp gesels. Stuur ’n vraag, kry ’n nuttige antwoord. Dit is die hele storie."] },
-        { en: ["Does it cost anything?", "No. It’s free to use. WhatsApp’s normal data charges apply, but Ongiini itself charges nothing — and never will."],
-          af: ["Kos dit iets?", "Nee. Dit is gratis om te gebruik. WhatsApp se normale dataheffings geld, maar Ongiini self vra niks — en sal nooit nie."] },
-        { en: ["Which languages can I use?", "English and Afrikaans work well today. Oshiwambo is coming soon — as soon as the open-source language models for it are good enough to be useful. Otjiherero and Damara-Nama are further out, on the same path."],
-          af: ["Watter tale kan ek gebruik?", "Engels en Afrikaans werk goed vandag. Oshiwambo kom binnekort — sodra die oopbron taalmodelle daarvoor goed genoeg is om nuttig te wees. Otjiherero en Damara-Nama is verder weg, op dieselfde pad."] },
-        { en: ["What can I ask it?", "Anything you’d ask a knowledgeable friend. Explain a topic from school, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document — learning and everyday questions."],
-          af: ["Wat kan ek dit vra?", "Enigiets wat jy ’n kundige vriend sou vra. Verduidelik ’n skoolvak, help jou ’n kontrak of nuusartikel verstaan, vertaal, stel ’n CV of e-pos op, werk deur ’n wiskundeprobleem, som ’n dokument op — leer en alledaagse vrae."] },
-        { en: ["Is it private?", "Conversations are processed on a single machine in Namibia and only the last 10 messages per number are kept, to give the assistant short-term memory. Nothing is sold or used to train anyone’s model."],
-          af: ["Is dit privaat?", "Gesprekke word op ’n enkele masjien in Namibië verwerk en slegs die laaste 10 boodskappe per nommer word gehou as kort-termyn geheue. Niks word verkoop of gebruik om enigiemand se model te leer nie."] },
-        { en: ["Who built this?", "A small independent team. The project is open source on GitHub — see the link in the footer."],
-          af: ["Wie het dit gebou?", "’n Klein onafhanklike span. Die projek is oopbron op GitHub — sien die skakel onder."] },
+        { en: ["What is Ongiini?", "A free AI assistant you chat with on WhatsApp. Send it a question — about anything — and you get a useful answer back. Built so anyone with a phone has the same access to AI as anyone else."],
+          af: ["Wat is Ongiini?", "'n Gratis KI-assistent waarmee jy op WhatsApp gesels. Stuur 'n vraag — oor enigiets — en kry 'n nuttige antwoord. Gebou sodat enigeen met 'n foon dieselfde toegang tot KI het as enigeen anders."] },
+        { en: ["Does it cost anything?", "No. It's free to use. WhatsApp's normal data charges apply, but Ongiini itself charges nothing. There's a fair monthly free-token cap (see the 'Free' section) so the service stays sustainable, but it covers normal use easily."],
+          af: ["Kos dit iets?", "Nee. Dit is gratis om te gebruik. WhatsApp se gewone dataheffings geld, maar Ongiini self vra niks nie. Daar is 'n billike maandelikse gratis-teken-limiet (sien die 'Gratis' afdeling) sodat die diens volhoubaar bly, maar dit dek normale gebruik maklik."] },
+        { en: ["Which languages can I use?", "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it (that's unlikely to happen soon) but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."],
+          af: ["Watter tale kan ek gebruik?", "Engels en Afrikaans werk vandag goed. Oshiwambo kom binnekort — nie deur te wag vir 'n model wat dit van nature verstaan nie (dit gebeur waarskynlik nie binnekort nie), maar deur 'n vertaallaag wat onder die enjinkap na en van Engels omskakel, terwyl Gemma 4 die brein bly. Otjiherero en Damara-Nama is op dieselfde pad."] },
+        { en: ["What can I ask it?", "Anything you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice — learning and everyday questions of every kind."],
+          af: ["Wat kan ek dit vra?", "Enigiets wat jy 'n kundige vriend sou vra. Verduidelik 'n skoolvak, help jou 'n kontrak of nuusartikel verstaan, vertaal, stel 'n CV of e-pos op, werk deur 'n wiskundeprobleem, som 'n dokument op, vra oor 'n siek mielieplant, 'n koors, 'n regskennisgewing — leer en alledaagse vrae van elke soort."] },
+        { en: ["How accurate is it?", "Sometimes very accurate. Sometimes confidently wrong — that's the nature of large language models today. Treat its answers like advice from a knowledgeable friend who can also make mistakes. Never make decisions about your health, money or legal status based on Ongiini's answer alone. Verify with a doctor, lawyer or other qualified person."],
+          af: ["Hoe akkuraat is dit?", "Soms baie akkuraat. Soms met selfvertroue verkeerd — dit is die aard van groot taalmodelle vandag. Behandel sy antwoorde soos raad van 'n kundige vriend wat ook foute kan maak. Moet nooit besluite oor jou gesondheid, geld of regstatus net op grond van Ongiini se antwoord maak nie. Kontroleer altyd met 'n dokter, prokureur of ander gekwalifiseerde persoon."] },
+        { en: ["What exactly do you store about me?", "Two things. (1) The last 10 messages from your phone number, so the assistant can follow a conversation. (2) A line per message in a usage log with token counts and a timestamp — no message content. Nothing else. No location, no contacts, no profile. Want it deleted? Just message 'delete my data' on WhatsApp."],
+          af: ["Wat presies stoor julle van my?", "Twee dinge. (1) Die laaste 10 boodskappe vanaf jou nommer, sodat die assistent 'n gesprek kan volg. (2) 'n Reël per boodskap in 'n gebruikslog met teltellings en 'n tydstempel — geen inhoud nie. Niks anders nie. Geen ligging, geen kontakte, geen profiel. Wil jy dit verwyder? Stuur net 'delete my data' op WhatsApp."] },
+        { en: ["Where is it physically running?", "On a single NVIDIA DGX Spark — a desktop computer, not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."],
+          af: ["Waar loop dit fisies?", "Op 'n enkele NVIDIA DGX Spark — 'n rekenaar op 'n tafel, nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase. Die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is. Geen US-wolkverskaffer is op enige punt deel van die roete nie."] },
+        { en: ["What if I hit the monthly limit?", "Just message us — through Ongiini itself or via WhatsApp. We'll sort it out, especially for educational, agricultural or community uses. The cap resets on the 1st of every month."],
+          af: ["Wat as ek die maandelimiet tref?", "Stuur ons net 'n boodskap — deur Ongiini self of via WhatsApp. Ons reël dit, veral vir opvoedkundige, landbou- of gemeenskapsdoeleindes. Die limiet stel die 1ste van elke maand terug."] },
         { en: ["Why WhatsApp?", "Because almost everyone in Namibia already has it. No download, no sign-up, no learning curve. You write, it writes back."],
-          af: ["Hoekom WhatsApp?", "Omdat byna almal in Namibië dit reeds het. Geen aflaai, geen aanmelding, geen leerkurwe. Jy skryf, dit skryf terug."] },
-        { en: ["Will it speak Oshiwambo one day?", "Yes — as soon as open language models for Oshiwambo are good enough to be useful. That’s the goal."],
-          af: ["Sal dit eendag Oshiwambo praat?", "Ja — sodra oop taalmodelle vir Oshiwambo goed genoeg is om nuttig te wees. Dit is die doel."] },
+          af: ["Hoekom WhatsApp?", "Omdat byna almal in Namibië dit reeds het. Geen aflaai, geen aanmelding, geen leerkurwe nie. Jy skryf, dit skryf terug."] },
+        { en: ["Who built this?", "An independent project by Sebastian Küpers. Solo, with help from open-source models and tools. The code is on GitHub — read it, audit it, fork it."],
+          af: ["Wie het dit gebou?", "'n Onafhanklike projek deur Sebastian Küpers. Alleen, met hulp van oopbron-modelle en gereedskap. Die kode is op GitHub — lees dit, oudit dit, vurk dit."] },
       ];
 
       function el(tag, className, text) {
@@ -822,7 +950,7 @@
         var item = el("div", "og-faq-item" + (i === 0 ? " is-open" : ""));
         var btn = el("button", "og-faq-q");
         btn.type = "button";
-        btn.appendChild(el("span", "og-faq-num", String(i + 1).length === 1 ? "0" + (i + 1) : String(i + 1)));
+        btn.appendChild(el("span", "og-faq-num", (i + 1) < 10 ? "0" + (i + 1) : String(i + 1)));
         var textWrap = el("span", "og-faq-text");
         textWrap.appendChild(localeSpan("en", entry.en[0]));
         textWrap.appendChild(localeSpan("af", entry.af[0]));
