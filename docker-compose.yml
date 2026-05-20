@@ -4,6 +4,23 @@ services:
     container_name: ongiini-webhook
     restart: unless-stopped
     env_file: .env
+    environment:
+      # mem0 wants to mkdir ~/.mem0 on import for its config + history db.
+      # The non-root ongiini user has no home dir on a read-only rootfs,
+      # so point mem0 at the writable bind-mounted /data volume instead.
+      MEM0_DIR: /data/mem0
+      # Don't phone home to PostHog — matches our "no US cloud, no
+      # third-party data sharing" privacy stance. Also avoids an
+      # extra outbound call per request.
+      MEM0_TELEMETRY: "False"
+      # sentence-transformers (mem0's embedder) writes lockfiles whenever
+      # it loads a model. The image pre-downloads the model into
+      # /app/.hf_cache but that path is read-only at runtime. Point the
+      # cache at /data (writable bind mount) — first container start
+      # re-downloads the ~80MB model, every restart after that finds it
+      # cached.
+      HF_HOME: /data/hf_cache
+      SENTENCE_TRANSFORMERS_HOME: /data/hf_cache/sentence_transformers
     # Match the Dockerfile's `ongiini` user (UID/GID 1000), which lines up
     # with the host's `nexus` user that owns ./data. Files written via the
     # bind mount stay owned by nexus instead of root.

@@ -3,3 +3,13 @@ uvicorn[standard]==0.32.1
 httpx==0.27.2
 openai==1.55.0
 pydantic==2.9.2
+
+# Memory v3: mem0 long-term semantic memory layer.
+# Pinned loosely so we get patch fixes but not surprise major bumps.
+# qdrant-client provides the local file-backed vector store (mem0 uses
+# `path: ...` mode, no separate qdrant container needed at pilot scale).
+# sentence-transformers + the CPU-only torch wheel (see Dockerfile) give
+# us a small local embedder; the Spark's GPU stays dedicated to vLLM.
+mem0ai>=0.1.110,<0.2
+qdrant-client>=1.12,<2
+sentence-transformers>=3.0,<4
