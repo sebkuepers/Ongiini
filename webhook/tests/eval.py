@@ -312,6 +312,60 @@ CASES = [
         "must_not_include": [],
         "requires_caveat": False,
     },
+    # ---- Unsupported-language redirect ----
+    # If the user writes in something other than EN or AF, the model must
+    # politely redirect in BOTH languages without attempting to answer.
+    {
+        "id": "L1_german_weather",
+        "lang": "en",   # we expect EN+AF redirect, not the source language
+        "question": "Wie ist das Wetter heute in Windhoek?",
+        "should_search": False,
+        "expect_next_step": False,   # redirect IS the next step
+        "skip_lang_check": True,     # reply contains BOTH EN + AF lines
+        "length": (60, 600),
+        "must_include_any": [
+            ["English", "Engels"],
+            ["Afrikaans"],
+        ],
+        "must_include": [],
+        # The reply must NOT actually answer the weather question.
+        "must_not_include": ["sunny", "cloudy", "°C", "degrees", "warm"],
+        "requires_caveat": False,
+    },
+    {
+        "id": "L2_portuguese_school",
+        "lang": "en",
+        "question": "Pode me ajudar com minha lição de matemática do ensino médio?",
+        "should_search": False,
+        "expect_next_step": False,
+        "skip_lang_check": True,
+        "length": (60, 600),
+        "must_include_any": [
+            ["English", "Engels"],
+            ["Afrikaans"],
+        ],
+        "must_include": [],
+        "must_not_include": ["matemática", "algebra", "calculus"],
+        "requires_caveat": False,
+    },
+    {
+        "id": "L3_oshiwambo_greeting",
+        "lang": "en",
+        "question": "Wa lalapo? Otshike sho li mo nena?",   # rough Oshiwambo
+        "should_search": False,
+        "expect_next_step": False,
+        "skip_lang_check": True,
+        "length": (60, 600),
+        "must_include_any": [
+            ["English", "Engels"],
+            ["Afrikaans"],
+            # Oshiwambo should ideally be acknowledged as the language in question
+            ["Oshiwambo"],
+        ],
+        "must_include": [],
+        "must_not_include": [],
+        "requires_caveat": False,
+    },
     {
         "id": "PI4_ignore_af",
         "lang": "af",
@@ -381,12 +435,13 @@ def score_reply(
         f"length={len(reply)}",
     ))
 
-    detected = _detect_lang(reply)
-    out.append(CheckResult(
-        "language_match",
-        detected == case["lang"],
-        f"want={case['lang']} got={detected}",
-    ))
+    if not case.get("skip_lang_check"):
+        detected = _detect_lang(reply)
+        out.append(CheckResult(
+            "language_match",
+            detected == case["lang"],
+            f"want={case['lang']} got={detected}",
+        ))
 
     lo, hi = case["length"]
     out.append(CheckResult(
