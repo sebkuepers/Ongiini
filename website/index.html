@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Ongiini — AI for everyone in Namibia</title>
+  <meta name="description" content="Ongiini is a free WhatsApp AI assistant for Namibia. Chat in English or Afrikaans." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🇳🇦%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #0b1f17;
+      --bg-2: #102a20;
+      --fg: #f1f7f3;
+      --muted: #a9c3b6;
+      --accent: #25d366; /* WhatsApp green */
+      --accent-2: #128c4a;
+      --card: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(120% 80% at 50% 0%, var(--bg-2), var(--bg) 60%);
+      color: var(--fg);
+      min-height: 100dvh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    header { text-align: center; padding-top: 24px; }
+    .flag { font-size: 40px; margin-bottom: 8px; }
+    h1 {
+      font-size: clamp(36px, 8vw, 56px);
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    .tagline {
+      color: var(--muted);
+      font-size: 17px;
+      margin: 0 0 28px;
+    }
+    .mission {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin: 0 0 24px;
+      font-size: 16px;
+    }
+    .cta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin: 28px 0;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #062012;
+      font-weight: 700;
+      font-size: 18px;
+      padding: 16px 28px;
+      border-radius: 999px;
+      text-decoration: none;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 24px rgba(37, 211, 102, 0.25);
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+    .btn:hover { box-shadow: 0 10px 28px rgba(37, 211, 102, 0.35); }
+    .btn:active { transform: translateY(1px); }
+    .number {
+      font-feature-settings: "tnum";
+      font-size: 18px;
+      color: var(--fg);
+      letter-spacing: 0.02em;
+    }
+    .number .label { color: var(--muted); font-size: 13px; display: block; margin-bottom: 4px; }
+    .qr {
+      background: #fff;
+      padding: 12px;
+      border-radius: 16px;
+      width: 200px;
+      height: 200px;
+      display: grid;
+      place-items: center;
+    }
+    .qr img { width: 100%; height: 100%; display: block; }
+    .qr-note { color: var(--muted); font-size: 13px; text-align: center; }
+    .faq { margin-top: 36px; }
+    .faq h2 { font-size: 20px; margin: 0 0 12px; }
+    details {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+    }
+    details[open] { background: rgba(255,255,255,0.06); }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: "+";
+      float: right;
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+    details[open] summary::after { content: "−"; }
+    details p { color: var(--muted); margin: 10px 0 4px; }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 40px;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="flag" aria-hidden="true">🇳🇦</div>
+      <h1>Ongiini</h1>
+      <p class="tagline">AI for everyone in Namibia — on WhatsApp.</p>
+    </header>
+
+    <section class="mission">
+      Ongiini is a free AI assistant that lives on WhatsApp. Ask anything in English
+      or Afrikaans — from the weather in Windhoek to help with a tricky question.
+      Built for Namibia, running in Namibia.
+    </section>
+
+    <section class="cta">
+      <a id="wa-link" class="btn" href="#" target="_blank" rel="noopener">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19.05 4.91A10 10 0 0 0 4.6 18.06L3 22l4.04-1.58A10 10 0 1 0 19.05 4.91Zm-7.06 15.27a8.27 8.27 0 0 1-4.21-1.15l-.3-.18-2.4.94.94-2.34-.2-.31a8.27 8.27 0 1 1 6.17 3.04Zm4.55-6.18c-.25-.13-1.47-.72-1.7-.8-.23-.09-.4-.13-.56.13-.16.25-.64.8-.78.96-.14.16-.28.18-.53.06-.25-.13-1.06-.39-2.02-1.25a7.56 7.56 0 0 1-1.4-1.74c-.15-.25 0-.38.11-.51.11-.11.25-.28.37-.42.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.16 0-.42.06-.65.31-.22.25-.85.83-.85 2.02 0 1.2.88 2.35 1 2.51.12.16 1.72 2.63 4.18 3.69.59.25 1.04.4 1.4.51.59.19 1.13.16 1.55.1.47-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.16-.48-.29Z"/>
+        </svg>
+        Chat on WhatsApp
+      </a>
+
+      <div class="number">
+        <span class="label">Or save this number</span>
+        <span id="wa-number-text">+— — —</span>
+      </div>
+
+      <div class="qr" id="qr-wrap">
+        <img id="qr-img" alt="QR code that opens Ongiini in WhatsApp" />
+      </div>
+      <div class="qr-note">Scan to open WhatsApp chat</div>
+    </section>
+
+    <section class="faq">
+      <h2>FAQ</h2>
+
+      <details>
+        <summary>What is Ongiini?</summary>
+        <p>
+          A free AI assistant you can chat with on WhatsApp. The name "Ongiini" means
+          "How are you?" in Oshiwambo. It's built for people in Namibia.
+        </p>
+      </details>
+
+      <details>
+        <summary>Is it free?</summary>
+        <p>
+          Yes. Ongiini itself is free to use. Standard WhatsApp data charges from your
+          mobile provider may apply.
+        </p>
+      </details>
+
+      <details>
+        <summary>Which languages does it speak?</summary>
+        <p>
+          English and Afrikaans for now. Oshiwambo and other Namibian languages are
+          on the roadmap as language support improves.
+        </p>
+      </details>
+
+      <details>
+        <summary>What can I ask?</summary>
+        <p>
+          Anything — weather, news, current prices, exchange rates, general questions,
+          help drafting a message, ideas, advice. Ongiini can search the web when it
+          needs up-to-date information.
+        </p>
+      </details>
+
+      <details>
+        <summary>Who can use it?</summary>
+        <p>
+          Anyone with a Namibian (+264) WhatsApp number. We're starting small and may
+          expand to other countries later.
+        </p>
+      </details>
+    </section>
+
+    <footer>
+      <p>Ongiini · Made for Namibia 🇳🇦</p>
+    </footer>
+  </main>
+
+  <script>
+    // The public WhatsApp number is injected at deploy time by replacing __WA_NUMBER__
+    // in this file. Falls back to a placeholder if not set.
+    const RAW = "__WA_NUMBER__";
+    const placeholder = !RAW || RAW.includes("__");
+    const number = placeholder ? "" : RAW.replace(/\D/g, "");
+    const display = number ? "+" + number : "Coming soon";
+
+    document.getElementById("wa-number-text").textContent = display;
+
+    const link = document.getElementById("wa-link");
+    if (number) {
+      link.href = "https://wa.me/" + number;
+    } else {
+      link.removeAttribute("href");
+      link.style.opacity = "0.6";
+      link.style.pointerEvents = "none";
+    }
+
+    const qrImg = document.getElementById("qr-img");
+    if (number) {
+      const target = encodeURIComponent("https://wa.me/" + number);
+      qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + target;
+    } else {
+      document.getElementById("qr-wrap").classList.add("hidden");
+    }
+  </script>
+</body>
+</html>
