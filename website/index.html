@@ -365,6 +365,43 @@
       max-width: 56ch;
     }
 
+    /* Contribute */
+    .og-contribute-lead {
+      margin-top: 4px;
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(20px, 2.6vw, 26px); line-height: 1.35;
+      color: var(--ink); text-wrap: pretty;
+      max-width: 56ch;
+    }
+    .og-contribute-lead em {
+      font-style: normal; color: var(--terracotta-deep);
+    }
+    .og-contribute-actions {
+      margin-top: 32px;
+      display: flex; flex-direction: column; gap: 12px;
+      max-width: 360px;
+    }
+    .og-cta--ghost {
+      background: var(--bone);
+      color: var(--ink);
+      border: 1px solid var(--rule);
+      box-shadow: none;
+    }
+    .og-cta--ghost:hover {
+      background: var(--bone-deep);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 6px 18px -10px rgba(0,0,0,0.18);
+    }
+    .og-cta--ghost .og-cta-arrow { color: var(--terracotta); }
+    .og-cta--ghost .og-cta-ic {
+      background: var(--sand-deep); color: var(--ink);
+    }
+    @media (min-width: 880px) {
+      .og-contribute-actions {
+        max-width: none;
+        flex-direction: row; align-items: center;
+      }
+    }
+
     /* FAQ */
     .og-faq { margin-top: 22px; max-width: 760px; }
     .og-faq-item { border-top: 1px solid var(--rule-faint); }
@@ -581,6 +618,7 @@
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
           <a href="#open"><span data-en="i">Open &amp; transparent</span><span data-af="i">Oop &amp; deursigtig</span></a>
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
+          <a href="#contribute"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
           <a href="#faq"><span data-en="i">Questions</span><span data-af="i">Vrae</span></a>
         </nav>
         <div class="og-lang" role="group" aria-label="Language">
@@ -802,6 +840,64 @@
       </div>
     </section>
 
+    <section class="og-section og-section--sand" id="contribute">
+      <div class="og-wrap og-section-inner">
+        <div class="og-eyebrow">
+          <span data-en>Contribute</span>
+          <span data-af>Bydra</span>
+        </div>
+        <h2 class="og-h2" data-en>Help shape this.</h2>
+        <h2 class="og-h2" data-af>Help dit vorm.</h2>
+
+        <p class="og-contribute-lead" data-en>I'm paying for the hardware, the electricity, the tokens — myself. That's part of the point: to show this can be done by <em>one person on one computer</em>, without a billion-dollar cloud. If Ongiini is useful to you, there are three good ways to help.</p>
+        <p class="og-contribute-lead" data-af>Ek betaal self vir die hardeware, die elektrisiteit, die tekens. Dit is deel van die punt: om te wys dit kan gedoen word deur <em>een persoon op een rekenaar</em>, sonder 'n miljard-dollar wolk. As Ongiini vir jou nuttig is, is daar drie goeie maniere om te help.</p>
+
+        <div class="og-grid">
+          <div class="og-card">
+            <div class="og-card-num">01</div>
+            <div class="og-card-head" data-en>Use it. Push it. Tell us what broke.</div>
+            <div class="og-card-head" data-af>Gebruik dit. Druk dit. Sê ons wat gebreek het.</div>
+            <p class="og-card-body" data-en>Throw real questions at it. Find where it shines and where it falls over. Honest, specific feedback from people actually trying to use it is the best signal we get.</p>
+            <p class="og-card-body" data-af>Vra dit regte vrae. Vind waar dit skitter en waar dit val. Eerlike, spesifieke terugvoer van mense wat dit regtig probeer gebruik, is die beste sein wat ons kry.</p>
+          </div>
+          <div class="og-card">
+            <div class="og-card-num">02</div>
+            <div class="og-card-head" data-en>Tell someone</div>
+            <div class="og-card-head" data-af>Vertel iemand</div>
+            <p class="og-card-body" data-en>Most Namibians still don't know there's a free AI assistant on WhatsApp. Sharing the number with one person who could use it is the biggest help anyone can give.</p>
+            <p class="og-card-body" data-af>Die meeste Namibiërs weet nog nie daar's 'n gratis KI-assistent op WhatsApp nie. Om die nommer met een persoon te deel wat dit kan gebruik, is die grootste hulp.</p>
+          </div>
+          <div class="og-card">
+            <div class="og-card-num">03</div>
+            <div class="og-card-head" data-en>Open the code</div>
+            <div class="og-card-head" data-af>Maak die kode oop</div>
+            <p class="og-card-body" data-en>The whole stack is on GitHub — webhook, prompts, deployment, everything. File an issue when something's wrong, send a pull request when you can fix it, or fork the project and run your own version for another country.</p>
+            <p class="og-card-body" data-af>Die hele stapel is op GitHub — webhook, opdragte, ontplooiing, alles. Open 'n kwessie as iets verkeerd is, stuur 'n pull request as jy dit kan regmaak, of vurk die projek en hardloop jou eie weergawe vir 'n ander land.</p>
+          </div>
+        </div>
+
+        <div class="og-contribute-actions">
+          <a class="og-cta" href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">
+            <span class="og-cta-l">
+              <span class="og-cta-ic">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.69-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.45.11-3.02 0 0 .97-.31 3.18 1.18A11 11 0 0 1 12 6.8c.98.01 1.97.13 2.89.39 2.2-1.49 3.17-1.18 3.17-1.18.62 1.57.23 2.73.11 3.02.74.8 1.18 1.83 1.18 3.08 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.05.78 2.12v3.14c0 .31.21.66.79.55C20.71 21.38 24 17.08 24 12 24 5.65 18.85.5 12 .5z"/>
+                </svg>
+              </span>
+              <span data-en="i">Open Ongiini on GitHub</span><span data-af="i">Maak Ongiini op GitHub oop</span>
+            </span>
+            <span class="og-cta-arrow">→</span>
+          </a>
+          <a class="og-cta og-cta--ghost" href="https://github.com/sebkuepers/Ongiini/issues/new" target="_blank" rel="noopener noreferrer">
+            <span class="og-cta-l">
+              <span data-en="i">File an issue</span><span data-af="i">Open 'n kwessie</span>
+            </span>
+            <span class="og-cta-arrow">→</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
     <section class="og-close">
       <div class="og-wrap og-close-inner">
         <div class="og-close-mark">Ongiini<span class="og-mark-dot">.</span></div>
@@ -857,6 +953,7 @@
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
           <a href="#free"><span data-en="i">Free, with limits</span><span data-af="i">Gratis, met limiet</span></a>
           <a href="#faq"><span data-en="i">Questions</span><span data-af="i">Vrae</span></a>
+          <a href="#contribute"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
         </nav>
 
         <div class="og-footer-legal">
