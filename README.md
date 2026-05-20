@@ -3,71 +3,109 @@
 > "Ongiini" — "How are you?" in Oshiwambo.
 
 A free WhatsApp AI assistant for Namibia. English & Afrikaans, powered by
-Gemma 4 on a local NVIDIA DGX Spark, served via Tailscale Funnel.
+**Gemma 4 26B A4B** (NVFP4) on a local NVIDIA DGX Spark, exposed via
+Tailscale Funnel.
 
 ## Architecture (Phase 1)
 
 ```
-WhatsApp Cloud API ──▶ Tailscale Funnel ──▶ nginx ──▶ FastAPI webhook
-                                                 │
-                                                 ├─▶ vLLM (host:8000)  ← Gemma 4
-                                                 ├─▶ Tavily (web search)
-                                                 └─▶ /data (memory + log)
+WhatsApp Cloud API ──┐
+                     │ /webhooks/whatsapp
+                     ▼
+        Tailscale Funnel  ──▶  127.0.0.1:8445  ──▶  FastAPI webhook (Docker)
+                                                      │
+                                                      ├─▶ vLLM Gemma 4 (host:8124)
+                                                      ├─▶ Tavily (web search)
+                                                      └─▶ /data (memory + log)
 
-                                                 ↘  nginx ──▶ static website
+Browser  ──▶  Tailscale Serve  ──▶  127.0.0.1:18789  ──▶  static website (Docker)
 ```
+
+Two containers, no in-repo nginx — Tailscale serve/funnel provides the public
+HTTPS surface and path routing.
 
 - `webhook/` — FastAPI service. Receives WhatsApp messages, filters by country
   code / whitelist, calls vLLM with tool-calling for `web_search`, replies,
   persists last 10 messages per user as JSON.
 - `website/` — single-page static site with a "Chat on WhatsApp" button & QR.
-- `nginx/` — reverse proxy that maps `/webhook` → FastAPI and `/` → website.
 - `data/` — JSON memory files + `usage.log` (mounted as a volume).
 
-vLLM runs **directly on the host**, not in Docker.
+## DGX Spark host setup
 
-## Setup
+The vLLM container runs **on the host**, not under compose, so it can use the
+full unified GB10 memory pool.
 
-1. **Copy env:**
-   ```sh
-   cp .env.example .env
-   ```
-   Fill in:
-   - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN`
-   - `TAVILY_API_KEY`
-   - `VLLM_MODEL` if different from the default
-   - `PUBLIC_WHATSAPP_NUMBER` (international format, no `+`) — used by the website
+```sh
+# 1. Download the model (~16.5 GB)
+hf download bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4 \
+  --local-dir ~/models/gemma-4-26b-a4b-nvfp4
 
-2. **Run vLLM on the host** (example):
-   ```sh
-   vllm serve google/gemma-3-27b-it --host 0.0.0.0 --port 8000 \
-     --enable-auto-tool-choice --tool-call-parser hermes
-   ```
+# 2. Run vLLM
+docker run -d \
+  --name gemma4-vllm \
+  --restart unless-stopped \
+  --gpus all --ipc host --shm-size 64gb \
+  -p 8124:8000 \
+  -v ~/models/gemma-4-26b-a4b-nvfp4:/models/gemma4 \
+  -v ~/models/gemma-4-26b-a4b-nvfp4/gemma4_patched.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/gemma4.py \
+  vllm/vllm-openai:gemma4-0505-arm64-cu130 \
+  --model /models/gemma4 \
+  --served-model-name gemma-4-26b \
+  --host 0.0.0.0 --port 8000 \
+  --quantization modelopt \
+  --kv-cache-dtype fp8 \
+  --max-model-len 131072 \
+  --gpu-memory-utilization 0.85 \
+  --moe-backend marlin \
+  --reasoning-parser gemma4 \
+  --enable-auto-tool-choice --tool-call-parser pythonic
+```
 
-3. **Bake the WhatsApp number into the static site** (one-time per number change):
-   ```sh
-   sed -i.bak "s/__WA_NUMBER__/$PUBLIC_WHATSAPP_NUMBER/" website/index.html
-   ```
+Quick check:
+```sh
+curl -s http://127.0.0.1:8124/v1/models | jq
+```
 
-4. **Bring up the stack:**
-   ```sh
-   docker compose up -d
-   ```
+## Ongiini stack setup
 
-5. **Expose via Tailscale Funnel** (on the host):
-   ```sh
-   tailscale funnel 8088
-   ```
+```sh
+cd ~/dev/Ongiini
+cp .env.example .env
+# Edit .env with WhatsApp + Tavily creds + PUBLIC_WHATSAPP_NUMBER
 
-6. **Point the Meta webhook** at `https://<your-tailnet>/webhook` using the
-   `WHATSAPP_VERIFY_TOKEN` you set.
+# Bake the public number into the static site (one-off per number change)
+sed -i.bak "s/__WA_NUMBER__/$(grep '^PUBLIC_WHATSAPP_NUMBER=' .env | cut -d= -f2)/" website/index.html
+
+docker compose up -d --build
+```
+
+## Tailscale exposure
+
+The Spark already has these routes provisioned via `tailscale serve`:
+
+```
+https://spark-dccf.tailac3921.ts.net/             → 127.0.0.1:18789  (website)
+https://spark-dccf.tailac3921.ts.net/webhooks/    → 127.0.0.1:8445   (webhook)
+```
+
+For Meta's WhatsApp Cloud API to reach the webhook over the public internet,
+enable Funnel on the webhook path:
+
+```sh
+tailscale funnel --bg --set-path=/webhooks/ http://127.0.0.1:8445
+```
+
+Then in Meta's WhatsApp Business app dashboard:
+
+- Callback URL: `https://spark-dccf.tailac3921.ts.net/webhooks/whatsapp`
+- Verify token: same as `WHATSAPP_VERIFY_TOKEN` in `.env`
 
 ## Endpoints
 
-- `GET  /webhook` — Meta verification handshake.
-- `POST /webhook` — incoming WhatsApp messages.
+- `GET  /webhooks/whatsapp` — Meta verification handshake.
+- `POST /webhooks/whatsapp` — incoming WhatsApp messages.
 - `GET  /health` — liveness check.
-- `GET  /` — static website.
+- `GET  /` (website container) — static landing page.
 
 ## Filter behaviour
 
@@ -78,7 +116,6 @@ vLLM runs **directly on the host**, not in Docker.
 ## Memory
 
 - Per-user JSON at `/data/{msisdn}.json`. Last 10 user+assistant turns kept.
-- No cleanup job; files grow only if a user is active. Trivial to reset.
 
 ## Usage log
 
