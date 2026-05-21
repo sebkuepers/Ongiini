@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f5efe4" />
+  <meta name="robots" content="noindex" />
+  <title>Privacy Policy — Ongiini</title>
+  <link rel="canonical" href="https://ongiini.ai/privacy/" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/ongiini-icon-192-v2.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:     oklch(0.60  0.14  45);
+      --terracotta-deep:oklch(0.48  0.13  40);
+      --rule:           oklch(0.85  0.018 70);
+      --rule-faint:     oklch(0.90  0.014 70);
+      --gutter: 22px;
+      --maxw-prose: 720px;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4;
+        --bone-deep: #ede5d6;
+        --sand: #e8dfcd;
+        --ink: #2a2522;
+        --ink-soft: #6a625d;
+        --ink-faint: #968d87;
+        --terracotta: #c46c3f;
+        --terracotta-deep: #9a4f2d;
+        --rule: #d1c8b9;
+        --rule-faint: #ddd5c6;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { color: var(--terracotta); }
+
+    .pol-bar {
+      background: color-mix(in oklab, var(--bone) 86%, transparent);
+      backdrop-filter: saturate(140%) blur(10px);
+      -webkit-backdrop-filter: saturate(140%) blur(10px);
+      border-bottom: 1px solid var(--rule-faint);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .pol-bar-inner {
+      max-width: 880px; margin: 0 auto;
+      padding: 0 var(--gutter);
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .pol-wordmark {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .pol-wordmark img { width: 28px; height: 28px; display: block; }
+    .pol-wordmark-text {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .pol-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
+    .pol-back {
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-size: 13px; font-weight: 500;
+      color: var(--terracotta-deep);
+      text-decoration: none;
+    }
+    .pol-back:hover { color: var(--terracotta); }
+
+    main { max-width: var(--maxw-prose); margin: 0 auto; padding: 56px var(--gutter) 96px; }
+    h1 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(36px, 6vw, 52px);
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin: 0 0 10px;
+      color: var(--ink);
+    }
+    .pol-lede {
+      margin: 0 0 40px;
+      color: var(--ink-soft);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    h2 {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-weight: 500;
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin: 44px 0 14px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    h3 {
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-weight: 500;
+      font-size: 16px;
+      letter-spacing: -0.005em;
+      margin: 22px 0 8px;
+      color: var(--ink);
+    }
+    p, ul, ol { margin: 0 0 1.1em; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 0.4em; }
+    .pol-tldr {
+      background: var(--sand);
+      border-radius: 12px;
+      padding: 20px 22px;
+      margin: 0 0 40px;
+    }
+    .pol-tldr p { margin: 0 0 0.6em; font-size: 15px; }
+    .pol-tldr p:last-child { margin-bottom: 0; }
+    .pol-tldr strong { color: var(--ink); font-weight: 600; }
+    .pol-foot {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--rule-faint);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+    }
+    @media (min-width: 880px) {
+      :root { --gutter: 48px; }
+      .pol-bar-inner { height: 72px; }
+      main { padding: 96px var(--gutter) 128px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="pol-bar">
+    <div class="pol-bar-inner">
+      <a class="pol-wordmark" href="/" aria-label="Ongiini">
+        <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
+        <span class="pol-wordmark-text">Ongiini<span class="dot">.</span></span>
+      </a>
+      <a class="pol-back" href="/">← Back</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="pol-lede">How Ongiini handles your data — last updated 21 May 2026</p>
+
+    <div class="pol-tldr">
+      <p><strong>The short version.</strong> Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).</p>
+      <p>You can see what we remember about you by sending <em>"what do you remember about me?"</em> on WhatsApp. You can delete it by sending <em>"delete my data"</em>. Both work in English and Afrikaans, any time.</p>
+      <p>Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a <strong>limited-risk AI system</strong> — a chatbot subject only to transparency obligations, not the stricter high-risk requirements. See Section 9 below.</p>
+    </div>
+
+    <h2>1. Who is responsible</h2>
+    <p>The controller of your personal data within the meaning of Article 4 (7) GDPR is:</p>
+    <p>Sebastian Küpers · Hibiskusweg 17b · 13089 Berlin · Germany · <a href="mailto:sebastian.kuepers@gmail.com">sebastian.kuepers@gmail.com</a> · <a href="tel:+491702372987">+49 170 2372987</a></p>
+    <p>Ongiini is the first project of the <a href="https://common-intelligence.org" target="_blank" rel="noopener noreferrer">Common Intelligence Foundation</a>, currently being formally established as a non-profit foundation in Estonia. Until that registration is complete, the service is privately funded and operated on a non-profit basis. After registration, the foundation will become the controller; you will be informed of that change in this policy.</p>
+    <p>The service is provided without charge and is not operated for profit.</p>
+    <p>Our processing does not meet the thresholds in Art. 37 GDPR for the mandatory appointment of a Data Protection Officer. You can reach us with any privacy enquiry using the contact details above.</p>
+
+    <h2>2. What we process, why, and on what legal basis</h2>
+
+    <h3>Your phone number and message content</h3>
+    <p>When you message the Ongiini WhatsApp number, we receive your phone number (as your WhatsApp identifier) and the content of each message you send — text, images, and voice notes. Voice notes are downloaded from Meta and transcribed to text on our own computer using an open-source speech-to-text model (Whisper). The original audio bytes are not retained after transcription; only the text transcript is processed and stored, the same way as any other text message.</p>
+    <p><strong>Purpose:</strong> to read your question and provide an answer — i.e. to deliver the service you requested by initiating the conversation.</p>
+    <p><strong>Legal basis:</strong> Art. 6 (1) (b) GDPR — performance of pre-contractual measures requested by you. By sending a message, you ask the service to respond.</p>
+
+    <h3>Short-term conversation memory</h3>
+    <p>We keep approximately the last 50 turns of your conversation (each turn = one message from you plus one reply) in a local file on the computer that runs Ongiini, identified by your phone number. Once the stored history grows beyond about 70 entries, the oldest entries are condensed into a single short summary line ("Earlier in this conversation: …") and the most recent ~40 turns are kept verbatim. Before any message is written to disk, we automatically scrub obvious personal data patterns from the text (email addresses, IBANs, credit-card numbers and Namibian-format ID numbers are replaced with placeholders such as <code>[REDACTED:email]</code>).</p>
+    <p><strong>Purpose:</strong> to allow the assistant to follow a conversation across messages (so you don't have to repeat context).</p>
+    <p><strong>Legal basis:</strong> Art. 6 (1) (b) GDPR — necessary to provide the conversation service you requested.</p>
+
+    <h3>Long-term memory ("mem0")</h3>
+    <p>Across all your chats, the assistant extracts a small number of typed facts about you and stores them as short text fragments. Categories are: <code>[PROFILE]</code> (location, role, family), <code>[PREFERENCE]</code> (language, style), <code>[SITUATION]</code> (ongoing topics), <code>[COMMITMENT]</code> (follow-ups, reminders), <code>[QUOTE]</code> (verbatim phrasing the assistant might re-use), and <code>[EMOTION]</code> (recent state). These facts are stored as numerical embeddings in a local vector database (qdrant), identified by your phone number, and are retrieved by semantic similarity each time you write so the assistant can recall relevant context. mem0 also maintains a separate local SQLite database that records when each fact was added, updated or deleted — this contains the fact text and metadata, but no full message content beyond the extracted fact itself.</p>
+    <p><strong>Purpose:</strong> to make the assistant useful over time — to remember that you farm maize, that you prefer Afrikaans replies, that you previously asked about a school topic, etc.</p>
+    <p><strong>Legal basis:</strong> Art. 6 (1) (b) GDPR — provision of the personalised service you requested. You can delete all of this at any time (see Section 6).</p>
+
+    <h3>Usage log</h3>
+    <p>We keep one line per message in a usage log: your phone number (used as identifier), a timestamp, the message kind (text / image / audio), the number of input/output tokens used, and a flag indicating whether the assistant used web search for that turn. The log does not contain the content of any message.</p>
+    <p>Separately, a structural trace file records, per message: number of model calls, token counts per call, latency, finish reason, and tool-call names + payload lengths. It deliberately does not record message content, tool arguments verbatim, or tool results — only structural signals.</p>
+    <p>A short-term in-memory rate-limiter tracks message timestamps per phone number to detect bursts of activity. This state lives only in process memory and is lost whenever the service restarts; it is not written to disk.</p>
+    <p><strong>Purpose:</strong> to monitor fair use of the free monthly token allowance, to detect abuse, and to keep the service operationally sustainable.</p>
+    <p><strong>Legal basis:</strong> Art. 6 (1) (f) GDPR — legitimate interest in service sustainability and abuse prevention. The interest is proportionate because none of these records contain message content.</p>
+
+    <h3>Website access logs (ongiini.ai)</h3>
+    <p>The website is served via Cloudflare. For security and operational purposes, Cloudflare logs each request: source IP address, user-agent string, requested URL, timestamp, and HTTP status. Cloudflare also processes basic security signals (rate-limiting, bot detection).</p>
+    <p>The website does not set advertising cookies, does not load any analytics scripts, and uses your browser's <code>localStorage</code> only to remember your language preference (English / Afrikaans). This is technically necessary and does not require consent.</p>
+    <p><strong>Legal basis:</strong> Art. 6 (1) (f) GDPR — legitimate interest in security and operability.</p>
+
+    <h2>3. Who else sees your data (processors and third parties)</h2>
+    <ul>
+      <li><strong>Meta Platforms Inc. (WhatsApp)</strong> — to deliver messages between you and us via the WhatsApp Business API, Meta receives, processes and routes them. Meta retains messages in line with its own policies. We have a data-processing relationship with Meta but cannot control Meta's own processing of your data — that is governed by Meta's terms and privacy policy.</li>
+      <li><strong>Tavily (Tavily Inc., a US-based provider)</strong> — used only when the assistant decides to perform a web search for your question. In that case, the assistant's search query (which may reference what you wrote) is sent to Tavily's API, and Tavily returns search results. Per Tavily's published <a href="https://www.tavily.com/privacy" target="_blank" rel="noopener noreferrer">privacy policy</a>, Tavily <em>may</em> use search queries to improve its own service. If you do not want your search queries to be used in this way, you can object directly to Tavily at <a href="mailto:support@tavily.com">support@tavily.com</a>. The exact processing location is governed by Tavily's own privacy practices.</li>
+      <li><strong>Cloudflare Inc.</strong> — hosts the website (ongiini.ai). Cloudflare does not have access to your WhatsApp conversation or any data on our local infrastructure.</li>
+    </ul>
+    <p>The AI model used (Google DeepMind's Gemma 4 26B) is an open-weight model that runs <em>locally</em> on hardware we operate. Google does not receive any of your data through the use of this model.</p>
+    <p>Voice-note transcription is also performed locally by an open-source speech-to-text model (Whisper / faster-whisper). No third party receives the audio.</p>
+    <p><strong>We do not sell, rent or share your data with anyone else. We do not use it for advertising. We do not use it to train any AI model.</strong> We do, however, run aggregate analyses across stored data for transparency reporting and research — only aggregate, statistical results are produced and published; individual conversations are never published. See the "Research, analytics &amp; transparency reporting" section below for details. One nuance: when web search is invoked, Tavily — as a separate company governed by its own terms — may use the search queries it receives from us to improve its own service (see the Tavily entry above). Ongiini itself trains no model on user data.</p>
+
+    <p><strong>Data Processing Agreements.</strong> Our two primary processors operate under formal data-processing terms required by Art. 28(3) GDPR:</p>
+    <ul>
+      <li>Meta's WhatsApp Business API is governed by Meta's <a href="https://www.whatsapp.com/legal/business-data-processing-terms" target="_blank" rel="noopener noreferrer">Business Data Processing Terms</a> and <a href="https://www.whatsapp.com/legal/business-data-transfer-addendum" target="_blank" rel="noopener noreferrer">Business Data Transfer Addendum</a>, incorporated by reference into the WhatsApp Business API terms we accepted.</li>
+      <li>Cloudflare's <a href="https://www.cloudflare.com/cloudflare-customer-dpa/" target="_blank" rel="noopener noreferrer">Customer Data Processing Addendum</a> is publicly published and automatically incorporated into our service terms.</li>
+    </ul>
+    <p>Tavily does not currently publish a standalone Art. 28 GDPR Data Processing Agreement; its relationship with users is governed by its own published <a href="https://www.tavily.com/privacy" target="_blank" rel="noopener noreferrer">privacy policy</a> and <a href="https://www.tavily.com/terms" target="_blank" rel="noopener noreferrer">terms of service</a>, including the SCC references for non-EU transfers cited there.</p>
+
+    <h2>4. International data transfers</h2>
+    <p>Meta and Tavily are based in the United States and process data there. Cloudflare also operates globally including in the United States. Transfers to the United States are based on the <strong>EU–US Data Privacy Framework</strong> (adequacy decision of the European Commission of 10 July 2023) where the recipient is certified under it, otherwise on the European Commission's <strong>Standard Contractual Clauses (SCC)</strong> with supplementary technical and organisational measures.</p>
+    <p>For transfers under the SCCs, the supplementary measures we rely on include: (a) <strong>encryption in transit</strong> (TLS) for all API calls to processors; (b) <strong>data minimisation</strong> — US-based processors only receive the data strictly necessary for their service (Meta receives WhatsApp message routing per its API; Tavily receives only the model's search query at the moment a search is performed; neither receives access to our local memory, mem0 store, or usage logs); (c) <strong>no persistent storage of our memory data on the processor side</strong> — short-term JSON memory, the mem0 vector store, the usage log and the trace log all live on our own computer.</p>
+    <p>The Ongiini computer itself, where short-term and long-term memory are stored, is currently physically located in Germany (EU). Once the service moves to Namibia, processing will take place in Namibia.</p>
+
+    <h2>5. How long we keep your data</h2>
+    <ul>
+      <li><strong>Short-term conversation memory:</strong> approximately the last 14 turns, summarised thereafter. There is no hard time limit; older turns roll out as new ones come in.</li>
+      <li><strong>Long-term memory ("mem0"):</strong> the extracted facts (vector embeddings in qdrant) and their mutation history (local SQLite log) are stored indefinitely <em>until you ask us to delete them</em>, or until the conversation has been inactive for an unusually long time and we decide to prune the data set during routine maintenance. The "delete my data" command wipes both.</li>
+      <li><strong>Usage log:</strong> stored indefinitely, but contains no message content.</li>
+      <li><strong>Trace file:</strong> stored indefinitely. Structural signals only — no message content, no tool arguments, no tool results.</li>
+      <li><strong>Cloudflare access logs for the website:</strong> retained by Cloudflare per its default retention (typically around 7–30 days).</li>
+    </ul>
+    <p>You can delete your conversation memory at any time by sending <em>"delete my data"</em> on WhatsApp (see Section 6).</p>
+
+    <h2>6. Your rights</h2>
+    <p>Under the GDPR, you have the right to:</p>
+    <ul>
+      <li><strong>Access</strong> (Art. 15) — find out what we have stored. Send <em>"what do you remember about me?"</em> on WhatsApp at any time. For the full dataset including timestamps and the usage log, email us at the address in Section 1.</li>
+      <li><strong>Rectification</strong> (Art. 16) — correct anything inaccurate. The simplest way is to tell the assistant the correct fact and the memory will be updated. Alternatively, email us.</li>
+      <li><strong>Erasure</strong> (Art. 17) — delete your data. Send <em>"delete my data"</em> on WhatsApp. Your conversation memory (short-term and long-term) is wiped immediately. The usage log line referring to that message is retained as anonymous statistics (no content, no identifier link).</li>
+      <li><strong>Restriction of processing</strong> (Art. 18) — limit how we use your data. Email us.</li>
+      <li><strong>Objection</strong> (Art. 21) — object to processing based on legitimate interest. Email us; you can also simply stop using the service.</li>
+      <li><strong>Data portability</strong> (Art. 20) — receive an export of your data in a machine-readable format. Email us; we'll send you a JSON export of your mem0 facts and short-term memory.</li>
+      <li><strong>Lodge a complaint</strong> with a supervisory authority. Since we are based in Berlin, the relevant authority is the <a href="https://www.datenschutz-berlin.de/" target="_blank" rel="noopener noreferrer">Berliner Beauftragte für Datenschutz und Informationsfreiheit</a>. You may also complain to the supervisory authority in the country where you live.</li>
+    </ul>
+
+    <h2>7. Research, analytics &amp; transparency reporting</h2>
+    <p>Part of the Common Intelligence Foundation's mission is to understand how AI access changes the lives of underserved communities — and to share what we learn openly. To do that, we run aggregate analyses across the data we already store for service operation.</p>
+
+    <p><strong>The questions we ask the data.</strong> Examples:</p>
+    <ul>
+      <li>How many people use Ongiini per day, week, month — and how is the user base growing?</li>
+      <li>What share of conversations relate to health, education, agriculture, contracts, daily life, or other topics?</li>
+      <li>What roles or professions appear in our user base (farmers, students, teachers, parents, etc.), as inferred from conversation context?</li>
+      <li>Which languages are people using, and how is that distribution shifting?</li>
+      <li>How often does the same user return, and how does engagement change over time?</li>
+      <li>When do people use the service — time of day, day of week?</li>
+    </ul>
+
+    <p><strong>Lawful basis.</strong> Art. 6 (1) (f) GDPR — legitimate interest of the foundation in understanding the impact of the service it operates, in reporting transparently on its work, and in contributing to the wider field of research on AI access in underserved communities. Where results are published as scientific research, Art. 89 GDPR and § 27 BDSG (Forschungsprivileg) also apply, with the safeguards described below. You may object to this processing at any time under Art. 21 GDPR — see "Your right to object" at the end of this section.</p>
+
+    <p><strong>What we publish.</strong> Only aggregate statistical results — counts, percentages, charts, trends — that do not identify any individual. Such results may appear on the website (e.g. on a public <code>/statistics</code> page), in foundation reports, or in academic papers.</p>
+
+    <p><strong>What we never publish.</strong></p>
+    <ul>
+      <li>Individual conversation content, in full or in excerpt, where any reasonable risk of identifying a specific person exists.</li>
+      <li>Phone numbers, narrow locations, names, or any other direct identifier.</li>
+      <li>Quotes or examples that have not been independently reviewed and stripped of identifying detail.</li>
+    </ul>
+
+    <p><strong>Safeguards.</strong> The data analysed is the same data we already store for the service: short-term memory, mem0 facts, and the structural usage log (see Section 2). PII patterns are scrubbed before storage. Analysis is performed on our own infrastructure, by team members operating under a confidentiality obligation. Where a human-readable example is being considered for publication, it goes through a separate de-identification review before it can leave the foundation.</p>
+
+    <p><strong>Your right to object.</strong> Because this processing relies on legitimate interest, you may object at any time under Art. 21 GDPR. Email us at the address in Section 1 with the subject line <em>"object to research processing"</em> and your phone number. We will mark your data as excluded from current and future aggregate analyses and publications. The service itself continues to work normally.</p>
+
+    <h2>8. Automated processing and AI</h2>
+    <p>Ongiini's replies are generated entirely automatically by an AI model — there is no human in the loop. The service does not make decisions that produce legal effects or similarly significantly affect you within the meaning of Article 22 GDPR; it provides information in response to your questions, and you decide what to do with that information.</p>
+    <p>AI-generated answers may be inaccurate, incomplete, or wrong. Do not rely on Ongiini's answers for medical, legal, financial, or other significant decisions. See the <a href="/terms/">Terms of Service</a> for the full disclaimer.</p>
+
+    <h2>9. EU AI Act classification</h2>
+    <p>Under Regulation (EU) 2024/1689 (the AI Act), Ongiini is a chatbot — a <strong>limited-risk AI system</strong> subject to the transparency obligations of Article 50. It is not a high-risk AI system under Annex III, and it does not engage in any of the prohibited practices listed in Article 5.</p>
+    <p>We meet the Article 50 transparency obligations by clearly identifying every interaction as AI-mediated: in the WhatsApp Business profile, in the assistant's first reply to every new user, in the disclosures on this website, and in this policy. The disclosures are provided in plain language at the point of first interaction (Article 50(5)).</p>
+    <p>The underlying model (Google DeepMind's Gemma 4 26B) is a general-purpose AI model. Under Article 25 of the AI Act, we accept the provider responsibilities for the integrated Ongiini chatbot system that we build on top of it.</p>
+
+    <h2>10. Children</h2>
+    <p>Ongiini is intended for general users in Namibia and is not specifically directed at children. We do not knowingly process personal data of children under 16. If you believe a child has used the service, please contact us and we will remove the relevant data.</p>
+
+    <h2>11. Security</h2>
+    <p>Conversation data is stored on a single computer operated by us, in Germany, behind a firewall and accessible only via authenticated administrative access. We apply state-of-the-art technical and organisational measures (Art. 32 GDPR), but no system is perfectly secure. If we become aware of a personal-data breach affecting your rights, we will notify the supervisory authority within 72 hours (Art. 33 GDPR) and, where required, inform you directly (Art. 34 GDPR).</p>
+
+    <h2>12. Changes to this policy</h2>
+    <p>If we change this policy materially, we will update the date at the top and, for substantial changes (e.g. new categories of processing, new processors, change of controller upon foundation registration), notify users via the WhatsApp service or on the website.</p>
+
+    <div class="pol-foot">
+      Last updated: 21 May 2026. Effective immediately.
+    </div>
+  </main>
+</body>
+</html>

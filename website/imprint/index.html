@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f5efe4" />
+  <meta name="robots" content="noindex" />
+  <title>Imprint — Ongiini</title>
+  <link rel="canonical" href="https://ongiini.ai/imprint/" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/ongiini-icon-192-v2.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:     oklch(0.60  0.14  45);
+      --terracotta-deep:oklch(0.48  0.13  40);
+      --rule:           oklch(0.85  0.018 70);
+      --rule-faint:     oklch(0.90  0.014 70);
+      --gutter: 22px;
+      --maxw-prose: 680px;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4;
+        --bone-deep: #ede5d6;
+        --sand: #e8dfcd;
+        --ink: #2a2522;
+        --ink-soft: #6a625d;
+        --ink-faint: #968d87;
+        --terracotta: #c46c3f;
+        --terracotta-deep: #9a4f2d;
+        --rule: #d1c8b9;
+        --rule-faint: #ddd5c6;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { color: var(--terracotta); }
+
+    .imp-bar {
+      background: color-mix(in oklab, var(--bone) 86%, transparent);
+      backdrop-filter: saturate(140%) blur(10px);
+      -webkit-backdrop-filter: saturate(140%) blur(10px);
+      border-bottom: 1px solid var(--rule-faint);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .imp-bar-inner {
+      max-width: 880px; margin: 0 auto;
+      padding: 0 var(--gutter);
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .imp-wordmark {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .imp-wordmark img { width: 28px; height: 28px; display: block; }
+    .imp-wordmark-text {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .imp-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
+    .imp-back {
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-size: 13px; font-weight: 500;
+      color: var(--terracotta-deep);
+      text-decoration: none;
+    }
+    .imp-back:hover { color: var(--terracotta); }
+
+    main { max-width: var(--maxw-prose); margin: 0 auto; padding: 56px var(--gutter) 96px; }
+    h1 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(36px, 6vw, 52px);
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin: 0 0 10px;
+      color: var(--ink);
+    }
+    .imp-lede {
+      margin: 0 0 40px;
+      color: var(--ink-soft);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    h2 {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-weight: 500;
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin: 36px 0 12px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    p { margin: 0 0 1.2em; }
+    address { font-style: normal; margin: 0 0 1.2em; }
+    .imp-block { margin-bottom: 28px; }
+    .imp-foot {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--rule-faint);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+    }
+
+    @media (min-width: 880px) {
+      :root { --gutter: 48px; }
+      .imp-bar-inner { height: 72px; }
+      main { padding: 96px var(--gutter) 128px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="imp-bar">
+    <div class="imp-bar-inner">
+      <a class="imp-wordmark" href="/" aria-label="Ongiini">
+        <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
+        <span class="imp-wordmark-text">Ongiini<span class="dot">.</span></span>
+      </a>
+      <a class="imp-back" href="/">← Back</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>Imprint</h1>
+    <p class="imp-lede">Legal information pursuant to German law</p>
+
+    <div class="imp-block">
+      <h2>Information pursuant to § 5 DDG</h2>
+      <address>
+        Sebastian Küpers<br />
+        Hibiskusweg 17b<br />
+        13089 Berlin<br />
+        Germany
+      </address>
+    </div>
+
+    <div class="imp-block">
+      <h2>Contact</h2>
+      <p>
+        Phone: <a href="tel:+491702372987">+49 170 2372987</a><br />
+        Email: <a href="mailto:sebastian.kuepers@gmail.com">sebastian.kuepers@gmail.com</a>
+      </p>
+    </div>
+
+    <div class="imp-block">
+      <h2>Responsible for content pursuant to § 18 (2) MStV</h2>
+      <address>
+        Sebastian Küpers<br />
+        Hibiskusweg 17b<br />
+        13089 Berlin<br />
+        Germany
+      </address>
+    </div>
+
+    <div class="imp-block">
+      <h2>About this site</h2>
+      <p>Ongiini is the first project of the <a href="https://common-intelligence.org" target="_blank" rel="noopener noreferrer">Common Intelligence Foundation</a>, which is in the process of being formally established as a non-profit foundation in Estonia. Until that registration is complete, this website and the Ongiini service are operated by Sebastian Küpers in his personal capacity, on a non-profit basis.</p>
+      <p>Ongiini is not affiliated with WhatsApp Inc., Meta Platforms Inc. or any related entity. The trademarks WhatsApp and Meta belong to their respective owners.</p>
+    </div>
+
+    <div class="imp-block">
+      <h2>Liability for content</h2>
+      <p>As a service provider, we are responsible for our own content on these pages under general law pursuant to § 7 (1) DDG. According to §§ 8 to 10 DDG, however, we as a service provider are not obligated to monitor transmitted or stored third-party information or to investigate circumstances that indicate illegal activity. Obligations to remove or block the use of information under general law remain unaffected. However, liability in this regard is only possible from the point in time at which knowledge of a specific legal violation becomes apparent. If we become aware of corresponding legal violations, we will remove the content in question immediately.</p>
+    </div>
+
+    <div class="imp-block">
+      <h2>Liability for links</h2>
+      <p>Our offering contains links to external websites operated by third parties whose content we have no influence over. We therefore cannot accept any liability for this external content. The respective provider or operator of the linked pages is always responsible for their content. The linked pages were checked for possible legal violations at the time of linking. Illegal content was not recognisable at that time. A permanent inspection of the linked pages is not reasonable without concrete evidence of a legal violation. Upon becoming aware of legal violations, we will remove such links immediately.</p>
+    </div>
+
+    <div class="imp-block">
+      <h2>Copyright</h2>
+      <p>The content and works on these pages created by the site operator are subject to German copyright law. Duplication, processing, distribution and any form of commercialisation of such material beyond the scope of copyright law require the written consent of the respective author or creator. Downloads and copies of this site are permitted only for private, non-commercial use. Insofar as content on this site was not created by the operator, the copyrights of third parties are respected. In particular, third-party content is identified as such. If you nevertheless become aware of a copyright infringement, please inform us accordingly. Upon becoming aware of legal violations, we will remove the content in question immediately.</p>
+    </div>
+
+    <div class="imp-foot">
+      Last updated: May 2026.
+    </div>
+  </main>
+</body>
+</html>

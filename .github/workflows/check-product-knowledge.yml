@@ -1,0 +1,44 @@
+# Fail any PR (or push to main) where the auto-generated product.md is
+# stale vs the website HTML. Catches contributors who forgot to install
+# the pre-commit hook (tools/pre-commit) or who edited HTML on the
+# GitHub web UI without running the regenerator.
+#
+# This workflow uses no external/user-controlled inputs in run: steps —
+# it only runs a pinned Python script against repo content fetched by
+# actions/checkout, so workflow-injection risks (issue titles, PR
+# bodies, commit messages) are not in play here.
+
+name: product-knowledge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "tools/build_product_knowledge.py"
+      - "webhook/app/knowledge/**"
+  pull_request:
+    paths:
+      - "website/**"
+      - "tools/build_product_knowledge.py"
+      - "webhook/app/knowledge/**"
+
+jobs:
+  check:
+    name: product.md is in sync with website HTML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # The extractor uses only the stdlib. 3.10+ is the documented
+          # floor (matches the webhook container image).
+          python-version: "3.12"
+
+      - name: Verify product.md is regenerated from current HTML
+        # --check writes nothing and exits non-zero if the generated
+        # content would differ from what's committed.
+        run: python3 tools/build_product_knowledge.py --check

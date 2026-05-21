@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f5efe4" />
+  <meta name="robots" content="noindex" />
+  <title>Terms of Service — Ongiini</title>
+  <link rel="canonical" href="https://ongiini.ai/terms/" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/ongiini-icon-192-v2.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:     oklch(0.60  0.14  45);
+      --terracotta-deep:oklch(0.48  0.13  40);
+      --rule:           oklch(0.85  0.018 70);
+      --rule-faint:     oklch(0.90  0.014 70);
+      --gutter: 22px;
+      --maxw-prose: 720px;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4;
+        --bone-deep: #ede5d6;
+        --sand: #e8dfcd;
+        --ink: #2a2522;
+        --ink-soft: #6a625d;
+        --ink-faint: #968d87;
+        --terracotta: #c46c3f;
+        --terracotta-deep: #9a4f2d;
+        --rule: #d1c8b9;
+        --rule-faint: #ddd5c6;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { color: var(--terracotta); }
+
+    .pol-bar {
+      background: color-mix(in oklab, var(--bone) 86%, transparent);
+      backdrop-filter: saturate(140%) blur(10px);
+      -webkit-backdrop-filter: saturate(140%) blur(10px);
+      border-bottom: 1px solid var(--rule-faint);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .pol-bar-inner {
+      max-width: 880px; margin: 0 auto;
+      padding: 0 var(--gutter);
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .pol-wordmark {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .pol-wordmark img { width: 28px; height: 28px; display: block; }
+    .pol-wordmark-text {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .pol-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
+    .pol-back {
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-size: 13px; font-weight: 500;
+      color: var(--terracotta-deep);
+      text-decoration: none;
+    }
+    .pol-back:hover { color: var(--terracotta); }
+
+    main { max-width: var(--maxw-prose); margin: 0 auto; padding: 56px var(--gutter) 96px; }
+    h1 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(36px, 6vw, 52px);
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin: 0 0 10px;
+      color: var(--ink);
+    }
+    .pol-lede {
+      margin: 0 0 40px;
+      color: var(--ink-soft);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    h2 {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-weight: 500;
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin: 44px 0 14px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    p, ul, ol { margin: 0 0 1.1em; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 0.4em; }
+    .pol-tldr {
+      background: var(--sand);
+      border-radius: 12px;
+      padding: 20px 22px;
+      margin: 0 0 40px;
+    }
+    .pol-tldr p { margin: 0 0 0.6em; font-size: 15px; }
+    .pol-tldr p:last-child { margin-bottom: 0; }
+    .pol-tldr strong { color: var(--ink); font-weight: 600; }
+    .pol-callout {
+      border-left: 3px solid var(--terracotta);
+      padding: 4px 0 4px 16px;
+      margin: 0 0 1.2em;
+      color: var(--ink);
+    }
+    .pol-foot {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--rule-faint);
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+    }
+    @media (min-width: 880px) {
+      :root { --gutter: 48px; }
+      .pol-bar-inner { height: 72px; }
+      main { padding: 96px var(--gutter) 128px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="pol-bar">
+    <div class="pol-bar-inner">
+      <a class="pol-wordmark" href="/" aria-label="Ongiini">
+        <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
+        <span class="pol-wordmark-text">Ongiini<span class="dot">.</span></span>
+      </a>
+      <a class="pol-back" href="/">← Back</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>Terms of Service</h1>
+    <p class="pol-lede">Plain-language rules for using Ongiini — last updated 21 May 2026</p>
+
+    <div class="pol-tldr">
+      <p><strong>The short version.</strong> Ongiini is a free AI helper on WhatsApp. By messaging the Ongiini number, you accept these terms.</p>
+      <p>Treat Ongiini's answers as a useful starting point — <strong>not as professional advice</strong>. For decisions about your health, your money, your legal situation, your safety, or anything else that really matters, always check with a qualified person.</p>
+      <p>We provide the service for free, as is, with no guarantees. We may suspend or stop it for anyone, at any time. Use at your own risk.</p>
+      <p>Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a <strong>limited-risk AI system</strong> — a chatbot subject only to transparency obligations, not the stricter high-risk requirements. See Section 12 below.</p>
+    </div>
+
+    <h2>1. Acceptance and scope</h2>
+    <p>These Terms of Service ("Terms") govern your use of Ongiini, an AI helper accessible via WhatsApp at the number published on <a href="https://ongiini.ai">ongiini.ai</a> and described on that website ("the Service"). These Terms and the <a href="/privacy/">Privacy Policy</a> are continuously available on this website. The WhatsApp Business profile of the Service links to this website, giving you the opportunity to review the Terms before initiating use. By sending a message to the Service, you confirm that you have had that opportunity and that you accept these Terms. If you do not accept them, do not use the Service.</p>
+    <p>The Service is operated by Sebastian Küpers (Hibiskusweg 17b, 13089 Berlin, Germany) as the first project of the <a href="https://common-intelligence.org" target="_blank" rel="noopener noreferrer">Common Intelligence Foundation</a>, currently being formally established as a non-profit foundation in Estonia. The Service is provided <strong>free of charge</strong> and is <strong>not operated for profit</strong>. Once the foundation is registered, it will become the operator; we will update these Terms accordingly and notify you of the change.</p>
+
+    <h2>2. What the Service is</h2>
+    <p>Ongiini is an AI helper that receives your WhatsApp messages (text, photos, and voice notes), generates responses using an AI model, and replies in text. Voice notes are transcribed to text on our own computer using an open-source speech-to-text model; we do not send your audio to any third party. The Service is designed to help with everyday questions — for example school topics, farming questions, contract clauses, health information, government services, and similar.</p>
+    <p>The Service is <strong>not a medical, legal, financial, psychological, or any other kind of professional service</strong>, and it is <strong>not operated by qualified professionals</strong>. It is a computer program. See Section 6.</p>
+    <p>Access is restricted to phone numbers from Namibia (+264). The Service may decline to respond, or respond differently, based on country code or other technical signals.</p>
+
+    <h2>3. Eligibility</h2>
+    <p>You must be at least <strong>16 years old</strong> to use the Service. If you are between 16 and 18, you confirm that your use is permitted under the law of the country in which you live and, where required, by your parent or legal guardian.</p>
+    <p>By using the Service you confirm that you have the legal capacity to enter into these Terms.</p>
+
+    <h2>4. Free service, no entitlement to availability</h2>
+    <p>The Service is provided <strong>free of charge</strong>. There is no payment, no subscription, no commercial relationship. You acquire no entitlement to the Service being available, complete, accurate, or fit for any particular purpose. We may change, restrict, suspend or discontinue the Service in whole or in part at any time, with or without notice, and without compensation.</p>
+    <p>Each user has a monthly allowance of free tokens (a measure of message length and conversation depth) as published on the website. We monitor usage and may, at our discretion, rate-limit or block any user whose usage materially exceeds normal individual use.</p>
+    <p>Because the Service is provided free of charge as a gratuitous service, <strong>no statutory right of withdrawal under § 312g BGB applies</strong> — no fee-based distance contract is concluded. You may stop using the Service at any time and may delete your data at any time via the in-product commands described in the <a href="/privacy/">Privacy Policy</a>.</p>
+
+    <h2>5. Acceptable use</h2>
+    <p>You agree that, when using the Service, you will <strong>not</strong>:</p>
+    <ul>
+      <li>Use the Service in any way that violates applicable law (whether in Germany, Namibia, or any other relevant jurisdiction) or infringes the rights of any third party.</li>
+      <li>Use the Service to harass, threaten, defame, defraud, stalk, or harm any person.</li>
+      <li>Send content that is illegal, hateful, sexually exploitative of minors, or otherwise abusive.</li>
+      <li>Use the Service to generate, promote, or distribute disinformation — including false or misleading claims about political figures, elections, public-health matters, or other consequential topics — or to mass-produce content for that purpose.</li>
+      <li>Attempt to extract, copy, or reverse-engineer the Service's underlying instructions, system prompt, model weights, or infrastructure.</li>
+      <li>Attempt to bypass safety mechanisms, country-code restrictions, or rate limits, or impersonate any other user.</li>
+      <li>Use the Service to generate content that you then present as professional advice (medical, legal, financial, etc.) to a third party.</li>
+      <li>Use automated tools, bots, or scripts to access the Service, except as expressly authorised by us.</li>
+      <li>Resell, repackage, syndicate, or commercially redistribute the Service or its output — including republication of Ongiini's answers in any paid product, paid newsletter, paid course, or any context in which a fee is charged for access to the output — without our prior written permission. Non-commercial sharing of individual answers in personal or community contexts is fine.</li>
+    </ul>
+    <p>We may suspend or block your access (by phone number or otherwise) at any time, without notice, if we reasonably believe you have breached these Terms.</p>
+
+    <h2>6. Not professional advice — your decisions are your own</h2>
+    <div class="pol-callout">
+      <p>Ongiini is an AI. Its answers can be wrong, incomplete, or out of date. They may sound confident even when they are not. <strong>Do not act on Ongiini's answers in any matter that materially affects your health, your money, your legal situation, your safety, or another person's life or rights — without consulting a qualified human professional</strong> (a doctor, lawyer, accountant, financial adviser, agricultural extension officer, etc.).</p>
+    </div>
+    <p>Specifically:</p>
+    <ul>
+      <li><strong>Medical:</strong> Ongiini is not a doctor and does not provide medical diagnosis or treatment. In an emergency, contact local emergency services.</li>
+      <li><strong>Legal:</strong> Ongiini is not a lawyer and does not provide legal advice or representation. Consult a licensed legal professional.</li>
+      <li><strong>Financial:</strong> Ongiini is not a financial adviser and does not provide investment, tax, or accounting advice. Consult a qualified adviser.</li>
+      <li><strong>Safety / agriculture / mechanical:</strong> Where the consequences of an error are serious (e.g. taking dangerous chemicals, operating machinery, deciding whether to seek emergency care for a child), confirm with someone qualified before acting.</li>
+    </ul>
+    <p>You agree that you understand the above, that you will exercise your own judgement, and that you will <strong>not rely on Ongiini's output as a substitute for professional advice</strong> in any consequential matter.</p>
+
+    <h2>7. No warranty — Service provided "as is"</h2>
+    <p>To the maximum extent permitted by applicable law, the Service is provided <strong>"as is" and "as available"</strong>, without any warranty of any kind, whether express, implied, or statutory. We do not warrant that the Service will be accurate, complete, current, uninterrupted, error-free, secure, fit for a particular purpose, or that any defects will be corrected.</p>
+    <p>AI output is probabilistic and inherently fallible. The Service may produce content that is factually incorrect, internally inconsistent, biased, outdated, or otherwise unsuitable. The Service does not learn or improve from your specific conversations in a way that guarantees better answers over time.</p>
+
+    <h2>8. Limitation of liability</h2>
+    <p>Because the Service is provided <strong>free of charge and without commercial purpose</strong>, our liability is governed by the rules applicable to gratuitous services under German law (in particular § 521 BGB by analogy). Subject to the mandatory provisions described at the end of this Section, our liability is limited as follows:</p>
+    <ul>
+      <li>We are liable only for damages caused by <strong>intent (Vorsatz)</strong> or <strong>gross negligence (grobe Fahrlässigkeit)</strong> on our part or on the part of our legal representatives or vicarious agents.</li>
+      <li>For damages caused by <strong>simple negligence (einfache Fahrlässigkeit)</strong>, our liability is excluded.</li>
+      <li>In no event are we liable for indirect, incidental, consequential, special, or punitive damages, for lost profits, lost data, lost opportunities, or for damages arising from your reliance on the Service's output in matters described in Section 6 (medical, legal, financial, safety) where you did not seek professional advice.</li>
+      <li>Subject to the mandatory provisions below, our aggregate liability arising out of or relating to your use of the Service is limited to <strong>EUR 100</strong> per claim and per calendar year.</li>
+    </ul>
+    <p><strong>The above limitations do not apply</strong>, and we remain fully liable, in cases of: (a) injury to life, body, or health caused by us; (b) liability under the German Product Liability Act (Produkthaftungsgesetz); (c) liability under any other mandatory statutory provision; (d) damages arising from the breach of a fundamental contractual obligation (Kardinalpflicht), in which case liability is limited to the typical, foreseeable damage.</p>
+
+    <h2>9. Indemnification</h2>
+    <p>You agree to indemnify and hold us harmless from and against any third-party claim, liability, damage, loss, or expense (including reasonable legal fees) arising out of or in connection with: (a) your breach of these Terms; (b) your use of the Service in a way that causes harm to another person or violates applicable law; or (c) your reliance on the Service's output in a manner inconsistent with Section 6.</p>
+
+    <h2>10. Intellectual property</h2>
+    <p>The Ongiini name, brand, website design, and code are owned by us (or, after registration, by the Common Intelligence Foundation). The Ongiini source code is published under an open-source licence as indicated in the GitHub repository — please refer to the repository for the applicable licence terms.</p>
+    <p>The output that the Service generates in response to your messages is not subject to copyright by us. You may use it freely, subject to applicable law and these Terms. You acknowledge that AI-generated content may be similar or identical for different users and that we make no claim of originality on your behalf.</p>
+    <p>You retain ownership of any content you submit to the Service. By submitting content, you grant us a non-exclusive, royalty-free, worldwide licence to process that content for the purpose of providing the Service, as described in our <a href="/privacy/">Privacy Policy</a>.</p>
+
+    <h2>11. Privacy</h2>
+    <p>Our processing of personal data is described in the <a href="/privacy/">Privacy Policy</a>, which forms part of these Terms.</p>
+
+    <h2>12. EU AI Act notice</h2>
+    <p>Ongiini is classified as a <strong>limited-risk AI system</strong> (a chatbot) under Regulation (EU) 2024/1689 (the AI Act). It is subject to the transparency obligations of Article 50 — you are entitled to know you are interacting with an AI rather than a human, and we ensure you do: in the WhatsApp Business profile, in the assistant's first reply to every new conversation, in these Terms, and in our <a href="/privacy/">Privacy Policy</a>. Ongiini is not a high-risk AI system under Annex III.</p>
+    <p>Specifically, Ongiini is not used for, and you must not use it for, any of the practices prohibited under <strong>Article 5 of the AI Act</strong>:</p>
+    <ul>
+      <li>(a) subliminal or purposefully manipulative techniques causing significant harm;</li>
+      <li>(b) exploitation of vulnerabilities of specific groups (age, disability, social or economic situation) causing significant harm;</li>
+      <li>(c) social scoring of natural persons leading to detrimental or unfavourable treatment;</li>
+      <li>(d) risk assessment of natural persons to predict criminal offending based solely on profiling or personality traits;</li>
+      <li>(e) untargeted scraping of facial images from the internet or CCTV footage to build or expand facial-recognition databases;</li>
+      <li>(f) emotion inference in the workplace or in education institutions (except for narrowly defined medical or safety reasons);</li>
+      <li>(g) biometric categorisation that infers sensitive characteristics (race, political opinion, religious belief, sexual orientation, etc.);</li>
+      <li>(h) real-time remote biometric identification in publicly accessible spaces for law-enforcement purposes (outside the narrow exceptions in the AI Act).</li>
+    </ul>
+    <p>You must also not use Ongiini's outputs as a component of any high-risk AI system listed in Annex III of the AI Act without conducting your own conformity assessment as required by the AI Act.</p>
+
+    <h2>13. Suspension and termination</h2>
+    <p>For <strong>good cause</strong> — including but not limited to material breach of these Terms, abusive use, illegal content, threats to the security or integrity of the Service, or imminent technical risk — we may suspend or terminate your access immediately, with or without prior notice (§ 314 BGB).</p>
+    <p>For termination <strong>without good cause</strong> (for example, if we decide to discontinue the Service in your region, retire the pilot, or change the country scope), we will give you at least <strong>30 days' notice</strong> through the WhatsApp Business profile, the website, or a direct message — where it is reasonably possible for us to reach you.</p>
+    <p>You may stop using the Service at any time. You may also delete all of your data at any time by sending <em>"delete my data"</em> on WhatsApp.</p>
+
+    <h2>14. Changes to these Terms</h2>
+    <p>We may amend these Terms at any time. The current version is published at this URL. Material changes will be highlighted by updating the date at the top of this page. Your continued use of the Service after a change constitutes acceptance of the amended Terms.</p>
+
+    <h2>15. Governing law and jurisdiction</h2>
+    <p>These Terms are governed by the laws of the <strong>Federal Republic of Germany</strong>, excluding the United Nations Convention on Contracts for the International Sale of Goods (CISG) and excluding the German rules on conflicts of laws. Mandatory consumer-protection provisions of the country in which you have your habitual residence remain unaffected.</p>
+    <p>The non-exclusive place of jurisdiction for disputes is <strong>Berlin, Germany</strong>, to the extent permitted by law.</p>
+    <p>For consumers in the EU: the European Commission's online dispute-resolution platform is available at <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noopener noreferrer">ec.europa.eu/consumers/odr</a>. We are not obliged and not willing to participate in dispute-resolution proceedings before a consumer arbitration board.</p>
+
+    <h2>16. Severability</h2>
+    <p>If any provision of these Terms is or becomes invalid or unenforceable, the validity of the remaining provisions is not affected. The invalid or unenforceable provision shall be replaced by a valid and enforceable provision that comes as close as possible to the economic intent of the original.</p>
+
+    <h2>17. Contact</h2>
+    <p>For questions about these Terms or about the Service, please refer to the contact information in the <a href="/imprint/">Imprint</a>.</p>
+
+    <div class="pol-foot">
+      Last updated: 21 May 2026. Effective immediately.
+    </div>
+  </main>
+</body>
+</html>

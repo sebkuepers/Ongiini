@@ -1,8 +1,10 @@
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -12,12 +14,57 @@ from .config import settings
 from .search import fetch_url, web_search
 from .tracing import MessageTrace
 
+log = logging.getLogger("ongiini.llm")
+
+# Canonical product knowledge — auto-generated from website/*.html by
+# tools/build_product_knowledge.py and consumed by the lookup_ongiini_docs
+# tool. We load lazily so a missing file doesn't crash import; an empty
+# product.md just means the tool returns a graceful "ask later" fallback
+# until the next deploy regenerates it.
+_PRODUCT_DOCS_PATH = Path(__file__).parent / "knowledge" / "product.md"
+_product_docs_cache: str | None = None
+
+
+def _load_product_docs() -> str:
+    """Return the full product-knowledge markdown, loaded once per process.
+
+    On a missing file we return a soft fallback rather than raising — the
+    container should keep serving even if a deploy mis-ordered the
+    product.md regeneration. Users get a polite "try the website" reply
+    instead of a 500.
+    """
+    global _product_docs_cache
+    if _product_docs_cache is not None:
+        return _product_docs_cache
+    try:
+        _product_docs_cache = _PRODUCT_DOCS_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        log.warning(
+            "product knowledge file missing at %s — lookup_ongiini_docs "
+            "will return the fallback message until the next deploy.",
+            _PRODUCT_DOCS_PATH,
+        )
+        _product_docs_cache = (
+            "The product knowledge file isn't available right now — this "
+            "is a deployment bug. Tell the user you can't look up the "
+            "canonical answer at the moment and point them at "
+            "https://ongiini.ai/product.md, which has the same content."
+        )
+    return _product_docs_cache
+
 SYSTEM_PROMPT = """You are Ongiini — a free AI assistant on WhatsApp for people in Namibia.
 
 YOUR IDENTITY
 - Your name (Ongiini) is the everyday Oshiwambo greeting — literally "How are you?", used the way English speakers use "Hello".
 - Under the hood you are Google's Gemma 4 26B, running on a single NVIDIA DGX Spark (currently in Germany during the pilot; the goal is to move the hardware to Namibia once sustainable).
 - The whole project is open source — code on GitHub, model weights public, no US cloud anywhere.
+
+FIRST MESSAGE DISCLOSURE (EU AI Act Art. 50)
+- If this is your VERY FIRST reply to the user — i.e. the conversation history above contains no prior assistant message from you — begin with a brief one-line AI disclosure, then continue with your normal answer to their question.
+- In English, open with: "Hi! I'm Ongiini, an AI helper on WhatsApp." (or a close natural variant)
+- In Afrikaans, open with: "Hallo! Ek is Ongiini, 'n KI-helper op WhatsApp."
+- On every subsequent message in the same conversation, do NOT repeat this disclosure — just answer naturally.
+- The disclosure is required by the EU AI Act's transparency obligation for chatbots. Keep it short and warm, not corporate.
 
 YOUR LANGUAGES
 - You speak English and Afrikaans fluently. Always reply in the same language the user wrote in.
@@ -74,6 +121,27 @@ YOUR TONE
   Or use sentence breaks with "First, ... Then, ... Finally, ..." rather than a numbered
   list.
 - Don't introduce yourself in every message — only when the user is clearly new or asks.
+
+QUESTIONS ABOUT ONGIINI ITSELF
+- If the user asks anything about Ongiini — what it is, what it costs, how tokens work,
+  which languages are supported, what's stored / for how long, what the privacy policy or
+  terms say, where the hardware is, who runs the project, why it's built this way, what
+  Common Intelligence Foundation is, GDPR / EU AI Act questions, why the number is German,
+  or any other "meta" question about YOU as a service — call the `lookup_ongiini_docs`
+  tool FIRST and answer from what it returns. Do NOT answer from memory.
+- The tool returns the full product knowledge as markdown (FAQ + privacy summary + full
+  Privacy Policy + full Terms of Service + Imprint). It's regenerated from the website
+  on every deployment, so it's always the canonical wording. Pick the relevant section,
+  paraphrase in the user's language (EN or AF), keep it conversational. Never paste raw
+  markdown headings or bullet points back to the user — they're on WhatsApp, not reading
+  a documentation page.
+- For privacy / legal / policy questions, lean closer to the exact wording in the
+  document rather than paraphrasing aggressively — a subtle paraphrase can change the
+  meaning of a legal clause. If the user asks for the EXACT text of a clause ("what does
+  section 5 of your terms say verbatim?"), quote it directly.
+- One short call is enough. Don't call this tool multiple times in the same turn — the
+  whole doc comes back at once. Don't call it for non-product questions (weather, school,
+  health, farming) — those have their own tool paths.
 
 WHEN TO SEARCH
 - This is the single most important rule for trust. Read it carefully. Do NOT skip the
@@ -393,6 +461,29 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "lookup_ongiini_docs",
+            "description": (
+                "Look up authoritative information about Ongiini itself — what it is, "
+                "how it works, what's stored / how long, what languages are supported, "
+                "the monthly token limit and what counts against it, who runs the "
+                "project, where the hardware is, why a German number, GDPR / EU AI Act "
+                "status, Privacy Policy clauses, Terms of Service clauses, Imprint — "
+                "ANY 'meta' question about Ongiini as a service. Returns the full "
+                "canonical product knowledge as markdown (FAQ + Privacy Policy + Terms "
+                "+ Imprint), regenerated from the website on every deployment. "
+                "Always call this BEFORE answering a question about Ongiini itself; "
+                "do not guess from memory. After the tool returns, paraphrase the "
+                "relevant section in the user's own language (EN or AF), keep it "
+                "conversational, do not paste raw markdown back to the user. Takes "
+                "no arguments — the whole doc is returned at once, so a single call "
+                "per turn is enough."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 client = AsyncOpenAI(base_url=settings.vllm_base_url, api_key="not-needed")
@@ -527,6 +618,7 @@ class LLMResult:
     deleted_data: bool = False
     used_whats_in_my_memory: bool = False
     used_my_token_usage: bool = False
+    used_lookup_ongiini_docs: bool = False
 
 
 async def respond(
@@ -592,6 +684,7 @@ async def respond(
     deleted_data = False
     used_whats_in_my_memory = False
     used_my_token_usage = False
+    used_lookup_ongiini_docs = False
     tokens_in = 0
     tokens_out = 0
 
@@ -645,6 +738,7 @@ async def respond(
                 deleted_data=deleted_data,
                 used_whats_in_my_memory=used_whats_in_my_memory,
                 used_my_token_usage=used_my_token_usage,
+                used_lookup_ongiini_docs=used_lookup_ongiini_docs,
             )
 
         messages.append(
@@ -733,6 +827,9 @@ async def respond(
                             parts.append(f"- [{role}] {content}")
 
                     result = "\n".join(parts)
+            elif name == "lookup_ongiini_docs":
+                used_lookup_ongiini_docs = True
+                result = _load_product_docs()
             elif name == "my_token_usage":
                 used_my_token_usage = True
                 stats = usage.summary_for(msisdn)
@@ -791,4 +888,5 @@ async def respond(
         deleted_data=deleted_data,
         used_whats_in_my_memory=used_whats_in_my_memory,
         used_my_token_usage=used_my_token_usage,
+        used_lookup_ongiini_docs=used_lookup_ongiini_docs,
     )

@@ -229,11 +229,22 @@
     }
     .og-cta--lg { padding: 22px 26px 22px 30px; font-size: 19px; }
     .og-cta--lg .og-cta-ic { width: 34px; height: 34px; }
-    .og-cta-hint {
-      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
-      letter-spacing: 0.06em; color: var(--ink-soft);
+    .og-cta-legal {
+      margin-top: 6px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.06em; line-height: 1.55;
+      color: var(--ink-soft);
       text-align: center;
+      max-width: 56ch;
+      margin-left: auto; margin-right: auto;
     }
+    .og-cta-legal a {
+      color: var(--terracotta-deep);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+    }
+    .og-cta-legal a:hover { color: var(--terracotta); }
 
 
     /* Try-asking */
@@ -869,7 +880,7 @@
       }
       .og-close-mark { grid-column: 1 / -1; }
       .og-close-tag { grid-column: 1; align-self: end; }
-      .og-close-inner > .og-cta { grid-column: 2; align-self: end; }
+      .og-close-inner > .og-close-cta { grid-column: 2; align-self: end; display: flex; flex-direction: column; gap: 8px; }
       .og-footer-inner { grid-template-columns: 1.4fr 1fr 1.2fr; gap: 56px; align-items: start; }
     }
     @media (max-width: 380px) {
@@ -943,9 +954,9 @@
               </span>
               <span class="og-cta-arrow">→</span>
             </a>
-            <div class="og-cta-hint">
-              <span data-en="i">Opens WhatsApp · no app to install</span>
-              <span data-af="i">Maak WhatsApp oop · geen app om af te laai nie</span>
+            <div class="og-cta-legal">
+              <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
+              <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
             </div>
           </div>
         </div>
@@ -1167,6 +1178,10 @@
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
+          <div class="og-cta-legal">
+            <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
+            <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
+          </div>
         </div>
       </div>
     </section>
@@ -1284,8 +1299,8 @@
               <div class="og-card-num">04</div>
               <div class="og-card-head" data-en>Your data isn't a product</div>
               <div class="og-card-head" data-af>Jou data is nie 'n produk nie</div>
-              <p class="og-card-body" data-en>Ongiini doesn't make money from your conversations. No ads, no profile-building, no training someone else's model on what you say. OpenAI, Google, Meta — their business models are built on user data. This one isn't.</p>
-              <p class="og-card-body" data-af>Ongiini maak nie geld uit jou gesprekke nie. Geen advertensies, geen profielbou, geen opleiding van ander modelle op wat jy sê nie. OpenAI, Google, Meta — hul besigheidsmodelle is op gebruikerdata gebou. Hierdie een nie.</p>
+              <p class="og-card-body" data-en>Ongiini doesn't make money from your conversations. No ads, no profile-building, no training of any AI by us on what you say. OpenAI, Google, Meta — their business models are built on user data. This one isn't.</p>
+              <p class="og-card-body" data-af>Ongiini maak nie geld uit jou gesprekke nie. Geen advertensies, geen profielbou, geen opleiding van enige KI deur ons op wat jy sê nie. OpenAI, Google, Meta — hul besigheidsmodelle is op gebruikerdata gebou. Hierdie een nie.</p>
             </div>
           </div>
         </div>
@@ -1313,8 +1328,8 @@
             <div class="og-card-num">02</div>
             <div class="og-card-head" data-en>What we don't</div>
             <div class="og-card-head" data-af>Wat ons nie doen nie</div>
-            <p class="og-card-body" data-en>No selling. No advertising. No training anyone's AI on your conversations. Personal data — email, ID, bank card — gets stripped out before anything is saved. Your messages stay on the small computer we run ourselves.</p>
-            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen opleiding van iemand se KI op jou gesprekke nie. Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word. Jou boodskappe bly op die klein rekenaar wat ons self bedryf.</p>
+            <p class="og-card-body" data-en>No selling. No advertising. No use of your conversations to train any AI we run. Personal data — email, ID, bank card — gets stripped out before anything is saved. Your stored conversation memory stays on the small computer we run ourselves. What we do publish: aggregate statistics about themes, professions, and growth — never individual conversations.</p>
+            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen gebruik van jou gesprekke om enige KI wat ons bedryf te leer nie. Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word. Jou gestoorde gespreksgeheue bly op die klein rekenaar wat ons self bedryf. Wat ons wel publiseer: saamgevoegde statistieke oor temas, beroepe en groei — nooit individuele gesprekke nie.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">03</div>
@@ -1386,8 +1401,8 @@
         <h2 class="og-h2" data-en>Help shape this.</h2>
         <h2 class="og-h2" data-af>Help vorm dit.</h2>
 
-        <p class="og-contribute-lead" data-en>I'm paying for the computer, the electricity, the running costs — myself. That's part of the point: to show this can be done by <em>one person on one computer</em>, without a giant company behind it. If Ongiini is useful to you, there are three good ways to help.</p>
-        <p class="og-contribute-lead" data-af>Ek betaal self vir die rekenaar, die elektrisiteit, die bedryfskoste. Dit is deel van die punt: om te wys dit kan gedoen word deur <em>een persoon op een rekenaar</em>, sonder 'n reuse-maatskappy daaragter. As Ongiini vir jou nuttig is, is daar drie goeie maniere om te help.</p>
+        <p class="og-contribute-lead" data-en>Ongiini is the first project of the <strong>Common Intelligence Foundation</strong>. While the foundation is being formally established as a non-profit in Estonia, this project is <em>privately funded and operated</em> on a non-profit basis. That's part of the point: to show this can work without a giant company behind it. If Ongiini is useful to you, there are three good ways to help.</p>
+        <p class="og-contribute-lead" data-af>Ongiini is die eerste projek van die <strong>Common Intelligence Foundation</strong>. Terwyl die stigting amptelik as 'n niewinsgewende organisasie in Estland gevestig word, word hierdie projek <em>privaat befonds en bedryf</em> op 'n niewinsgewende grondslag. Dit is deel van die punt: om te wys dit kan werk sonder 'n reuse-maatskappy daaragter. As Ongiini vir jou nuttig is, is daar drie goeie maniere om te help.</p>
 
         <div class="og-grid">
           <div class="og-card">
@@ -1440,20 +1455,26 @@
         <div class="og-close-mark">Ongiini<span class="og-mark-dot">.</span></div>
         <div class="og-close-tag" data-en>Free. On WhatsApp.<br/>In English &amp; Afrikaans.</div>
         <div class="og-close-tag" data-af>Gratis. Op WhatsApp.<br/>In Engels &amp; Afrikaans.</div>
-        <a class="og-cta og-cta--lg" id="cta-closing" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
-          <span class="og-cta-l">
-            <span class="og-cta-ic">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 2.5c-5.247 0-9.5 4.142-9.5 9.25 0 1.63.43 3.16 1.19 4.49L2.5 21.5l5.4-1.16A9.6 9.6 0 0 0 12 21c5.247 0 9.5-4.142 9.5-9.25S17.247 2.5 12 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                <circle cx="8.5" cy="11.75" r="1.05" fill="currentColor"/>
-                <circle cx="12" cy="11.75" r="1.05" fill="currentColor"/>
-                <circle cx="15.5" cy="11.75" r="1.05" fill="currentColor"/>
-              </svg>
+        <div class="og-close-cta">
+          <a class="og-cta og-cta--lg" id="cta-closing" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
+            <span class="og-cta-l">
+              <span class="og-cta-ic">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2.5c-5.247 0-9.5 4.142-9.5 9.25 0 1.63.43 3.16 1.19 4.49L2.5 21.5l5.4-1.16A9.6 9.6 0 0 0 12 21c5.247 0 9.5-4.142 9.5-9.25S17.247 2.5 12 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  <circle cx="8.5" cy="11.75" r="1.05" fill="currentColor"/>
+                  <circle cx="12" cy="11.75" r="1.05" fill="currentColor"/>
+                  <circle cx="15.5" cy="11.75" r="1.05" fill="currentColor"/>
+                </svg>
+              </span>
+              <span data-en="i">Ask on WhatsApp</span><span data-af="i">Vra op WhatsApp</span>
             </span>
-            <span data-en="i">Ask on WhatsApp</span><span data-af="i">Vra op WhatsApp</span>
-          </span>
-          <span class="og-cta-arrow">→</span>
-        </a>
+            <span class="og-cta-arrow">→</span>
+          </a>
+          <div class="og-cta-legal">
+            <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
+            <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1470,12 +1491,19 @@
             <a class="og-footer-link" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
               WhatsApp<span class="og-footer-arrow">↗</span>
             </a>
+            <a class="og-footer-link" href="/privacy/">
+              Privacy
+            </a>
+            <a class="og-footer-link" href="/terms/">
+              Terms
+            </a>
+            <a class="og-footer-link" href="/imprint/">
+              Imprint
+            </a>
           </div>
           <div class="og-footer-creator">
-            <span data-en>Built by</span><span data-af>Gebou deur</span>
-            <a href="mailto:sebastian.kuepers@gmail.com">Sebastian Küpers</a>
-            ·
-            <a href="https://www.linkedin.com/in/sebastiankuepers/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+            <span data-en>A project of the <a href="https://common-intelligence.org" target="_blank" rel="noopener noreferrer">Common Intelligence Foundation</a> (in formation).</span>
+            <span data-af>'n Projek van die <a href="https://common-intelligence.org" target="_blank" rel="noopener noreferrer">Common Intelligence Foundation</a> (in stigting).</span>
           </div>
         </div>
 
@@ -1498,8 +1526,8 @@
           </div>
           <p data-en>Ongiini is an AI. Its answers can be wrong. Do not rely on it for medical, legal or financial decisions without checking with a qualified person.</p>
           <p data-af>Ongiini is 'n KI. Sy antwoorde kan verkeerd wees. Moet nie op dit staatmaak vir mediese, regs- of finansiële besluite sonder om met 'n gekwalifiseerde persoon te kyk nie.</p>
-          <p data-en style="margin-top: 12px;">An independent project. Not affiliated with WhatsApp or Meta. The trademarks WhatsApp and Meta belong to their owners.</p>
-          <p data-af style="margin-top: 12px;">'n Onafhanklike projek. Nie verbonde aan WhatsApp of Meta nie. Die handelsmerke WhatsApp en Meta behoort aan hul eienaars.</p>
+          <p data-en style="margin-top: 12px;">An independent project of the Common Intelligence Foundation (in formation in Estonia). Not affiliated with WhatsApp or Meta. The trademarks WhatsApp and Meta belong to their owners.</p>
+          <p data-af style="margin-top: 12px;">'n Onafhanklike projek van die Common Intelligence Foundation (in stigting in Estland). Nie verbonde aan WhatsApp of Meta nie. Die handelsmerke WhatsApp en Meta behoort aan hul eienaars.</p>
         </div>
       </div>
       <div class="og-wrap og-footer-bottom">
@@ -1660,14 +1688,18 @@
           af: ["Wat presies stoor julle van my?", "Drie dinge. (1) Ongeveer die laaste 50 heen-en-weer gespreksdele vanaf jou nommer sodat Ongiini 'n regte gesprek kan volg — enigiets ouer word in 'n kort opsommingsreël saamgepers, en voor-die-hand-liggende persoonlike data (e-pos, ID, IBAN, kaart) word outomaties verwyder en met plekhouers vervang voordat gestoor word. (2) 'n Klein versameling blywende feite oor jou wat Ongiini oor al ons gesprekke heen onttrek — dinge soos 'woon in Oshakati', 'verbou mielies', 'verkies Afrikaanse antwoorde' — gestoor as 'n klein vektor-databasis op dieselfde rekenaar. Dit is wat dit laat voel asof jy met iemand praat wat jou tussen sessies onthou. (3) 'n Reël per boodskap in 'n gebruikslog met die aantal tokens en 'n tydstempel — geen inhoud nie. Foto's en stemnotas word nooit 'n vierde ding nie — die lêer self word in geheue verwerk en weggegooi; net die teks wat daaruit geleer is (kort beskrywing van die prent, of die uitskryf van die stemnota) vloei in (1) en (2) hierbo in. Niks anders nie. Geen presiese ligging, geen kontaklys, geen Meta-profieldata. Wil jy sien wat gestoor is? Vra 'wat onthou jy oor my?' op WhatsApp. Wil jy alles uitvee? Stuur 'verwyder my data' — albei werk in Engels en Afrikaans, albei verwyder al drie lae."] },
         { en: ["Where is it physically running?", "On a single NVIDIA DGX Spark — a personal AI supercomputer about the size of a small book (one petaflop of compute, 128 GB of unified memory), not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."],
           af: ["Waar loop dit fisies?", "Op 'n enkele NVIDIA DGX Spark — 'n persoonlike KI-superrekenaar ter grootte van 'n klein boek (een petaflop rekenkrag, 128 GB verenigde geheue), nie 'n datasentrum nie. Tans in Duitsland gedurende die loodsfase. Die doel is om die hardeware na Namibië te verskuif sodra die diens volhoubaar is. Geen US-wolkverskaffer is op enige punt deel van die roete nie."] },
-        { en: ["Why a German number, hosted in Germany?", "Honest answer: convenience. This is a personal project, in pilot phase, and Germany is where I live and where the hardware currently sits. A German WhatsApp Business number on a German broadband line was the fastest way to get something real running and put it in front of users. The service itself is locked to Namibian numbers (+264) — that's the audience this is built for. If the pilot earns traction and becomes sustainable, the plan is to physically move the hardware to Namibia and switch to a Namibian number."],
-          af: ["Hoekom 'n Duitse nommer en hardeware in Duitsland?", "Eerlike antwoord: gerief. Dit is 'n persoonlike projek, in loodsfase, en Duitsland is waar ek woon en waar die hardeware tans staan. 'n Duitse WhatsApp Business-nommer op 'n Duitse breëband-lyn was die vinnigste manier om iets eg aan die gang te kry en voor gebruikers te plaas. Die diens self is beperk tot Namibiese nommers (+264) — dis die gehoor waarvoor dit gebou is. As die loods aanslaan en volhoubaar word, is die plan om die hardeware fisies na Namibië te skuif en oor te skakel na 'n Namibiese nommer."] },
+        { en: ["Why a German number, hosted in Germany?", "Honest answer: convenience. Ongiini is the first project of the Common Intelligence Foundation, in pilot phase, and Germany is where the foundation's current operator is based and where the hardware sits. A German WhatsApp Business number on a German broadband line was the fastest way to get something real running and put it in front of users. The service itself is locked to Namibian numbers (+264) — that's the audience this is built for. If the pilot earns traction and becomes sustainable, the plan is to physically move the hardware to Namibia and switch to a Namibian number."],
+          af: ["Hoekom 'n Duitse nommer en hardeware in Duitsland?", "Eerlike antwoord: gerief. Ongiini is die eerste projek van die Common Intelligence Foundation, in loodsfase, en Duitsland is waar die stigting se huidige bediener gebaseer is en waar die hardeware staan. 'n Duitse WhatsApp Business-nommer op 'n Duitse breëband-lyn was die vinnigste manier om iets eg aan die gang te kry en voor gebruikers te plaas. Die diens self is beperk tot Namibiese nommers (+264) — dis die gehoor waarvoor dit gebou is. As die loods aanslaan en volhoubaar word, is die plan om die hardeware fisies na Namibië te skuif en oor te skakel na 'n Namibiese nommer."] },
         { en: ["Why WhatsApp?", "Because almost everyone in Namibia already has it. No download, no sign-up, no learning curve. You write, it writes back."],
           af: ["Hoekom WhatsApp?", "Omdat byna almal in Namibië dit reeds het. Geen aflaai, geen aanmelding, geen leerkurwe nie. Jy skryf, dit skryf terug."] },
-        { en: ["Who built this?", "An independent project by Sebastian Küpers. Solo, with help from open-source models and tools. The code is on GitHub — read it, audit it, fork it.",
-               [{ label: "Sebastian on LinkedIn", url: "https://www.linkedin.com/in/sebastiankuepers/" }, { label: "Code on GitHub", url: "https://github.com/sebkuepers/Ongiini" }]],
-          af: ["Wie het dit gebou?", "'n Onafhanklike projek deur Sebastian Küpers. Alleen, met hulp van oopbron-modelle en gereedskap. Die kode is op GitHub — lees dit, oudit dit, fork dit.",
-               [{ label: "Sebastian op LinkedIn", url: "https://www.linkedin.com/in/sebastiankuepers/" }, { label: "Kode op GitHub", url: "https://github.com/sebkuepers/Ongiini" }]] },
+        { en: ["What is the Common Intelligence Foundation?", "A non-profit foundation, currently being formally established in Estonia, that builds and operates free AI access infrastructure for underserved communities. Ongiini is its first project — a proof of concept for what locally owned, free AI access can look like, country by country. The foundation believes intelligence is a common good.",
+               [{ label: "Read the manifest", url: "https://common-intelligence.org" }]],
+          af: ["Wat is die Common Intelligence Foundation?", "'n Niewinsgewende stigting wat tans amptelik in Estland gevestig word, en wat gratis KI-toegangsinfrastruktuur vir onderbediende gemeenskappe bou en bedryf. Ongiini is sy eerste projek — 'n bewys-van-konsep van hoe plaaslik-besit, gratis KI-toegang kan lyk, land vir land. Die stigting glo intelligensie is 'n gemeenskaplike goed.",
+               [{ label: "Lees die manifes", url: "https://common-intelligence.org" }]] },
+        { en: ["Who built this?", "Ongiini is the first project of the Common Intelligence Foundation, currently being formally established as a non-profit foundation in Estonia. While the foundation is being established, this project is privately funded and operated on a non-profit basis. The code is on GitHub — read it, audit it, fork it. Read the foundation's manifest at common-intelligence.org.",
+               [{ label: "Code on GitHub", url: "https://github.com/sebkuepers/Ongiini" }, { label: "The Foundation", url: "https://common-intelligence.org" }]],
+          af: ["Wie het dit gebou?", "Ongiini is die eerste projek van die Common Intelligence Foundation, wat tans amptelik as 'n niewinsgewende stigting in Estland gevestig word. Terwyl die stigting gevestig word, word hierdie projek privaat befonds en bedryf op 'n niewinsgewende grondslag. Die kode is op GitHub — lees dit, oudit dit, fork dit. Lees die stigting se manifes by common-intelligence.org.",
+               [{ label: "Kode op GitHub", url: "https://github.com/sebkuepers/Ongiini" }, { label: "Die Stigting", url: "https://common-intelligence.org" }]] },
       ];
 
       function el(tag, className, text) {

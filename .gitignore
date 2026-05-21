@@ -14,3 +14,7 @@ venv/
 .claude/
 .wrangler/
 node_modules/
+
+# Common Intelligence Foundation site — kept local only until the foundation
+# is formally established. Deployed directly to Cloudflare Pages via wrangler.
+foundation/

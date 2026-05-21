@@ -10,6 +10,16 @@ a Cloudflare Tunnel.
 Pilot currently runs in Germany; the goal is to move the hardware to Namibia
 once the service is sustainable.
 
+Ongiini is the first project of the **Common Intelligence Foundation** — a
+non-profit foundation currently being formally established in Estonia. Until
+that registration is complete, operations are carried out by Sebastian Küpers
+in his personal capacity, on a non-profit basis. See
+[common-intelligence.org](https://common-intelligence.org) for the manifest.
+
+The foundation's website source lives under `foundation/` in this repo but is
+**gitignored** (kept local-only until the foundation is formally registered).
+It is deployed to Cloudflare Pages directly via `wrangler pages deploy`.
+
 ## Architecture
 
 ```
@@ -272,3 +282,34 @@ in text. That's the only intentional asymmetry.
 
 Voice replies (TTS), Oshiwambo via a translation layer, hard rate-limit
 enforcement, Redis-backed memory, async queue.
+
+## AI literacy and EU AI Act compliance
+
+Ongiini is classified as a **limited-risk AI system** (a chatbot) under
+Regulation (EU) 2024/1689 (the AI Act) and is subject to the transparency
+obligations of Article 50, which become formally applicable on 2 August 2026.
+It is **not** a high-risk AI system under Annex III and engages in **none** of
+the prohibited practices listed in Article 5.
+
+The operator is aware of the system's capabilities and limitations:
+
+- Outputs are probabilistic — the model can be wrong, especially on numbers,
+  dates, recent events, region-specific facts, and anything requiring
+  professional expertise.
+- Known model failure modes: hallucinated citations, occasional reasoning
+  errors, language-specific quality variance (Afrikaans is supported but the
+  model is most accurate in English).
+- The system prompt explicitly directs the model to defer to qualified humans
+  on medical, legal, financial and safety-critical questions, and to use
+  Tavily web search for time-sensitive or location-specific questions.
+- Every reply to a new user begins with an explicit AI disclosure to satisfy
+  Article 50(1). See `webhook/app/llm.py` → `SYSTEM_PROMPT` → "FIRST MESSAGE
+  DISCLOSURE".
+- Memory (short-term JSON window + mem0 long-term layer) is bounded and
+  user-controllable via the `whats_in_my_memory` and `delete_my_data` tools,
+  exposed as natural-language prompts ("what do you remember about me?" /
+  "delete my data") and operating in English and Afrikaans.
+- The underlying model (Gemma 4 26B) is a general-purpose AI model provided
+  by Google DeepMind. Under Article 25 of the AI Act, the operator accepts
+  the provider responsibilities for the integrated Ongiini chatbot system
+  built on top of it.
