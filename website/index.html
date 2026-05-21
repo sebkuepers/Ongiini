@@ -598,15 +598,6 @@
       border-color: var(--ink);
       color: var(--bone);
     }
-    .og-modes-tab .og-modes-pill {
-      font-family: 'Geist Mono', ui-monospace, monospace;
-      font-size: 8.5px; letter-spacing: 0.16em;
-      padding: 2px 5px;
-      border: 1px solid currentColor;
-      border-radius: 4px;
-      text-transform: uppercase;
-      opacity: 0.7;
-    }
     .og-modes-panel {
       display: none; flex-direction: column; gap: 12px;
       width: 100%; align-items: center;
@@ -759,6 +750,47 @@
         grid-template-columns: 0.95fr 1.05fr;
         gap: 56px;
         align-items: start;
+      }
+    }
+
+    /* People section — three portraits with role + use-case captions */
+    .og-people {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+      margin-top: 32px;
+    }
+    .og-person { margin: 0; }
+    .og-person img {
+      width: 100%;
+      aspect-ratio: 5 / 4;
+      object-fit: cover;
+      border-radius: 14px;
+      display: block;
+      box-shadow:
+        0 1px 0 rgba(0,0,0,0.03),
+        0 18px 40px -22px rgba(42, 37, 34, 0.30);
+    }
+    .og-person figcaption {
+      display: flex; flex-direction: column;
+      gap: 4px;
+      margin-top: 14px;
+    }
+    .og-person-role {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--terracotta-deep);
+    }
+    .og-person-line {
+      font-size: 14.5px; line-height: 1.5;
+      color: var(--ink-soft);
+    }
+    @media (min-width: 880px) {
+      .og-people {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+        margin-top: 40px;
       }
     }
 
@@ -943,7 +975,6 @@
             </button>
             <button type="button" class="og-modes-tab" data-mode="voice" role="tab" aria-selected="false" aria-controls="mode-voice">
               <span data-en="i">Voice</span><span data-af="i">Stem</span>
-              <span class="og-modes-pill">SOON</span>
             </button>
           </div>
 
@@ -1140,6 +1171,75 @@
       </div>
     </section>
 
+    <section class="og-section og-section--sand" id="people">
+      <div class="og-wrap og-section-inner">
+        <div class="og-eyebrow">
+          <span data-en>For everyone</span>
+          <span data-af>Vir almal</span>
+        </div>
+        <h2 class="og-h2" data-en>For your life. Whatever it looks like.</h2>
+        <h2 class="og-h2" data-af>Vir jou lewe. Hoe dit ook al lyk.</h2>
+        <p class="og-body" data-en>Mothers, students, farmers — anyone in Namibia with a question and a phone.</p>
+        <p class="og-body" data-af>Moeders, studente, boere — enigeen in Namibië met 'n vraag en 'n foon.</p>
+        <div class="og-people">
+          <figure class="og-person">
+            <img src="/assets/mother.webp"
+                 srcset="/assets/mother-480.webp 480w, /assets/mother.webp 800w"
+                 sizes="(min-width: 880px) 360px, 100vw"
+                 width="800" height="640"
+                 alt="A mother in her living room, looking at her phone, with two children doing homework behind her."
+                 loading="lazy"
+                 decoding="async" />
+            <figcaption>
+              <span class="og-person-role">
+                <span data-en="i">Mothers</span><span data-af="i">Moeders</span>
+              </span>
+              <span class="og-person-line">
+                <span data-en="i">Homework, fevers, household questions.</span>
+                <span data-af="i">Huiswerk, koors, huishoudelike vrae.</span>
+              </span>
+            </figcaption>
+          </figure>
+          <figure class="og-person">
+            <img src="/assets/student.webp"
+                 srcset="/assets/student-480.webp 480w, /assets/student.webp 800w"
+                 sizes="(min-width: 880px) 360px, 100vw"
+                 width="800" height="640"
+                 alt="A student at a campus table with a notebook and laptop, reading his phone."
+                 loading="lazy"
+                 decoding="async" />
+            <figcaption>
+              <span class="og-person-role">
+                <span data-en="i">Students</span><span data-af="i">Studente</span>
+              </span>
+              <span class="og-person-line">
+                <span data-en="i">Exam revision, explanations, drafts.</span>
+                <span data-af="i">Eksamenleer, verduidelikings, opstelle.</span>
+              </span>
+            </figcaption>
+          </figure>
+          <figure class="og-person">
+            <img src="/assets/farmer.webp"
+                 srcset="/assets/farmer-480.webp 480w, /assets/farmer.webp 800w"
+                 sizes="(min-width: 880px) 360px, 100vw"
+                 width="800" height="640"
+                 alt="A farmer in a maize field, reading something on his phone, mountains in the distance."
+                 loading="lazy"
+                 decoding="async" />
+            <figcaption>
+              <span class="og-person-role">
+                <span data-en="i">Farmers</span><span data-af="i">Boere</span>
+              </span>
+              <span class="og-person-line">
+                <span data-en="i">Plants, weather, prices, the field.</span>
+                <span data-af="i">Plante, weer, pryse, die land.</span>
+              </span>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
     <section class="og-section og-section--dark" id="open">
       <div class="og-wrap og-section-inner">
         <div class="og-eyebrow" style="color: var(--ink-faint)">
@@ -1206,22 +1306,22 @@
             <div class="og-card-num">01</div>
             <div class="og-card-head" data-en>What we keep</div>
             <div class="og-card-head" data-af>Wat ons stoor</div>
-            <p class="og-card-body" data-en>About 50 turns of back-and-forth so Ongiini can follow a real conversation, plus a small set of facts it picks up across chats (like your location or what you're working on). Personal data — email, ID, bank card — is removed before anything is saved. Photos and voice notes are processed in memory and never saved — only what Ongiini learned from them.</p>
-            <p class="og-card-body" data-af>Sowat 50 heen-en-weer gespreksdele sodat Ongiini 'n regte gesprek kan volg, plus 'n klein versameling feite wat oor gesprekke opgetel word (soos jou ligging of waarmee jy besig is). Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word. Foto's en stemboodskappe word in geheue verwerk en nooit gestoor nie — net wat Ongiini daaruit geleer het bly.</p>
+            <p class="og-card-body" data-en>About 50 turns of back-and-forth so Ongiini can follow a real conversation, plus a small set of facts it picks up across chats — like where you are or what you're working on.</p>
+            <p class="og-card-body" data-af>Sowat 50 heen-en-weer gespreksdele sodat Ongiini 'n regte gesprek kan volg, plus 'n klein versameling feite wat oor gesprekke opgetel word — soos waar jy is of waarmee jy besig is.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">02</div>
             <div class="og-card-head" data-en>What we don't</div>
             <div class="og-card-head" data-af>Wat ons nie doen nie</div>
-            <p class="og-card-body" data-en>No selling. No advertising. No training anyone's AI on your conversations. No big tech company anywhere in the path — your messages stay on the small computer we run ourselves.</p>
-            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen opleiding van iemand se KI op jou gesprekke nie. Geen groot tegnologiemaatskappy in die roete nie — jou boodskappe bly op die klein rekenaar wat ons self bedryf.</p>
+            <p class="og-card-body" data-en>No selling. No advertising. No training anyone's AI on your conversations. Personal data — email, ID, bank card — gets stripped out before anything is saved. Your messages stay on the small computer we run ourselves.</p>
+            <p class="og-card-body" data-af>Geen verkoop nie. Geen advertensies nie. Geen opleiding van iemand se KI op jou gesprekke nie. Persoonlike data — e-pos, ID, bankkaart — word verwyder voordat enigiets gestoor word. Jou boodskappe bly op die klein rekenaar wat ons self bedryf.</p>
           </div>
           <div class="og-card">
             <div class="og-card-num">03</div>
             <div class="og-card-head" data-en>See it. Delete it.</div>
             <div class="og-card-head" data-af>Sien dit. Verwyder dit.</div>
-            <p class="og-card-body" data-en>Ask "what do you remember about me?" to see what's stored. Send "delete my data" to wipe it. Both work in English and Afrikaans.</p>
-            <p class="og-card-body" data-af>Vra "wat onthou jy oor my?" om te sien wat gestoor is. Stuur "verwyder my data" om dit uit te wis. Albei werk in Engels en Afrikaans.</p>
+            <p class="og-card-body" data-en>Ask "what do you remember about me?" any time to see what Ongiini has stored. Send "delete my data" to wipe it. Both phrases work in English and Afrikaans.</p>
+            <p class="og-card-body" data-af>Vra enige tyd "wat onthou jy oor my?" om te sien wat Ongiini gestoor het. Stuur "verwyder my data" om dit uit te wis. Albei frases werk in Engels en Afrikaans.</p>
           </div>
         </div>
       </div>
@@ -1548,8 +1648,8 @@
           af: ["Wat tel presies teen my maandelikse tokens?", "Elke antwoord wat Ongiini stuur, insluitend die tokens om enige foto wat jy aanstuur te lees. Plus 'n klein bietjie vir die agtergrondwerk om jou langtermyngeheue ná elke boodskap by te werk, en die nou en dan opsomming wat ou dele van 'n lang gesprek saampers. Om bestaande geheue terug te lees, is gratis. Vra 'hoeveel tokens het ek hierdie maand gebruik?' op WhatsApp en jy kry 'n uiteensetting oor al drie."] },
         { en: ["Which languages can I use?", "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it (that's unlikely to happen soon) but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."],
           af: ["Watter tale kan ek gebruik?", "Engels en Afrikaans werk vandag goed. Oshiwambo kom binnekort — nie deur te wag vir 'n model wat dit van nature verstaan nie (dit gebeur waarskynlik nie binnekort nie), maar deur 'n vertaallaag wat onder die enjinkap na en van Engels omskakel, terwyl Gemma 4 die brein bly. Otjiherero en Damara-Nama is op dieselfde pad."] },
-        { en: ["Can I send voice notes?", "Yes. Ongiini transcribes WhatsApp voice notes on the Spark itself using Whisper (running on CPU so it doesn't compete with the chat model for GPU). The transcript is treated exactly like a typed message — same memory, same tools, same English / Afrikaans language rule. Audio bytes are discarded right after transcription; nothing audio-shaped is ever stored. Replies still come back as text for now — voice replies are on the roadmap."],
-          af: ["Kan ek stemnotas stuur?", "Ja. Ongiini skryf WhatsApp-stemnotas op die Spark self uit met Whisper (op die SVE, sodat dit nie met die KI-model meeding vir GPU nie). Die uitgeskrewe teks word behandel net soos 'n getikte boodskap — selfde geheue, selfde gereedskap, selfde Engels-of-Afrikaans-reël. Die klankgreepe word weggegooi sodra dit uitgeskryf is; niks oudio word ooit gestoor nie. Antwoorde kom voorlopig steeds as teks terug — stem-antwoorde is op die padkaart."] },
+        { en: ["Can I send voice notes?", "Yes. Press and hold the microphone button in WhatsApp, speak your question, release to send — exactly the same flow you'd use with a friend. English and Afrikaans both work; up to about 90 seconds per note. Ongiini transcribes the recording on the Spark itself using Whisper (running on CPU so it doesn't compete with the chat model for GPU). The transcript is treated exactly like a typed message — same memory, same tools, same English / Afrikaans language rule. Audio bytes are discarded right after transcription; nothing audio-shaped is ever stored. Replies still come back as text for now — voice replies are on the roadmap."],
+          af: ["Kan ek stemnotas stuur?", "Ja. Hou die mikrofoonknoppie in WhatsApp ingedruk, praat jou vraag, laat los om te stuur — presies dieselfde manier as met 'n vriend. Engels en Afrikaans werk albei; tot omtrent 90 sekondes per nota. Ongiini skryf die opname op die Spark self uit met Whisper (op die SVE, sodat dit nie met die KI-model meeding vir GPU nie). Die uitgeskrewe teks word behandel net soos 'n getikte boodskap — selfde geheue, selfde gereedskap, selfde Engels-of-Afrikaans-reël. Die klankgreepe word weggegooi sodra dit uitgeskryf is; niks oudio word ooit gestoor nie. Antwoorde kom voorlopig steeds as teks terug — stem-antwoorde is op die padkaart."] },
         { en: ["What can I ask it?", "Lots of the things you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice — learning and everyday questions of many kinds. You can also send a photo if it's easier to show than tell."],
           af: ["Wat kan ek dit vra?", "Baie van die goed wat jy 'n kundige vriend sou vra. Verduidelik 'n skoolvak, help jou 'n kontrak of nuusartikel verstaan, vertaal, stel 'n CV of e-pos op, werk deur 'n wiskundeprobleem, som 'n dokument op, vra oor 'n siek mielieplant, 'n koors, 'n regskennisgewing — leer en alledaagse vrae van baie soorte. Jy kan ook 'n foto stuur as dit makliker is om te wys as om te beskryf."] },
         { en: ["Can I send photos?", "Yes. Take a photo on WhatsApp like normal, add a question as the caption, and send. Ongiini can look at the picture and answer questions about it — useful for a sick plant, a strange rash, an ingredient label, a contract page you can't quite read, or a handwritten note. It works the same way in English and Afrikaans. The photo itself isn't kept — Ongiini reads it in memory and then discards the file. Only what it learned from the picture (something like 'shared photo of yellowing maize leaves') goes into long-term memory, and 'delete my data' wipes those learnings too."],
