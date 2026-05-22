@@ -11,8 +11,19 @@
   <meta property="og:description" content="Life is full of questions. Ongiini is here to help — ask in text or send a photo. Free, on WhatsApp, in English & Afrikaans." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://ongiini.ai/" />
-  <meta property="og:image" content="/assets/ongiini-icon-512-v2.png" />
-  <meta name="twitter:card" content="summary" />
+  <meta property="og:image" content="https://ongiini.ai/assets/ongiini-icon-512-v2.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:site_name" content="Ongiini" />
+  <meta property="og:locale" content="en_NA" />
+  <meta property="og:locale:alternate" content="af_NA" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ongiini — Help for life's questions, on WhatsApp" />
+  <meta name="twitter:description" content="Free AI helper on WhatsApp for Namibia. Ask in text or send a photo. English &amp; Afrikaans, no app to install." />
+  <meta name="twitter:image" content="https://ongiini.ai/assets/ongiini-icon-512-v2.png" />
+
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large" />
+  <link rel="canonical" href="https://ongiini.ai/" />
 
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/assets/ongiini-icon-192-v2.png" />
@@ -21,6 +32,91 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Common Intelligence Foundation",
+    "alternateName": "Ongiini",
+    "url": "https://ongiini.ai",
+    "logo": "https://ongiini.ai/assets/ongiini-icon-512-v2.png",
+    "description": "A non-profit foundation, currently being formally established in Estonia, that builds and operates free AI access infrastructure for communities currently locked out of AI. Ongiini is its first project.",
+    "foundingLocation": {
+      "@type": "Country",
+      "name": "Estonia"
+    },
+    "sameAs": [
+      "https://common-intelligence.org",
+      "https://github.com/sebkuepers/Ongiini"
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Ongiini",
+    "url": "https://ongiini.ai",
+    "applicationCategory": "CommunicationApplication",
+    "operatingSystem": "WhatsApp",
+    "description": "A free AI helper on WhatsApp for Namibia. Ask in text or send a photo — school, farming, health, contracts, daily life. English and Afrikaans today, Oshiwambo via a translation layer coming soon. Powered by Google's Gemma 4 26B running locally on an NVIDIA DGX Spark.",
+    "inLanguage": ["en", "af"],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "NAD",
+      "availability": "https://schema.org/InStock",
+      "description": "Free for users in Namibia, with a monthly cap of 1,000,000 tokens (~500 conversations) per user."
+    },
+    "audience": {
+      "@type": "Audience",
+      "geographicArea": {
+        "@type": "Country",
+        "name": "Namibia"
+      }
+    },
+    "featureList": [
+      "Text questions on WhatsApp",
+      "Photo recognition and visual question answering",
+      "Voice note transcription and reply",
+      "English and Afrikaans support",
+      "Web search for time-sensitive questions",
+      "Long-term per-user memory",
+      "User-controlled data deletion"
+    ],
+    "creator": {
+      "@type": "Organization",
+      "name": "Common Intelligence Foundation",
+      "url": "https://common-intelligence.org"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {"@type": "Question", "name": "What is Ongiini?", "acceptedAnswer": {"@type": "Answer", "text": "A free AI helper on WhatsApp. Send a question — about learning, work, health, daily life — and you get a useful answer back. Built on a simple idea: a tool this useful belongs to all of us, not just to whoever can afford a subscription."}},
+      {"@type": "Question", "name": "Why 'Ongiini'?", "acceptedAnswer": {"@type": "Answer", "text": "It's the everyday Oshiwambo greeting — literally 'How are you?', used the way English speakers use 'Hello'. It's the first word many Namibians hear and say each day. Naming the project after it felt right: the brand name is its own first message to you, said in a language of the country it serves."}},
+      {"@type": "Question", "name": "Why Namibia?", "acceptedAnswer": {"@type": "Answer", "text": "Almost everyone uses WhatsApp on the phone they already have — nothing to install, no account to make. English and Afrikaans are widely spoken, and they're the two languages Gemma 4 handles well today. The country is small enough (~3 million people) that one DGX Spark can realistically serve a meaningful share of users on a generous one-million-token-per-month cap each. The mix of urban and rural, multilingual, formal and informal use cases makes Namibia a real test of whether free AI on WhatsApp can be a genuine game-changer for everyday life."}},
+      {"@type": "Question", "name": "Does it cost anything?", "acceptedAnswer": {"@type": "Answer", "text": "No. Each user gets one million free tokens per month, which covers about 500 normal conversations — easily more than typical daily use. The cap resets on the 1st of every month. WhatsApp's normal data charges from your mobile provider still apply, but Ongiini itself is free."}},
+      {"@type": "Question", "name": "What is a token?", "acceptedAnswer": {"@type": "Answer", "text": "It's how AI measures the text it reads and writes — roughly three-quarters of a word, including punctuation. 'How are you?' is about 4 tokens. 'My maize leaves are turning yellow' is about 9. One million tokens — your free monthly cap — works out to roughly 500 normal back-and-forth conversations over a month."}},
+      {"@type": "Question", "name": "What exactly counts toward my monthly tokens?", "acceptedAnswer": {"@type": "Answer", "text": "Every reply Ongiini sends you, including the tokens used to read any photo you attach. Plus a small amount for the behind-the-scenes work of keeping your long-term memory in sync after each message, and the occasional summary that compresses old turns of a long conversation. Reading existing memory back to you is free. Asking 'how many tokens have I used this month?' on WhatsApp gives you a breakdown across all three."}},
+      {"@type": "Question", "name": "Which languages can I use?", "acceptedAnswer": {"@type": "Answer", "text": "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."}},
+      {"@type": "Question", "name": "Can I send voice notes?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Press and hold the microphone button in WhatsApp, speak your question, release to send. English and Afrikaans both work; up to about 90 seconds per note. Ongiini transcribes the recording on the Spark itself using Whisper. The transcript is treated exactly like a typed message. Audio bytes are discarded right after transcription. Replies still come back as text for now; voice replies are on the roadmap."}},
+      {"@type": "Question", "name": "What can I ask it?", "acceptedAnswer": {"@type": "Answer", "text": "Lots of the things you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice. You can also send a photo if it's easier to show than tell."}},
+      {"@type": "Question", "name": "Can I send photos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Take a photo on WhatsApp, add a question as the caption, send. Ongiini can look at the picture and answer questions about it — useful for a sick plant, a strange rash, an ingredient label, a contract page you can't quite read, or a handwritten note. The photo itself isn't kept — Ongiini reads it in memory and then discards the file. Only what it learned from the picture goes into long-term memory, and 'delete my data' wipes those learnings too."}},
+      {"@type": "Question", "name": "How accurate is it?", "acceptedAnswer": {"@type": "Answer", "text": "Sometimes very accurate. Sometimes confidently wrong — that's the nature of AI today. Treat its answers like advice from a knowledgeable friend who can also make mistakes. Never make decisions about your health, money or legal status based on Ongiini's answer alone. Verify with a doctor, lawyer or other qualified person."}},
+      {"@type": "Question", "name": "What exactly do you store about me?", "acceptedAnswer": {"@type": "Answer", "text": "Three things. (1) Roughly the last 50 turns of back-and-forth so Ongiini can follow a conversation — obvious personal data (email, ID, IBAN, card) is auto-scrubbed before saving. (2) A small set of durable facts about you extracted across all our chats — things like 'lives in northern Namibia', 'farms maize', 'prefers Afrikaans replies'. (3) A line per message in a usage log with token counts and a timestamp — no message content. Ask 'what do you remember about me?' on WhatsApp to see. Send 'delete my data' to wipe all three."}},
+      {"@type": "Question", "name": "Where is it physically running?", "acceptedAnswer": {"@type": "Answer", "text": "On a single NVIDIA DGX Spark — a personal AI supercomputer about the size of a small book, not a data centre. It's currently in Germany during the pilot phase. The goal is to move the hardware to Namibia once the service is sustainable. No US cloud provider is in the pipeline at any point."}},
+      {"@type": "Question", "name": "Why a German number, hosted in Germany?", "acceptedAnswer": {"@type": "Answer", "text": "Honest answer: convenience. Ongiini is the first project of the Common Intelligence Foundation, in pilot phase, and Germany is where the foundation's current operator is based and where the hardware sits. A German WhatsApp Business number was the fastest way to get something real running. The service itself is locked to Namibian numbers (+264). If the pilot earns traction the plan is to physically move the hardware to Namibia."}},
+      {"@type": "Question", "name": "Why WhatsApp?", "acceptedAnswer": {"@type": "Answer", "text": "Because almost everyone in Namibia already has it. No download, no sign-up, no learning curve. You write, it writes back."}},
+      {"@type": "Question", "name": "What is the Common Intelligence Foundation?", "acceptedAnswer": {"@type": "Answer", "text": "A non-profit foundation, currently being formally established in Estonia, that builds and operates free AI access infrastructure for communities currently locked out of AI. Ongiini is its first project — a proof of concept for what locally owned, free AI access can look like, country by country. The foundation believes intelligence is a common good."}},
+      {"@type": "Question", "name": "Who built this?", "acceptedAnswer": {"@type": "Answer", "text": "Ongiini is the first project of the Common Intelligence Foundation, currently being formally established as a non-profit foundation in Estonia. While the foundation is being established, this project is privately funded and operated on a non-profit basis. The code is on GitHub — read it, audit it, fork it."}}
+    ]
+  }
+  </script>
 
   <style>
     :root {
@@ -176,6 +272,23 @@
     .og-pre-line { width: 22px; height: 1px; background: var(--ink-soft); }
     .og-pre-gloss { text-transform: uppercase; letter-spacing: 0.14em; }
     .og-pre-dot { opacity: 0.5; }
+
+    /* Visually-hidden but readable to screen readers and search engines.
+       Used inside the H1 to carry a descriptive sentence behind the
+       brand wordmark — search engines weigh H1 content; this lets the
+       visual H1 stay tight while the semantic H1 still describes what
+       the page is. Standard a11y pattern. */
+    .og-sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
 
     .og-mark {
       margin: 18px 0 0;
@@ -927,7 +1040,10 @@
           <span class="og-pre-gloss" data-af>Hoe gaan dit? · Oshiwambo</span>
         </div>
 
-        <h1 class="og-mark">Ongiini<span class="og-mark-dot">.</span></h1>
+        <h1 class="og-mark">
+          <span class="og-sr-only">Ongiini — a free AI helper on WhatsApp for Namibia. Ask in text or send a photo: school, farming, health, contracts, daily life. English and Afrikaans, Oshiwambo coming soon. No app to install.</span>
+          <span aria-hidden="true">Ongiini<span class="og-mark-dot">.</span></span>
+        </h1>
 
         <div class="og-hero-row">
           <div class="og-hero-tag">

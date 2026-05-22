@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Hidden admin / legal subpages — also carry <meta name="robots" content="noindex">.
+# Listing them here is belt-and-braces for the small share of crawlers that
+# don't read meta tags.
+Disallow: /statistics/
+
+# Pages Function endpoint (JSON API) — no point indexing.
+Disallow: /api/
+
+Sitemap: https://ongiini.ai/sitemap.xml
