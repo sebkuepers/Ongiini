@@ -523,10 +523,15 @@ async def handle_audio_message(
     # tools dispatch, EN/AF-only redirect (the language rule in
     # SYSTEM_PROMPT fires on the transcript text itself — no separate
     # gating needed here). Reply is text-only for v1.
-    await handle_message(sender, transcript)
+    #
+    # `memory_prefix="[voice note]"` marks the stored turn — the LLM
+    # still receives the raw transcript for THIS call, but future turns
+    # (and the transparency aggregator's voice-note counter) see the
+    # marker. Same pattern as `[image attached]` for images.
+    await handle_message(sender, transcript, memory_prefix="[voice note]")
 
 
-async def handle_message(sender: str, text: str) -> None:
+async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> None:
     try:
         msisdn = normalize(sender)
     except InvalidMsisdn as exc:
@@ -565,7 +570,8 @@ async def handle_message(sender: str, text: str) -> None:
             # already saw the un-redacted user text (so it could answer the
             # actual question). What lands on disk for future-turn replay
             # is the scrubbed version.
-            history.append(pii.sanitize_message({"role": "user", "content": text}))
+            stored_text = f"{memory_prefix} {text}".strip() if memory_prefix else text
+            history.append(pii.sanitize_message({"role": "user", "content": stored_text}))
             history.append(pii.sanitize_message({"role": "assistant", "content": result.reply}))
             history = await maybe_summarize(history, msisdn=msisdn)
             memory.save(msisdn, history)

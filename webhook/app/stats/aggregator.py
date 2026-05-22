@@ -381,6 +381,7 @@ def _compute_sync() -> dict[str, Any]:
     # in the meantime the trace-based total works for the overall photo
     # count.
     image_marker = "[image attached]"
+    voice_marker = "[voice note]"
     for fp in _memory_glob():
         msisdn = fp.stem
         if msisdn in excluded:
@@ -397,14 +398,12 @@ def _compute_sync() -> dict[str, Any]:
             if entry.get("role") != "user":
                 continue
             content = entry.get("content")
-            if isinstance(content, str) and image_marker in content:
+            if not isinstance(content, str):
+                continue
+            if image_marker in content:
                 photos += 1
-            # Voice notes leave no trace in stored memory (they become
-            # plain text). Audio count therefore stays in trace land
-            # (handled below via kind=audio when we add that marker).
-    # Until a kind=audio marker exists in the data, we report 0 for
-    # voice notes. The plan documents this limitation.
-    voice_notes = 0
+            elif voice_marker in content:
+                voice_notes += 1
 
     # ---- Assemble period + timeseries ----
     parsed_timestamps = [

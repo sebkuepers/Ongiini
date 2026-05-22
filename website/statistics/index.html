@@ -28,6 +28,17 @@
       --terracotta:     oklch(0.60  0.14  45);
       --terracotta-deep:oklch(0.48  0.13  40);
       --terracotta-light:oklch(0.78 0.10 50);
+      /* Second accent, tied to the Common Intelligence Foundation
+         palette. Used for "growth" / "people" semantics: cumulative
+         users, day-of-week, the people KPI tiles. */
+      --teal:           oklch(0.55  0.09  215);
+      --teal-deep:      oklch(0.42  0.10  220);
+      --teal-light:     oklch(0.78  0.06  215);
+      /* Tertiary accent — olive/sage. Used sparingly for distribution
+         rows so a long bar chart has internal differentiation without
+         multiple competing primary colors. */
+      --olive:          oklch(0.55  0.07  120);
+      --olive-light:    oklch(0.78  0.05  120);
       --rule:           oklch(0.85  0.018 70);
       --rule-faint:     oklch(0.90  0.014 70);
       --gutter: 22px;
@@ -45,6 +56,11 @@
         --terracotta: #c46c3f;
         --terracotta-deep: #9a4f2d;
         --terracotta-light: #d4a283;
+        --teal: #4787a3;
+        --teal-deep: #28688a;
+        --teal-light: #a8c5d2;
+        --olive: #7d8a5f;
+        --olive-light: #b9c2a4;
         --rule: #d1c8b9;
         --rule-faint: #ddd5c6;
       }
@@ -144,12 +160,26 @@
       gap: 12px;
     }
     .stat-kpi {
+      position: relative;
       background: var(--sand);
       border-radius: 12px;
-      padding: 20px 18px;
+      padding: 22px 18px 20px;
       display: flex; flex-direction: column;
       gap: 6px;
+      overflow: hidden;
     }
+    /* 3px top-accent stripe — colour set by data-accent on the tile.
+       Lets us group tiles by what they measure: 'people' is teal,
+       'activity' is terracotta, 'compute' is olive. */
+    .stat-kpi::before {
+      content: "";
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--terracotta);
+    }
+    .stat-kpi[data-accent="people"]::before { background: var(--teal); }
+    .stat-kpi[data-accent="activity"]::before { background: var(--terracotta); }
+    .stat-kpi[data-accent="compute"]::before { background: var(--olive); }
     .stat-kpi-label {
       font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -161,6 +191,8 @@
       line-height: 1;
       color: var(--ink);
     }
+    .stat-kpi[data-accent="people"] .stat-kpi-value { color: var(--teal-deep); }
+    .stat-kpi[data-accent="compute"] .stat-kpi-value { color: var(--olive); }
     .stat-kpi-sub {
       font-size: 13px;
       color: var(--ink-soft);
@@ -207,6 +239,13 @@
       font-size: 13px;
       fill: var(--ink-faint);
     }
+    /* Growth-related charts use teal (people / cumulative). Activity
+       charts keep terracotta. Same shape; just a colour swap. */
+    #chart-cumulative .line { stroke: var(--teal-deep); }
+    #chart-cumulative .area { fill: var(--teal-light); opacity: 0.55; }
+    #chart-cumulative .point { fill: var(--teal-deep); }
+    #chart-dow .bar { fill: var(--teal-deep); }
+    #chart-dow .bar-secondary { fill: var(--teal-light); }
 
     .stat-bars { margin: 4px 0 0; }
     .stat-bar-row {
@@ -242,6 +281,12 @@
       background: var(--terracotta);
       border-radius: 999px;
     }
+    /* Rotate bar colours across rows so a vertical list of categories
+       has visual rhythm — keeps the qualitative section from looking
+       like a wall of orange. Selectors target the row's nth-of-type
+       and override the fill. */
+    .stat-bar-row:nth-of-type(3n+2) .stat-bar-fill { background: var(--teal); }
+    .stat-bar-row:nth-of-type(3n+3) .stat-bar-fill { background: var(--olive); }
     .stat-placeholder {
       background: var(--bone-deep);
       border: 1px dashed var(--rule);
@@ -330,7 +375,7 @@
 
   <main>
     <p class="stat-eyebrow">Transparency</p>
-    <h1>What Ongiini is doing.</h1>
+    <h1>What Ongiini.ai is doing.</h1>
     <p class="stat-lede">Live aggregate statistics about how the service is used. Updated continuously. Never includes individual conversations.</p>
     <p class="stat-refreshed" id="refreshed">Loading…</p>
 
@@ -487,8 +532,9 @@
       refreshed.appendChild(document.createTextNode(' · Period: ' + period));
     }
 
-    function tile(label, value, sub) {
+    function tile(label, value, sub, accent) {
       const root = el('div', { className: 'stat-kpi' });
+      if (accent) root.setAttribute('data-accent', accent);
       root.appendChild(el('div', { className: 'stat-kpi-label', text: label }));
       root.appendChild(el('div', { className: 'stat-kpi-value', text: value }));
       if (sub) root.appendChild(el('div', { className: 'stat-kpi-sub', text: sub }));
@@ -499,12 +545,14 @@
       const t = d.totals;
       const wrap = document.getElementById('kpis');
       clear(wrap);
-      wrap.appendChild(tile('Unique users', fmtInt.format(t.unique_users)));
-      wrap.appendChild(tile('Conversations', fmtInt.format(t.conversations), '≥30 min gap = new'));
-      wrap.appendChild(tile('Free tokens generated', fmtCompact.format(t.free_tokens_generated), 'Assistant replies, lifetime'));
-      wrap.appendChild(tile('Web searches', fmtInt.format(t.web_searches), 'Tavily API calls'));
-      wrap.appendChild(tile('Voice notes', fmtInt.format(t.voice_notes), 'Transcribed locally'));
-      wrap.appendChild(tile('Photos', fmtInt.format(t.photos), 'Image messages'));
+      // Accent grouping: 'people' = teal, 'activity' = terracotta,
+      // 'compute' = olive. Matches the page's three-colour rhythm.
+      wrap.appendChild(tile('Unique users', fmtInt.format(t.unique_users), null, 'people'));
+      wrap.appendChild(tile('Conversations', fmtInt.format(t.conversations), '≥30 min gap = new', 'people'));
+      wrap.appendChild(tile('Free tokens generated', fmtCompact.format(t.free_tokens_generated), 'Assistant replies, lifetime', 'compute'));
+      wrap.appendChild(tile('Web searches', fmtInt.format(t.web_searches), 'Tavily API calls', 'activity'));
+      wrap.appendChild(tile('Voice notes', fmtInt.format(t.voice_notes), 'Transcribed locally', 'activity'));
+      wrap.appendChild(tile('Photos', fmtInt.format(t.photos), 'Image messages', 'activity'));
     }
 
     function svgNode(width, height) {
