@@ -38,18 +38,23 @@ log = logging.getLogger("ongiini.planner")
 
 
 # Adapted from smolagents/src/smolagents/prompts/code_agent.yaml::initial_plan,
-# narrowed for the WhatsApp / Namibia shape. The three sections
-# (FACTS I ALREADY KNOW / FACTS TO LOOK UP / SEARCH PLAN) are the
-# minimum decomposition that produces measurably better multi-step
-# behaviour on Gemma 4. The ``PLAN_DONE`` sentinel mirrors smolagents'
-# ``<end_plan>`` — gives the parser a reliable stop and protects
-# against the model rambling into the act loop content.
+# narrowed for the WhatsApp / Namibia shape. The four sections
+# (FACTS I ALREADY KNOW / FACTS TO LOOK UP / SEARCH PLAN / TOOL PLAN)
+# decompose the question AND tell the model which tools to use to
+# gather what's missing. The TOOL PLAN section was added after live
+# testing showed Gemma 4 sticking to web_search even when the question
+# needed verbatim content from a specific document — without explicit
+# guidance, the model never escalates to fetch_url / fetch_urls.
+#
+# The ``PLAN_DONE`` sentinel mirrors smolagents' ``<end_plan>`` —
+# gives the parser a reliable stop and protects against the model
+# rambling into the act loop content.
 _PLAN_PROMPT = """You're about to help a user in Namibia answer this question on WhatsApp:
 
   {question}
 
-Before any search, write a 3-section plan in plain text. Keep the total
-output under 200 tokens. No markdown, no preamble. Use this exact shape:
+Before any search, write a 4-section plan in plain text. Keep the total
+output under 250 tokens. No markdown, no preamble. Use this exact shape:
 
 FACTS I ALREADY KNOW:
 - 1-2 bullets of background you can answer confidently without searching
@@ -65,15 +70,32 @@ SEARCH PLAN:
 - 1-2 lines describing the search order. Mention whether to broaden or
   narrow the query if first results are thin.
 
+TOOL PLAN:
+- Tell yourself HOW to use the tools, not just what to look up. Use
+  these rules:
+  - For COMPARISON questions ("compare X, Y, Z", "which is cheapest",
+    "best 3 banks for..."), call ``web_search`` to find the top sources
+    first, then call ``fetch_urls`` on the 3-5 best results IN ONE CALL
+    to read them in parallel.
+  - For VERBATIM or SPECIFIC DATA (an exact price, a clause, an exact
+    schedule, an official document), call ``web_search`` to find the
+    authoritative source, then call ``fetch_url`` to read the full
+    page — search snippets routinely truncate the data you need.
+  - For NEWS / CURRENT EVENTS / WHAT'S HAPPENING questions, a single
+    ``web_search`` is usually enough — the snippets carry the
+    headlines and you can quote them directly.
+  - For HOW-TO and PROCESS questions about Namibia, search once and
+    fetch the most authoritative source (gov website, BIPA, NamRA).
+
 End with the literal token PLAN_DONE.
 """
 
 
 # Hard cap on plan output. The act loop will see this as a system
 # message; bloating it eats prefix-cache headroom and slows the chat
-# call. Empirically ~200 completion tokens is plenty for the structure
+# call. ~270 completion tokens accommodates the new TOOL PLAN section
 # above.
-_PLAN_MAX_TOKENS = 220
+_PLAN_MAX_TOKENS = 280
 
 # Latency budget. If Gemma can't produce a plan in this time, the
 # planner returns an empty PlanStep and the executor proceeds without

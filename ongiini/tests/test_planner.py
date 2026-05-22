@@ -118,4 +118,24 @@ async def test_planner_prompt_contains_question_and_sentinel_instruction():
     sent = call_kwargs["messages"][0]["content"]
     assert "compare three banks" in sent
     assert "PLAN_DONE" in sent
-    assert call_kwargs["max_tokens"] == 220
+    assert call_kwargs["max_tokens"] == 280
+
+
+@pytest.mark.asyncio
+async def test_planner_prompt_includes_tool_plan_section():
+    """The TOOL PLAN section is the v1.2 fix for Gemma not escalating
+    to fetch_url / fetch_urls on its own. The prompt must explicitly
+    describe when to use each tool by question shape."""
+    client = _client_returning("ok\nPLAN_DONE")
+    planner = OngiiniPlanner(base_url="x", model_id="gemma", client=client)
+    await planner.plan(_msg("compare three banks"), Policy(name="search_deep"), [])
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    # All four sections must be in the prompt template.
+    assert "FACTS I ALREADY KNOW:" in sent
+    assert "FACTS TO LOOK UP:" in sent
+    assert "SEARCH PLAN:" in sent
+    assert "TOOL PLAN:" in sent
+    # And the specific tool-escalation guidance shapes are present.
+    assert "fetch_urls" in sent and "fetch_url" in sent
+    assert "COMPARISON" in sent
+    assert "VERBATIM" in sent or "SPECIFIC DATA" in sent
