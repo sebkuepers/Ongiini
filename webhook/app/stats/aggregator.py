@@ -317,14 +317,16 @@ def _top_topics_block(top_n: int = 20) -> dict[str, Any]:
             "labels": [],
             "status": "Computing — first extraction pass not yet complete.",
         }
-    floor = settings.stats_minimum_bucket
-    # Filter labels with count >= floor for the top-list (privacy
-    # floor + signal-to-noise). Drop 'small talk' explicitly — it's a
-    # placeholder, not a use-case.
+    # Top-topics has a LOWER threshold than the per-user bucket floor:
+    # individual topic phrases don't identify a person the way roles or
+    # locations might. We filter true singletons (count==1) which are
+    # mostly noise (verbatim once-off phrasings the model produced).
+    # Two-or-more keeps things interesting without privacy harm. Also
+    # drop 'small talk' — it's a placeholder, not a real topic.
     rows = [
         {"label": lbl, "count": c}
         for lbl, c in counts.items()
-        if c >= floor and lbl.lower() != "small talk"
+        if c >= 2 and lbl.lower() != "small talk"
     ]
     rows.sort(key=lambda r: r["count"], reverse=True)
     shown = rows[:top_n]
