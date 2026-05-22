@@ -1,12 +1,14 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import httpx
 from openai import AsyncOpenAI
 
 from . import mem, memory, router, usage
@@ -456,6 +458,77 @@ class LLMResult:
     used_lookup_ongiini_docs: bool = False
 
 
+# Matches a full https:// URL up to the first whitespace or closing
+# bracket. Trailing punctuation is trimmed in the strip step.
+_URL_RE = re.compile(r"https?://[^\s)>\"]+")
+
+
+async def _strip_dead_urls(reply: str) -> str:
+    """HEAD-check every full URL in the reply; strip any LINE that
+    contains a definitely-dead URL (404 / 410). Returns the cleaned
+    reply text.
+
+    Why this matters: Tavily search results sometimes include URLs that
+    have since 404'd, and Gemma cites them verbatim per our prompt
+    rules. The user clicks the citation, gets a broken page, and the
+    whole citation system loses credibility. Cheap pre-send check fixes
+    the common case.
+
+    Soft-fail design:
+      - HEAD timeout is 2s per URL; longer than that = leave the URL alone.
+      - 401/403 (gated / paywalled) → keep, those URLs are still real.
+      - Network errors → keep (transient).
+      - Only 404 and 410 are treated as "definitely dead" — these are
+        the cases the user actually loses trust on.
+    URLs are checked in parallel via asyncio.gather to bound total
+    extra latency to one network round-trip.
+
+    If we end up stripping ALL source lines, the reply still goes out
+    minus the citations — which is honest ("I couldn't verify the
+    sources right now"). Better than sending dead links.
+    """
+    if not reply:
+        return reply
+    raw_urls = _URL_RE.findall(reply)
+    # Trim trailing punctuation that snuck into the match.
+    urls = [u.rstrip(".,;:!?)") for u in raw_urls]
+    urls = list(dict.fromkeys(urls))  # dedupe, preserve order
+    if not urls:
+        return reply
+
+    async def _check(url: str) -> tuple[str, bool]:
+        try:
+            async with httpx.AsyncClient(
+                timeout=2.0, follow_redirects=True
+            ) as client:
+                # Try HEAD first (cheap). Some servers reject HEAD (405);
+                # fall back to a streamed GET that we don't read.
+                r = await client.head(url)
+                if r.status_code == 405:
+                    r = await client.get(url, headers={"Range": "bytes=0-0"})
+                alive = r.status_code not in (404, 410)
+                return url, alive
+        except Exception:
+            return url, True   # soft-fail: keep the URL
+
+    results = await asyncio.gather(*[_check(u) for u in urls])
+    dead = {u for u, alive in results if not alive}
+    if not dead:
+        return reply
+    for u in dead:
+        log.info("stripping dead URL (404/410) from reply: %s", u)
+
+    out_lines: list[str] = []
+    for line in reply.split("\n"):
+        if any(d in line for d in dead):
+            continue
+        out_lines.append(line)
+    cleaned = "\n".join(out_lines)
+    # Collapse any 3+ blank-line runs introduced by line removal.
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip() + ("\n" if cleaned.endswith("\n") else "")
+
+
 async def respond(
     history: list[dict[str, Any]],
     user_content: "str | list[dict[str, Any]]",
@@ -655,6 +728,11 @@ async def respond(
                     )
                     content = reasoning
             reply = content or "Sorry, I couldn't come up with a reply."
+            # Validate citations: HEAD-check every URL in the reply and
+            # strip lines containing 404/410 URLs. Saves us from sending
+            # confident-looking dead links that destroy citation trust.
+            if used_search:
+                reply = await _strip_dead_urls(reply)
             trace.reply_len = len(reply)
             trace.used_search = used_search
             trace.deleted_data = deleted_data
