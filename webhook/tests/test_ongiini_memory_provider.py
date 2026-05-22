@@ -54,10 +54,31 @@ async def test_assemble_messages_text_only_no_memory():
         content_parts=[{"type": "text", "text": "hi"}],
     )
     result = await provider.assemble_messages(msg, Policy(name="p"), [])
-    assert result == [
-        {"role": "system", "content": "SYS"},
-        {"role": "user", "content": "hi"},
-    ]
+    # SYS prompt + today's-date system + user. No mem0 hits, no history.
+    assert len(result) == 3
+    assert result[0] == {"role": "system", "content": "SYS"}
+    assert result[1]["role"] == "system"
+    assert "Today is" in result[1]["content"]
+    assert "Namibia" in result[1]["content"]
+    assert result[2] == {"role": "user", "content": "hi"}
+
+
+@pytest.mark.asyncio
+async def test_assemble_messages_includes_current_date():
+    """The date system message anchors the model to today's actual date
+    (Namibia time). Without it, the model defaults to its training
+    cutoff and presents stale events as upcoming."""
+    from datetime import datetime, timedelta, timezone
+    namibia = datetime.now(timezone(timedelta(hours=2)))
+    expected_date = namibia.strftime("%A, %d %B %Y")
+
+    provider = _provider()
+    msg = InboundMessage(
+        user_id="u", msg_id="m", text="hi", content_parts=[],
+    )
+    result = await provider.assemble_messages(msg, Policy(name="p"), [])
+    date_msg = next(m for m in result if "Today is" in m.get("content", ""))
+    assert expected_date in date_msg["content"]
 
 
 @pytest.mark.asyncio
@@ -78,11 +99,13 @@ async def test_assemble_messages_with_history_and_mem0():
     result = await provider.assemble_messages(msg, Policy(name="p"), [])
 
     assert result[0] == {"role": "system", "content": "SYS"}
-    assert result[1]["role"] == "system"
-    assert "Lives in Oshakati" in result[1]["content"]
-    assert result[2] == {"role": "user", "content": "earlier"}
-    assert result[3] == {"role": "assistant", "content": "reply"}
-    assert result[4] == {"role": "user", "content": "weather?"}
+    # result[1] is the today-date system message.
+    assert "Today is" in result[1]["content"]
+    assert result[2]["role"] == "system"
+    assert "Lives in Oshakati" in result[2]["content"]
+    assert result[3] == {"role": "user", "content": "earlier"}
+    assert result[4] == {"role": "assistant", "content": "reply"}
+    assert result[5] == {"role": "user", "content": "weather?"}
 
     long.search.assert_called_once_with("u", "weather?", 5)
 
@@ -106,8 +129,8 @@ async def test_assemble_messages_image_uses_multipart_content():
 
 @pytest.mark.asyncio
 async def test_assemble_messages_skips_empty_mem0_block():
-    """No mem0 hits → no extra system message (avoid wasting prompt tokens
-    on an empty 'What you know about this user' header)."""
+    """No mem0 hits → no mem0 system message. The static SYSTEM_PROMPT
+    + today's-date system message still both appear (those are always-on)."""
     long = _make_long(format_relevant_value="")   # empty → no block
     provider = _provider(long=long)
     msg = InboundMessage(
@@ -116,7 +139,10 @@ async def test_assemble_messages_skips_empty_mem0_block():
     )
     result = await provider.assemble_messages(msg, Policy(name="p"), [])
     system_msgs = [m for m in result if m["role"] == "system"]
-    assert len(system_msgs) == 1
+    # SYS prompt + today's date — but NOT a third 'What you know about you' block.
+    assert len(system_msgs) == 2
+    assert system_msgs[0]["content"] == "SYS"
+    assert "Today is" in system_msgs[1]["content"]
 
 
 # ---------- record_turn ----------

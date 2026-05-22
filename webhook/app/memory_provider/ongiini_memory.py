@@ -37,11 +37,40 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
 from owela import InboundMessage, Policy, Step
 
 log = logging.getLogger("ongiini.memory_provider")
+
+
+# Namibia uses Central Africa Time (UTC+2) year-round; no DST. The
+# container clock runs in UTC, so we shift explicitly when we want to
+# present "today" to the model — otherwise after 22:00 CAT we'd already
+# be on tomorrow's UTC date.
+_NAMIBIA_TZ = timezone(timedelta(hours=2))
+
+
+def _today_in_namibia_prompt() -> str:
+    """Short system message anchoring the model to today's real date.
+
+    Critical for SEARCH replies: web results commonly include events
+    dated in the past, and a date-blind model presents them as
+    "upcoming". Without this anchor the model defaults to its training-
+    cutoff sense of "now" (typically 2024-25 for current Gemma builds),
+    which is months stale.
+    """
+    today = datetime.now(_NAMIBIA_TZ)
+    return (
+        f"Today is {today.strftime('%A, %d %B %Y')} (Namibia, CAT timezone).\n"
+        "Anchor all 'soon', 'upcoming', 'recent', 'this week', 'next week' "
+        "reasoning to THIS date.\n"
+        "When web_search results include dated events, compare the event date "
+        "to today: events BEFORE today have already happened — never present "
+        "them as upcoming. If all results are about past events, say so "
+        "plainly instead of pretending they're scheduled."
+    )
 
 
 class ShortTermBackend(Protocol):
@@ -108,6 +137,11 @@ class OngiiniMemoryProvider:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
         ]
+        # Today's date as its own short system message. Goes AFTER the
+        # static system prompt so the prefix cache still hits everything
+        # above it. The date itself rotates daily — fine, the cache miss
+        # cost on ~80 tokens is negligible.
+        messages.append({"role": "system", "content": _today_in_namibia_prompt()})
         if memory_block:
             # Separate system message rather than concatenated into
             # SYSTEM_PROMPT — the per-user mem0 block is the only
