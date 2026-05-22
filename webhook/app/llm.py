@@ -507,7 +507,29 @@ async def respond(
     #
     # Verdict ∈ {SEARCH, DOCS, NONE}. NONE falls through to tool_choice
     # ="auto" — i.e. the model can still freely call any tool.
-    router_verdict = await router.classify(search_query, msisdn=msisdn)
+    # Pull the most recent user turn from history so the router can
+    # resolve pronouns ("what is HER stance on AI?" → who's "her"?).
+    # Without this, the classifier saw 'what is her stance on AI' alone
+    # and routed it to DOCS thinking 'her' meant Ongiini — producing a
+    # confused product.md-driven reply instead of a fresh web search
+    # for the person the user actually meant.
+    prev_user_text = ""
+    for h in reversed(history):
+        if h.get("role") == "user":
+            c = h.get("content", "")
+            if isinstance(c, list):
+                # multipart content (e.g. image+text) — extract text parts
+                c = " ".join(
+                    p.get("text", "")
+                    for p in c
+                    if isinstance(p, dict) and p.get("type") == "text"
+                )
+            prev_user_text = (c or "").strip()
+            break
+
+    router_verdict = await router.classify(
+        search_query, msisdn=msisdn, prev_user_text=prev_user_text
+    )
     first_turn_tool_choice = router.tool_choice_for(router_verdict)
     log.info("router verdict=%s for msisdn=%s msg_len=%d", router_verdict, msisdn, user_msg_len)
 

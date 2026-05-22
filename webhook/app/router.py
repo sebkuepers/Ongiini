@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Union
 
 from openai import AsyncOpenAI
@@ -37,6 +38,29 @@ from . import usage
 from .config import settings
 
 log = logging.getLogger("ongiini.router")
+
+
+# Match common English and Afrikaans pronouns + reference words. When the
+# current user message contains one of these, it likely references prior
+# context — we include the previous user message in the classifier prompt
+# so it can disambiguate ("what is HER stance on AI?" → her = Emma from
+# the previous turn, not "your stance" from Ongiini DOCS).
+_PRONOUN_RE = re.compile(
+    r"\b("
+    r"he|his|him|she|her|hers|it|its|they|their|them|"  # EN pronouns
+    r"this|that|these|those|"                            # EN references
+    r"hy|sy|haar|hulle|hul|"                             # AF pronouns
+    r"hierdie|daardie"                                   # AF references
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _has_pronoun_or_reference(text: str) -> bool:
+    """Cheap heuristic for whether the current message likely references
+    a prior turn. Used to decide whether to spend tokens passing context
+    to the classifier."""
+    return bool(_PRONOUN_RE.search(text))
 
 
 # Module-level client. We deliberately make a fresh AsyncOpenAI rather
@@ -69,7 +93,15 @@ Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu, Katima
 Mulilo) and institutions (BIPA, NamRA, Bank of Namibia, Ministry of Home
 Affairs) imply Namibian context even when "Namibia" isn't explicitly said.
 
-Request: {user_text}
+If a previous user message is shown for context, use it to resolve pronouns
+("her", "his", "it", "they") and references like "this" or "that" in the
+current message. The current message is what you classify; the previous
+message is ONLY there to disambiguate what the user is talking about.
+For example: "Who is the President of Namibia?" → next "what is his policy
+on healthcare?" classifies as SEARCH (about the President), NOT as DOCS
+(it's not asking about Ongiini's own AI policy).
+
+{context}Current message: {user_text}
 
 Reply with exactly one word: SEARCH, DOCS, or NONE.
 """
@@ -87,7 +119,11 @@ _TIMEOUT_S = 2.0
 ToolChoice = Union[str, dict]
 
 
-async def classify(user_text: str, msisdn: str | None = None) -> str:
+async def classify(
+    user_text: str,
+    msisdn: str | None = None,
+    prev_user_text: str = "",
+) -> str:
     """Classify the user's incoming message into 'SEARCH', 'DOCS', or 'NONE'.
 
     'NONE' is the safe default returned on:
@@ -106,13 +142,25 @@ async def classify(user_text: str, msisdn: str | None = None) -> str:
     if not text or len(text) < 3:
         return "NONE"
 
+    # Only include conversation context when the current message has
+    # pronouns or short reference words — those are the cases where the
+    # router needs to know what "her/his/it/this/that" refers to. For a
+    # fully self-contained question we save tokens by not including it.
+    prev = (prev_user_text or "").strip()
+    if prev and len(prev) < 500 and _has_pronoun_or_reference(text):
+        context = f"Previous user message: {prev}\n"
+    else:
+        context = ""
+
     try:
         resp = await asyncio.wait_for(
             _client.chat.completions.create(
                 model=settings.vllm_model,
                 messages=[{
                     "role": "user",
-                    "content": CLASSIFIER_PROMPT.format(user_text=text),
+                    "content": CLASSIFIER_PROMPT.format(
+                        user_text=text, context=context
+                    ),
                 }],
                 temperature=0.0,
                 max_tokens=5,
