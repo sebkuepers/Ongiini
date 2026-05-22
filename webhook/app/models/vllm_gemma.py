@@ -90,13 +90,36 @@ class VLLMGemmaModel(Model):
         msg = choice.message if choice else None
 
         # Content: prefer .content; if empty (Gemma reasoning mode ate
-        # the budget), fall back to reasoning_content so the user gets
+        # the budget), fall back to the reasoning text so the user gets
         # *something* instead of "Sorry, couldn't reply". The executor
         # itself decides what to do when content is empty; here we just
         # surface what we have.
+        #
+        # vLLM's --reasoning-parser gemma4 puts the chain-of-thought in
+        # ``msg.reasoning`` (NOT ``reasoning_content``). Older vLLM/parser
+        # combinations expose it as ``reasoning_content``; check both
+        # for forwards/backwards compatibility, and also peek at
+        # ``model_extra`` since the OpenAI SDK stores unknown response
+        # fields there if the typed model didn't define them.
         content = (getattr(msg, "content", "") or "").strip()
         if not content:
-            reasoning = (getattr(msg, "reasoning_content", "") or "").strip()
+            reasoning = ""
+            for candidate in (
+                getattr(msg, "reasoning", None),
+                getattr(msg, "reasoning_content", None),
+            ):
+                if candidate:
+                    reasoning = str(candidate).strip()
+                    if reasoning:
+                        break
+            if not reasoning:
+                extra = getattr(msg, "model_extra", None) or {}
+                for k in ("reasoning", "reasoning_content"):
+                    v = extra.get(k) if isinstance(extra, dict) else None
+                    if v:
+                        reasoning = str(v).strip()
+                        if reasoning:
+                            break
             if reasoning:
                 log.warning(
                     "Gemma returned empty content with %d chars of reasoning — "

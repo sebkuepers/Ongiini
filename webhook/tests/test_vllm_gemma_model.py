@@ -58,6 +58,7 @@ def test_billable_clamps_at_zero():
 def _make_openai_response(
     content: str = "hello",
     tool_calls: list[dict[str, Any]] | None = None,
+    reasoning: str = "",
     reasoning_content: str = "",
     finish_reason: str = "stop",
     prompt_tokens: int = 100,
@@ -67,7 +68,11 @@ def _make_openai_response(
     """Build a MagicMock that looks like an OpenAI ChatCompletion."""
     msg = MagicMock()
     msg.content = content
+    # vLLM gemma4 reasoning parser exposes the thinking on `.reasoning`;
+    # older builds used `.reasoning_content`. The adapter looks at both.
+    msg.reasoning = reasoning
     msg.reasoning_content = reasoning_content
+    msg.model_extra = {}
 
     if tool_calls:
         tc_mocks = []
@@ -191,11 +196,36 @@ async def test_complete_falls_back_to_reasoning_when_content_empty():
     """Gemma + reasoning sometimes returns empty content when the
     reasoning_budget runs out. We surface the reasoning text as content
     so the user sees *something* instead of a hard fallback message."""
-    response = _make_openai_response(content="", reasoning_content="my thinking went here")
+    response = _make_openai_response(content="", reasoning="my thinking went here")
     client = _make_client(response)
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
     out = await model.complete(_basic_request(enable_thinking=True))
     assert out.content == "my thinking went here"
+
+
+@pytest.mark.asyncio
+async def test_complete_falls_back_to_legacy_reasoning_content_field():
+    """Forward-compat: older vLLM exposed reasoning_content instead of
+    reasoning. Both must work."""
+    response = _make_openai_response(content="", reasoning_content="legacy thinking")
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
+    out = await model.complete(_basic_request(enable_thinking=True))
+    assert out.content == "legacy thinking"
+
+
+@pytest.mark.asyncio
+async def test_complete_falls_back_to_model_extra_reasoning():
+    """If the typed model doesn't expose reasoning at all (older SDK +
+    vLLM combo), it may land in model_extra. We dig there too."""
+    response = _make_openai_response(content="")
+    response.choices[0].message.reasoning = None
+    response.choices[0].message.reasoning_content = None
+    response.choices[0].message.model_extra = {"reasoning": "extra-located"}
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
+    out = await model.complete(_basic_request(enable_thinking=True))
+    assert out.content == "extra-located"
 
 
 @pytest.mark.asyncio
