@@ -353,15 +353,84 @@ def _billable(usage_obj: Any) -> tuple[int, int, int]:
     return max(0, prompt_tokens - cached), completion_tokens, cached
 
 
+_REASON_PREFIXES = ("FAIL:", "ISSUE:", "PROBLEM:", "FAILS:", "NO:")
+
+# Strip only ACTUAL list decoration: "1." / "2)" / "-" / "*" / "•",
+# followed by whitespace. Previously a greedy character class also ate
+# leading digits of content (e.g. "2025." would become "."). The
+# anchored alternation is conservative — it only matches recognised
+# list-marker shapes.
+_DECORATION_RE = re.compile(r"^(?:\d+[\.\)]|[\-\*•])\s+")
+
+# A line is an "OK / PASS" verdict on a dimension if it begins with
+# that word followed by a word boundary (whitespace, punctuation,
+# end-of-string). Earlier code only checked for trailing space, which
+# missed "OK." / "OK," / "OK -".
+_OK_OR_PASS_RE = re.compile(r"^(?:OK|PASS)\b", re.IGNORECASE)
+
+# A line counts as a verdict line. The VERDICT marker is the cue we
+# use to enable narrative-only fallback parsing.
+_VERDICT_LINE_RE = re.compile(r"^\s*VERDICT:\s*(PASS|REVISE)\s*$", re.IGNORECASE | re.MULTILINE)
+
+
 def _extract_fail_reasons(critique_text: str) -> list[str]:
-    """Pull "FAIL: <reason>" lines out of the critique body. Each line
-    that begins (after optional digit + dot prefix and whitespace) with
-    FAIL: contributes one reason."""
+    """Pull reason lines out of the critique body.
+
+    Gemma 4 doesn't always use the exact "FAIL:" prefix we asked for —
+    in live testing it uses "Issue:", "Problem:", "Fails:" interchangeably.
+    Catch all the common variants. Each matching line yields one reason.
+
+    Also handles the numbered-list-with-prose case where Gemma writes
+    "2. The claim about X isn't grounded in the search results" rather
+    than "2. FAIL: claim not grounded". We capture those when:
+
+      (a) the critique already has at least one structured reason
+          (Gemma is mixing both styles in the same response), OR
+      (b) the critique's verdict is REVISE but pass 1 found zero
+          structured reasons (Gemma went pure-narrative for this one).
+
+    Both branches skip lines that explicitly say "OK" / "PASS" so
+    positive dimensions don't get captured as failures.
+    """
+    lines = critique_text.splitlines()
     reasons: list[str] = []
-    for line in critique_text.splitlines():
-        stripped = line.strip()
-        # Strip any leading "1." / "2)" / "-" decoration
-        stripped = re.sub(r"^[\d\.\)\-\s]+", "", stripped)
-        if stripped.upper().startswith("FAIL:"):
-            reasons.append(stripped[len("FAIL:"):].strip())
+    structured_reasons_seen = False
+
+    # Pass 1: structured "PREFIX: <reason>" lines (any of the variants).
+    for line in lines:
+        stripped = _DECORATION_RE.sub("", line.strip())
+        upper = stripped.upper()
+        for prefix in _REASON_PREFIXES:
+            if upper.startswith(prefix):
+                body = stripped[len(prefix):].strip()
+                if body:
+                    reasons.append(body)
+                    structured_reasons_seen = True
+                break
+
+    # Pass 2 trigger:
+    #   - mixed-mode: at least one structured reason already → grab the
+    #     narrative siblings too;
+    #   - narrative-only mode: verdict was REVISE but pass 1 found
+    #     nothing — Gemma went pure-prose this time.
+    verdict_match = _VERDICT_LINE_RE.search(critique_text)
+    revise_verdict = verdict_match and verdict_match.group(1).upper() == "REVISE"
+    run_pass_2 = structured_reasons_seen or (revise_verdict and not structured_reasons_seen)
+
+    if run_pass_2:
+        for line in lines:
+            stripped = line.strip()
+            num_match = re.match(r"^[\d]+[\.\)]\s+(.+)$", stripped)
+            if not num_match:
+                continue
+            body = num_match.group(1).strip()
+            upper = body.upper()
+            # Skip if it's already captured by pass 1 (starts with a
+            # known prefix) or if it's an explicit OK / PASS verdict.
+            if any(upper.startswith(p) for p in _REASON_PREFIXES):
+                continue
+            if _OK_OR_PASS_RE.match(body):
+                continue
+            reasons.append(body)
+
     return reasons

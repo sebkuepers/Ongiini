@@ -83,6 +83,21 @@ class Settings:
         os.getenv("ONGIINI_DISABLE_INTERSTITIAL", "").lower() in ("1", "true", "yes")
     )
 
+    # Debug-mode trace detail. When set, the TracingHook includes the
+    # raw critique body + planner plan_text snippet inside each turn's
+    # trace.jsonl entry. Default OFF — production traces stay
+    # structural-only (no content). The operator flips this on during
+    # experiments to understand WHY critique flipped REVISE or what
+    # the planner actually said, then flips it off again.
+    #
+    # Privacy note: these fields contain LLM output that references
+    # user content (the draft reply, parts of the user's question,
+    # snippets from search results). Don't ship traces written under
+    # this flag to external systems / public dashboards.
+    trace_critique_detail: bool = (
+        os.getenv("ONGIINI_TRACE_CRITIQUE_DETAIL", "").lower() in ("1", "true", "yes")
+    )
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)

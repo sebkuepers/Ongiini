@@ -254,6 +254,172 @@ def test_extract_fail_reasons_handles_no_fails():
     assert _extract_fail_reasons(body) == []
 
 
+# ---------- v1.2 Phase 1: loosened reason extraction ----------
+
+def test_extract_reasons_with_issue_prefix():
+    """Gemma 4 in live testing uses 'Issue:' interchangeably with 'FAIL:'."""
+    body = (
+        "1. OK\n"
+        "2. Issue: claim about Oct 2025 not grounded in tool results\n"
+        "3. Issue: no deep URL cited for the BoN figure\n"
+        "VERDICT: REVISE\n"
+    )
+    assert _extract_fail_reasons(body) == [
+        "claim about Oct 2025 not grounded in tool results",
+        "no deep URL cited for the BoN figure",
+    ]
+
+
+def test_extract_reasons_with_problem_prefix():
+    body = (
+        "1. OK\n"
+        "2. Problem: factual claim about Bankmed N$940 sourced to Renaissance URL\n"
+        "VERDICT: REVISE\n"
+    )
+    assert _extract_fail_reasons(body) == [
+        "factual claim about Bankmed N$940 sourced to Renaissance URL",
+    ]
+
+
+def test_extract_reasons_narrative_when_structured_seen():
+    """When Gemma writes structured failures AND narrative descriptions
+    in the same critique, capture both. The narrative is usually
+    finer-grained guidance worth feeding to revise."""
+    body = (
+        "1. OK\n"
+        "2. FAIL: claim not grounded\n"
+        "3. The reply also doesn't acknowledge the date when search results were thin\n"
+        "4. OK\n"
+        "VERDICT: REVISE\n"
+    )
+    reasons = _extract_fail_reasons(body)
+    assert "claim not grounded" in reasons
+    # Narrative line should also be captured
+    assert any("doesn't acknowledge the date" in r for r in reasons)
+
+
+def test_extract_reasons_narrative_only_with_no_structured_reasons():
+    """If there are no structured FAIL/Issue lines, DON'T capture
+    numbered prose — we'd produce false positives on critiques that
+    write "1. The reply is OK because..." in narrative form."""
+    body = (
+        "1. The reply answers the question clearly\n"
+        "2. All facts are grounded\n"
+        "3. Citations present\n"
+        "VERDICT: PASS\n"
+    )
+    assert _extract_fail_reasons(body) == []
+
+
+def test_extract_reasons_strips_bullet_and_star_decoration():
+    """Different decoration styles — must catch them all."""
+    body = (
+        "* FAIL: bullet style\n"
+        "- ISSUE: hyphen style\n"
+        "• Problem: bullet point style\n"
+        "VERDICT: REVISE\n"
+    )
+    reasons = _extract_fail_reasons(body)
+    assert reasons == [
+        "bullet style", "hyphen style", "bullet point style",
+    ]
+
+
+def test_extract_reasons_case_insensitive_prefix():
+    """fail / Issue / PROBLEM all work."""
+    body = (
+        "1. fail: lowercase\n"
+        "2. Issue: titlecase\n"
+        "3. PROBLEM: uppercase\n"
+        "VERDICT: REVISE\n"
+    )
+    reasons = _extract_fail_reasons(body)
+    assert reasons == ["lowercase", "titlecase", "uppercase"]
+
+
+def test_extract_reasons_ignores_empty_body():
+    """Skip 'FAIL:' followed by nothing — that's the model echoing the
+    prompt template, not actually reporting a failure."""
+    body = (
+        "FAIL:\n"          # empty — template echo, not a real reason
+        "FAIL: real reason\n"
+        "VERDICT: REVISE\n"
+    )
+    assert _extract_fail_reasons(body) == ["real reason"]
+
+
+# ---------- Phase 1 review fixes ----------
+
+def test_extract_reasons_skips_OK_with_punctuation():
+    """The 'OK / PASS' skip must catch 'OK.', 'OK,', 'OK -' etc. —
+    not just 'OK ' with a trailing space. Earlier behaviour was a
+    false-positive bug that would leak positive dimensions into
+    reasons."""
+    body = (
+        "1. OK, the reply answers the question.\n"
+        "2. FAIL: the price citation is wrong\n"
+        "3. OK. All other facts look grounded.\n"
+        "4. OK\n"
+        "VERDICT: REVISE\n"
+    )
+    reasons = _extract_fail_reasons(body)
+    assert reasons == ["the price citation is wrong"]
+
+
+def test_extract_reasons_pure_narrative_when_revise():
+    """When VERDICT is REVISE but Gemma wrote pure narrative (no
+    'FAIL:' / 'Issue:' prefix anywhere), the parser should fall back
+    to numbered-prose capture so we still get something useful in
+    CritiqueStep.reasons. Previously this case produced reasons_count=0
+    and defeated the visibility goal."""
+    body = (
+        "1. The reply doesn't answer the user's question — it talks "
+        "about something tangential.\n"
+        "2. The reply has no source citation.\n"
+        "3. OK, language matches.\n"
+        "VERDICT: REVISE\n"
+    )
+    reasons = _extract_fail_reasons(body)
+    assert len(reasons) == 2
+    assert any("tangential" in r for r in reasons)
+    assert any("no source citation" in r for r in reasons)
+
+
+def test_extract_reasons_no_narrative_on_pass_verdict():
+    """When VERDICT is PASS and there are no structured FAIL: lines,
+    do NOT capture narrative — they're positive dimensions, not
+    failures."""
+    body = (
+        "1. The reply answers the question clearly.\n"
+        "2. All facts are grounded.\n"
+        "3. Citation is present and deep.\n"
+        "VERDICT: PASS\n"
+    )
+    assert _extract_fail_reasons(body) == []
+
+
+def test_extract_reasons_preserves_leading_year():
+    """The decoration regex must not eat content digits. Earlier
+    greedy character-class behaviour would strip '2025.' from
+    '2025. The claim isn't grounded' leaving 'The claim isn't
+    grounded'. With the anchored decoration regex this is preserved
+    (the line doesn't look like a list marker, so nothing gets
+    stripped from the start)."""
+    body = (
+        "1. FAIL: confabulated\n"
+        "2025 was a different year and the claim about it isn't grounded.\n"
+        "VERDICT: REVISE\n"
+    )
+    reasons = _extract_fail_reasons(body)
+    # The "2025 was..." line is NOT a numbered list item ("2025." would
+    # be a year, not a list marker), so pass 2 skips it. The structured
+    # "FAIL: confabulated" line is captured.
+    assert "confabulated" in reasons
+    # We don't strip "2025" from anywhere either.
+    for r in reasons:
+        assert "was a different year" not in r or "2025" in r
+
+
 # ---------- verdict regex robustness (review I2 fix) ----------
 
 @pytest.mark.asyncio

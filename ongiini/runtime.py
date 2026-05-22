@@ -204,9 +204,19 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
     # MemoryRecordingHook so the trace line is written even if mem0 is
     # down. All three are soft-fail at the registry level.
     trace_destination = trace_path or (settings.data_dir / "trace.jsonl")
+    if settings.trace_critique_detail:
+        log.warning(
+            "ONGIINI_TRACE_CRITIQUE_DETAIL is set — trace.jsonl will include "
+            "raw critique bodies and plan-text snippets. These contain LLM "
+            "output that may reference user-question content. Do NOT export "
+            "this file to external systems while the flag is on."
+        )
     hooks = HookRegistry([
         BillingHook(recorder=usage),
-        TracingHook(trace_path=trace_destination),
+        TracingHook(
+            trace_path=trace_destination,
+            include_critique_detail=settings.trace_critique_detail,
+        ),
         OngiiniMemoryRecordingHook(sanitiser=pii.sanitize),
     ])
 

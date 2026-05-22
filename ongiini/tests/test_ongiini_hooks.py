@@ -187,6 +187,72 @@ async def test_tracing_captures_v1_phases_in_separate_block(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_tracing_omits_critique_detail_by_default(tmp_path: Path):
+    """Default mode: no raw critique text, no plan body. Privacy."""
+    trace_path = tmp_path / "t.jsonl"
+    hook = TracingHook(trace_path=trace_path)  # detail OFF by default
+
+    plan = PlanStep(plan_text="FACTS TO LOOK UP:\n- specific data\n- another fact")
+    crit = CritiqueStep(verdict="REVISE", reasons=["claim X not grounded"])
+    crit.attrs["raw_critique"] = "VERY SECRET reviewer narrative including user content"
+    steps = [
+        RouterStep(verdict="SEARCH", depth="SHALLOW"),
+        plan,
+        ModelCallStep(turn=1),
+        crit,
+        ReplyStep(sent=True),
+    ]
+    await hook.on_turn_complete(steps, _ctx())
+
+    entry = json.loads(trace_path.read_text().strip())
+    plan_entry = next(p for p in entry["phases"] if p["kind"] == "plan")
+    critique_entry = next(p for p in entry["phases"] if p["kind"] == "critique")
+    # Structural fields stay.
+    assert plan_entry["plan_len"] > 0
+    assert critique_entry["verdict"] == "REVISE"
+    assert critique_entry["reasons_count"] == 1
+    # Detail fields must NOT be present.
+    assert "plan_text" not in plan_entry
+    assert "raw_critique" not in critique_entry
+    assert "reasons" not in critique_entry
+    # And the secret content must not have leaked anywhere into the line.
+    body = trace_path.read_text()
+    assert "VERY SECRET" not in body
+    assert "specific data" not in body
+
+
+@pytest.mark.asyncio
+async def test_tracing_includes_critique_detail_when_flag_on(tmp_path: Path):
+    """Detail mode: raw critique text + extracted reasons + plan
+    snippet land in the per-phase entries. Used for experimentation."""
+    trace_path = tmp_path / "t.jsonl"
+    hook = TracingHook(trace_path=trace_path, include_critique_detail=True)
+
+    plan = PlanStep(plan_text="FACTS TO LOOK UP:\n- price of X\n- price of Y" * 50)
+    crit = CritiqueStep(verdict="REVISE", reasons=["claim X not grounded"])
+    crit.attrs["raw_critique"] = "1. OK\n2. FAIL: claim X not grounded\nVERDICT: REVISE"
+    steps = [
+        RouterStep(verdict="SEARCH", depth="DEEP"),
+        plan,
+        ModelCallStep(turn=1),
+        crit,
+        ReplyStep(sent=True),
+    ]
+    await hook.on_turn_complete(steps, _ctx())
+
+    entry = json.loads(trace_path.read_text().strip())
+    plan_entry = next(p for p in entry["phases"] if p["kind"] == "plan")
+    critique_entry = next(p for p in entry["phases"] if p["kind"] == "critique")
+    # plan_text is included, capped at 400 chars.
+    assert "plan_text" in plan_entry
+    assert len(plan_entry["plan_text"]) <= 400
+    assert "price of X" in plan_entry["plan_text"]
+    # critique detail: extracted reasons AND raw body.
+    assert critique_entry["reasons"] == ["claim X not grounded"]
+    assert "FAIL: claim X not grounded" in critique_entry["raw_critique"]
+
+
+@pytest.mark.asyncio
 async def test_tracing_writes_one_jsonl_per_turn(tmp_path: Path):
     trace_path = tmp_path / "trace.jsonl"
     hook = TracingHook(trace_path=trace_path)

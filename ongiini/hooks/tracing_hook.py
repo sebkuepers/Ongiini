@@ -32,10 +32,19 @@ log = logging.getLogger("ongiini.hooks.tracing")
 
 class TracingHook:
     """Writes one JSON line per turn to the given file. Constructed with
-    the destination path so tests can point at a tempfile."""
+    the destination path so tests can point at a tempfile.
 
-    def __init__(self, trace_path: Path) -> None:
+    When ``include_critique_detail=True``, also embeds the raw critique
+    text + a plan_text snippet in the per-phase trace entries — useful
+    for debugging WHY the critique flipped REVISE or WHAT the planner
+    actually said. Default OFF so production traces stay structural-
+    only (no content). The flag is plumbed from
+    ``settings.trace_critique_detail`` in the composition root.
+    """
+
+    def __init__(self, trace_path: Path, *, include_critique_detail: bool = False) -> None:
         self.trace_path = Path(trace_path)
+        self.include_critique_detail = include_critique_detail
 
     async def on_turn_complete(self, steps: list[Step], ctx: TurnContext) -> None:
         try:
@@ -83,7 +92,7 @@ class TracingHook:
                 total_tokens_in += s.tokens_in
                 total_tokens_out += s.tokens_out
             elif isinstance(s, PlanStep):
-                phases.append({
+                plan_entry = {
                     "kind": "plan",
                     "tokens_in": s.tokens_in,
                     "tokens_out": s.tokens_out,
@@ -91,12 +100,18 @@ class TracingHook:
                     "plan_len": len(s.plan_text),
                     "latency_ms": s.latency_ms(),
                     "error": s.attrs.get("error"),
-                })
+                }
+                if self.include_critique_detail:
+                    # First 400 chars of the actual plan body — useful
+                    # to verify what Gemma is suggesting and whether the
+                    # plan is shaping the act-loop's tool choices.
+                    plan_entry["plan_text"] = s.plan_text[:400]
+                phases.append(plan_entry)
                 total_latency_ms += s.latency_ms()
                 total_tokens_in += s.tokens_in
                 total_tokens_out += s.tokens_out
             elif isinstance(s, CritiqueStep):
-                phases.append({
+                critique_entry = {
                     "kind": "critique",
                     "tokens_in": s.tokens_in,
                     "tokens_out": s.tokens_out,
@@ -105,7 +120,15 @@ class TracingHook:
                     "reasons_count": len(s.reasons),
                     "latency_ms": s.latency_ms(),
                     "error": s.attrs.get("error"),
-                })
+                }
+                if self.include_critique_detail:
+                    # Extracted reasons + raw critique body. The raw
+                    # body is the ground truth — reasons are what our
+                    # parser extracted from it. Comparing the two tells
+                    # us if the parser is missing things.
+                    critique_entry["reasons"] = list(s.reasons)
+                    critique_entry["raw_critique"] = s.attrs.get("raw_critique", "")
+                phases.append(critique_entry)
                 total_latency_ms += s.latency_ms()
                 total_tokens_in += s.tokens_in
                 total_tokens_out += s.tokens_out
