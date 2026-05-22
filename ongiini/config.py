@@ -67,6 +67,22 @@ class Settings:
     # user in it, which would be reverse-identifiable.
     stats_minimum_bucket: int = 5
 
+    # v1 quality-phase kill switches. Each defaults to ON; set the
+    # env var to "1" / "true" / "yes" to disable WITHOUT redeploying
+    # any code (env-var change + container restart only). Useful if
+    # post-deploy we discover the REVISE rate is too high or the
+    # planner is wasting budget on shallow questions the classifier
+    # mis-tagged as DEEP. Read by ongiini.runtime.build_policy_table.
+    disable_planner: bool = (
+        os.getenv("ONGIINI_DISABLE_PLANNER", "").lower() in ("1", "true", "yes")
+    )
+    disable_critique: bool = (
+        os.getenv("ONGIINI_DISABLE_CRITIQUE", "").lower() in ("1", "true", "yes")
+    )
+    disable_interstitial: bool = (
+        os.getenv("ONGIINI_DISABLE_INTERSTITIAL", "").lower() in ("1", "true", "yes")
+    )
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)

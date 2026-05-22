@@ -40,7 +40,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
-from owela import InboundMessage, Policy, Step
+from owela import InboundMessage, PlanStep, Policy, Step
 
 log = logging.getLogger("ongiini.memory_provider")
 
@@ -153,9 +153,36 @@ class OngiiniMemoryProvider:
             # SYSTEM_PROMPT — the per-user mem0 block is the only
             # variable here, so the static system stays prefix-cached.
             messages.append({"role": "system", "content": memory_block})
+
+        # Plan injection — if the executor ran the Planner phase BEFORE
+        # the act loop (only happens on SEARCH_DEEP turns when
+        # policy.enable_planner is True), surface the plan as its own
+        # system message so the model enters the act loop with the
+        # decomposition in scope. We look at prior_steps rather than
+        # taking the plan as a separate parameter so this provider stays
+        # decoupled from the Planner protocol.
+        plan_msg = self._extract_plan_message(prior_steps)
+        if plan_msg:
+            messages.append({"role": "system", "content": plan_msg})
+
         messages.extend(msg.history)
         messages.append({"role": "user", "content": user_content})
         return messages
+
+    @staticmethod
+    def _extract_plan_message(prior_steps: list[Step]) -> str:
+        """Pull the latest PlanStep's text out of the step list and
+        format it as a system-message body. Empty plan_text means the
+        Planner soft-failed; treat as no plan."""
+        for step in reversed(prior_steps):
+            if isinstance(step, PlanStep) and step.plan_text:
+                return (
+                    "Your plan for this turn (built before the search "
+                    "step). Follow it as a guide — adjust if a search "
+                    "result reveals something the plan didn't anticipate:\n"
+                    f"{step.plan_text}"
+                )
+        return ""
 
     async def record_turn(
         self,

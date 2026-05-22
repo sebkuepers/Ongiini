@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from owela import (
-    HookRegistry, InboundMessage, ModelCallStep, Policy, ReplyStep, RouterStep,
-    Step, ToolStep, TurnContext,
+    CritiqueStep, HookRegistry, InboundMessage, ModelCallStep, PlanStep, Policy,
+    ReplyStep, ReviseStep, RouterStep, Step, ToolStep, TurnContext,
 )
 from owela.hooks import HookRegistry as Registry
 from ongiini.hooks.billing_hook import BillingHook
@@ -59,6 +59,34 @@ async def test_billing_aggregates_chat_across_turns():
     chat_call = next(c for c in calls if c.kwargs.get("kind") == "chat")
     assert chat_call.args[1] == 150     # 100 + 50
     assert chat_call.args[2] == 210     # 10 + 200
+    assert chat_call.kwargs["used_search"] is True
+
+
+@pytest.mark.asyncio
+async def test_billing_aggregates_v1_phases_into_chat_line():
+    """v1: PlanStep + CritiqueStep + ReviseStep tokens spend real vLLM
+    capacity against the user's request and MUST roll into the chat
+    aggregate. Without this they'd silently vanish from the monthly
+    cap accounting — power-user could effectively get 2x allowance."""
+    recorder = MagicMock()
+    hook = BillingHook(recorder=recorder)
+    steps = [
+        RouterStep(tokens_in=20, tokens_out=5, verdict="SEARCH", depth="DEEP"),
+        PlanStep(tokens_in=30, tokens_out=180),
+        ModelCallStep(turn=1, tokens_in=100, tokens_out=10),
+        ToolStep(tool_name="web_search", result_len=2000),
+        ModelCallStep(turn=2, tokens_in=80, tokens_out=400),
+        CritiqueStep(tokens_in=50, tokens_out=80, verdict="REVISE"),
+        ReviseStep(tokens_in=200, tokens_out=600),
+        ReplyStep(reply_len=400, sent=True),
+    ]
+    await hook.on_turn_complete(steps, _ctx())
+
+    chat_call = next(c for c in recorder.record.call_args_list if c.kwargs.get("kind") == "chat")
+    # 30 (plan) + 100 (call1) + 80 (call2) + 50 (critique) + 200 (revise) = 460
+    assert chat_call.args[1] == 460
+    # 180 (plan) + 10 (call1) + 400 (call2) + 80 (critique) + 600 (revise) = 1270
+    assert chat_call.args[2] == 1270
     assert chat_call.kwargs["used_search"] is True
 
 
@@ -113,6 +141,50 @@ async def test_billing_recorder_failure_does_not_raise():
 # ============================================================
 # TracingHook
 # ============================================================
+
+@pytest.mark.asyncio
+async def test_tracing_captures_v1_phases_in_separate_block(tmp_path: Path):
+    """v1: PlanStep / CritiqueStep / ReviseStep land in their own
+    `phases` block alongside `calls`, with structural fields only
+    (verdict, plan_len, revised_len, latency, error). Tokens roll into
+    the totals."""
+    trace_path = tmp_path / "trace.jsonl"
+    hook = TracingHook(trace_path=trace_path)
+
+    plan = PlanStep(plan_text="FACTS TO LOOK UP:\n- rate", tokens_in=30, tokens_out=180)
+    plan.ended_at = plan.started_at + 0.05
+    critique = CritiqueStep(verdict="REVISE", reasons=["x", "y"], tokens_in=50, tokens_out=80)
+    critique.ended_at = critique.started_at + 0.02
+    revise = ReviseStep(tokens_in=200, tokens_out=600)
+    revise.attrs["revised_reply"] = "revised reply text"
+    revise.ended_at = revise.started_at + 0.10
+
+    steps = [
+        RouterStep(verdict="SEARCH", depth="DEEP"),
+        plan,
+        ModelCallStep(turn=1, tokens_in=100, tokens_out=10),
+        critique,
+        revise,
+        ReplyStep(reply_len=400, sent=True),
+    ]
+    await hook.on_turn_complete(steps, _ctx())
+
+    entry = json.loads(trace_path.read_text().strip())
+    assert "phases" in entry
+    phase_kinds = [p["kind"] for p in entry["phases"]]
+    assert phase_kinds == ["plan", "critique", "revise"]
+
+    critique_entry = next(p for p in entry["phases"] if p["kind"] == "critique")
+    assert critique_entry["verdict"] == "REVISE"
+    assert critique_entry["reasons_count"] == 2
+
+    revise_entry = next(p for p in entry["phases"] if p["kind"] == "revise")
+    assert revise_entry["revised_len"] == len("revised reply text")
+
+    # Totals MUST include the v1 phases.
+    assert entry["total_tokens_in"] == 30 + 100 + 50 + 200      # plan+call+critique+revise
+    assert entry["total_tokens_out"] == 180 + 10 + 80 + 600
+
 
 @pytest.mark.asyncio
 async def test_tracing_writes_one_jsonl_per_turn(tmp_path: Path):

@@ -36,6 +36,8 @@ from .memory import (
     short_term as memory,
 )
 from .models import VLLMGemmaModel
+from .planner import OngiiniPlanner
+from .reviewer import OngiiniReviewer
 from .routers import GemmaClassifier
 from .system_prompt import SYSTEM_PROMPT
 from .tools import ALL_TOOLS
@@ -47,16 +49,27 @@ log = logging.getLogger("ongiini.runtime")
 def build_policy_table() -> PolicyTable:
     """The orchestration policy table — verdict + depth → Policy.
 
-    v0 keeps all the v1 flags (enable_planner, enable_critique,
-    enable_interstitial) at False everywhere. Step 12 of the migration
-    plan flips SEARCH_DEEP into the more agentic shape; nothing else
-    needs to change to support that.
+    v1.1 flips the planner / critique / interstitial flags ON for the
+    policies that benefit. Gating rationale:
+
+      - **Planner** only on SEARCH_DEEP. Casual / ADMIN / DOCS / SHALLOW
+        turns don't need decomposition; running a planner there just
+        adds latency for no quality gain.
+      - **Critique** on every turn that fired a tool: DOCS + both SEARCH
+        depths. This is the biggest single quality unlock — catches
+        confabulation before it ships. ADMIN / NONE turns return short
+        tool-bounded or trivial replies; critique is wasted there.
+      - **Interstitial** only on SEARCH_DEEP. The planner + multiple
+        tool calls + critique + maybe revise can push past the 25s
+        WhatsApp typing window; the interstitial message tells the
+        user "still working" so the wait feels intentional.
     """
     table = PolicyTable()
 
     # Default fallback — looked up when the router returns NONE or an
     # unknown verdict. tool_choice="auto" so Gemma can still call any
-    # tool it wants on a casual turn (e.g. user pivots mid-chat).
+    # tool it wants on a casual turn (e.g. user pivots mid-chat). No
+    # v1 phases — casual chat must stay snappy.
     table.set(
         VERDICT_NONE, DEPTH_SHALLOW,
         Policy(name="none", first_tool=AUTO, max_steps=6),
@@ -66,6 +79,7 @@ def build_policy_table() -> PolicyTable:
     # model can pick between delete_my_data / whats_in_my_memory /
     # my_token_usage based on the phrasing. The router lifts the
     # decision OUT of DOCS (which is the historical confusion case).
+    # No critique — admin tool replies are templated, nothing to fact-check.
     table.set(
         VERDICT_ADMIN, DEPTH_SHALLOW,
         Policy(name="admin", first_tool=AUTO, max_steps=4),
@@ -73,38 +87,67 @@ def build_policy_table() -> PolicyTable:
 
     # DOCS — meta questions about Ongiini itself. Force the docs tool
     # on turn 1 so Gemma always grounds in the canonical product.md.
+    # Critique ON: catches paraphrase drift from the source doc.
     table.set(
         VERDICT_DOCS, DEPTH_SHALLOW,
-        Policy(name="docs", first_tool=force_tool("lookup_ongiini_docs"), max_steps=4),
+        Policy(
+            name="docs",
+            first_tool=force_tool("lookup_ongiini_docs"),
+            max_steps=4,
+            enable_critique=_critique_on(),
+        ),
     )
 
     # SEARCH_SHALLOW — single tool call is enough. Force web_search on
     # turn 1; subsequent turns fall back to AUTO so the model can
     # optionally call fetch_url for one deeper read.
+    # Critique ON: this is the path the hackathon-confabulation
+    # incident travelled — exactly where critique adds value.
     table.set(
         VERDICT_SEARCH, DEPTH_SHALLOW,
-        Policy(name="search_shallow", first_tool=force_tool("web_search"), max_steps=6),
+        Policy(
+            name="search_shallow",
+            first_tool=force_tool("web_search"),
+            max_steps=6,
+            enable_critique=_critique_on(),
+        ),
     )
 
     # SEARCH_DEEP — multi-source research. Let the model decide which
     # tool to call first (web_search vs fetch_urls); allow more steps
-    # to give it room to iterate. v0 keeps planner/critique OFF; v1
-    # turns them on here.
+    # to give it room to iterate. ALL THREE v1 phases on: plan
+    # decomposes the question, critique checks the answer, interstitial
+    # tells the user we're working.
     table.set(
         VERDICT_SEARCH, DEPTH_DEEP,
         Policy(
             name="search_deep",
             first_tool=AUTO,
             max_steps=8,
-            # v1 — flip these on when planner / reviewer / interstitial
-            # are wired in (step v1 of the plan):
-            #   enable_planner=True,
-            #   enable_critique=True,
-            #   enable_interstitial=True,
+            enable_planner=_planner_on(),
+            enable_critique=_critique_on(),
+            enable_interstitial=_interstitial_on(),
         ),
     )
 
     return table
+
+
+# v1 quality-phase kill switches. Each is gated by an env var in
+# ``ongiini.config`` so we can disable a phase WITHOUT redeploying if
+# we discover (e.g.) the REVISE rate is too high or the planner is
+# misfiring on questions the classifier mis-tagged as DEEP. Default
+# is ON for every flag.
+def _planner_on() -> bool:
+    return not settings.disable_planner
+
+
+def _critique_on() -> bool:
+    return not settings.disable_critique
+
+
+def _interstitial_on() -> bool:
+    return not settings.disable_interstitial
 
 
 def build_runtime(*, trace_path: Path | None = None) -> Runtime:
@@ -135,6 +178,19 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         model_id=settings.vllm_model,
     )
 
+    # v1.1 components — planner runs only when policy.enable_planner
+    # fires (SEARCH_DEEP); reviewer runs only when policy.enable_critique
+    # fires (DOCS + both SEARCH depths). Both are soft-fail by contract
+    # so a flaky reviewer never blocks a reply.
+    planner = OngiiniPlanner(
+        base_url=settings.vllm_base_url,
+        model_id=settings.vllm_model,
+    )
+    reviewer = OngiiniReviewer(
+        base_url=settings.vllm_base_url,
+        model_id=settings.vllm_model,
+    )
+
     tools = ToolRegistry(list(ALL_TOOLS))
 
     policies = build_policy_table()
@@ -158,9 +214,12 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         tools=tools,
         policies=policies,
         hooks=hooks,
+        planner=planner,
+        reviewer=reviewer,
     )
     log.info(
-        "Ongiini runtime ready — tools=%d, policies=%d, hooks=%d",
+        "Ongiini runtime ready — tools=%d, policies=%d, hooks=%d, "
+        "planner=on, reviewer=on",
         len(tools.names()), len(policies.all()), len(hooks.hooks),
     )
     return rt

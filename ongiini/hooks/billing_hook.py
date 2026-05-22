@@ -1,15 +1,14 @@
 """Owela ``Hook`` that records token usage to ``usage.log``.
 
 The hook subscribes to step events and writes one line per BILLABLE
-step into ``usage.log``. Billable steps are:
+step into ``usage.log``. Billable steps:
 
-  - ModelCallStep with kind="model_call" → "chat" usage
-  - RouterStep                            → "router" usage (NOT counted
-    toward the user's monthly cap; see usage.py)
-
-PlanStep / CritiqueStep / ReviseStep (v1) will be added when those
-phases start firing; for v0 they don't appear so no special handling
-is needed.
+  - ``RouterStep``                                  → ``kind="router"``
+    (NOT counted toward the user's monthly cap; see usage.py)
+  - ``ModelCallStep``, ``PlanStep``, ``CritiqueStep``, ``ReviseStep``
+    → aggregated into one ``kind="chat"`` line per turn (sum, not
+    per-call). All four count against the monthly cap because all
+    four spend real vLLM tokens against the user's request.
 
 Soft-fail: a broken billing log must never break a reply.
 """
@@ -20,7 +19,20 @@ import logging
 from typing import Protocol
 
 from owela import (
-    ModelCallStep, RouterStep, Step, TurnContext,
+    CritiqueStep, ModelCallStep, PlanStep, ReviseStep, RouterStep, Step,
+    TurnContext,
+)
+
+
+# Step types whose tokens roll up into the per-turn "chat" aggregate.
+# Anti-trap: kept as a module-level tuple so adding a future phase
+# (e.g. SummariseStep) is a one-line change in this file rather than a
+# scattered hunt across hook code.
+_CHAT_AGGREGATE_STEP_TYPES = (
+    ModelCallStep,
+    PlanStep,
+    CritiqueStep,
+    ReviseStep,
 )
 
 log = logging.getLogger("ongiini.hooks.billing")
@@ -72,14 +84,16 @@ class BillingHook:
                     log.warning("billing: router record failed: %s", exc)
                 break   # one RouterStep per turn
 
-        # Aggregate model_call cost across all act-loop turns. Any
-        # tool that fired with kind=web_search or kind=fetch_url marks
-        # used_search=True on the aggregate line.
+        # Aggregate cost across every step kind that spends real vLLM
+        # tokens against this user's request — the act-loop model calls
+        # AND the v1 planner / critique / revise phases. All roll into
+        # one "chat" line per turn so the monthly cap stays honest no
+        # matter which phases the policy enables.
         chat_in = 0
         chat_out = 0
         used_search = False
         for s in steps:
-            if isinstance(s, ModelCallStep):
+            if isinstance(s, _CHAT_AGGREGATE_STEP_TYPES):
                 chat_in += s.tokens_in
                 chat_out += s.tokens_out
             elif getattr(s, "tool_name", "") in ("web_search", "fetch_url", "fetch_urls"):

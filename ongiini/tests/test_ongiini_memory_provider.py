@@ -132,6 +132,45 @@ async def test_assemble_messages_image_uses_multipart_content():
 
 
 @pytest.mark.asyncio
+async def test_assemble_messages_injects_plan_when_planstep_present():
+    """When the executor ran the Planner phase before calling
+    assemble_messages, its PlanStep lands in prior_steps. The provider
+    surfaces the plan_text as its own system message so the model
+    enters the act loop with the decomposition in scope."""
+    from owela import PlanStep
+    provider = _provider()
+    msg = InboundMessage(
+        user_id="u", msg_id="m", text="compare home loan rates",
+        content_parts=[],
+    )
+    plan_step = PlanStep(plan_text=(
+        "FACTS TO LOOK UP:\n- Bank Windhoek rate\n- FNB rate\n- StanBic rate"
+    ))
+    result = await provider.assemble_messages(msg, Policy(name="search_deep"), [plan_step])
+
+    plan_msg = next(
+        (m for m in result if m["role"] == "system" and "FACTS TO LOOK UP" in m["content"]),
+        None,
+    )
+    assert plan_msg is not None
+    assert "Your plan for this turn" in plan_msg["content"]
+    assert "Bank Windhoek rate" in plan_msg["content"]
+
+
+@pytest.mark.asyncio
+async def test_assemble_messages_skips_empty_plantext():
+    """If the Planner soft-failed (empty plan_text), don't inject an
+    empty 'Your plan' header that wastes prompt tokens."""
+    from owela import PlanStep
+    provider = _provider()
+    msg = InboundMessage(user_id="u", msg_id="m", text="x", content_parts=[])
+    empty_plan = PlanStep(plan_text="")
+    result = await provider.assemble_messages(msg, Policy(name="search_deep"), [empty_plan])
+    plan_msgs = [m for m in result if "Your plan for this turn" in m.get("content", "")]
+    assert plan_msgs == []
+
+
+@pytest.mark.asyncio
 async def test_assemble_messages_skips_empty_mem0_block():
     """No mem0 hits → no mem0 system message. The static SYSTEM_PROMPT
     + today's-date system message still both appear (those are always-on)."""

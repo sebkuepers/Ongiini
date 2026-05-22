@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Any
 
 from owela import (
-    ModelCallStep, ReplyStep, RouterStep, Step, ToolStep, TurnContext,
+    CritiqueStep, ModelCallStep, PlanStep, ReplyStep, ReviseStep, RouterStep,
+    Step, ToolStep, TurnContext,
 )
 
 log = logging.getLogger("ongiini.hooks.tracing")
@@ -49,6 +50,11 @@ class TracingHook:
         reply = next((s for s in reversed(steps) if isinstance(s, ReplyStep)), None)
 
         calls = []
+        # phases: the v1 pre-/post-loop steps (planner, critique, revise).
+        # Kept separate from `calls` so the trace shape stays clean — calls
+        # are the act-loop iterations; phases are the agentic-quality
+        # pre/post-processing.
+        phases = []
         total_latency_ms = 0
         total_tokens_in = 0
         total_tokens_out = 0
@@ -72,6 +78,46 @@ class TracingHook:
                         }
                         for tc in s.tool_calls
                     ],
+                })
+                total_latency_ms += s.latency_ms()
+                total_tokens_in += s.tokens_in
+                total_tokens_out += s.tokens_out
+            elif isinstance(s, PlanStep):
+                phases.append({
+                    "kind": "plan",
+                    "tokens_in": s.tokens_in,
+                    "tokens_out": s.tokens_out,
+                    "cached_tokens": s.cached_tokens,
+                    "plan_len": len(s.plan_text),
+                    "latency_ms": s.latency_ms(),
+                    "error": s.attrs.get("error"),
+                })
+                total_latency_ms += s.latency_ms()
+                total_tokens_in += s.tokens_in
+                total_tokens_out += s.tokens_out
+            elif isinstance(s, CritiqueStep):
+                phases.append({
+                    "kind": "critique",
+                    "tokens_in": s.tokens_in,
+                    "tokens_out": s.tokens_out,
+                    "cached_tokens": s.cached_tokens,
+                    "verdict": s.verdict,
+                    "reasons_count": len(s.reasons),
+                    "latency_ms": s.latency_ms(),
+                    "error": s.attrs.get("error"),
+                })
+                total_latency_ms += s.latency_ms()
+                total_tokens_in += s.tokens_in
+                total_tokens_out += s.tokens_out
+            elif isinstance(s, ReviseStep):
+                phases.append({
+                    "kind": "revise",
+                    "tokens_in": s.tokens_in,
+                    "tokens_out": s.tokens_out,
+                    "cached_tokens": s.cached_tokens,
+                    "revised_len": len(s.attrs.get("revised_reply", "")),
+                    "latency_ms": s.latency_ms(),
+                    "error": s.attrs.get("error"),
                 })
                 total_latency_ms += s.latency_ms()
                 total_tokens_in += s.tokens_in
@@ -106,6 +152,7 @@ class TracingHook:
                 "latency_ms": router.latency_ms() if router else 0,
             } if router else None,
             "calls": calls,
+            "phases": phases,
             "reply_len": reply.reply_len if reply else 0,
             "sent": bool(reply and reply.sent),
             "total_tokens_in": total_tokens_in,
