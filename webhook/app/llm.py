@@ -602,12 +602,18 @@ async def respond(
             # typing window. The empty-content fallback below catches
             # the rare case where reasoning eats the whole budget.
             max_tokens=1500,
-            # Turn on Gemma 4 thinking mode for the main chat call only.
-            # The router / mem0 / summarizer don't benefit from reasoning
-            # (binary or short outputs) and keep their faster default
-            # behaviour. Reasoning output lands in response.reasoning_content,
-            # not response.content — see the empty-content fallback below.
-            extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+            # Reasoning mode is OFF for now. We tried turning it on earlier
+            # today but the latency cost on Gemma 4 26B was severe — even
+            # turn 1 (just emitting a router-forced tool call) was eating
+            # 7-23s on reasoning before producing the call. Total replies
+            # ran 25-40s, well past WhatsApp's 25s typing-indicator window,
+            # producing the bad "typing → stops → silence → late reply"
+            # experience that confused first users. Quality without
+            # reasoning is still strong (slim prompt + router + citations
+            # + care tone do the heavy lifting). The empty-content fallback
+            # below stays as defensive code in case reasoning gets re-
+            # enabled at the chat-template level or the parser emits
+            # reasoning_content for some other reason.
         )
         call_usage = resp.usage
         # billable_in subtracts prefix-cached tokens (free GPU-wise) so the
