@@ -225,6 +225,19 @@ async def verify(request: Request):
     return Response(status_code=403)
 
 
+async def _run_handler(coro, sender: str, kind: str) -> None:
+    """Wrap an inbound-message handler with exception logging so it can
+    be scheduled as a fire-and-forget background task. The webhook POST
+    returns 200 OK to Meta synchronously (within milliseconds); the
+    actual processing — router, search, Gemma, send — runs in the
+    background and never delays Meta's webhook acknowledgement.
+    """
+    try:
+        await coro
+    except Exception:
+        log.exception("Failed to handle %s message from %s", kind, sender)
+
+
 @app.post("/whatsapp")
 async def receive(
     request: Request,
@@ -257,6 +270,16 @@ async def receive(
     if msg_ids:
         asyncio.create_task(asyncio.gather(*(mark_as_read(mid) for mid in msg_ids)))
 
+    # Schedule each handler as a fire-and-forget task and return 200 to
+    # Meta IMMEDIATELY. Meta retries any webhook POST it doesn't get a
+    # 200 on within ~5 seconds — and our full pipeline (router classifier
+    # + Tavily search + 2 Gemma vLLM hops with reasoning + WhatsApp send)
+    # easily takes 8-15s on a search-grounded reply. Without this
+    # fire-and-forget pattern, the user gets duplicate (or triplicate)
+    # replies because Meta keeps retrying while we're still working.
+    # Per-user lock inside handle_message serialises concurrent work for
+    # the same msisdn, so even retries that ARE delivered before the
+    # background task finishes can't trample each other's state.
     for m in messages:
         sender = m["from"]
         kind = m.get("type", "text")
@@ -273,10 +296,7 @@ async def receive(
                     "dropping oversize message from %s (%d chars)", sender, len(text)
                 )
                 continue
-            try:
-                await handle_message(sender, text)
-            except Exception:
-                log.exception("Failed to handle message from %s", sender)
+            asyncio.create_task(_run_handler(handle_message(sender, text), sender, "text"))
 
         elif kind == "image":
             media_id = m.get("media_id") or ""
@@ -302,35 +322,38 @@ async def receive(
                     "image caption matched admin intent — handling as text from %s",
                     sender,
                 )
-                try:
-                    await handle_message(sender, caption)
-                except Exception:
-                    log.exception(
-                        "Failed to handle admin-intent caption from %s", sender
-                    )
-                continue
-            try:
-                await handle_image_message(
-                    sender=sender,
-                    media_id=media_id,
-                    mime_type=m.get("mime_type") or "image/jpeg",
-                    caption=caption,
+                asyncio.create_task(
+                    _run_handler(handle_message(sender, caption), sender, "admin-caption")
                 )
-            except Exception:
-                log.exception("Failed to handle image message from %s", sender)
+                continue
+            asyncio.create_task(
+                _run_handler(
+                    handle_image_message(
+                        sender=sender,
+                        media_id=media_id,
+                        mime_type=m.get("mime_type") or "image/jpeg",
+                        caption=caption,
+                    ),
+                    sender,
+                    "image",
+                )
+            )
 
         elif kind == "audio":
             media_id = m.get("media_id") or ""
             if not media_id:
                 continue
-            try:
-                await handle_audio_message(
-                    sender=sender,
-                    media_id=media_id,
-                    mime_type=m.get("mime_type") or "audio/ogg",
+            asyncio.create_task(
+                _run_handler(
+                    handle_audio_message(
+                        sender=sender,
+                        media_id=media_id,
+                        mime_type=m.get("mime_type") or "audio/ogg",
+                    ),
+                    sender,
+                    "audio",
                 )
-            except Exception:
-                log.exception("Failed to handle audio message from %s", sender)
+            )
 
     # WhatsApp expects a fast 200 OK acknowledgement.
     return {"status": "ok"}

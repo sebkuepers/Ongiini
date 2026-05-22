@@ -106,18 +106,23 @@ async def send_text(to: str, body: str) -> None:
         raise last_error
 
 
-async def mark_as_read(message_id: str) -> None:
-    """Tell Meta the user's message has been read.
+async def mark_as_read(message_id: str, with_typing: bool = True) -> None:
+    """Tell Meta the user's message has been read, optionally with a
+    typing indicator to show the bot is composing a reply.
 
-    Flips the user's blue checkmarks from grey (delivered) to blue (read)
-    in their WhatsApp chat. Otherwise their messages sit at "delivered"
-    forever, which feels like the bot is ignoring them. Best fired as soon
-    as the webhook receives the payload, before downstream processing
-    (rate-limit checks, model generation, etc.) — that way blue checkmarks
-    appear within a second of the user sending.
+    Read receipt flips the user's checkmarks from grey ✓✓ (delivered) to
+    blue ✓✓ (read). The typing indicator adds an animated "..." or
+    "typing" status under the bot's name in the user's chat — perfect
+    for the 5-15s gap between read receipt and the actual reply landing
+    (after router classification, web_search, Gemma 4 reasoning, etc.).
+    WhatsApp auto-dismisses the typing indicator the moment we send the
+    reply (or after ~25s, whichever comes first), so we don't need to
+    actively "stop typing".
 
-    Soft-fail: a billing-blocked WABA or transient Meta 5xx shouldn't break
-    the reply path. Log the failure and continue.
+    Fired immediately upon webhook receipt — before any processing —
+    so the UX feedback ("read + composing") appears within a second of
+    the user sending. Soft-fail: a billing-blocked WABA or transient
+    Meta 5xx shouldn't break the reply path.
     """
     if not settings.whatsapp_token or not settings.whatsapp_phone_id or not message_id:
         return
@@ -131,6 +136,10 @@ async def mark_as_read(message_id: str) -> None:
         "status": "read",
         "message_id": message_id,
     }
+    if with_typing:
+        # Meta's API: typing indicator goes in the same /messages call as
+        # the read receipt, requires status=read alongside it.
+        payload["typing_indicator"] = {"type": "text"}
     try:
         async with httpx.AsyncClient(timeout=5.0) as c:
             r = await c.post(url, headers=headers, json=payload)
