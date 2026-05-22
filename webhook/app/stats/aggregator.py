@@ -240,8 +240,11 @@ def _format_synthesis_block(
 
     Applies the same minimum-bucket-size floor as quantitative
     distributions: clusters with count < settings.stats_minimum_bucket
-    are rolled into 'Other'. Reads via local import to avoid a
-    circular import (analyses imports aggregator's _load_objections).
+    are rolled into 'Other'.
+
+    `denominator` is the universe size for the coverage metric:
+      - for `topics`: total user messages
+      - for any WHO dimension: total unique users
     """
     from .synthesis_io import load_synthesis
 
@@ -250,21 +253,22 @@ def _format_synthesis_block(
         return {
             "method": "LLM-emergent clustering of extracted labels",
             "coverage": 0.0,
+            "n_observations": 0,
+            "denominator": denominator,
             "categories": [],
             "status": empty_status,
         }
 
     clusters = payload.get("clusters") or []
-    # Cluster rows we feed through the standard bucket-floor helper.
     rows = [{"label": c.get("label", "?"), "count": int(c.get("count", 0))} for c in clusters]
-    # Carry the summary into the output so the UI can show tooltips
-    # later if it wants — match on label since labels are unique within
-    # a synthesis run.
     summary_by_label = {c.get("label", "?"): str(c.get("summary", "")) for c in clusters}
     rows = _collapse_small_buckets(rows)
     rows = _with_pct(rows)
     total_assigned = sum(int(r.get("count", 0)) for r in rows)
-    coverage = round(total_assigned / denominator, 3) if denominator else 0.0
+    # Cap at 1.0: synthesis from a previous larger dataset can in
+    # principle have more observations than the current universe (e.g.
+    # after opt-outs prune the universe but the cache hasn't refreshed).
+    coverage = round(min(1.0, total_assigned / denominator), 3) if denominator else 0.0
     out_categories = [
         {
             "label": r["label"],
@@ -277,10 +281,57 @@ def _format_synthesis_block(
     return {
         "method": payload.get("method", "LLM-emergent clustering"),
         "coverage": coverage,
+        # n_observations is the number of items the synthesis actually
+        # saw. For topics it's user-messages-with-an-extracted-label;
+        # for a WHO dimension it's users-with-data-for-that-dimension.
+        # Crucially: NOT the universe size — that's `denominator`.
+        "n_observations": payload.get("total_items_analysed", 0),
+        "denominator": denominator,
         "categories": out_categories,
         "generated_at": payload.get("generated_at"),
-        "total_items_analysed": payload.get("total_items_analysed", 0),
         "distinct_labels": payload.get("distinct_labels", 0),
+    }
+
+
+def _top_topics_block(top_n: int = 20) -> dict[str, Any]:
+    """Return the most-mentioned raw topic extractions — one level down
+    from the use-case clusters.
+
+    Lets readers see specific user concerns ('yellowing maize leaves',
+    'VAT registration') under the broader buckets ('Agriculture',
+    'Government'). Read directly from the extraction cache without
+    needing a synthesis.
+    """
+    try:
+        from .analyses_io import load_label_counts_via_io
+    except ImportError:
+        # Fall back to lazy import of analyses (which DOES drag in
+        # mem0); only used when analyses_io isn't yet present.
+        from .analyses import load_label_counts_sync as load_label_counts_via_io  # type: ignore
+
+    counts = load_label_counts_via_io("topics")
+    if not counts:
+        return {
+            "n_distinct": 0,
+            "n_shown": 0,
+            "labels": [],
+            "status": "Computing — first extraction pass not yet complete.",
+        }
+    floor = settings.stats_minimum_bucket
+    # Filter labels with count >= floor for the top-list (privacy
+    # floor + signal-to-noise). Drop 'small talk' explicitly — it's a
+    # placeholder, not a use-case.
+    rows = [
+        {"label": lbl, "count": c}
+        for lbl, c in counts.items()
+        if c >= floor and lbl.lower() != "small talk"
+    ]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    shown = rows[:top_n]
+    return {
+        "n_distinct": len(counts),
+        "n_shown": len(shown),
+        "labels": shown,
     }
 
 
@@ -548,11 +599,34 @@ def _compute_sync() -> dict[str, Any]:
             denominator=total_user_msgs,
             empty_status="Computing — first classification pass not yet complete.",
         ),
-        "professions": _format_synthesis_block(
-            "roles",
-            denominator=len(unique_users),
-            empty_status="Computing — first classification pass not yet complete.",
-        ),
+        "top_topics": _top_topics_block(top_n=20),
+        "who": {
+            "roles": _format_synthesis_block(
+                "roles",
+                denominator=len(unique_users),
+                empty_status="Computing — extracting roles from profile facts.",
+            ),
+            "regions": _format_synthesis_block(
+                "regions",
+                denominator=len(unique_users),
+                empty_status="Computing — extracting regions from profile facts.",
+            ),
+            "languages": _format_synthesis_block(
+                "languages",
+                denominator=len(unique_users),
+                empty_status="Computing — extracting preferred languages.",
+            ),
+            "family": _format_synthesis_block(
+                "family",
+                denominator=len(unique_users),
+                empty_status="Computing — extracting family / household context.",
+            ),
+            "situations": _format_synthesis_block(
+                "situations",
+                denominator=len(unique_users),
+                empty_status="Computing — extracting current life situations.",
+            ),
+        },
         "performance": perf,
     }
 

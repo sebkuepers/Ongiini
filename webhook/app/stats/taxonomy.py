@@ -10,7 +10,7 @@ The system has no fixed taxonomy — categories are emergent from the
 data via LLM analysis. See analyses.py for the framework.)
 """
 
-ANALYSIS_VERSION = 1
+ANALYSIS_VERSION = 2  # bumped: hierarchy split + multi-dim WHO
 
 # Backwards-compat alias used by aggregator.py. Same number.
 TAXONOMY_VERSION = ANALYSIS_VERSION

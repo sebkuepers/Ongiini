@@ -182,11 +182,18 @@ def _iter_user_messages(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
             yield h, text
 
 
-def _iter_user_profiles(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
-    """Yield (msisdn-hash, profile_text) — one item per user.
+def _iter_user_facts_by_tags(
+    tags: tuple[str, ...],
+    excluded: frozenset[str],
+) -> Iterator[tuple[str, str]]:
+    """Yield (msisdn-hash, concatenated-fact-text) for every user with at
+    least one fact carrying any of `tags`.
 
-    profile_text is the concatenation of that user's [PROFILE] facts
-    from mem0. Users with no PROFILE facts are skipped.
+    `tags` is a tuple of mem0 tag markers like ("[PROFILE]",) or
+    ("[PROFILE]", "[PREFERENCE]") — facts carrying any listed tag are
+    included; their tag prefix is stripped. Users with no matching
+    facts are skipped (so a WHO analysis only consumes LLM budget for
+    users who actually have data on that dimension).
     """
     for path in settings.data_dir.glob("*.json"):
         if not path.stem.isdigit():
@@ -198,7 +205,7 @@ def _iter_user_profiles(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
             facts = mem.list_all(msisdn)
         except Exception:  # noqa: BLE001
             continue
-        profile_bits: list[str] = []
+        bits: list[str] = []
         for f in facts or []:
             txt = ""
             if isinstance(f, dict):
@@ -207,19 +214,30 @@ def _iter_user_profiles(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
                 txt = f
             if not txt:
                 continue
-            if "[PROFILE]" in txt:
-                # Strip the tag, keep just the descriptor text.
-                cleaned = txt.replace("[PROFILE]", "").strip()
+            if any(t in txt for t in tags):
+                cleaned = txt
+                for t in tags:
+                    cleaned = cleaned.replace(t, "")
+                cleaned = cleaned.strip()
                 if cleaned:
-                    profile_bits.append(cleaned)
-        if not profile_bits:
+                    bits.append(cleaned)
+        if not bits:
             continue
-        combined = "; ".join(profile_bits)[:1500]
-        # Hash the msisdn (not the profile text) so we get one row per
-        # user; if the profile evolves the label can update (we INSERT
-        # OR REPLACE on extraction store).
+        combined = "; ".join(bits)[:1500]
         h = hashlib.sha256(msisdn.encode("utf-8")).hexdigest()
         yield h, combined
+
+
+def _iter_user_profiles(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
+    return _iter_user_facts_by_tags(("[PROFILE]",), excluded)
+
+
+def _iter_user_profile_pref(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
+    return _iter_user_facts_by_tags(("[PROFILE]", "[PREFERENCE]"), excluded)
+
+
+def _iter_user_situations(excluded: frozenset[str]) -> Iterator[tuple[str, str]]:
+    return _iter_user_facts_by_tags(("[SITUATION]",), excluded)
 
 
 # --- Analysis definitions --------------------------------------------------
@@ -234,9 +252,16 @@ class Analysis:
     item_kind: str  # "message" | "user" — used in synthesis prompt and aggregator labelling
 
 
+# ---------------------------------------------------------------------------
+# Topic analysis (HOW people use Ongiini.ai). Extracted per-message,
+# synthesised into BROAD use-case buckets. The raw extractions
+# themselves are surfaced separately on the page as "top topics" — one
+# level down from the use-case buckets.
+# ---------------------------------------------------------------------------
+
 TOPICS_ANALYSIS = Analysis(
     name="topics",
-    description="What people use Ongiini for, emergent from message content",
+    description="Per-message topic phrase; clusters become use-cases",
     source=_iter_user_messages,
     extract_system=(
         "You read one short message from a user of a free Namibian AI helper. "
@@ -252,13 +277,13 @@ TOPICS_ANALYSIS = Analysis(
     synthesize_system=(
         "You are analysing how people use a free AI helper in Namibia. Below is a "
         "list of short topic phrases, each with a count of how often it appeared. "
-        "Cluster them into meaningful named themes.\n\n"
+        "Cluster them into a SMALL number of BROAD use-case buckets.\n\n"
         "Rules:\n"
-        "- Produce 6-12 clusters. Don't over-fragment — closely related phrases "
-        "  belong together.\n"
-        "- Each cluster label is 1-4 words, clear and concrete (e.g. 'Crop health', "
-        "  'School homework', 'Government forms', 'Childhood illness').\n"
-        "- Each cluster summary is one sentence describing what's in it.\n"
+        "- Produce 4-7 clusters total. Prefer FEWER, BIGGER buckets.\n"
+        "- Each cluster label is 1-2 words at high-level category granularity — "
+        "  e.g. 'Education', 'Health', 'Agriculture', 'Government', 'Daily life', "
+        "  'Business & money', 'Parenting'. Avoid sub-categorisation here.\n"
+        "- Each cluster summary is one sentence explaining what's in it.\n"
         "- Assign EVERY input phrase to exactly one cluster.\n"
         "- Output strict JSON in this shape, with no preamble or trailing text:\n"
         '  {"clusters": [{"label": "...", "summary": "...", "items": ["phrase1", "phrase2"]}]}\n'
@@ -268,40 +293,142 @@ TOPICS_ANALYSIS = Analysis(
 )
 
 
+# ---------------------------------------------------------------------------
+# WHO analyses — five dimensions, all sourced from mem0 facts. Each is
+# self-contained so the framework adds new dimensions by adding new
+# Analysis objects to ALL_ANALYSES.
+# ---------------------------------------------------------------------------
+
+_WHO_SYNTH_RULES = (
+    "Rules:\n"
+    "- Produce 4-8 clusters total.\n"
+    "- Each cluster label is 1-3 words, descriptive and dignified.\n"
+    "- Each cluster summary is one sentence.\n"
+    "- Assign EVERY input phrase to exactly one cluster.\n"
+    "- Output strict JSON in this shape, with no preamble or trailing text:\n"
+    '  {"clusters": [{"label": "...", "summary": "...", "items": ["phrase1", "phrase2"]}]}\n'
+    "- Items must be EXACT verbatim copies of the input phrases.\n"
+)
+
+
 ROLES_ANALYSIS = Analysis(
     name="roles",
-    description="What roles/professions describe the user base, emergent from profile facts",
+    description="What roles/professions describe the user base",
     source=_iter_user_profiles,
     extract_system=(
-        "You read a short profile description of one user of a free Namibian AI "
-        "helper. Reply with a SHORT role description (1-4 words) capturing the "
-        "person's dominant role or situation — e.g. 'smallholder farmer', "
-        "'matric student', 'first-time mother', 'taxi driver', 'small shop owner'.\n\n"
+        "You read facts about one user of a free Namibian AI helper. Reply with "
+        "a SHORT role descriptor (1-4 words) capturing the person's main role or "
+        "occupation — e.g. 'smallholder farmer', 'matric student', 'taxi driver', "
+        "'small shop owner', 'nurse', 'pastor', 'unemployed jobseeker'.\n\n"
         "Rules:\n"
-        "- Output ONLY the role phrase. No quotes, no punctuation at the end, "
-        "  no explanation.\n"
-        "- Use English regardless of the profile's language.\n"
-        "- If the profile only says a location with no role, output 'unspecified'.\n"
+        "- Output ONLY the role phrase. No quotes, no punctuation, no explanation.\n"
+        "- If no role is stated or inferable, output 'unknown'.\n"
+        "- Use English regardless of the facts' language.\n"
     ),
     synthesize_system=(
-        "You are analysing the user base of a free AI helper in Namibia. Below "
-        "is a list of short role descriptions, each with a count of how many "
-        "users had that description. Cluster them into meaningful named groups.\n\n"
-        "Rules:\n"
-        "- Produce 5-10 clusters.\n"
-        "- Each cluster label is 1-4 words (e.g. 'Farmers', 'Students', "
-        "  'Health workers').\n"
-        "- Each cluster summary is one sentence describing the group.\n"
-        "- Assign EVERY input phrase to exactly one cluster.\n"
-        "- Output strict JSON in this shape, with no preamble or trailing text:\n"
-        '  {"clusters": [{"label": "...", "summary": "...", "items": ["phrase1", "phrase2"]}]}\n'
-        "- Items must be EXACT verbatim copies of the input phrases.\n"
+        "You are analysing roles in the user base of a Namibian AI helper. Below "
+        "are role descriptors, each with a count of users.\n\n" + _WHO_SYNTH_RULES
     ),
     item_kind="user",
 )
 
 
-ALL_ANALYSES: list[Analysis] = [TOPICS_ANALYSIS, ROLES_ANALYSIS]
+REGIONS_ANALYSIS = Analysis(
+    name="regions",
+    description="Where in Namibia users are located",
+    source=_iter_user_profiles,
+    extract_system=(
+        "You read facts about one user of a free Namibian AI helper. Reply with "
+        "a SHORT region or town name (1-3 words) — e.g. 'Oshakati', 'Windhoek', "
+        "'Northern Namibia', 'Kavango', 'rural area'.\n\n"
+        "Rules:\n"
+        "- Output ONLY the place name. No quotes, no punctuation, no explanation.\n"
+        "- If no location is stated or inferable, output 'unknown'.\n"
+        "- Prefer the most specific named place mentioned.\n"
+    ),
+    synthesize_system=(
+        "You are analysing where users live, in the user base of a Namibian AI "
+        "helper. Below are location descriptors with counts.\n\n" + _WHO_SYNTH_RULES
+    ),
+    item_kind="user",
+)
+
+
+FAMILY_ANALYSIS = Analysis(
+    name="family",
+    description="Family / household situation",
+    source=_iter_user_profiles,
+    extract_system=(
+        "You read facts about one user of a free Namibian AI helper. Reply with "
+        "a SHORT family/household descriptor (1-4 words) — e.g. 'parent of 3', "
+        "'single mother', 'married couple', 'lives with parents', 'caring for "
+        "elderly relative', 'no dependents'.\n\n"
+        "Rules:\n"
+        "- Output ONLY the descriptor. No quotes, no punctuation, no explanation.\n"
+        "- If no family or household info is stated, output 'unknown'.\n"
+    ),
+    synthesize_system=(
+        "You are analysing family / household situations in the user base of a "
+        "Namibian AI helper. Below are family descriptors with counts.\n\n"
+        + _WHO_SYNTH_RULES
+    ),
+    item_kind="user",
+)
+
+
+LANGUAGES_ANALYSIS = Analysis(
+    name="languages",
+    description="Preferred language",
+    source=_iter_user_profile_pref,
+    extract_system=(
+        "You read facts about one user of a free Namibian AI helper. Reply with "
+        "a SHORT language descriptor (1-2 words) capturing the preferred reply "
+        "language — e.g. 'English', 'Afrikaans', 'Oshiwambo', 'mixed'.\n\n"
+        "Rules:\n"
+        "- Output ONLY the language name. No quotes, no punctuation, no explanation.\n"
+        "- If no preference is stated, output 'unknown'.\n"
+    ),
+    synthesize_system=(
+        "You are analysing preferred languages in the user base of a Namibian AI "
+        "helper. Below are language descriptors with counts.\n\n" + _WHO_SYNTH_RULES
+    ),
+    item_kind="user",
+)
+
+
+SITUATIONS_ANALYSIS = Analysis(
+    name="situations",
+    description="Current life situations users are working through",
+    source=_iter_user_situations,
+    extract_system=(
+        "You read short notes about one user's current situation, written as "
+        "facts about ongoing topics they are dealing with. Reply with a SHORT "
+        "phrase (3-6 words) describing the dominant current situation — e.g. "
+        "'planting maize this season', 'preparing for matric exams', "
+        "'navigating a new business registration', 'looking after a sick child'.\n\n"
+        "Rules:\n"
+        "- Output ONLY the phrase. No quotes, no punctuation, no explanation.\n"
+        "- If situations are unclear or absent, output 'unspecified'.\n"
+    ),
+    synthesize_system=(
+        "You are analysing current life situations in the user base of a "
+        "Namibian AI helper. Below are situation descriptors with counts.\n\n"
+        + _WHO_SYNTH_RULES
+    ),
+    item_kind="user",
+)
+
+
+# Order matters for display on the page: topics first, then WHO panels
+# in the order that's most informative for understanding the user base.
+ALL_ANALYSES: list[Analysis] = [
+    TOPICS_ANALYSIS,
+    ROLES_ANALYSIS,
+    REGIONS_ANALYSIS,
+    LANGUAGES_ANALYSIS,
+    FAMILY_ANALYSIS,
+    SITUATIONS_ANALYSIS,
+]
 
 
 # --- Extraction pass -------------------------------------------------------

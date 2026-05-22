@@ -298,27 +298,105 @@
     }
     .stat-placeholder strong { color: var(--ink-soft); font-weight: 500; display: block; margin-bottom: 6px; }
 
+    /* "How it performs" is operationally-focused — give it a dark
+       variance so it reads as a distinct register from the warm
+       cream-coloured user-facing sections above. */
     .stat-perf {
       margin: 0;
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 10px;
+      padding: 22px;
+      background: var(--ink);
+      border-radius: 14px;
     }
     .stat-perf-tile {
-      background: var(--bone-deep);
+      background: color-mix(in oklab, var(--ink) 80%, var(--bone));
       border-radius: 10px;
       padding: 14px 16px;
     }
     .stat-perf-label {
       font-family: 'Geist Mono', monospace;
       font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--ink-faint);
+      color: var(--bone-deep);
+      opacity: 0.7;
     }
     .stat-perf-value {
       font-family: 'Instrument Serif', serif;
       font-size: 24px;
-      color: var(--ink);
+      color: var(--bone);
       margin-top: 4px;
+    }
+
+    /* Section note (sample-size + skew warning). Sits under the H2,
+       above the chart. Quiet visual weight but always-on. */
+    .stat-section-note {
+      margin: -8px 0 24px;
+      padding: 12px 16px;
+      background: var(--bone-deep);
+      border-left: 3px solid var(--terracotta);
+      border-radius: 0 8px 8px 0;
+      font-size: 13.5px;
+      color: var(--ink-soft);
+      line-height: 1.5;
+    }
+    .stat-section-note strong { color: var(--ink); font-weight: 500; }
+
+    .stat-chart-meta {
+      margin: 6px 0 0;
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+    }
+
+    /* Donut chart needs more vertical room than the other charts. */
+    .stat-chart--donut svg { max-height: 240px; }
+    .stat-donut-legend {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      margin-top: 14px;
+    }
+    .stat-donut-legend-row {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .stat-donut-swatch {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+    }
+    .stat-donut-pct {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-soft);
+    }
+
+    /* WHO grid — multiple distribution panels side-by-side. */
+    .stat-who {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+    .stat-who-panel {
+      background: var(--bone-deep);
+      border-radius: 12px;
+      padding: 18px 18px 16px;
+    }
+    .stat-who-head {
+      font-family: 'Geist', sans-serif;
+      font-size: 13px; font-weight: 500;
+      color: var(--ink);
+      margin: 0;
+    }
+    .stat-who-sub {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+      margin: 4px 0 14px;
     }
 
     .stat-state {
@@ -353,6 +431,7 @@
       .stat-kpis { grid-template-columns: repeat(3, 1fr); gap: 14px; }
       .stat-chart-row { grid-template-columns: 1fr 1fr; }
       .stat-perf { grid-template-columns: repeat(4, 1fr); }
+      .stat-who { grid-template-columns: 1fr 1fr; gap: 22px; }
     }
     @media (min-width: 880px) {
       :root { --gutter: 48px; }
@@ -413,30 +492,42 @@
         </div>
       </div>
 
-      <h2>How people use it</h2>
+      <h2>How people use Ongiini.ai</h2>
+      <p class="stat-section-note">Numbers reflect <strong>what users mention in conversation</strong>, not a survey. We don't ask people what they want help with — we measure what comes up.</p>
       <div class="stat-chart-row">
         <div class="stat-chart">
-          <p class="stat-chart-title">Topics</p>
-          <p class="stat-chart-sub">Per-message classification · local model</p>
-          <div id="dist-topics"></div>
+          <p class="stat-chart-title">Use cases</p>
+          <p class="stat-chart-sub" id="usecases-sub">Broad buckets · clustered by local model</p>
+          <div id="chart-usecases"></div>
         </div>
         <div class="stat-chart">
-          <p class="stat-chart-title">Professions &amp; roles</p>
-          <p class="stat-chart-sub">From extracted profile facts</p>
-          <div id="dist-professions"></div>
+          <p class="stat-chart-title">Top topics</p>
+          <p class="stat-chart-sub" id="toptopics-sub">Most-mentioned specifics · one level down</p>
+          <div id="dist-toptopics"></div>
         </div>
       </div>
 
+      <h2>Who uses Ongiini.ai</h2>
+      <p class="stat-section-note">Built from the small set of facts the memory system extracts when users share them in chat — <strong>not a registration form</strong>. Most users don't volunteer most of these things; the percentages below describe only the slice of users who did.</p>
+      <div class="stat-who" id="who-grid"></div>
+
       <h2>How it performs</h2>
+      <p class="stat-section-note">Operational signals from the model layer. Useful for tuning, less so for understanding people.</p>
       <div class="stat-perf" id="perf"></div>
 
       <h2>How these numbers are made</h2>
       <div class="stat-meta-prose">
-        <p>Every number on this page is computed live from data Ongiini already keeps for the service itself — the per-message usage log, the structural trace log, and the long-term memory store. <strong>No raw conversation content leaves the foundation's infrastructure.</strong></p>
-        <p>The qualitative themes you see under <em>How people use it</em> are <strong>not chosen from a fixed list</strong>. The local AI model first reads each user message and produces a short description of what the message is about — something like <em>"yellowing maize leaves"</em>, <em>"grade 11 chemistry homework"</em>, or <em>"VAT registration deadline"</em>. Then, periodically, the same model reads the entire collection of those short descriptions with their counts and groups them into named clusters of its own choosing. The clusters above are what the data, not a Berlin committee, suggests as the natural shape of how people use Ongiini.</p>
-        <p>Professions and roles work the same way: the model reads each user's <em>profile</em> facts and produces a short role descriptor (<em>"smallholder farmer"</em>, <em>"matric student"</em>, <em>"first-time mother"</em>), then clusters all the descriptors into emergent groups.</p>
-        <p>Both passes run entirely on the same computer the chat service runs on — no third-party APIs, no data leaving the foundation. Any cluster represented by fewer than five people is folded into <em>"Other"</em> so no single user can be identified.</p>
-        <p>If you'd rather your data not be counted in any of these statistics — current or future — write to the address in our <a href="/privacy/">Privacy Policy</a> with the subject <em>"object to research processing"</em> and your phone number. Your messages stop contributing immediately and retroactively.</p>
+        <p><strong>What the data is.</strong> Everything on this page is computed live from data Ongiini already keeps for the service itself — the per-message usage log, the structural trace log, and the long-term memory store. No raw conversation content leaves the foundation's infrastructure. The classification and clustering passes that produce the qualitative sections run on the same computer the chat service runs on; no third-party APIs are involved.</p>
+
+        <p><strong>Two qualitative passes.</strong> The categories you see under <em>How people use Ongiini.ai</em> are <strong>not chosen from a fixed list</strong>. The local AI model first reads each user message and produces a short description — <em>"yellowing maize leaves"</em>, <em>"grade 11 chemistry homework"</em>, <em>"VAT registration deadline"</em>. Then, periodically, the same model reads the entire collection of those descriptions with their counts and groups them into broad <strong>use cases</strong> of its own choosing. <strong>Top topics</strong> below is one level down — the most-mentioned raw descriptions, before clustering. <em>Who uses Ongiini.ai</em> works the same way per dimension: short descriptors per user → clustered into emergent groups for roles, regions, languages, family context, and current life situations.</p>
+
+        <p><strong>This is a heavily skewed sample, not a survey.</strong> The percentages on this page describe <em>only what users have mentioned in conversation</em>. They are not a representative cross-section of who uses Ongiini.ai. A teacher who has never mentioned teaching does not appear under <em>Roles → Teacher</em>. A user in Oshakati who has never named their town does not show up under <em>Regions → Oshakati</em>. We do not ask, we only observe. Every WHO percentage is therefore relative to <em>"users who mentioned this dimension at all"</em> — usually a minority of the total user base — and the sample sizes shown next to each chart make that explicit. Read accordingly.</p>
+
+        <p><strong>Sample size matters.</strong> Every chart shows how many observations underlie it. A cluster of "3 users" tells you something very different from a cluster of "3,000 users". When the service is small, the numbers are small. Treat anything with fewer than a few hundred observations as <em>signal of direction</em>, not <em>measurement of magnitude</em>.</p>
+
+        <p><strong>Privacy floor.</strong> Any cluster or category represented by fewer than five people / fewer than five mentions is folded into <em>"Other"</em> so no single user can be identified.</p>
+
+        <p><strong>Right to object.</strong> If you'd rather your data not be counted in any of these statistics — current or future — write to the address in our <a href="/privacy/">Privacy Policy</a> with the subject <em>"object to research processing"</em> and your phone number. Your messages stop contributing immediately and retroactively.</p>
       </div>
     </div>
 
@@ -514,8 +605,9 @@
       renderDau(d.timeseries.daily_active_users);
       renderHistogram('chart-hour', d.distributions.by_hour_of_day_local, r => r.hour, r => r.count, h => String(h));
       renderHistogram('chart-dow', d.distributions.by_day_of_week, r => r.day, r => r.count, l => l);
-      renderDistribution('dist-topics', d.topics);
-      renderDistribution('dist-professions', d.professions);
+      renderUseCases(d.topics, d.totals.messages_user);
+      renderTopTopics(d.top_topics);
+      renderWho(d.who, d.totals.unique_users);
       renderPerf(d.performance);
       renderFoot(d);
     }
@@ -669,6 +761,157 @@
         svg.appendChild(t);
       });
       parent.appendChild(svg);
+    }
+
+    // Three-colour rotation matching the page's accent rhythm. Used for
+    // donut slices and WHO bars so the qualitative sections share a
+    // visual language.
+    const PALETTE = [
+      'var(--terracotta)',
+      'var(--teal)',
+      'var(--olive)',
+      'var(--terracotta-deep)',
+      'var(--teal-deep)',
+      'var(--terracotta-light)',
+      'var(--teal-light)',
+      'var(--olive-light)',
+    ];
+
+    function renderUseCases(block, totalMessages) {
+      const parent = document.getElementById('chart-usecases');
+      const subEl = document.getElementById('usecases-sub');
+      clear(parent);
+      const cats = (block && block.categories) || [];
+      const n = block.n_observations || 0;
+      const cov = block.coverage || 0;
+      if (subEl) {
+        const covText = totalMessages ? Math.round(cov * 100) + '% of ' + fmtInt.format(totalMessages) + ' messages' : '—';
+        subEl.textContent = 'Based on ' + fmtInt.format(n) + ' classified messages · ' + covText;
+      }
+      if (cats.length === 0) {
+        const div = el('div', { className: 'stat-placeholder' });
+        div.appendChild(el('strong', { text: 'Computing…' }));
+        div.appendChild(document.createTextNode(block.status || 'No data yet.'));
+        parent.appendChild(div);
+        return;
+      }
+      // Donut chart
+      const total = cats.reduce((s, c) => s + c.count, 0) || 1;
+      const W = 240, H = 240, R = 86, STROKE = 28, CX = W / 2, CY = H / 2;
+      const C = 2 * Math.PI * R;
+      const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H });
+      svg.style.maxWidth = '240px';
+      svg.style.margin = '0 auto';
+      let offset = 0;
+      cats.forEach((c, i) => {
+        const frac = c.count / total;
+        const arc = frac * C;
+        const seg = svgEl('circle', {
+          cx: CX, cy: CY, r: R,
+          fill: 'transparent',
+          stroke: PALETTE[i % PALETTE.length],
+          'stroke-width': STROKE,
+          'stroke-dasharray': arc.toFixed(2) + ' ' + (C - arc).toFixed(2),
+          'stroke-dashoffset': (-offset).toFixed(2),
+          transform: 'rotate(-90 ' + CX + ' ' + CY + ')',
+        });
+        svg.appendChild(seg);
+        offset += arc;
+      });
+      // Center label
+      const total_text = svgEl('text', {
+        x: CX, y: CY - 4, 'text-anchor': 'middle',
+        'font-family': "'Instrument Serif', serif",
+        'font-size': 30,
+        fill: 'var(--ink)',
+      });
+      total_text.textContent = fmtInt.format(total);
+      svg.appendChild(total_text);
+      const center_label = svgEl('text', {
+        x: CX, y: CY + 14, 'text-anchor': 'middle',
+        'font-family': "'Geist Mono', monospace",
+        'font-size': 9,
+        'letter-spacing': 1.6,
+        fill: 'var(--ink-faint)',
+      });
+      center_label.textContent = 'MESSAGES';
+      svg.appendChild(center_label);
+      parent.appendChild(svg);
+      // Legend
+      const legend = el('div', { className: 'stat-donut-legend' });
+      cats.forEach((c, i) => {
+        const row = el('div', { className: 'stat-donut-legend-row' });
+        const sw = el('span', { className: 'stat-donut-swatch' });
+        sw.style.background = PALETTE[i % PALETTE.length];
+        row.appendChild(sw);
+        row.appendChild(el('span', { text: c.label }));
+        row.appendChild(el('span', { className: 'stat-donut-pct', text: c.pct.toFixed(1) + '%' }));
+        legend.appendChild(row);
+      });
+      parent.appendChild(legend);
+    }
+
+    function renderTopTopics(block) {
+      const parent = document.getElementById('dist-toptopics');
+      const subEl = document.getElementById('toptopics-sub');
+      clear(parent);
+      const labels = (block && block.labels) || [];
+      if (subEl) {
+        if (labels.length === 0) {
+          subEl.textContent = 'Computing…';
+        } else {
+          subEl.textContent = 'Showing top ' + labels.length + ' of ' + fmtInt.format(block.n_distinct) + ' distinct phrases';
+        }
+      }
+      if (labels.length === 0) {
+        const div = el('div', { className: 'stat-placeholder' });
+        div.appendChild(el('strong', { text: 'Computing…' }));
+        div.appendChild(document.createTextNode(block.status || 'No data yet.'));
+        parent.appendChild(div);
+        return;
+      }
+      const wrap = el('div', { className: 'stat-bars' });
+      const max = Math.max(1, ...labels.map(c => c.count));
+      labels.forEach((c) => {
+        const row = el('div', { className: 'stat-bar-row' });
+        const meta = el('div', { className: 'stat-bar-meta' });
+        meta.appendChild(el('span', { className: 'stat-bar-label', text: String(c.label) }));
+        meta.appendChild(el('span', { className: 'stat-bar-value', text: fmtInt.format(c.count) }));
+        row.appendChild(meta);
+        const track = el('div', { className: 'stat-bar-track' });
+        const fill = el('div', { className: 'stat-bar-fill' });
+        fill.style.width = ((c.count / max) * 100).toFixed(1) + '%';
+        track.appendChild(fill);
+        row.appendChild(track);
+        wrap.appendChild(row);
+      });
+      parent.appendChild(wrap);
+    }
+
+    function renderWho(who, totalUsers) {
+      const grid = document.getElementById('who-grid');
+      clear(grid);
+      const dims = [
+        ['roles',      'Roles',                'What people do'],
+        ['regions',    'Regions',              'Where they live'],
+        ['languages',  'Languages',            'Preferred reply language'],
+        ['family',     'Family situation',     'Household context'],
+        ['situations', 'Current life context', 'What they are working through'],
+      ];
+      for (const [key, title, sub] of dims) {
+        const block = who[key];
+        const panel = el('div', { className: 'stat-who-panel' });
+        panel.appendChild(el('p', { className: 'stat-who-head', text: title }));
+        const subText = block && block.n_observations
+          ? sub + ' · ' + fmtInt.format(block.n_observations) + ' of ' + fmtInt.format(totalUsers || 0) + ' users mentioned this'
+          : sub;
+        panel.appendChild(el('p', { className: 'stat-who-sub', text: subText }));
+        const inner = el('div');
+        inner.id = 'who-' + key;
+        panel.appendChild(inner);
+        grid.appendChild(panel);
+        renderDistribution('who-' + key, block);
+      }
     }
 
     function renderDistribution(parentId, block) {
