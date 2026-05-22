@@ -11,7 +11,7 @@ WhatsApp inbound traffic) and asserts the observed behaviour.
 
 Run from inside the rebuilt webhook container:
 
-    docker cp webhook/tests/image_failure_modes.py ongiini-webhook:/data/imft.py
+    docker cp ongiini/tests/image_failure_modes.py ongiini-webhook:/data/imft.py
     docker exec ongiini-webhook python3 /data/imft.py
 """
 

@@ -1,0 +1,50 @@
+# Keep the build context lean — Docker uploads everything not in
+# this file to the daemon on every build, even if the Dockerfile's
+# COPY commands only reference a subset.
+#
+# The Dockerfile only copies ``ongiini/``, ``owela/``, and
+# ``requirements.txt`` into the image, so technically nothing else
+# matters for the final image — but excluding the rest keeps build
+# context transfer fast and avoids accidentally leaking sensitive
+# files into a future COPY that scope-creeps.
+
+# Runtime data (qdrant vectors, mem0 history, usage logs, etc.).
+# This can grow into the gigabytes on a busy Spark.
+data/
+
+# Git internals — not needed for the build.
+.git/
+.github/
+
+# Static assets and docs not used by the webhook.
+website/
+website-config/
+functions/
+foundation/
+docs/
+deploy/
+
+# Auto-generated Python bytecode + virtualenvs.
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.venv/
+venv/
+
+# Test caches.
+.pytest_cache/
+
+# IDE / OS scratch.
+.idea/
+.vscode/
+.DS_Store
+
+# This file itself and other project metadata.
+.dockerignore
+.gitignore
+.claude/
+.env*
+README.md
+CLAUDE.md
+SECURITY.md
+docker-compose.yml

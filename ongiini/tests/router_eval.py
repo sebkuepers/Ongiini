@@ -14,7 +14,7 @@ Two phases:
 
 Run inside the webhook container:
 
-    docker cp webhook/tests/router_eval.py ongiini-webhook:/data/router_eval.py
+    docker cp ongiini/tests/router_eval.py ongiini-webhook:/data/router_eval.py
     docker exec ongiini-webhook python3 /data/router_eval.py
 """
 

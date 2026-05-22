@@ -52,7 +52,7 @@ class Classifier(Protocol):
 
     The Ongiini impl uses Gemma 4 as the classifier with a prefix-cached
     prompt (~270 tokens) and a 2s timeout. See
-    ``webhook/app/routers/gemma_classifier.py``.
+    ``ongiini/routers/gemma_classifier.py``.
     """
 
     async def classify(self, msg: InboundMessage) -> ClassifierResult:

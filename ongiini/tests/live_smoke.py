@@ -11,7 +11,7 @@ prints the on-disk memory state after each turn. Lets us watch:
 
 Run from inside the container:
 
-    docker cp webhook/tests/live_smoke.py ongiini-webhook:/data/live_smoke.py
+    docker cp ongiini/tests/live_smoke.py ongiini-webhook:/data/live_smoke.py
     docker exec ongiini-webhook python3 /data/live_smoke.py
 """
 

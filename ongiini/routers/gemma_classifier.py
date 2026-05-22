@@ -15,7 +15,7 @@ during rollout.
 
 Validation:
   - Held-out 4-way (NONE/ADMIN/DOCS/SEARCH) accuracy: still measured
-    against ``webhook/tests/router_eval_holdout.py`` after migration.
+    against ``ongiini/tests/router_eval_holdout.py`` after migration.
   - Depth (SHALLOW vs DEEP) accuracy: measured against an extended
     held-out set added in step 5b. Target ≥85% on depth, ≥96% on the
     4-way category.

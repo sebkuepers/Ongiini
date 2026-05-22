@@ -1,12 +1,12 @@
 """Quality eval for Ongiini's agent loop.
 
 Runs each of the 8 example questions shown on the public website through
-app.llm.respond() with fresh history, scores the reply against a per-case
+ongiini.tests._legacy_respond.respond() with fresh history, scores the reply against a per-case
 checklist, and prints a scorecard.
 
 How to run from the host (container must be up):
 
-    docker cp webhook/tests/eval.py ongiini-webhook:/app/eval.py
+    docker cp ongiini/tests/eval.py ongiini-webhook:/app/eval.py
     docker exec ongiini-webhook python3 /app/eval.py
 
 Each case in CASES has:

@@ -11,7 +11,7 @@ a fraction are images.
 
 Run from inside the rebuilt webhook container:
 
-    docker cp webhook/tests/image_stress.py ongiini-webhook:/data/imstress.py
+    docker cp ongiini/tests/image_stress.py ongiini-webhook:/data/imstress.py
     docker exec ongiini-webhook python3 /data/imstress.py
 """
 

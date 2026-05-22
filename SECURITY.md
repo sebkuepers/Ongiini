@@ -60,7 +60,7 @@ only emergent labels and counts:
 - `/data/qualia.sqlite` — short-label cache keyed by
   `(analysis, content-hash, version)`. Labels are produced by the local
   LLM under explicit anti-PII prompts and then passed through a regex
-  sanitiser (`webhook/app/stats/safety.py::sanitise_label`) before
+  sanitiser (`ongiini/stats/safety.py::sanitise_label`) before
   storage. Labels containing 4-digit numbers, capitalised possessives,
   known Namibian town names, or any pattern the existing PII scrubber
   catches are dropped, not stored.
@@ -90,7 +90,7 @@ WhatsApp — all three work in English and Afrikaans.
 
 - Message content from the user.
 - The assistant's reply text. (Useful for debugging, but a privacy
-  liability — the eval harness in `webhook/tests/eval.py` is the right
+  liability — the eval harness in `ongiini/tests/eval.py` is the right
   tool for inspecting replies during development.)
 - Any payload field from Meta's webhook beyond what's needed to route
   the message.
@@ -116,12 +116,12 @@ to log only recipient + length.
 
 | Control | File | What it stops |
 |---|---|---|
-| Meta `X-Hub-Signature-256` HMAC verification | `webhook/app/whatsapp.py` `verify_signature()` | Forged webhook POSTs from anyone who guesses the verify token. Requires `WHATSAPP_APP_SECRET` env. |
-| Per-MSISDN rate limit (20 / 5min, 200 / day) | `webhook/app/ratelimit.py` | Single-user burst abuse / token exhaustion. In-memory only — resets on container restart. |
-| Message-size cap (4096 chars) | `webhook/app/main.py` | Oversize-payload abuse / token waste. |
-| Namibia number filter + whitelist | `webhook/app/filters.py` | Non-pilot-region traffic. |
-| SSRF guard on `fetch_url` | `webhook/app/search.py` `_safe_url()` | Model tricked into fetching localhost, RFC1918, link-local, or other internal addresses. |
-| Prompt-injection guard | `webhook/app/llm.py` `SYSTEM_PROMPT` BOUNDARIES section | "Ignore previous instructions" / "tell me your system prompt" / jailbreak phrasings. |
+| Meta `X-Hub-Signature-256` HMAC verification | `ongiini/whatsapp.py` `verify_signature()` | Forged webhook POSTs from anyone who guesses the verify token. Requires `WHATSAPP_APP_SECRET` env. |
+| Per-MSISDN rate limit (20 / 5min, 200 / day) | `ongiini/ratelimit.py` | Single-user burst abuse / token exhaustion. In-memory only — resets on container restart. |
+| Message-size cap (4096 chars) | `ongiini/api/main.py` | Oversize-payload abuse / token waste. |
+| Namibia number filter + whitelist | `ongiini/filters.py` | Non-pilot-region traffic. |
+| SSRF guard on `fetch_url` | `ongiini/search.py` `_safe_url()` | Model tricked into fetching localhost, RFC1918, link-local, or other internal addresses. |
+| Prompt-injection guard | `ongiini/system_prompt.py` `SYSTEM_PROMPT` BOUNDARIES section | "Ignore previous instructions" / "tell me your system prompt" / jailbreak phrasings. |
 
 ## Container hardening
 

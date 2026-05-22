@@ -42,7 +42,7 @@ extend it.
 
 ## Backend (Spark)
 
-All code lives under [`webhook/app/stats/`](../webhook/app/stats/):
+All code lives under [`ongiini/stats/`](../ongiini/stats/):
 
 | File | Role |
 |---|---|
@@ -54,7 +54,7 @@ All code lives under [`webhook/app/stats/`](../webhook/app/stats/):
 | `cache.py` | In-process TTL cache (5 min) so repeated polling doesn't re-aggregate. |
 | `api.py` | FastAPI router mounting `GET /stats.json`. |
 
-Lifespan in `webhook/app/main.py` starts the analysis loop as an asyncio
+Lifespan in `ongiini/api/main.py` starts the analysis loop as an asyncio
 task during startup and cancels it on shutdown.
 
 ### Data sources (already on disk for service operation)
@@ -171,7 +171,7 @@ The qualitative section is the highest-risk surface (the LLM is reading
 content and producing labels). Two layers of defence:
 
 **Layer 1 — extraction prompts.** Every analysis's `extract_system` is
-prefixed with [`safety.py::ANTI_PII_PROMPT`](../webhook/app/stats/safety.py).
+prefixed with [`safety.py::ANTI_PII_PROMPT`](../ongiini/stats/safety.py).
 The prefix:
 
 - Explicitly forbids: person names, places below country level, ages,
@@ -186,7 +186,7 @@ towns are not. If a user mentions a town, the model is instructed to
 generalise to the region.
 
 **Layer 2 — regex post-filter.** Every LLM-produced label runs through
-[`safety.py::sanitise_label()`](../webhook/app/stats/safety.py)
+[`safety.py::sanitise_label()`](../ongiini/stats/safety.py)
 before storage. Drops labels containing:
 
 - A 4-digit number (years, IDs)
@@ -251,7 +251,7 @@ the Spark is offline.
 
 ---
 
-## Config knobs (`webhook/app/config.py`)
+## Config knobs (`ongiini/config.py`)
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -282,7 +282,7 @@ After any change to the transparency layer:
 
 1. **Backend smoke:** synthetic `usage.log` + `trace.jsonl` fixtures →
    the response dict has the expected shape. See the integration
-   pattern in past commits (`webhook/tests/` is the right home for a
+   pattern in past commits (`ongiini/tests/` is the right home for a
    formal harness).
 2. **Sanitiser tests:** every change to `safety.py` should re-verify
    the existing 21 test cases (Heinis, Oshakati, Joseph's grade 11

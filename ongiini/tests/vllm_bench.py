@@ -27,7 +27,7 @@ For each regime + concurrency level we report:
 Run from inside the webhook container so we hit vLLM through the same
 client + base URL the real traffic does:
 
-    docker cp webhook/tests/vllm_bench.py ongiini-webhook:/data/vllm_bench.py
+    docker cp ongiini/tests/vllm_bench.py ongiini-webhook:/data/vllm_bench.py
     docker exec ongiini-webhook python3 /data/vllm_bench.py
 """
 
@@ -85,7 +85,7 @@ client = AsyncOpenAI(base_url=BASE_URL, api_key="not-needed")
 
 
 def _build_messages(per_request_history: list[dict]) -> list[dict]:
-    """Same message-construction logic as app.llm.respond()."""
+    """Same message-construction logic as Agent.handle (via ongiini.tests._legacy_respond.respond)."""
     return (
         [{"role": "system", "content": SYSTEM_PROMPT}]
         + per_request_history

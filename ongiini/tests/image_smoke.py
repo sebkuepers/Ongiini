@@ -16,7 +16,7 @@ facts in each scenario.
 
 Run from inside the rebuilt webhook container:
 
-    docker cp webhook/tests/image_smoke.py ongiini-webhook:/data/image_smoke.py
+    docker cp ongiini/tests/image_smoke.py ongiini-webhook:/data/image_smoke.py
     docker exec ongiini-webhook python3 /data/image_smoke.py
 """
 

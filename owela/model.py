@@ -2,7 +2,7 @@
 
 Wraps whatever client the application uses to talk to its model.
 Today the only impl is the vLLM/OpenAI-compatible adapter living in
-``webhook/app/models/vllm_gemma.py``; the protocol is intentionally
+``ongiini/models/vllm_gemma.py``; the protocol is intentionally
 designed around the OpenAI chat-completions shape because that's what
 Gemma + vLLM serves and that's what every other major engine will
 serve too.

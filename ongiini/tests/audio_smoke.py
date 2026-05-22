@@ -15,15 +15,15 @@ also confirm the model loaded and ffmpeg/CTranslate2 are wired up.
 
   case C — Real Afrikaans speech: a 1.5s recording of "Suid-Afrika"
            by Jan Schutte (SABC, 1960), sourced from Wikimedia Commons
-           and shipped in webhook/tests/fixtures/. Vendored because
+           and shipped in ongiini/tests/fixtures/. Vendored because
            espeak-ng's AF voice transcribes too poorly to be useful,
            and we need to prove the pipeline handles a natural human
            voice — which is what WhatsApp will actually deliver.
 
 Run from inside the rebuilt webhook container:
 
-    docker cp webhook/tests/audio_smoke.py ongiini-webhook:/data/audio_smoke.py
-    docker cp webhook/tests/fixtures/. ongiini-webhook:/data/fixtures/
+    docker cp ongiini/tests/audio_smoke.py ongiini-webhook:/data/audio_smoke.py
+    docker cp ongiini/tests/fixtures/. ongiini-webhook:/data/fixtures/
     docker exec ongiini-webhook python3 /data/audio_smoke.py
 """
 
@@ -143,7 +143,7 @@ async def main() -> None:
     if not _AF_FIXTURE.exists():
         raise AssertionError(
             f"AF fixture missing at {_AF_FIXTURE} — run from a checkout that "
-            f"includes webhook/tests/fixtures/"
+            f"includes ongiini/tests/fixtures/"
         )
     speech_af = _AF_FIXTURE.read_bytes()
     print(f"  loaded {len(speech_af)} bytes from {_AF_FIXTURE.name}")

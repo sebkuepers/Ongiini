@@ -6,7 +6,7 @@ concerns are hooks, including the ones the framework itself offers.
 
 If you find yourself adding new behaviour here, ask: is this truly
 framework-generic, or is it application-specific? Application-specific
-hooks belong in ``webhook/app/hooks/``, not here.
+hooks belong in ``ongiini/hooks/``, not here.
 """
 
 from __future__ import annotations

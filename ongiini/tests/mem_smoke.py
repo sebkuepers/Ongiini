@@ -9,7 +9,7 @@ Drives ongiini.memory.long_term directly (no respond() loop yet) to verify:
 
 Run from inside the rebuilt webhook container:
 
-    docker cp webhook/tests/mem_smoke.py ongiini-webhook:/data/mem_smoke.py
+    docker cp ongiini/tests/mem_smoke.py ongiini-webhook:/data/mem_smoke.py
     docker exec ongiini-webhook python3 /data/mem_smoke.py
 """
 

@@ -7,7 +7,7 @@ worker.
 
 Run from inside the rebuilt webhook container:
 
-    docker cp webhook/tests/audio_failure_modes.py ongiini-webhook:/data/aft.py
+    docker cp ongiini/tests/audio_failure_modes.py ongiini-webhook:/data/aft.py
     docker exec ongiini-webhook python3 /data/aft.py
 """
 

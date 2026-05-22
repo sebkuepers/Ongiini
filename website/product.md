@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-05-21. Do not edit by hand: edit the source HTML and re-run `tools/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-05-22. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Privacy summary (homepage cards)
 
@@ -10,7 +10,7 @@ Your data. Your control.
 
 What we keep
 
-About 50 turns of back-and-forth so Ongiini can follow a real conversation, plus a small set of facts it picks up across chats — like where you are or what you're working on.
+About 50 turns of back-and-forth so Ongiini can follow a real conversation, plus a few things it remembers so you don't have to repeat yourself — your preferred language, or a follow-up you've asked it to keep in mind.
 
 What we don't
 
@@ -148,11 +148,11 @@ Because almost everyone in Namibia already has it. No download, no sign-up, no l
 
 How Ongiini handles your data — last updated 21 May 2026
 
-**The short version.** Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations.
+**The short version.** Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).
 
 You can see what we remember about you by sending *"what do you remember about me?"* on WhatsApp. You can delete it by sending *"delete my data"*. Both work in English and Afrikaans, any time.
 
-Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a **limited-risk AI system** — a chatbot subject only to transparency obligations, not the stricter high-risk requirements. See Section 8 below.
+Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a **limited-risk AI system** — a chatbot subject only to transparency obligations, not the stricter high-risk requirements. See Section 9 below.
 
 ### 1. Who is responsible
 
@@ -274,7 +274,7 @@ Part of the Common Intelligence Foundation's mission is to understand how AI acc
 - How often does the same user return, and how does engagement change over time?
 - When do people use the service — time of day, day of week?
 
-**Lawful basis.** Art. 6 (1) (f) GDPR — legitimate interest of the foundation in understanding the impact of the service it operates, in reporting transparently on its work, and in contributing to the wider field of research on AI access in underserved communities. Where results are published as scientific research, Art. 89 GDPR and § 27 BDSG (Forschungsprivileg) also apply, with the safeguards described below. You may object to this processing at any time under Art. 21 GDPR — see "Your right to object" at the end of this section.
+**Lawful basis.** Art. 6 (1) (f) GDPR — legitimate interest of the foundation in understanding the impact of the service it operates, in reporting transparently on its work, and in contributing to the wider field of research on AI access in underserved communities. Where results are published as scientific research, Art. 89 GDPR and § 27 of the German Federal Data Protection Act (*Bundesdatenschutzgesetz*, BDSG — the "Forschungsprivileg" or research privilege) also apply, with the safeguards described below. You may object to this processing at any time under Art. 21 GDPR — see "Your right to object" at the end of this section.
 
 **What we publish.** Only aggregate statistical results — counts, percentages, charts, trends — that do not identify any individual. Such results may appear on the website (e.g. on a public `/statistics` page), in foundation reports, or in academic papers.
 
@@ -306,11 +306,11 @@ The underlying model (Google DeepMind's Gemma 4 26B) is a general-purpose AI mod
 
 Ongiini is intended for general users in Namibia and is not specifically directed at children. We do not knowingly process personal data of children under 16. If you believe a child has used the service, please contact us and we will remove the relevant data.
 
-### 10. Security
+### 11. Security
 
 Conversation data is stored on a single computer operated by us, in Germany, behind a firewall and accessible only via authenticated administrative access. We apply state-of-the-art technical and organisational measures (Art. 32 GDPR), but no system is perfectly secure. If we become aware of a personal-data breach affecting your rights, we will notify the supervisory authority within 72 hours (Art. 33 GDPR) and, where required, inform you directly (Art. 34 GDPR).
 
-### 11. Changes to this policy
+### 12. Changes to this policy
 
 If we change this policy materially, we will update the date at the top and, for substantial changes (e.g. new categories of processing, new processors, change of controller upon foundation registration), notify users via the WhatsApp service or on the website.
 
@@ -327,6 +327,8 @@ Treat Ongiini's answers as a useful starting point — **not as professional adv
 We provide the service for free, as is, with no guarantees. We may suspend or stop it for anyone, at any time. Use at your own risk.
 
 Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a **limited-risk AI system** — a chatbot subject only to transparency obligations, not the stricter high-risk requirements. See Section 12 below.
+
+**A note on legal references.** These Terms are governed by **German law** (see Section 15). Citations like "§ 312g BGB" refer to the German Civil Code (*Bürgerliches Gesetzbuch*, BGB); other German statutes are spelled out on first mention.
 
 ### 1. Acceptance and scope
 
@@ -354,7 +356,7 @@ The Service is provided **free of charge**. There is no payment, no subscription
 
 Each user has a monthly allowance of free tokens (a measure of message length and conversation depth) as published on the website. We monitor usage and may, at our discretion, rate-limit or block any user whose usage materially exceeds normal individual use.
 
-Because the Service is provided free of charge as a gratuitous service, **no statutory right of withdrawal under § 312g BGB applies** — no fee-based distance contract is concluded. You may stop using the Service at any time and may delete your data at any time via the in-product commands described in the [Privacy Policy](/privacy/).
+Because the Service is provided free of charge as a gratuitous service, **no statutory right of withdrawal under § 312g of the German Civil Code (BGB) applies** — no fee-based distance contract is concluded. You may stop using the Service at any time and may delete your data at any time via the in-product commands described in the [Privacy Policy](/privacy/).
 
 ### 5. Acceptable use
 
