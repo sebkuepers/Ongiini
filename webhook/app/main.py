@@ -257,103 +257,111 @@ async def receive(
         log.warning("rejected webhook POST with non-JSON body")
         return Response(status_code=400)
 
-    messages = extract_messages(payload)
+    # Top-level safety net: if anything in the dispatch / scheduling
+    # block below raises (bug, typo, library mismatch), we MUST still
+    # return 200 to Meta so they don't retry the same broken payload
+    # over and over. The original message is logged on our side; better
+    # to drop one user message than to lock Meta in a retry loop against
+    # our broken webhook.
+    try:
+        messages = extract_messages(payload)
 
-    # Fire read receipts immediately, before any downstream processing.
-    # That flips the user's WhatsApp checkmarks from grey (delivered) to
-    # blue (read) within a second of them sending — the natural feedback
-    # that "your message was received and is being worked on", rather than
-    # leaving them wondering if the bot ignored them. Done in parallel via
-    # asyncio.gather so multiple message_ids in a single webhook payload
-    # don't serialize.
-    msg_ids = [m["id"] for m in messages if m.get("id")]
-    if msg_ids:
-        asyncio.create_task(asyncio.gather(*(mark_as_read(mid) for mid in msg_ids)))
+        # Fire read receipt + typing indicator immediately for each
+        # inbound message. One task per id — asyncio.gather() returns a
+        # Future and create_task() rejects Futures, so we keep this as
+        # a simple loop.
+        for mid in (m["id"] for m in messages if m.get("id")):
+            asyncio.create_task(mark_as_read(mid))
 
-    # Schedule each handler as a fire-and-forget task and return 200 to
-    # Meta IMMEDIATELY. Meta retries any webhook POST it doesn't get a
-    # 200 on within ~5 seconds — and our full pipeline (router classifier
-    # + Tavily search + 2 Gemma vLLM hops with reasoning + WhatsApp send)
-    # easily takes 8-15s on a search-grounded reply. Without this
-    # fire-and-forget pattern, the user gets duplicate (or triplicate)
-    # replies because Meta keeps retrying while we're still working.
-    # Per-user lock inside handle_message serialises concurrent work for
-    # the same msisdn, so even retries that ARE delivered before the
-    # background task finishes can't trample each other's state.
-    for m in messages:
-        sender = m["from"]
-        kind = m.get("type", "text")
+        # Schedule each handler as a fire-and-forget task and return
+        # 200 to Meta IMMEDIATELY. Meta retries any webhook POST it
+        # doesn't get a 200 on within ~5 seconds — and our full pipeline
+        # (router classifier + Tavily search + 2 Gemma vLLM hops with
+        # reasoning + WhatsApp send) easily takes 8-15s on a search-
+        # grounded reply. Without this pattern, the user gets duplicate
+        # replies because Meta keeps retrying while we're still working.
+        # The per-user lock inside handle_message serialises concurrent
+        # work for the same msisdn, so even if Meta DOES deliver a
+        # retry before the original task finishes, they queue instead
+        # of trampling state.
+        for m in messages:
+            sender = m["from"]
+            kind = m.get("type", "text")
 
-        if kind == "text":
-            text = (m.get("text") or "").strip()
-            if not text:
-                continue
-            # Defensive: WhatsApp's own text limit is 4096 chars. Anything
-            # larger is either a bug or an abuse attempt — drop it without
-            # spending tokens.
-            if len(text) > settings.message_max_chars:
-                log.warning(
-                    "dropping oversize message from %s (%d chars)", sender, len(text)
-                )
-                continue
-            asyncio.create_task(_run_handler(handle_message(sender, text), sender, "text"))
-
-        elif kind == "image":
-            media_id = m.get("media_id") or ""
-            if not media_id:
-                continue
-            caption = (m.get("caption") or "").strip()
-            # WhatsApp's image caption limit is 1024 chars. Anything more
-            # is either a buggy client or an abuse attempt — drop on the
-            # floor like we do oversize text. Use the same general cap so
-            # there's one number to remember.
-            if len(caption) > settings.message_max_chars:
-                log.warning(
-                    "dropping image with oversize caption from %s (%d chars)",
-                    sender, len(caption),
-                )
-                continue
-            # Admin-intent captions (delete / recall / usage) can't be
-            # served by the image path because we drop tools= for vLLM
-            # #41452. Route the CAPTION through the text handler instead
-            # so the proper tool fires — and skip the image entirely.
-            if _caption_is_admin_intent(caption):
-                log.info(
-                    "image caption matched admin intent — handling as text from %s",
-                    sender,
-                )
+            if kind == "text":
+                text = (m.get("text") or "").strip()
+                if not text:
+                    continue
+                # Defensive: WhatsApp's own text limit is 4096 chars.
+                # Anything larger is either a bug or an abuse attempt
+                # — drop it without spending tokens.
+                if len(text) > settings.message_max_chars:
+                    log.warning(
+                        "dropping oversize message from %s (%d chars)",
+                        sender, len(text),
+                    )
+                    continue
                 asyncio.create_task(
-                    _run_handler(handle_message(sender, caption), sender, "admin-caption")
+                    _run_handler(handle_message(sender, text), sender, "text")
                 )
-                continue
-            asyncio.create_task(
-                _run_handler(
-                    handle_image_message(
-                        sender=sender,
-                        media_id=media_id,
-                        mime_type=m.get("mime_type") or "image/jpeg",
-                        caption=caption,
-                    ),
-                    sender,
-                    "image",
-                )
-            )
 
-        elif kind == "audio":
-            media_id = m.get("media_id") or ""
-            if not media_id:
-                continue
-            asyncio.create_task(
-                _run_handler(
-                    handle_audio_message(
-                        sender=sender,
-                        media_id=media_id,
-                        mime_type=m.get("mime_type") or "audio/ogg",
-                    ),
-                    sender,
-                    "audio",
+            elif kind == "image":
+                media_id = m.get("media_id") or ""
+                if not media_id:
+                    continue
+                caption = (m.get("caption") or "").strip()
+                # WhatsApp's image caption limit is 1024 chars; same
+                # behaviour as oversize text for consistency.
+                if len(caption) > settings.message_max_chars:
+                    log.warning(
+                        "dropping image with oversize caption from %s (%d chars)",
+                        sender, len(caption),
+                    )
+                    continue
+                # Admin-intent captions (delete / recall / usage) route
+                # through the text handler so the proper tool fires.
+                if _caption_is_admin_intent(caption):
+                    log.info(
+                        "image caption matched admin intent — handling as text from %s",
+                        sender,
+                    )
+                    asyncio.create_task(
+                        _run_handler(
+                            handle_message(sender, caption), sender, "admin-caption"
+                        )
+                    )
+                    continue
+                asyncio.create_task(
+                    _run_handler(
+                        handle_image_message(
+                            sender=sender,
+                            media_id=media_id,
+                            mime_type=m.get("mime_type") or "image/jpeg",
+                            caption=caption,
+                        ),
+                        sender,
+                        "image",
+                    )
                 )
-            )
+
+            elif kind == "audio":
+                media_id = m.get("media_id") or ""
+                if not media_id:
+                    continue
+                asyncio.create_task(
+                    _run_handler(
+                        handle_audio_message(
+                            sender=sender,
+                            media_id=media_id,
+                            mime_type=m.get("mime_type") or "audio/ogg",
+                        ),
+                        sender,
+                        "audio",
+                    )
+                )
+    except Exception:
+        # Always return 200 below — see the safety-net comment above.
+        log.exception("webhook dispatch failed — returning 200 to Meta anyway")
 
     # WhatsApp expects a fast 200 OK acknowledgement.
     return {"status": "ok"}
