@@ -76,8 +76,13 @@ Reply with exactly one word: SEARCH, DOCS, or NONE.
 
 
 # Latency budget. Classifier should fail fast and degrade rather than
-# block the user's actual reply.
-_TIMEOUT_S = 5.0
+# block the user's actual reply. 2s is generous for the typical 85ms
+# round-trip but tight enough that, under GPU contention (vLLM batched
+# decoding for another user's max_tokens=4000 chat call), we don't
+# block the user's p99 reply by sitting on a busy queue. Fallback on
+# timeout is "NONE" → tool_choice="auto", which is the pre-router
+# behaviour — never breakage.
+_TIMEOUT_S = 2.0
 
 ToolChoice = Union[str, dict]
 

@@ -3,6 +3,7 @@ import base64
 import io
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 
 import httpx
@@ -238,6 +239,60 @@ async def _run_handler(coro, sender: str, kind: str) -> None:
         log.exception("Failed to handle %s message from %s", kind, sender)
 
 
+# Module-level strong-reference set for in-flight tasks. asyncio's docs
+# explicitly warn that tasks held only by weakrefs can be garbage-collected
+# mid-flight on a quiet event loop. Keeping a reference here defends against
+# that and silences the "Task was destroyed but it is pending" RuntimeWarning.
+# discard() runs on task completion via add_done_callback.
+_in_flight: set[asyncio.Task] = set()
+
+
+def _spawn(coro, sender: str, kind: str) -> asyncio.Task:
+    """Schedule a coroutine as a fire-and-forget task, wrapped with
+    exception logging and held in `_in_flight` so the loop's GC can't
+    drop it before completion."""
+    task = asyncio.create_task(_run_handler(coro, sender, kind))
+    _in_flight.add(task)
+    task.add_done_callback(_in_flight.discard)
+    return task
+
+
+# ── Inbound message-id dedup ─────────────────────────────────────────
+# Fire-and-forget acks the webhook in milliseconds, BUT if Meta retries
+# a payload (because our 200 was delayed by network, or because the user's
+# WhatsApp client itself fired the same wamid twice), the same message.id
+# can legitimately arrive at our webhook twice within seconds. Without
+# dedup, each arrival schedules its own _run_handler task → user gets
+# duplicate replies. The per-user lock inside handle_message serialises
+# them but does NOT deduplicate them.
+#
+# Bounded TTL set: 10-minute TTL (well past Meta's typical 1-3 retry
+# window), capped at 1024 entries to bound memory under attack scenarios.
+_SEEN_MSG_IDS: dict[str, float] = {}
+_SEEN_TTL_S = 600.0
+_SEEN_MAX_ENTRIES = 1024
+
+
+def _is_duplicate_msg_id(msg_id: str) -> bool:
+    """Return True if this message_id was processed within the last
+    _SEEN_TTL_S seconds. Always records the id (refreshes its timestamp)
+    so the most recently seen messages are also the most recently
+    refreshed — which keeps the eviction policy LRU-shaped.
+    """
+    if not msg_id:
+        return False
+    now = time.monotonic()
+    # Opportunistic eviction when the set grows past cap.
+    if len(_SEEN_MSG_IDS) > _SEEN_MAX_ENTRIES:
+        cutoff = now - _SEEN_TTL_S
+        for k in list(_SEEN_MSG_IDS.keys()):
+            if _SEEN_MSG_IDS[k] < cutoff:
+                del _SEEN_MSG_IDS[k]
+    prev = _SEEN_MSG_IDS.get(msg_id)
+    _SEEN_MSG_IDS[msg_id] = now
+    return prev is not None and (now - prev) < _SEEN_TTL_S
+
+
 @app.post("/whatsapp")
 async def receive(
     request: Request,
@@ -266,12 +321,26 @@ async def receive(
     try:
         messages = extract_messages(payload)
 
+        # Drop duplicates BEFORE doing anything. Meta may legitimately
+        # re-deliver the same message.id (network blip, our 200 was slow,
+        # client retransmitted) — without this filter, every retry would
+        # generate a second reply.
+        unique_messages = []
+        for m in messages:
+            mid = m.get("id", "")
+            if _is_duplicate_msg_id(mid):
+                log.info("dropping duplicate message_id %s from %s", mid, m.get("from", "?"))
+                continue
+            unique_messages.append(m)
+        messages = unique_messages
+
         # Fire read receipt + typing indicator immediately for each
-        # inbound message. One task per id — asyncio.gather() returns a
-        # Future and create_task() rejects Futures, so we keep this as
-        # a simple loop.
-        for mid in (m["id"] for m in messages if m.get("id")):
-            asyncio.create_task(mark_as_read(mid))
+        # inbound message. Wrapped via _spawn so failures are logged
+        # and tasks are held in _in_flight to survive GC.
+        for m in messages:
+            mid = m.get("id", "")
+            if mid:
+                _spawn(mark_as_read(mid), m.get("from", ""), "mark_as_read")
 
         # Schedule each handler as a fire-and-forget task and return
         # 200 to Meta IMMEDIATELY. Meta retries any webhook POST it
@@ -301,9 +370,7 @@ async def receive(
                         sender, len(text),
                     )
                     continue
-                asyncio.create_task(
-                    _run_handler(handle_message(sender, text), sender, "text")
-                )
+                _spawn(handle_message(sender, text), sender, "text")
 
             elif kind == "image":
                 media_id = m.get("media_id") or ""
@@ -325,39 +392,31 @@ async def receive(
                         "image caption matched admin intent — handling as text from %s",
                         sender,
                     )
-                    asyncio.create_task(
-                        _run_handler(
-                            handle_message(sender, caption), sender, "admin-caption"
-                        )
-                    )
+                    _spawn(handle_message(sender, caption), sender, "admin-caption")
                     continue
-                asyncio.create_task(
-                    _run_handler(
-                        handle_image_message(
-                            sender=sender,
-                            media_id=media_id,
-                            mime_type=m.get("mime_type") or "image/jpeg",
-                            caption=caption,
-                        ),
-                        sender,
-                        "image",
-                    )
+                _spawn(
+                    handle_image_message(
+                        sender=sender,
+                        media_id=media_id,
+                        mime_type=m.get("mime_type") or "image/jpeg",
+                        caption=caption,
+                    ),
+                    sender,
+                    "image",
                 )
 
             elif kind == "audio":
                 media_id = m.get("media_id") or ""
                 if not media_id:
                     continue
-                asyncio.create_task(
-                    _run_handler(
-                        handle_audio_message(
-                            sender=sender,
-                            media_id=media_id,
-                            mime_type=m.get("mime_type") or "audio/ogg",
-                        ),
-                        sender,
-                        "audio",
-                    )
+                _spawn(
+                    handle_audio_message(
+                        sender=sender,
+                        media_id=media_id,
+                        mime_type=m.get("mime_type") or "audio/ogg",
+                    ),
+                    sender,
+                    "audio",
                 )
     except Exception:
         # Always return 200 below — see the safety-net comment above.

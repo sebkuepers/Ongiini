@@ -120,8 +120,23 @@ def summary_for(msisdn: str) -> dict:
                 slot["tokens_in"] += int(m["in"])
                 slot["tokens_out"] += int(m["out"])
 
-    tokens_in = sum(s["tokens_in"] for s in breakdown.values())
-    tokens_out = sum(s["tokens_out"] for s in breakdown.values())
+    # Kinds excluded from the user's monthly cap. The 3-way router
+    # classifier ("kind=router") is system overhead — a fixed cost
+    # per turn that doesn't correspond to anything the user explicitly
+    # asked for. We log it under its own kind for auditability and
+    # cost monitoring, but it shouldn't count against the 1M allowance
+    # the user is told about in product.md / FAQ. Likewise we keep
+    # `chat`, `memory`, and `summary` billable — those are all
+    # explicitly documented in the FAQ as counting toward the monthly
+    # allowance.
+    NON_BILLABLE_KINDS = {"router"}
+
+    tokens_in = sum(
+        s["tokens_in"] for k, s in breakdown.items() if k not in NON_BILLABLE_KINDS
+    )
+    tokens_out = sum(
+        s["tokens_out"] for k, s in breakdown.items() if k not in NON_BILLABLE_KINDS
+    )
     messages = breakdown.get("chat", {}).get("count", 0)
     total = tokens_in + tokens_out
     limit = settings.monthly_token_limit
