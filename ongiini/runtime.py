@@ -113,16 +113,20 @@ def build_policy_table() -> PolicyTable:
         ),
     )
 
-    # SEARCH_DEEP — multi-source research. Let the model decide which
-    # tool to call first (web_search vs fetch_urls); allow more steps
-    # to give it room to iterate. ALL THREE v1 phases on: plan
-    # decomposes the question, critique checks the answer, interstitial
-    # tells the user we're working.
+    # SEARCH_DEEP — multi-source research. Force web_search on turn 1
+    # for the same reason SEARCH_SHALLOW does: with first_tool=AUTO,
+    # Gemma 4 26B was observed (May 2026) deciding to skip the search
+    # entirely and reply from training data — even when the planner
+    # explicitly identified things to look up. Forcing the tool on
+    # turn 1 removes that option. Subsequent turns fall back to AUTO
+    # so the model can chain fetch_urls or another web_search freely.
+    # ALL THREE v1 phases on: plan decomposes the question, critique
+    # checks the answer, interstitial tells the user we're working.
     table.set(
         VERDICT_SEARCH, DEPTH_DEEP,
         Policy(
             name="search_deep",
-            first_tool=AUTO,
+            first_tool=force_tool("web_search"),
             max_steps=8,
             enable_planner=_planner_on(),
             enable_critique=_critique_on(),
