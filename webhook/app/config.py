@@ -48,6 +48,25 @@ class Settings:
     rate_limit_per_5min: int = 20
     rate_limit_per_day: int = 200
 
+    # Transparency-reporting / /stats.json endpoint.
+    # stats_cache_ttl_seconds: how long the assembled aggregate JSON stays
+    # cached in-process before recomputation. Aggregation is cheap (a few
+    # ten-thousand log lines) but the Pages Function CDN also honours
+    # Cache-Control: max-age of the same number, so this is the de-facto
+    # refresh interval seen by visitors. 5 minutes is responsive enough
+    # for an internal dashboard, idle enough not to thrash the disk.
+    stats_cache_ttl_seconds: int = 300
+    # How often the background topic-classification task wakes up to
+    # process newly-arrived user messages through the local model. The
+    # work is bounded — only messages not yet in topic_cache.sqlite get
+    # classified. Default 10 minutes.
+    topic_classify_interval_seconds: int = 600
+    # Privacy floor: any distribution-category whose count is strictly
+    # below this number is collapsed into "Other" before publication.
+    # Protects against accidentally publishing a category with only one
+    # user in it, which would be reverse-identifiable.
+    stats_minimum_bucket: int = 5
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)

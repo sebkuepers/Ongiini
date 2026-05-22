@@ -15,6 +15,8 @@ from . import audio, mem, memory, pii, ratelimit, usage
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import maybe_summarize, respond
+from .stats import analyses as stats_analyses
+from .stats.api import router as stats_router
 from .whatsapp import download_media, extract_messages, send_text, verify_signature
 
 logging.basicConfig(
@@ -38,7 +40,21 @@ async def lifespan(app: FastAPI):
     log.info("warming faster-whisper…")
     await asyncio.to_thread(audio.warmup)
     log.info("faster-whisper ready")
-    yield
+    # Kick off the LLM-driven qualitative-analysis loop (topics, roles).
+    # Runs in the background; never blocks message handling. Pauses
+    # between passes; one-shot failures are caught inside.
+    stats_task = asyncio.create_task(
+        stats_analyses.run_forever(), name="stats-analyses"
+    )
+    log.info("qualitative analysis background loop scheduled")
+    try:
+        yield
+    finally:
+        stats_task.cancel()
+        try:
+            await stats_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 app = FastAPI(title="Ongiini Webhook", lifespan=lifespan)
@@ -55,6 +71,11 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=False,
 )
+
+# Transparency-reporting endpoint (/stats.json). Same FastAPI app, same
+# port; routed through Cloudflare Pages Function on the page side so the
+# browser sees same-origin /api/stats.
+app.include_router(stats_router)
 
 NON_NAMIBIA_REPLY = (
     "Hi! Ongiini is currently only available for users in Namibia (+264 numbers). "
