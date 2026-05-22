@@ -10,7 +10,7 @@ WORKDIR /app
 # format the user might send). System package is the simplest path —
 # ffmpeg-python wrappers all shell out to the ffmpeg binary anyway.
 #
-# espeak-ng is dev-only — used by webhook/tests/audio_smoke.py to
+# espeak-ng is dev-only — used by ongiini/tests/audio_smoke.py to
 # synthesise short EN/AF speech samples so we can verify the Whisper
 # pipeline transcribes real speech (not just survives empty audio).
 # Tiny package (~3 MB) and unused at runtime so the cost is negligible.
@@ -26,7 +26,7 @@ RUN apt-get update \
 RUN pip install --index-url https://download.pytorch.org/whl/cpu \
         torch==2.5.1
 
-COPY webhook/requirements.txt .
+COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Pre-download the sentence-transformers model into the image so the
@@ -36,9 +36,10 @@ RUN pip install -r requirements.txt
 RUN python -c "from sentence_transformers import SentenceTransformer; \
     SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
-COPY webhook/app ./app
-# Owela framework lives at the repo root; copy it next to ``app`` so
-# the application's ``from owela import ...`` imports resolve at runtime.
+# The Owela framework lives at the repo root; the Ongiini application
+# imports from it via ``from owela import ...``. Both packages get
+# copied into /app and are findable on the default sys.path.
+COPY ongiini ./ongiini
 COPY owela ./owela
 
 # Run as a non-root user matching the host's primary user (UID 1000), so
@@ -61,4 +62,4 @@ USER ongiini
 
 EXPOSE 8080
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "ongiini.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
