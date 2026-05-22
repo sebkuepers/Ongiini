@@ -20,6 +20,23 @@ The foundation's website source lives under `foundation/` in this repo but is
 **gitignored** (kept local-only until the foundation is formally registered).
 It is deployed to Cloudflare Pages directly via `wrangler pages deploy`.
 
+## Built on Owela
+
+The chat-agent framework that powers Ongiini lives in this repo as a sibling
+package: [`owela/`](./owela/README.md). Owela is an opinionated framework
+for small open-source models (Gemma, Llama, Qwen) on inference engines
+(vLLM, llama.cpp, ollama) delivered through messenger transports (WhatsApp,
+Signal, Telegram) — the deliberate opposite of frontier-model-via-API
+frameworks like LangGraph. It was extracted from this codebase as the
+patterns repeated themselves and the application file grew past what one
+file should hold.
+
+Owela is MIT-licensed and is kept embedded in this repo for v0; if a
+second consumer emerges it can split to its own repo + PyPI. See
+[`owela/README.md`](./owela/README.md) for the framework's positioning
+and [`ongiini/README.md`](./ongiini/README.md) for the technical
+counterpart to this operator manual.
+
 ## Architecture
 
 ```
@@ -59,14 +76,14 @@ Three processes on the Spark:
 3. `cloudflared` — systemd service exposing the two containers at
    `ongiini.ai` / `www.ongiini.ai` / `api.ongiini.ai`.
 
-- `webhook/` — FastAPI service. Receives WhatsApp messages, filters by country
+- `ongiini/` — FastAPI service. Receives WhatsApp messages, filters by country
   code / whitelist, calls vLLM with tool-calling (`web_search`, `fetch_url`,
   `delete_my_data`, `whats_in_my_memory`, `my_token_usage`). Two-tier memory: a
   short-term JSON window per user (about 50 turns) and a mem0 long-term layer
   that extracts typed facts (`[PROFILE]`, `[PREFERENCE]`, `[SITUATION]`,
   `[COMMITMENT]`, `[QUOTE]`, `[EMOTION]`) across all chats and retrieves them
   by semantic relevance per turn. Also exposes `GET /stats.json` for the
-  transparency / `/statistics` page — see `webhook/app/stats/`.
+  transparency / `/statistics` page — see `ongiini/stats/`.
 - `website/` — Cloudflare Pages site with two surfaces:
   - `website/index.html` + subpages (`/privacy/`, `/terms/`, `/imprint/`,
     `/statistics/`). Vanilla HTML+CSS+JS, no build step.
@@ -260,7 +277,7 @@ see `docs/statistics.md`):
 
 - `/data/qualia.sqlite` — short-label cache from the qualitative-analysis
   loop. One row per (analysis, content-hash, version) → label. The LLM-
-  produced labels pass through a regex sanitiser (`webhook/app/stats/safety.py`)
+  produced labels pass through a regex sanitiser (`ongiini/stats/safety.py`)
   that drops anything containing identifying patterns before storage.
 - `/data/synthesis-{topics,roles,regions,languages,family,situations}.json`
   — cluster output written by the periodic synthesis pass. Used by
@@ -321,8 +338,8 @@ see the transcript text, which goes through the same PII scrub the text
 path uses (email / IBAN / card / 11-digit ID → placeholders before
 write).
 
-Code: `webhook/app/audio.py` (transcribe wrapper),
-`webhook/app/main.py::handle_audio_message` (download → transcribe →
+Code: `ongiini/audio.py` (transcribe wrapper),
+`ongiini/api/main.py::handle_audio_message` (download → transcribe →
 delegate to `handle_message`).
 
 Voice replies (TTS) are not yet supported — Ongiini answers voice notes
@@ -363,7 +380,7 @@ Privacy guardrails (defence in depth):
 - Extraction prompts include an explicit anti-PII prefix forbidding names,
   places below country level, ages, dates, specific numbers, or any
   identifying detail.
-- A regex sanitiser (`webhook/app/stats/safety.py::sanitise_label`) drops
+- A regex sanitiser (`ongiini/stats/safety.py::sanitise_label`) drops
   any label containing 4-digit numbers, capitalised possessives
   (`Joseph's`), known Namibian town names, anything the existing PII
   scrubber catches, or labels longer than 80 characters. Failed labels
@@ -402,7 +419,7 @@ The operator is aware of the system's capabilities and limitations:
   on medical, legal, financial and safety-critical questions, and to use
   Tavily web search for time-sensitive or location-specific questions.
 - Every reply to a new user begins with an explicit AI disclosure to satisfy
-  Article 50(1). See `webhook/app/llm.py` → `SYSTEM_PROMPT` → "FIRST MESSAGE
+  Article 50(1). See `ongiini/system_prompt.py` → `SYSTEM_PROMPT` → "FIRST MESSAGE
   DISCLOSURE".
 - Memory (short-term JSON window + mem0 long-term layer) is bounded and
   user-controllable via the `whats_in_my_memory` and `delete_my_data` tools,
