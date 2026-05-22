@@ -1,6 +1,6 @@
 # Fail any PR (or push to main) where the auto-generated product.md is
 # stale vs the website HTML. Catches contributors who forgot to install
-# the pre-commit hook (tools/pre-commit) or who edited HTML on the
+# the pre-commit hook (scripts/pre-commit) or who edited HTML on the
 # GitHub web UI without running the regenerator.
 #
 # This workflow uses no external/user-controlled inputs in run: steps —
@@ -15,13 +15,13 @@ on:
     branches: [main]
     paths:
       - "website/**"
-      - "tools/build_product_knowledge.py"
-      - "webhook/app/knowledge/**"
+      - "scripts/build_product_knowledge.py"
+      - "ongiini/knowledge/**"
   pull_request:
     paths:
       - "website/**"
-      - "tools/build_product_knowledge.py"
-      - "webhook/app/knowledge/**"
+      - "scripts/build_product_knowledge.py"
+      - "ongiini/knowledge/**"
 
 jobs:
   check:
@@ -41,4 +41,4 @@ jobs:
       - name: Verify product.md is regenerated from current HTML
         # --check writes nothing and exits non-zero if the generated
         # content would differ from what's committed.
-        run: python3 tools/build_product_knowledge.py --check
+        run: python3 scripts/build_product_knowledge.py --check
