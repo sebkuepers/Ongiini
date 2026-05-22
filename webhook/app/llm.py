@@ -643,6 +643,23 @@ async def respond(
     tokens_in = 0
     tokens_out = 0
 
+    # Selective reasoning: turn 1 stays no-reasoning (just emits the
+    # router-forced tool call or a direct reply, no deliberation needed).
+    # Turn 2+ enables reasoning ONLY if the previous turn produced a long
+    # tool result (web_search, fetch_url, lookup_ongiini_docs) that the
+    # model now has to digest and cite. Admin tools (delete_my_data,
+    # whats_in_my_memory, my_token_usage) return short strings — no
+    # reasoning needed to compose the confirmation.
+    #
+    # Why: reasoning is what enforces the citation rule. Without it, the
+    # model generates a fluent answer and silently drops the source line.
+    # With unrestricted reasoning, turns hit 25-40s and bust the typing
+    # window. Capping reasoning at 500 tokens via reasoning_budget keeps
+    # search-grounded turns at ~12-18s while bringing citations back.
+    prev_turn_had_long_result = False
+    _LONG_TOOL_RESULT_THRESHOLD = 1000  # chars; web_search ~2KB, lookup_ongiini_docs ~50KB
+    _REASONING_BUDGET = 500             # tokens; Gemma 4 reasoning_budget (default 4096)
+
     # Up to 6 round-trips so the model can chain e.g. search -> fetch -> reply.
     MAX_TURNS = 6
     for turn in range(1, MAX_TURNS + 1):
@@ -659,34 +676,24 @@ async def respond(
         # can chain tool calls freely (e.g. web_search → fetch_url, or
         # call delete_my_data after a search-grounded turn).
         turn_tool_choice = first_turn_tool_choice if turn == 1 else "auto"
+
+        # Selective reasoning: ON only when last turn produced substantial
+        # tool context to digest. See comment near prev_turn_had_long_result
+        # init above. reasoning_budget caps the chain so the turn stays
+        # inside the WhatsApp typing window.
+        turn_enable_thinking = prev_turn_had_long_result
+        chat_template_kwargs = {"enable_thinking": turn_enable_thinking}
+        if turn_enable_thinking:
+            chat_template_kwargs["reasoning_budget"] = _REASONING_BUDGET
+
         resp = await client.chat.completions.create(
             model=settings.vllm_model,
             messages=messages,
             tools=TOOLS,
             tool_choice=turn_tool_choice,
             temperature=0.6,
-            # 1500 is the sweet spot between reasoning quality and
-            # WhatsApp UX. At 4000 tokens, Gemma 4 26B with reasoning
-            # on takes 20-40s per turn on the Spark — which is past
-            # WhatsApp's 25s typing-indicator timeout, producing the
-            # awful "typing → stops → silence → reply" experience.
-            # At 1500 tokens (reasoning + visible reply combined),
-            # most replies finish in 8-15s — comfortably inside the
-            # typing window. The empty-content fallback below catches
-            # the rare case where reasoning eats the whole budget.
             max_tokens=1500,
-            # Reasoning mode is OFF for now. We tried turning it on earlier
-            # today but the latency cost on Gemma 4 26B was severe — even
-            # turn 1 (just emitting a router-forced tool call) was eating
-            # 7-23s on reasoning before producing the call. Total replies
-            # ran 25-40s, well past WhatsApp's 25s typing-indicator window,
-            # producing the bad "typing → stops → silence → late reply"
-            # experience that confused first users. Quality without
-            # reasoning is still strong (slim prompt + router + citations
-            # + care tone do the heavy lifting). The empty-content fallback
-            # below stays as defensive code in case reasoning gets re-
-            # enabled at the chat-template level or the parser emits
-            # reasoning_content for some other reason.
+            extra_body={"chat_template_kwargs": chat_template_kwargs},
         )
         call_usage = resp.usage
         # billable_in subtracts prefix-cached tokens (free GPU-wise) so the
@@ -767,6 +774,10 @@ async def respond(
                 ],
             }
         )
+
+        # Reset for this turn — flips True if any tool produced a long
+        # result that the NEXT turn's reasoning should be enabled for.
+        prev_turn_had_long_result = False
 
         for tc in tool_calls:
             name = tc.function.name
@@ -886,6 +897,13 @@ async def respond(
                     "result_len": len(result),
                 }
             )
+
+            # If this tool returned a substantial payload (search results,
+            # fetched page, product.md), the next turn will need reasoning
+            # to digest + cite. Admin tools return short strings — they
+            # don't need a reasoning turn after.
+            if len(result) >= _LONG_TOOL_RESULT_THRESHOLD:
+                prev_turn_had_long_result = True
 
             messages.append(
                 {
