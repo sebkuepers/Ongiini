@@ -9,7 +9,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from . import mem, memory, usage
+from . import mem, memory, router, usage
 from .config import settings
 from .search import fetch_url, web_search
 from .tracing import MessageTrace
@@ -497,6 +497,21 @@ async def respond(
     relevant_memories = await asyncio.to_thread(mem.search, msisdn, search_query, 5)
     memory_block = mem.format_relevant(relevant_memories)
 
+    # Tool router: classify the user's intent and force tool_choice on the
+    # first vLLM turn when the question clearly needs web_search or
+    # lookup_ongiini_docs. Gemma 4 at tool_choice="auto" is unreliable
+    # about deciding to call these tools for the exact patterns where it
+    # matters most (Namibian factual questions, Ongiini self-questions);
+    # the router upstream call removes that decision from Gemma's hands
+    # for the clear cases. See webhook/app/router.py + the held-out
+    # benchmark at webhook/tests/router_eval_holdout.py (96.8% accuracy).
+    #
+    # Verdict ∈ {SEARCH, DOCS, NONE}. NONE falls through to tool_choice
+    # ="auto" — i.e. the model can still freely call any tool.
+    router_verdict = await router.classify(search_query, msisdn=msisdn)
+    first_turn_tool_choice = router.tool_choice_for(router_verdict)
+    log.info("router verdict=%s for msisdn=%s msg_len=%d", router_verdict, msisdn, user_msg_len)
+
     messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     if memory_block:
         # Separate system message rather than concatenated into SYSTEM_PROMPT
@@ -535,11 +550,16 @@ async def respond(
         # on every call, image or not. If the chat-template path regresses,
         # respond() returns a crash-induced 5xx, the per-user lock releases,
         # and Meta will redeliver — same failure mode as any other vLLM blip.
+        # Force the router's tool decision on turn 1 only. Subsequent
+        # turns inside this respond() invocation use "auto" so the model
+        # can chain tool calls freely (e.g. web_search → fetch_url, or
+        # call delete_my_data after a search-grounded turn).
+        turn_tool_choice = first_turn_tool_choice if turn == 1 else "auto"
         resp = await client.chat.completions.create(
             model=settings.vllm_model,
             messages=messages,
             tools=TOOLS,
-            tool_choice="auto",
+            tool_choice=turn_tool_choice,
             temperature=0.6,
             max_tokens=600,
         )
