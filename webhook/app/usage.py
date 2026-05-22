@@ -5,6 +5,34 @@ from .config import settings
 
 LOG_PATH = settings.data_dir / "usage.log"
 
+
+def billable_from_usage(usage_obj) -> tuple[int, int, int]:
+    """Extract (billable_in, completion, cached) from a vLLM/OpenAI usage object.
+
+    vLLM with ``--enable-prompt-tokens-details`` populates
+    ``usage.prompt_tokens_details.cached_tokens`` with the number of prompt
+    tokens that hit the prefix cache (i.e. cost no real GPU work). We bill the
+    user only the MARGINAL tokens — uncached prompt + completion — so the
+    static SYSTEM_PROMPT and product.md overhead don't eat the monthly
+    allowance once they're cached on the second request and onward.
+
+    Falls back gracefully to full ``prompt_tokens`` if the cached field is
+    absent (e.g. vLLM running without the flag, or a non-vLLM OpenAI-compat
+    backend that doesn't surface cache details).
+
+    Returns (0, 0, 0) when usage_obj is None.
+    """
+    if usage_obj is None:
+        return 0, 0, 0
+    prompt_tokens = int(getattr(usage_obj, "prompt_tokens", 0) or 0)
+    completion_tokens = int(getattr(usage_obj, "completion_tokens", 0) or 0)
+    cached = 0
+    details = getattr(usage_obj, "prompt_tokens_details", None)
+    if details is not None:
+        cached = int(getattr(details, "cached_tokens", 0) or 0)
+    billable_in = max(0, prompt_tokens - cached)
+    return billable_in, completion_tokens, cached
+
 # Parses the lines written by record(); kept in lockstep with the format below.
 # The trailing `| kind=...` field is optional so old log lines (pre-v3) still
 # match — they implicitly count as kind=chat for the summary_for() rollup.

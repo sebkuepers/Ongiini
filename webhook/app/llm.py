@@ -376,12 +376,12 @@ async def summarize_turns(
 
     if msisdn:
         try:
-            u = resp.usage
-            if u is not None:
+            billable_in, completion, _cached = usage.billable_from_usage(resp.usage)
+            if billable_in or completion:
                 usage.record(
                     msisdn,
-                    int(u.prompt_tokens or 0),
-                    int(u.completion_tokens or 0),
+                    billable_in,
+                    completion,
                     used_search=False,
                     kind="summary",
                 )
@@ -544,16 +544,22 @@ async def respond(
             max_tokens=600,
         )
         call_usage = resp.usage
+        # billable_in subtracts prefix-cached tokens (free GPU-wise) so the
+        # static SYSTEM_PROMPT / TOOLS schema / lookup_ongiini_docs payload
+        # doesn't keep eating the user's monthly allowance after the first
+        # request caches them. See usage.billable_from_usage docstring.
+        call_billable_in, call_completion, call_cached = usage.billable_from_usage(
+            call_usage
+        )
         call = trace.add_call(
             turn=turn,
-            tokens_in=(call_usage.prompt_tokens if call_usage else 0) or 0,
-            tokens_out=(call_usage.completion_tokens if call_usage else 0) or 0,
+            tokens_in=call_billable_in,
+            tokens_out=call_completion,
             finish_reason=resp.choices[0].finish_reason if resp.choices else None,
             started_at=call_started,
         )
-        if call_usage:
-            tokens_in += call_usage.prompt_tokens or 0
-            tokens_out += call_usage.completion_tokens or 0
+        tokens_in += call_billable_in
+        tokens_out += call_completion
 
         msg = resp.choices[0].message
         tool_calls = msg.tool_calls or []

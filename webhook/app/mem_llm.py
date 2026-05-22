@@ -57,14 +57,16 @@ class TrackedVllmLLM(_VllmLLM):
         response = self.client.chat.completions.create(**params)
 
         try:
-            u = response.usage
-            if u is not None:
-                msisdn = _current_msisdn.get()
-                if msisdn:
+            msisdn = _current_msisdn.get()
+            if msisdn:
+                billable_in, completion, _cached = usage.billable_from_usage(
+                    response.usage
+                )
+                if billable_in or completion:
                     usage.record(
                         msisdn,
-                        int(getattr(u, "prompt_tokens", 0) or 0),
-                        int(getattr(u, "completion_tokens", 0) or 0),
+                        billable_in,
+                        completion,
                         used_search=False,
                         kind="memory",
                     )

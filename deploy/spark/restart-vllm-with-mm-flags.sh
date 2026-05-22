@@ -19,6 +19,15 @@
 #       Tames concurrent multimodal allocations on the Spark.
 #   + --async-scheduling
 #       Recommended by the vLLM Gemma 4 recipe for MoE multimodal.
+#   + --enable-prompt-tokens-details
+#       Populates `prompt_tokens_details.cached_tokens` in the
+#       OpenAI-compatible usage response so the webhook can bill
+#       users only for uncached prompt + completion. With prefix
+#       caching ON by default, the static SYSTEM_PROMPT + TOOLS +
+#       product.md hits cache after first request and is reported
+#       as cached. Without this flag, vLLM reports prompt_tokens
+#       in full and the user gets over-billed for every turn's
+#       static overhead.
 #
 # Service interruption: ~3-4 minutes during cold model load.
 
@@ -57,7 +66,8 @@ docker run -d \
   --limit-mm-per-prompt '{"image": 4, "audio": 0}' \
   --mm-processor-kwargs '{"max_soft_tokens": 280}' \
   --hf-overrides '{"vision_config":{"torch_dtype":"bfloat16"}}' \
-  --async-scheduling
+  --async-scheduling \
+  --enable-prompt-tokens-details
 
 echo "==> waiting for /v1/models to respond (up to 5 minutes)"
 for i in $(seq 1 60); do
