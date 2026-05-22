@@ -10,9 +10,10 @@ reachable.
 
 After this change:
 
-| Hostname | Where it's served from |
+| Hostname / path | Where it's served from |
 |---|---|
 | `ongiini.ai`, `www.ongiini.ai` | Cloudflare Pages (static, always up) |
+| `ongiini.ai/api/stats` | Cloudflare **Pages Function** → forwards to Spark webhook `/stats.json` |
 | `api.ongiini.ai` | Cloudflare Tunnel → Spark webhook (unchanged) |
 
 ## One-time setup (you do this in the dashboard)
@@ -92,6 +93,74 @@ docker compose stop website
 - The `og-status` indicator in the footer continues to poll
   `api.ongiini.ai/status`. When the Spark is down, the dot turns red
   and the tooltip explains the pilot reality. The page itself stays up.
+
+## Pages Function: `/api/stats`
+
+The `/statistics` page on Pages fetches the live `/stats.json` payload
+from the Spark webhook. To avoid CORS and to keep the DGX hostname out
+of the browser, we use a Cloudflare Pages Function as a same-origin
+proxy.
+
+File: [`functions/api/stats.js`](../functions/api/stats.js)
+Maps to: `https://ongiini.ai/api/stats`
+Forwards to: `${env.STATS_API_URL}/stats.json`
+
+### One-time setup
+
+Set the environment variable on the Pages project so the Function knows
+where to forward.
+
+**Via the dashboard:**
+1. Cloudflare → Workers & Pages → `ongiini` → **Settings** →
+   **Variables and Secrets**.
+2. Add to **Production** (and **Preview** if you preview-deploy):
+   - Variable name: `STATS_API_URL`
+   - Value: `https://api.ongiini.ai`
+   - Type: Plaintext (it's not a secret — just a URL).
+
+**Or via the Cloudflare API:**
+
+```sh
+source .env  # CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN
+curl -X PATCH "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/ongiini" \
+  -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data '{"deployment_configs":{"production":{"env_vars":{"STATS_API_URL":{"value":"https://api.ongiini.ai"}}},"preview":{"env_vars":{"STATS_API_URL":{"value":"https://api.ongiini.ai"}}}}}'
+```
+
+### Directory layout for Pages Functions
+
+Cloudflare scans the `functions/` directory at the **project root**
+(sibling of the assets directory you deploy):
+
+```
+Ongiini/
+├── functions/
+│   └── api/
+│       └── stats.js     →  /api/stats
+├── website/             ← deployed via `wrangler pages deploy website`
+│   ├── index.html
+│   └── statistics/
+│       └── index.html
+```
+
+If you move `functions/` inside `website/`, wrangler won't discover it
+and the route will fall through to the SPA fallback (returning the
+landing page HTML — symptom: `/api/stats` returns `<!doctype html>`
+instead of JSON).
+
+### What the Function does
+
+- Reads `env.STATS_API_URL`, returns 500 if unset.
+- `fetch()`-es `${STATS_API_URL}/stats.json` with Cloudflare's edge
+  caching enabled (`cf.cacheTtl: 300`).
+- Sets `Cache-Control: public, max-age=300` on the response so any
+  downstream cache honours the same freshness window.
+- `X-Robots-Tag: noindex` on the JSON endpoint (defence-in-depth).
+- Returns the upstream body unchanged with `Content-Type: application/json`.
+
+If the upstream is unreachable or returns non-2xx, the Function returns
+a small JSON error body the page can render gracefully.
 
 ## Rollback
 

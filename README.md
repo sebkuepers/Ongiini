@@ -34,12 +34,21 @@ WhatsApp Cloud API ──▶ api.ongiini.ai/whatsapp
                                               ├─▶ mem0 long-term semantic memory
                                               │       ↳ embedded qdrant on /data
                                               │       ↳ all-MiniLM-L6-v2 embedder (CPU)
+                                              ├─▶ qualitative-analysis loop
+                                              │       ↳ LLM-emergent topic + WHO clustering
+                                              │       ↳ /data/qualia.sqlite (label cache)
+                                              │       ↳ /data/synthesis-*.json (cluster output)
                                               └─▶ /data (short-term JSON, qdrant, usage log)
 
-Browser ──▶ ongiini.ai / www.ongiini.ai ──▶  127.0.0.1:18789  ──▶  nginx (Docker)
-                              ▲
-                              │  (Cloudflare Tunnel)
-                              │
+Browser ──▶ ongiini.ai/statistics      ──┐
+                                          ├─▶ Cloudflare Pages (static)
+Browser ──▶ ongiini.ai (landing page)  ──┘       │
+                                                  │  /api/stats Pages Function
+                                                  ▼
+                                          api.ongiini.ai/stats.json
+                                                  │  (same Cloudflare Tunnel)
+                                                  ▼
+                                          FastAPI webhook /stats.json
 ```
 
 Three processes on the Spark:
@@ -56,10 +65,18 @@ Three processes on the Spark:
   short-term JSON window per user (about 50 turns) and a mem0 long-term layer
   that extracts typed facts (`[PROFILE]`, `[PREFERENCE]`, `[SITUATION]`,
   `[COMMITMENT]`, `[QUOTE]`, `[EMOTION]`) across all chats and retrieves them
-  by semantic relevance per turn.
-- `website/` — single-page static site, vanilla HTML+CSS+JS, ~14 KB gzipped.
+  by semantic relevance per turn. Also exposes `GET /stats.json` for the
+  transparency / `/statistics` page — see `webhook/app/stats/`.
+- `website/` — Cloudflare Pages site with two surfaces:
+  - `website/index.html` + subpages (`/privacy/`, `/terms/`, `/imprint/`,
+    `/statistics/`). Vanilla HTML+CSS+JS, no build step.
+  - `functions/api/stats.js` — Cloudflare Pages Function that proxies
+    `/api/stats` to the DGX-hosted webhook's `/stats.json`. Keeps the page
+    same-origin so the browser never hits a different hostname.
 - `data/` — short-term JSON memory files + qdrant vector store + `usage.log`
-  + mem0 history sqlite (mounted as a volume; everything stays on the Spark).
+  + mem0 history sqlite + transparency caches (`qualia.sqlite`,
+  `synthesis-*.json`, optional `objections.txt`). Mounted as a volume;
+  everything stays on the Spark.
 
 ## DGX Spark host setup
 
@@ -181,13 +198,24 @@ configured in Meta match.
 
 ## Endpoints
 
-- `GET  /whatsapp` (webhook container) — Meta verification handshake.
-- `POST /whatsapp` (webhook container) — incoming WhatsApp messages.
-- `GET  /health` (webhook container) — liveness check.
-- `GET  /` (website container) — static landing page.
+- `GET  /whatsapp` (webhook) — Meta verification handshake.
+- `POST /whatsapp` (webhook) — incoming WhatsApp messages.
+- `GET  /health` (webhook) — liveness check.
+- `GET  /status` (webhook) — public status indicator polled by the landing
+  page footer.
+- `GET  /stats.json` (webhook) — transparency-reporting payload. Aggregate
+  data only, no per-user content. Read by the Cloudflare Pages Function
+  at `/api/stats` and rendered on `/statistics/`. See
+  [`docs/statistics.md`](docs/statistics.md) for the framework.
+- `GET  /api/stats` (Pages Function) — same-origin proxy to the webhook's
+  `/stats.json`, with `STATS_API_URL` Pages env var pointing at
+  `https://api.ongiini.ai`.
+- `GET  /` (Cloudflare Pages) — static landing page.
+- `GET  /privacy/`, `/terms/`, `/imprint/`, `/statistics/` — static subpages.
 
-Internally the webhook only listens on `/whatsapp`. Cloudflare Tunnel routes
-the entire `api.ongiini.ai` host into port 8445 with the path preserved.
+The webhook's container only listens on `:8080` internally (`:8445` on the
+host loopback). Cloudflare Tunnel routes the entire `api.ongiini.ai` host
+into the webhook with the path preserved.
 
 ## Filter behaviour
 
@@ -197,7 +225,7 @@ the entire `api.ongiini.ai` host into port 8445 with the path preserved.
 
 ## Data we keep
 
-Three things per user, all on the Spark, nothing leaves the box:
+Per user, all on the Spark, nothing leaves the box:
 
 1. **Short-term memory** at `/data/{msisdn}.json` — about the last 50 turns of
    user+assistant back-and-forth (capped at 100 entries on disk). Marathon chats
@@ -206,7 +234,10 @@ Three things per user, all on the Spark, nothing leaves the box:
    verbatim.
    Before any message is written, regex-scrubbed for obvious PII patterns
    (email, IBAN, credit card, 11-digit Namibian ID — replaced with
-   `[REDACTED:kind]` placeholders).
+   `[REDACTED:kind]` placeholders). Image and voice messages are stored as
+   text placeholders only: `[image attached] <caption>` for images,
+   `[voice note] <transcript>` for voice (the audio bytes are discarded
+   after Whisper transcription).
 2. **Long-term memory** via mem0 — typed facts about the user extracted across
    ALL conversations: `[PROFILE]` (location, role, family), `[PREFERENCE]`
    (language, style), `[SITUATION]` (ongoing projects), `[COMMITMENT]`
@@ -221,8 +252,27 @@ Three things per user, all on the Spark, nothing leaves the box:
    counts + timestamp, **no message content ever**.
 
 ```
-2026-05-20T14:32:11 | 264811234567 | tokens_in=342 tokens_out=187 | search=yes
+2026-05-20T14:32:11 | 264811234567 | tokens_in=342 tokens_out=187 | search=yes | kind=chat
 ```
+
+Aggregate-only by-products of the transparency layer (no per-user content,
+see `docs/statistics.md`):
+
+- `/data/qualia.sqlite` — short-label cache from the qualitative-analysis
+  loop. One row per (analysis, content-hash, version) → label. The LLM-
+  produced labels pass through a regex sanitiser (`webhook/app/stats/safety.py`)
+  that drops anything containing identifying patterns before storage.
+- `/data/synthesis-{topics,roles,regions,languages,family,situations}.json`
+  — cluster output written by the periodic synthesis pass. Used by
+  `/stats.json` to surface emergent use-cases and demographic dimensions
+  on `/statistics/`.
+- `/data/objections.txt` — optional list of MSISDNs that have objected to
+  research processing (Art. 21 GDPR). The aggregator excludes these at the
+  source so their data contributes to no aggregate, current or future.
+- `/data/trace.jsonl` — one JSON line per handled message, recording
+  structural signals (token counts, tool calls by name, latencies, finish
+  reasons). **No message content, no tool arguments verbatim** — only
+  lengths and names.
 
 Users can ask "what do you remember about me?" (any wording, English or
 Afrikaans) and the `whats_in_my_memory` tool reads both tiers back grouped
@@ -277,6 +327,55 @@ delegate to `handle_message`).
 
 Voice replies (TTS) are not yet supported — Ongiini answers voice notes
 in text. That's the only intentional asymmetry.
+
+## Transparency reporting (`/statistics`)
+
+Hidden-but-online page at [`ongiini.ai/statistics`](https://ongiini.ai/statistics/)
+(unlinked from the main nav, `<meta name="robots" content="noindex">`).
+Renders **aggregate** statistics about service usage — never individual
+conversations. Legally scaffolded by Privacy Policy Section 7 (Art. 6(1)(f)
+GDPR legitimate interest, with Art. 89 GDPR / § 27 BDSG research privilege
+when results are published as research).
+
+What it shows:
+- **Volume KPIs** — unique users, conversations, free tokens generated,
+  web searches, voice notes, photos, with WoW delta tags.
+- **Growth** — cumulative users + DAU sparklines.
+- **Engagement** — retention curve (cohort-averaged), per-user engagement
+  buckets, conversation-depth (median/p95/mean + histogram).
+- **Time-of-week heatmap** — 7×24 grid in Africa/Windhoek time.
+- **How people use Ongiini.ai** — emergent use-case donut + top-topics list,
+  produced by an LLM-driven two-pass clustering loop running on the same
+  computer as the chat service.
+- **Who uses Ongiini.ai** — five emergent panels (roles, regions,
+  languages, family situation, current life context) extracted from mem0
+  facts.
+- **How it performs** — median + p95 latency, tool-call rate, truncation
+  rate.
+
+The qualitative passes use **no fixed taxonomy**. The LLM reads each user
+message, produces a short generic label (e.g. *"yellowing maize leaves"*,
+*"grade 11 chemistry homework"*), and a periodic synthesis pass clusters
+those labels into named themes the data itself suggests. Categories are
+emergent, not pre-decided.
+
+Privacy guardrails (defence in depth):
+- Extraction prompts include an explicit anti-PII prefix forbidding names,
+  places below country level, ages, dates, specific numbers, or any
+  identifying detail.
+- A regex sanitiser (`webhook/app/stats/safety.py::sanitise_label`) drops
+  any label containing 4-digit numbers, capitalised possessives
+  (`Joseph's`), known Namibian town names, anything the existing PII
+  scrubber catches, or labels longer than 80 characters. Failed labels
+  are logged but never stored.
+- Bucket floor of 5 for user-demographic categories: any cluster
+  represented by fewer than 5 users folds into "Other".
+- Cohort retention only published when at least one cohort has 5+ users
+  with the required follow-up window.
+- Opt-out via `/data/objections.txt` — MSISDNs listed here are filtered
+  at the source so their data contributes to nothing.
+
+Full deep-dive: [`docs/statistics.md`](docs/statistics.md).
 
 ## Out of scope for Phase 1
 

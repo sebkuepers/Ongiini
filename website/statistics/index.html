@@ -756,11 +756,13 @@
       const parent = document.getElementById('chart-retention');
       const subEl = document.getElementById('retention-sub');
       clear(parent);
-      if (!curve || !curve.retained_pct || curve.retained_pct.length === 0) {
-        if (subEl) subEl.textContent = 'Not enough data yet — need cohorts of at least ' + ((curve && curve.min_cohort_size) || 5) + ' users.';
+      const hasCohorts = curve && curve.n_cohorts && curve.n_cohorts > 0;
+      if (!curve || !curve.retained_pct || curve.retained_pct.length === 0 || !hasCohorts) {
+        const floor = (curve && curve.min_cohort_size) || 5;
+        if (subEl) subEl.textContent = 'No cohort of ' + floor + '+ users has reached week 1 yet.';
         const ph = el('div', { className: 'stat-placeholder' });
-        ph.appendChild(el('strong', { text: 'Computing…' }));
-        ph.appendChild(document.createTextNode('Retention requires multiple weekly cohorts to be meaningful.'));
+        ph.appendChild(el('strong', { text: 'Not enough data yet' }));
+        ph.appendChild(document.createTextNode('Retention needs at least one cohort of ' + floor + ' users with a week of follow-up data.'));
         parent.appendChild(ph);
         return;
       }

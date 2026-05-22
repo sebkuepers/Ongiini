@@ -26,7 +26,7 @@ Three tiers, all on the Spark, none shared with any third party:
   for replies) both run on the Spark — no external service.
 
 - **Token-count log** — `/data/usage.log`, one line per message:
-  `timestamp | msisdn | tokens_in=... tokens_out=... | search=yes|no`.
+  `timestamp | msisdn | tokens_in=... tokens_out=... | search=yes|no | kind=chat`.
   **No message content in this file, ever.**
 
 Image messages: the image bytes are processed through vLLM and discarded.
@@ -44,7 +44,43 @@ via `faster-whisper` (CTranslate2 Whisper-large-v3-turbo, INT8 on CPU), and
 the audio bytes are discarded immediately after transcription. The transcript
 flows through the same text path — PII scrub, short-term memory, mem0
 long-term, tools dispatch, EN/AF language redirect — so the storage and
-privacy guarantees match exactly. No audio is ever persisted.
+privacy guarantees match exactly. No audio is ever persisted. The stored
+turn carries a `[voice note]` prefix so the transparency aggregator can
+count voice messages without re-reading audio.
+
+## Transparency layer
+
+A separate aggregate-only data tier feeds the unlinked `/statistics` page.
+Distinct from the per-user tiers above — it stores **no per-user content**,
+only emergent labels and counts:
+
+- `/data/trace.jsonl` — one JSON line per handled message: token counts,
+  tool calls by NAME, latencies, finish reasons. No message text, no
+  tool arguments verbatim — only lengths and names.
+- `/data/qualia.sqlite` — short-label cache keyed by
+  `(analysis, content-hash, version)`. Labels are produced by the local
+  LLM under explicit anti-PII prompts and then passed through a regex
+  sanitiser (`webhook/app/stats/safety.py::sanitise_label`) before
+  storage. Labels containing 4-digit numbers, capitalised possessives,
+  known Namibian town names, or any pattern the existing PII scrubber
+  catches are dropped, not stored.
+- `/data/synthesis-*.json` — output of the periodic clustering pass.
+  Holds named clusters with their constituent labels and counts. Read
+  by the `/stats.json` aggregator.
+- `/data/objections.txt` — optional MSISDN list (Art. 21 GDPR opt-out).
+  The aggregator filters these at the source for every analysis and
+  every distribution; their data contributes to no aggregate, current
+  or future.
+
+The endpoint `GET /stats.json` returns the assembled aggregate payload
+with a 5-minute in-process cache. It is reachable from `ongiini.ai/api/stats`
+via a Cloudflare Pages Function (`functions/api/stats.js`) that proxies
+to `STATS_API_URL` (set per-deployment, currently `https://api.ongiini.ai`).
+Bucket floor of 5 users / mentions applies to user-demographic distributions;
+clusters below that fold into "Other".
+
+For the full design + the LLM-as-analyst framework, see
+[`docs/statistics.md`](docs/statistics.md).
 
 Users can inspect everything (`whats_in_my_memory`), check token usage
 (`my_token_usage`), and delete it all (`delete_my_data`) from inside
@@ -71,6 +107,10 @@ to log only recipient + length.
   or dropped (oversize)
 - Exception tracebacks (without message content — our code never puts
   user text into exception args)
+- Transparency-layer events: when a label is rejected by the anti-PII
+  sanitiser, when the qualitative-analysis loop runs a pass, when
+  synthesis produces N clusters. These include the analysis name and
+  the rejected label TRUNCATED TO 80 CHARS for debugging; no MSISDN.
 
 ## Webhook hardening (Layer 7)
 
