@@ -1,6 +1,11 @@
 services:
   webhook:
-    build: ./webhook
+    # Build context is the repo root so the Dockerfile can ``COPY owela``
+    # alongside ``COPY webhook/app``. The Owela framework lives outside
+    # webhook/ so the webhook is just one consumer of it.
+    build:
+      context: .
+      dockerfile: webhook/Dockerfile
     container_name: ongiini-webhook
     restart: unless-stopped
     env_file: .env

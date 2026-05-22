@@ -26,7 +26,7 @@ RUN apt-get update \
 RUN pip install --index-url https://download.pytorch.org/whl/cpu \
         torch==2.5.1
 
-COPY requirements.txt .
+COPY webhook/requirements.txt .
 RUN pip install -r requirements.txt
 
 # Pre-download the sentence-transformers model into the image so the
@@ -36,7 +36,10 @@ RUN pip install -r requirements.txt
 RUN python -c "from sentence_transformers import SentenceTransformer; \
     SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
-COPY app ./app
+COPY webhook/app ./app
+# Owela framework lives at the repo root; copy it next to ``app`` so
+# the application's ``from owela import ...`` imports resolve at runtime.
+COPY owela ./owela
 
 # Run as a non-root user matching the host's primary user (UID 1000), so
 # files written into the bind-mounted /data volume are owned by `nexus`
