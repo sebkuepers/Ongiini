@@ -90,12 +90,17 @@ class WhatsAppTransport:
 
         Steps, in order:
           1. trim whitespace
-          2. if used_search: dead-URL strip (HEAD-check every URL in parallel)
-          3. cap at ``max_message_chars``
-          4. send via the underlying WhatsApp helper
+          2. normalise Markdown → WhatsApp formatting (deterministic)
+          3. if used_search: dead-URL strip (HEAD-check every URL in parallel)
+          4. cap at ``max_message_chars``
+          5. send via the underlying WhatsApp helper
 
-        Dead-URL stripping is gated on ``used_search`` to match the
-        original behaviour in ``ongiini/llm.py::respond`` — non-search
+        Markdown normalisation runs BEFORE dead-URL strip so that
+        Markdown links like ``[The Namibian](https://...)`` become
+        ``The Namibian (https://...)`` first, leaving a bare URL the
+        HEAD-check can actually probe.
+
+        Dead-URL stripping is gated on ``used_search`` — non-search
         turns should not pay the 2s HEAD-check latency or risk stripping
         legitimately-quoted URLs the model wrote from its own context.
 
@@ -105,6 +110,14 @@ class WhatsAppTransport:
         cleaned = (body or "").strip()
         if not cleaned:
             cleaned = "Sorry, I couldn't come up with a reply."
+
+        # Deterministic Markdown → WhatsApp formatting transform.
+        # Gemma 4 has a strong tendency to emit **double-asterisk** bold
+        # and `# heading` Markdown that doesn't render in WhatsApp. We
+        # convert these to the equivalent WhatsApp syntax server-side
+        # instead of asking the critique LLM to enforce the rule — much
+        # cheaper (no LLM round-trip) and deterministic.
+        cleaned = self._normalise_markdown_for_whatsapp(cleaned)
 
         if used_search:
             cleaned = await self._strip_dead_urls(cleaned)
@@ -125,6 +138,80 @@ class WhatsAppTransport:
         return True
 
     # ----------- internal hygiene -----------
+
+    @staticmethod
+    def _normalise_markdown_for_whatsapp(text: str) -> str:
+        """Convert common Markdown idioms into the SUBSET WhatsApp
+        actually renders. Deterministic, no LLM call.
+
+        WhatsApp supports:
+          ``*bold*`` (single asterisks)
+          ``_italic_`` (single underscores)
+          ``~strikethrough~``
+          ```code``` / triple-backtick blocks
+          ``- bullet`` / ``* bullet`` at line start (renders as •)
+          ``1. item`` at line start
+          ``> quote`` at line start
+
+        WhatsApp does NOT render (shows literal characters):
+          ``**double-asterisk bold**`` — Markdown
+          ``__double-underscore italic__`` — some MD dialects
+          ``# heading`` / ``## subheading``
+          ``[link text](https://url)`` — Markdown links
+
+        Transforms applied here:
+          ``**X**``       → ``*X*``      (the most common failure)
+          ``__X__``       → ``_X_``      (rare but cheap to handle)
+          ``# X`` at SOL  → ``*X*``      (treat headers as bold)
+          ``[T](URL)``    → ``T (URL)``  (preserves both text and URL,
+                                          and exposes the URL so the
+                                          dead-link HEAD-check can run)
+
+        Other Markdown features (tables, footnotes, etc.) are left as-is.
+        We prefer leaving raw text over guessing badly.
+        """
+        if not text:
+            return text
+
+        # **bold** → *bold* — non-greedy, must have content, can't span
+        # a line break. The `[^*]` inner class prevents collapsing
+        # adjacent runs of asterisks into a single match.
+        text = re.sub(
+            r"\*\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*\*",
+            r"*\1*",
+            text,
+        )
+
+        # __italic__ → _italic_ — same pattern, with underscores. Use a
+        # word-boundary on the outside so we don't munch in-the-middle
+        # underscores in things like file names (``a__b``).
+        text = re.sub(
+            r"(?<![A-Za-z0-9_])__([^\s_][^_\n]*?[^\s_]|[^\s_])__(?![A-Za-z0-9_])",
+            r"_\1_",
+            text,
+        )
+
+        # Markdown headers `#`/`##`/`###` at start of line → *bold*.
+        # We strip the # and surrounding spaces, then bold the heading
+        # text. Limit to up to 6 leading `#` characters (standard MD).
+        text = re.sub(
+            r"^[ \t]*#{1,6}[ \t]+(.+?)[ \t]*$",
+            r"*\1*",
+            text,
+            flags=re.MULTILINE,
+        )
+
+        # [text](url) → text (url). Preserves both halves; the URL is
+        # exposed so the dead-link HEAD-check can probe it. Skip the
+        # match if the bracketed text is empty or the URL doesn't look
+        # like an http/https URL (might be an image alt or footnote ref).
+        text = re.sub(
+            r"\[([^\]\n]+?)\]\((https?://[^\s)]+)\)",
+            r"\1 (\2)",
+            text,
+        )
+
+        return text
 
     async def _strip_dead_urls(self, reply: str) -> str:
         """HEAD-check every URL in the reply; remove lines containing a

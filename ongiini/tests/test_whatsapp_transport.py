@@ -216,6 +216,73 @@ async def test_send_keeps_url_when_head_fails_softly():
     assert "maybe-up.example.com" in sent
 
 
+# ---------- Markdown → WhatsApp normalisation ----------
+
+def test_normalise_double_asterisks_to_single():
+    """Gemma 4's most common formatting failure: **double-asterisk**
+    Markdown bold that doesn't render in WhatsApp. Transform to single
+    asterisks deterministically."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    assert n("This is **bold** text.") == "This is *bold* text."
+    assert n("Two **here** and **there**.") == "Two *here* and *there*."
+
+
+def test_normalise_does_not_break_intra_word_underscores():
+    """Don't munge file_names_with_underscores or variable_names."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    assert n("File a__b__c.txt") == "File a__b__c.txt"
+    assert "my_var" in n("Variable my_var here.")
+
+
+def test_normalise_markdown_headers_to_bold():
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    assert n("# Heading") == "*Heading*"
+    assert n("## Sub-heading") == "*Sub-heading*"
+    assert n("### Section three") == "*Section three*"
+    assert n("see #1234") == "see #1234"
+
+
+def test_normalise_markdown_links_to_text_plus_url():
+    """Markdown link syntax doesn't render. Convert to 'text (url)' so
+    BOTH the link text AND the URL are visible — and the URL is bare,
+    so the downstream dead-URL check can probe it."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    assert n("Read [The Namibian](https://namibian.com.na/x) today.") == \
+        "Read The Namibian (https://namibian.com.na/x) today."
+
+
+def test_normalise_leaves_whatsapp_native_syntax_alone():
+    """Don't munge the formatting WhatsApp ACTUALLY renders."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    assert n("*single asterisk bold*") == "*single asterisk bold*"
+    assert n("_italic here_") == "_italic here_"
+    assert n("- bullet point") == "- bullet point"
+    assert n("1. first\n2. second") == "1. first\n2. second"
+    assert n("> quote") == "> quote"
+    assert n("`inline code`") == "`inline code`"
+
+
+@pytest.mark.asyncio
+async def test_send_applies_markdown_normalisation():
+    """End-to-end: a reply with **bold** + a Markdown link arrives at
+    WhatsApp as *bold* + a bare-URL link."""
+    t = WhatsAppTransport()
+    body = "Today the BoN rate is **N$18.42** per [USD](https://example.com/usd-rate)."
+
+    async def fake_head(self, url, **kwargs):
+        return httpx.Response(200)
+
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock()) as mock_send:
+        with patch("httpx.AsyncClient.head", new=fake_head):
+            await t.send("+264user", body, Policy(name="x"), used_search=True)
+    sent = mock_send.call_args.args[1]
+    assert "*N$18.42*" in sent
+    assert "**" not in sent
+    assert "USD (https://example.com/usd-rate)" in sent
+    assert "[USD]" not in sent
+
+
 @pytest.mark.asyncio
 async def test_send_handles_url_with_trailing_punctuation():
     """Tavily snippets often have 'see https://example.com/x.' — trailing

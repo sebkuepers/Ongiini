@@ -68,10 +68,14 @@ TOOL RESULTS (truncated, in the order they fired):
 DRAFTED REPLY:
 {draft_reply}
 
-Critique on EXACTLY these six dimensions, in this order. Be honest —
+Critique on EXACTLY these five dimensions, in this order. Be honest —
 your job is to catch problems, not be polite. Format each line as
 either "OK" or "FAIL: <one short reason>". Do NOT add commentary
 beyond what's asked.
+
+(Note: WhatsApp formatting is handled deterministically by the
+transport layer. Do NOT critique formatting — focus only on
+substance, grounding, and language.)
 
 1. Answers the user's actual question (not a tangent or partial answer):
 2. Every factual claim about Namibia (places, businesses, prices,
@@ -84,9 +88,6 @@ beyond what's asked.
    plainly instead of inventing specifics:
 5. Language matches the user's (EN or AF) — same language they asked
    in:
-6. Plain WhatsApp text — no Markdown, no asterisks, no #headers, no
-   "1." numbered lists, no bullet hyphens used as bullets, no tables,
-   no backticks:
 
 End with one line in the exact form:
 
