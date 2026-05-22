@@ -155,12 +155,19 @@ async def classify(
     if not text or len(text) < 3:
         return "NONE"
 
-    # Only include conversation context when the current message has
-    # pronouns or short reference words — those are the cases where the
-    # router needs to know what "her/his/it/this/that" refers to. For a
-    # fully self-contained question we save tokens by not including it.
+    # Include conversation context when the current message likely
+    # references the previous turn. Two heuristics:
+    #   (a) Has a pronoun or reference word ("her stance on AI?")
+    #   (b) Is short (< 80 chars) — short follow-ups almost always rely
+    #       on prior context. Example: prev "what's happening in Windhoek
+    #       this weekend?", curr "whats in the movies?" — no pronoun but
+    #       clearly continuing the Windhoek topic, should route SEARCH.
+    # Cap prev at 500 chars to bound the classifier prompt.
     prev = (prev_user_text or "").strip()
-    if prev and len(prev) < 500 and _has_pronoun_or_reference(text):
+    needs_context = prev and len(prev) < 500 and (
+        _has_pronoun_or_reference(text) or len(text) < 80
+    )
+    if needs_context:
         context = f"Previous user message: {prev}\n"
     else:
         context = ""

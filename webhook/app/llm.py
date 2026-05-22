@@ -492,7 +492,36 @@ async def _strip_dead_urls(reply: str) -> str:
     raw_urls = _URL_RE.findall(reply)
     # Trim trailing punctuation that snuck into the match.
     urls = [u.rstrip(".,;:!?)") for u in raw_urls]
+
+    # Defensive: some URLs come back from Tavily with embedded HTML
+    # tag fragments (e.g. "https://www.eventbrite.com/d/.../wind</i>"
+    # because the snippet had an <i> italic that wasn't stripped).
+    # Treat any URL containing "<" or ">" as broken — don't send it to
+    # the user. The dead-URL HEAD check won't catch these because
+    # httpx percent-encodes the brackets and the server typically
+    # returns 200 with a redirect to the homepage.
+    malformed = {u for u in urls if "<" in u or ">" in u}
+    if malformed:
+        for u in malformed:
+            log.info("stripping malformed URL (embedded HTML) from reply: %s", u)
+
+    urls = [u for u in urls if u not in malformed]
     urls = list(dict.fromkeys(urls))  # dedupe, preserve order
+
+    # Strip lines containing malformed URLs right away (before the HEAD check)
+    if malformed:
+        out_lines = []
+        for line in reply.split("\n"):
+            if any(m in line for m in malformed):
+                continue
+            out_lines.append(line)
+        reply = re.sub(r"\n{3,}", "\n\n", "\n".join(out_lines)).strip()
+        if not reply.endswith("\n"):
+            reply = reply
+        # No URLs left to check?
+        if not urls:
+            return reply
+
     if not urls:
         return reply
 
