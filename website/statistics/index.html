@@ -197,6 +197,77 @@
       font-size: 13px;
       color: var(--ink-soft);
     }
+    /* WoW delta sub-row on KPI tiles. Hidden when no comparison data
+       (prior window had zero observations). */
+    .stat-kpi-delta {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.08em;
+      margin-top: 4px;
+      display: inline-flex; align-items: baseline; gap: 5px;
+    }
+    .stat-kpi-delta--up { color: var(--teal-deep); }
+    .stat-kpi-delta--down { color: var(--terracotta-deep); }
+    .stat-kpi-delta--flat { color: var(--ink-faint); }
+    .stat-kpi-delta-period {
+      font-size: 9.5px;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+    }
+
+    /* Engagement section grid — three sub-charts side-by-side at desktop. */
+    .stat-engagement-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    /* Conversation-depth tile cluster (median + p95 + mean inside one chart). */
+    .stat-depth-tiles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 4px 0 14px;
+    }
+    .stat-depth-tile {
+      background: var(--sand);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .stat-depth-label {
+      font-family: 'Geist Mono', monospace;
+      font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .stat-depth-value {
+      font-family: 'Instrument Serif', serif;
+      font-size: 26px;
+      color: var(--ink);
+      margin-top: 2px;
+      line-height: 1;
+    }
+
+    /* Heatmap cells. SVG fills are set inline; CSS handles hover-style only. */
+    .stat-chart .heatmap-cell {
+      stroke: var(--bone);
+      stroke-width: 1;
+    }
+    .stat-heatmap-legend {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 10px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+    }
+    .stat-heatmap-legend-bar {
+      flex: 0 0 140px;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(
+        to right,
+        color-mix(in oklab, var(--terracotta) 5%, var(--bone-deep)),
+        var(--terracotta-deep)
+      );
+    }
 
     .stat-chart-row {
       display: grid;
@@ -432,6 +503,7 @@
       .stat-chart-row { grid-template-columns: 1fr 1fr; }
       .stat-perf { grid-template-columns: repeat(4, 1fr); }
       .stat-who { grid-template-columns: 1fr 1fr; gap: 22px; }
+      .stat-engagement-grid { grid-template-columns: repeat(3, 1fr); gap: 18px; }
     }
     @media (min-width: 880px) {
       :root { --gutter: 48px; }
@@ -478,18 +550,32 @@
         </div>
       </div>
 
-      <h2>When people use Ongiini</h2>
-      <div class="stat-chart-row">
+      <h2>Engagement</h2>
+      <p class="stat-section-note">How sticky the service is. Numbers count <strong>distinct returning users</strong>, not just messages — early signal of whether people get real value or try once and drop off.</p>
+      <div class="stat-engagement-grid">
         <div class="stat-chart">
-          <p class="stat-chart-title">Hour of day</p>
-          <p class="stat-chart-sub">Africa/Windhoek time · all messages</p>
-          <div id="chart-hour"></div>
+          <p class="stat-chart-title">Retention curve</p>
+          <p class="stat-chart-sub" id="retention-sub">Of users who start, what % return weeks later</p>
+          <div id="chart-retention"></div>
         </div>
         <div class="stat-chart">
-          <p class="stat-chart-title">Day of week</p>
-          <p class="stat-chart-sub">All messages</p>
-          <div id="chart-dow"></div>
+          <p class="stat-chart-title">Users by activity</p>
+          <p class="stat-chart-sub" id="perusers-sub">Distribution of total messages per user</p>
+          <div id="dist-perusers"></div>
         </div>
+        <div class="stat-chart">
+          <p class="stat-chart-title">Conversation depth</p>
+          <p class="stat-chart-sub" id="depth-sub">Turns per conversation</p>
+          <div id="chart-depth"></div>
+        </div>
+      </div>
+
+      <h2>When people use Ongiini.ai</h2>
+      <p class="stat-section-note">Activity by day-of-week × hour-of-day in <strong>Africa/Windhoek time</strong>. Darker cells = more messages. UTC offsets handled — a message sent at UTC 23:00 Sunday counts as Monday 01:00.</p>
+      <div class="stat-chart">
+        <p class="stat-chart-title">Time-of-week heatmap</p>
+        <p class="stat-chart-sub" id="heatmap-sub">Local time · all messages</p>
+        <div id="chart-heatmap"></div>
       </div>
 
       <h2>How people use Ongiini.ai</h2>
@@ -605,8 +691,10 @@
       renderKpis(d);
       renderCumulative(d.timeseries.unique_users_cumulative);
       renderDau(d.timeseries.daily_active_users);
-      renderHistogram('chart-hour', d.distributions.by_hour_of_day_local, r => r.hour, r => r.count, h => String(h));
-      renderHistogram('chart-dow', d.distributions.by_day_of_week, r => r.day, r => r.count, l => l);
+      renderRetention(d.engagement && d.engagement.retention_curve);
+      renderPerUserDistribution(d.engagement && d.engagement.per_user_distribution, d.totals.unique_users);
+      renderConversationDepth(d.engagement && d.engagement.conversation_depth);
+      renderHeatmap(d.distributions.heatmap_dow_hour);
       renderUseCases(d.topics, d.totals.messages_user);
       renderTopTopics(d.top_topics);
       renderWho(d.who, d.totals.unique_users);
@@ -626,28 +714,262 @@
       refreshed.appendChild(document.createTextNode(' · Period: ' + period));
     }
 
-    function tile(label, value, sub, accent) {
+    function tile(label, value, sub, accent, delta) {
       const root = el('div', { className: 'stat-kpi' });
       if (accent) root.setAttribute('data-accent', accent);
       root.appendChild(el('div', { className: 'stat-kpi-label', text: label }));
       root.appendChild(el('div', { className: 'stat-kpi-value', text: value }));
       if (sub) root.appendChild(el('div', { className: 'stat-kpi-sub', text: sub }));
+      if (delta && delta.pct_change != null) {
+        const pct = delta.pct_change;
+        let cls = 'stat-kpi-delta--flat', arrow = '·';
+        if (pct > 0.5) { cls = 'stat-kpi-delta--up'; arrow = '↑'; }
+        else if (pct < -0.5) { cls = 'stat-kpi-delta--down'; arrow = '↓'; }
+        const sign = pct > 0 ? '+' : '';
+        const wrap = el('div', { className: 'stat-kpi-delta ' + cls });
+        wrap.appendChild(document.createTextNode(arrow + ' ' + sign + pct.toFixed(1) + '%'));
+        wrap.appendChild(el('span', { className: 'stat-kpi-delta-period', text: 'vs prior week' }));
+        root.appendChild(wrap);
+      }
       return root;
     }
 
     function renderKpis(d) {
       const t = d.totals;
+      const dx = d.totals_deltas || {};
       const wrap = document.getElementById('kpis');
       clear(wrap);
       // Accent grouping: 'people' = teal, 'activity' = terracotta,
       // 'compute' = olive. Matches the page's three-colour rhythm.
-      wrap.appendChild(tile('Unique users', fmtInt.format(t.unique_users), null, 'people'));
-      wrap.appendChild(tile('Conversations', fmtInt.format(t.conversations), '≥30 min gap = new', 'people'));
-      wrap.appendChild(tile('Free tokens generated', fmtCompact.format(t.free_tokens_generated), 'Assistant replies, lifetime', 'compute'));
-      wrap.appendChild(tile('Web searches', fmtInt.format(t.web_searches), 'Tavily API calls', 'activity'));
+      // Delta sub-row appears when there's a prior-week comparison.
+      wrap.appendChild(tile('Unique users', fmtInt.format(t.unique_users), null, 'people', dx.unique_users));
+      wrap.appendChild(tile('Conversations', fmtInt.format(t.conversations), '≥30 min gap = new', 'people', dx.conversations));
+      wrap.appendChild(tile('Free tokens generated', fmtCompact.format(t.free_tokens_generated), 'Assistant replies, lifetime', 'compute', dx.free_tokens_generated));
+      wrap.appendChild(tile('Web searches', fmtInt.format(t.web_searches), 'Tavily API calls', 'activity', dx.web_searches));
       wrap.appendChild(tile('Voice notes', fmtInt.format(t.voice_notes), 'Transcribed locally', 'activity'));
       wrap.appendChild(tile('Photos', fmtInt.format(t.photos), 'Image messages', 'activity'));
     }
+
+    // ----- Engagement renderers -------------------------------------------
+
+    function renderRetention(curve) {
+      const parent = document.getElementById('chart-retention');
+      const subEl = document.getElementById('retention-sub');
+      clear(parent);
+      if (!curve || !curve.retained_pct || curve.retained_pct.length === 0) {
+        if (subEl) subEl.textContent = 'Not enough data yet — need cohorts of at least ' + ((curve && curve.min_cohort_size) || 5) + ' users.';
+        const ph = el('div', { className: 'stat-placeholder' });
+        ph.appendChild(el('strong', { text: 'Computing…' }));
+        ph.appendChild(document.createTextNode('Retention requires multiple weekly cohorts to be meaningful.'));
+        parent.appendChild(ph);
+        return;
+      }
+      if (subEl) {
+        subEl.textContent = 'Averaged across ' + curve.n_cohorts + ' cohorts (min ' + curve.min_cohort_size + ' users each)';
+      }
+      // Sparkline: x = curve.weeks (0, 1, 2, 4), y = curve.retained_pct
+      const W = 320, H = 160, padL = 36, padR = 16, padT = 14, padB = 28;
+      const innerW = W - padL - padR;
+      const innerH = H - padT - padB;
+      const xs = curve.weeks;
+      const ys = curve.retained_pct;
+      const xMax = xs[xs.length - 1] || 1;
+      const xFor = w => padL + (w / xMax) * innerW;
+      const yFor = p => padT + innerH - (p / 100) * innerH;
+
+      const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' });
+      svg.style.aspectRatio = W + ' / ' + H;
+
+      // Grid lines at 0/25/50/75/100%
+      [0, 25, 50, 75, 100].forEach(p => {
+        const y = yFor(p);
+        svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: 'grid-line' }));
+        const t = svgEl('text', { x: padL - 6, y: y + 3, 'text-anchor': 'end', class: 'axis-tick' });
+        t.textContent = p + '%';
+        svg.appendChild(t);
+      });
+      // X-axis ticks
+      xs.forEach((w, i) => {
+        const x = xFor(w);
+        const t = svgEl('text', { x: x, y: H - 8, 'text-anchor': 'middle', class: 'axis-tick' });
+        t.textContent = w === 0 ? 'start' : 'wk ' + w;
+        svg.appendChild(t);
+      });
+
+      // Line path
+      const pathD = ys.map((y, i) => (i === 0 ? 'M' : 'L') + xFor(xs[i]).toFixed(1) + ' ' + yFor(y).toFixed(1)).join(' ');
+      // Area under line
+      const closeD = pathD + ' L ' + xFor(xs[xs.length - 1]).toFixed(1) + ' ' + (padT + innerH).toFixed(1) + ' L ' + padL + ' ' + (padT + innerH).toFixed(1) + ' Z';
+      svg.appendChild(svgEl('path', { d: closeD, fill: 'var(--teal-light)', 'fill-opacity': '0.5' }));
+      svg.appendChild(svgEl('path', { d: pathD, stroke: 'var(--teal-deep)', 'stroke-width': '1.8', fill: 'none' }));
+      // Dots at each measured point with value label
+      xs.forEach((w, i) => {
+        const cx = xFor(w), cy = yFor(ys[i]);
+        svg.appendChild(svgEl('circle', { cx: cx, cy: cy, r: 3, fill: 'var(--teal-deep)' }));
+        const lab = svgEl('text', {
+          x: cx, y: cy - 8, 'text-anchor': 'middle',
+          'font-family': "'Geist Mono', monospace",
+          'font-size': 9.5, fill: 'var(--ink-soft)',
+        });
+        lab.textContent = ys[i].toFixed(0) + '%';
+        svg.appendChild(lab);
+      });
+      parent.appendChild(svg);
+    }
+
+    function renderPerUserDistribution(rows, totalUsers) {
+      const parent = document.getElementById('dist-perusers');
+      const subEl = document.getElementById('perusers-sub');
+      clear(parent);
+      if (!rows || rows.length === 0) {
+        if (subEl) subEl.textContent = 'Distribution of total messages per user · waiting for data';
+        const ph = el('div', { className: 'stat-placeholder' });
+        ph.appendChild(el('strong', { text: 'Computing…' }));
+        ph.appendChild(document.createTextNode('Will populate once activity accumulates.'));
+        parent.appendChild(ph);
+        return;
+      }
+      if (subEl) subEl.textContent = 'Distribution across ' + fmtInt.format(totalUsers || 0) + ' users';
+      const wrap = el('div', { className: 'stat-bars' });
+      const max = Math.max(1, ...rows.map(r => r.count));
+      for (const r of rows) {
+        const row = el('div', { className: 'stat-bar-row' });
+        const meta = el('div', { className: 'stat-bar-meta' });
+        meta.appendChild(el('span', { className: 'stat-bar-label', text: r.label }));
+        meta.appendChild(el('span', { className: 'stat-bar-value', text: r.pct.toFixed(1) + '% · ' + fmtInt.format(r.count) }));
+        row.appendChild(meta);
+        const track = el('div', { className: 'stat-bar-track' });
+        const fill = el('div', { className: 'stat-bar-fill' });
+        fill.style.width = ((r.count / max) * 100).toFixed(1) + '%';
+        track.appendChild(fill);
+        row.appendChild(track);
+        wrap.appendChild(row);
+      }
+      parent.appendChild(wrap);
+    }
+
+    function renderConversationDepth(block) {
+      const parent = document.getElementById('chart-depth');
+      const subEl = document.getElementById('depth-sub');
+      clear(parent);
+      if (!block || !block.n_conversations) {
+        if (subEl) subEl.textContent = 'Turns per conversation · waiting for data';
+        const ph = el('div', { className: 'stat-placeholder' });
+        ph.appendChild(el('strong', { text: 'Computing…' }));
+        parent.appendChild(ph);
+        return;
+      }
+      if (subEl) subEl.textContent = 'Across ' + fmtInt.format(block.n_conversations) + ' conversations';
+      // Tile row: median · p95 · mean
+      const tiles = el('div', { className: 'stat-depth-tiles' });
+      [
+        ['Median', String(block.median_turns)],
+        ['p95', String(block.p95_turns)],
+        ['Mean', block.mean_turns.toFixed(1)],
+      ].forEach(([lbl, val]) => {
+        const t = el('div', { className: 'stat-depth-tile' });
+        t.appendChild(el('div', { className: 'stat-depth-label', text: lbl }));
+        t.appendChild(el('div', { className: 'stat-depth-value', text: val }));
+        tiles.appendChild(t);
+      });
+      parent.appendChild(tiles);
+      // Histogram below
+      const hist = block.histogram || [];
+      if (hist.length > 0) {
+        const wrap = el('div', { className: 'stat-bars' });
+        const max = Math.max(1, ...hist.map(r => r.count));
+        for (const r of hist) {
+          const row = el('div', { className: 'stat-bar-row' });
+          const meta = el('div', { className: 'stat-bar-meta' });
+          meta.appendChild(el('span', { className: 'stat-bar-label', text: r.label }));
+          meta.appendChild(el('span', { className: 'stat-bar-value', text: fmtInt.format(r.count) }));
+          row.appendChild(meta);
+          const track = el('div', { className: 'stat-bar-track' });
+          const fill = el('div', { className: 'stat-bar-fill' });
+          fill.style.width = ((r.count / max) * 100).toFixed(1) + '%';
+          track.appendChild(fill);
+          row.appendChild(track);
+          wrap.appendChild(row);
+        }
+        parent.appendChild(wrap);
+      }
+    }
+
+    function renderHeatmap(matrix) {
+      const parent = document.getElementById('chart-heatmap');
+      const subEl = document.getElementById('heatmap-sub');
+      clear(parent);
+      if (!matrix || matrix.length === 0) {
+        if (subEl) subEl.textContent = 'Local time · waiting for data';
+        emptyChart('chart-heatmap', 'No data yet.');
+        return;
+      }
+      const total = matrix.reduce((s, c) => s + c.count, 0);
+      if (subEl) subEl.textContent = 'Africa/Windhoek time · ' + fmtInt.format(total) + ' messages across the week';
+      const W = 560, H = 220;
+      const padL = 44, padR = 12, padT = 22, padB = 18;
+      const innerW = W - padL - padR;
+      const innerH = H - padT - padB;
+      const cellW = innerW / 24;
+      const cellH = innerH / 7;
+      const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      const max = Math.max(1, ...matrix.map(c => c.count));
+
+      const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' });
+      svg.style.aspectRatio = W + ' / ' + H;
+      svg.style.maxHeight = '260px';
+
+      // Hour ticks (every 4 hours)
+      for (let h = 0; h < 24; h += 4) {
+        const x = padL + h * cellW + cellW / 2;
+        const t = svgEl('text', {
+          x: x, y: padT - 8, 'text-anchor': 'middle', class: 'axis-tick',
+        });
+        t.textContent = String(h).padStart(2, '0');
+        svg.appendChild(t);
+      }
+      // Day labels
+      DOW.forEach((d, i) => {
+        const y = padT + i * cellH + cellH / 2 + 3;
+        const t = svgEl('text', {
+          x: padL - 8, y: y, 'text-anchor': 'end', class: 'axis-tick',
+        });
+        t.textContent = d;
+        svg.appendChild(t);
+      });
+      // Cells
+      matrix.forEach(c => {
+        const x = padL + c.hour * cellW;
+        const y = padT + c.day * cellH;
+        // Opacity-based intensity: empty cells nearly invisible; max
+        // cells fully saturated terracotta-deep.
+        const intensity = c.count === 0 ? 0 : (0.12 + 0.88 * (c.count / max));
+        const rect = svgEl('rect', {
+          x: (x + 0.5).toFixed(1),
+          y: (y + 0.5).toFixed(1),
+          width: (cellW - 1).toFixed(1),
+          height: (cellH - 1).toFixed(1),
+          rx: 2,
+          fill: 'var(--terracotta-deep)',
+          'fill-opacity': intensity.toFixed(3),
+          class: 'heatmap-cell',
+        });
+        const title = svgEl('title', {});
+        title.textContent = DOW[c.day] + ' ' + String(c.hour).padStart(2, '0') + ':00 · ' + c.count + ' messages';
+        rect.appendChild(title);
+        svg.appendChild(rect);
+      });
+      parent.appendChild(svg);
+
+      // Legend
+      const legend = el('div', { className: 'stat-heatmap-legend' });
+      legend.appendChild(document.createTextNode('0'));
+      legend.appendChild(el('span', { className: 'stat-heatmap-legend-bar' }));
+      legend.appendChild(document.createTextNode(fmtInt.format(max) + ' messages / hour'));
+      parent.appendChild(legend);
+    }
+
+    // ----- End engagement renderers ---------------------------------------
 
     function svgNode(width, height) {
       const svg = svgEl('svg', {

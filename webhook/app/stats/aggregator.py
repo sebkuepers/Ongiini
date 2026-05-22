@@ -228,6 +228,373 @@ def _count_conversations(per_user_timestamps: dict[str, list[datetime]]) -> int:
     return total
 
 
+def _conversation_lengths(
+    per_user_timestamps: dict[str, list[datetime]],
+) -> list[int]:
+    """Return a flat list of conversation lengths (turn counts) across all
+    users. Same conversation-grouping rules as `_count_conversations`.
+
+    A conversation's "length" is the number of user messages in that
+    burst (one user turn = one entry in this count). Sorted output is
+    NOT guaranteed.
+    """
+    lengths: list[int] = []
+    for ts_list in per_user_timestamps.values():
+        if not ts_list:
+            continue
+        ts_list.sort()
+        run = 1
+        for prev, cur in zip(ts_list, ts_list[1:]):
+            if cur - prev >= CONVERSATION_GAP:
+                lengths.append(run)
+                run = 1
+            else:
+                run += 1
+        lengths.append(run)
+    return lengths
+
+
+# --- Engagement helpers ----------------------------------------------------
+
+# Buckets for per-user message-count distribution. Order matters for
+# the output (it determines rendering order on the page). Tuples are
+# (label, lower_bound, upper_bound_inclusive_or_None).
+_ENGAGEMENT_BUCKETS: list[tuple[str, int, int | None]] = [
+    ("1 message", 1, 1),
+    ("2-5 messages", 2, 5),
+    ("6-20 messages", 6, 20),
+    ("21-100 messages", 21, 100),
+    ("100+ messages", 101, None),
+]
+
+
+def _compute_engagement_distribution(
+    chat_per_user_ts: dict[str, list[datetime]],
+) -> list[dict[str, Any]]:
+    """Bucket users by their total chat-message count. Returns a list
+    of {label, count, pct} rows in display order.
+
+    Privacy: applies the same minimum-bucket-size floor as other
+    distributions. Buckets below the floor roll into nothing (we
+    don't aggregate them into an 'Other' bucket here because the
+    semantic of 'Other' would be ambiguous — a sub-floor 'heavy users'
+    is meaningfully different from a sub-floor 'try-once' group).
+    Empty buckets are simply omitted.
+    """
+    if not chat_per_user_ts:
+        return []
+    counts_per_bucket: dict[str, int] = {b[0]: 0 for b in _ENGAGEMENT_BUCKETS}
+    for ts_list in chat_per_user_ts.values():
+        n = len(ts_list)
+        if n <= 0:
+            continue
+        for label, lo, hi in _ENGAGEMENT_BUCKETS:
+            if n >= lo and (hi is None or n <= hi):
+                counts_per_bucket[label] += 1
+                break
+    # No privacy floor on activity-level buckets: a bucket like
+    # "100+ messages" is a usage-pattern label, not a personal trait.
+    # Knowing "1 user sent 100+ messages" does not identify them
+    # without other dimensions, and the total unique-users count is
+    # already published. The floor exists to prevent surfacing rare
+    # personal categories (helicopter pilot), not common activity
+    # tiers.
+    total_users = sum(counts_per_bucket.values())
+    rows: list[dict[str, Any]] = []
+    for label, _, _ in _ENGAGEMENT_BUCKETS:
+        c = counts_per_bucket[label]
+        if c <= 0:
+            continue
+        pct = round(c / total_users * 100, 1) if total_users else 0.0
+        rows.append({"label": label, "count": c, "pct": pct})
+    return rows
+
+
+_CONVERSATION_DEPTH_BUCKETS: list[tuple[str, int, int | None]] = [
+    ("1 turn", 1, 1),
+    ("2-4 turns", 2, 4),
+    ("5-10 turns", 5, 10),
+    ("11-30 turns", 11, 30),
+    ("30+ turns", 31, None),
+]
+
+
+def _compute_conversation_depth(lengths: list[int]) -> dict[str, Any]:
+    """Compute conversation-depth statistics from a flat list of
+    per-conversation turn counts.
+
+    Returns median, mean, p95, and a bucketed histogram. Empty input
+    yields zeroed stats and an empty histogram.
+    """
+    if not lengths:
+        return {
+            "n_conversations": 0,
+            "median_turns": 0,
+            "mean_turns": 0.0,
+            "p95_turns": 0,
+            "histogram": [],
+        }
+    sorted_l = sorted(lengths)
+    n = len(sorted_l)
+    median_v = int(statistics.median(sorted_l))
+    mean_v = round(statistics.fmean(sorted_l), 2)
+    p95_idx = max(0, int(round(n * 0.95)) - 1)
+    p95_v = sorted_l[p95_idx]
+
+    # Same reasoning as engagement distribution: conversation-length
+    # buckets are activity tiers, not personal categories. No floor.
+    bucket_counts: dict[str, int] = {b[0]: 0 for b in _CONVERSATION_DEPTH_BUCKETS}
+    for v in lengths:
+        for label, lo, hi in _CONVERSATION_DEPTH_BUCKETS:
+            if v >= lo and (hi is None or v <= hi):
+                bucket_counts[label] += 1
+                break
+    histogram = [
+        {"label": label, "count": bucket_counts[label]}
+        for label, _, _ in _CONVERSATION_DEPTH_BUCKETS
+        if bucket_counts[label] > 0
+    ]
+    return {
+        "n_conversations": n,
+        "median_turns": median_v,
+        "mean_turns": mean_v,
+        "p95_turns": p95_v,
+        "histogram": histogram,
+    }
+
+
+def _iso_week_key(dt: datetime) -> tuple[int, int]:
+    """ISO year-week tuple for cohort grouping. Done in NAMIBIA_TZ so
+    cohorts align with the local week boundaries users experience."""
+    local = dt.astimezone(NAMIBIA_TZ)
+    iso = local.isocalendar()
+    return (iso.year, iso.week)
+
+
+_RETENTION_OFFSETS = [1, 2, 4]  # week offsets to compute retention for
+
+
+def _compute_retention_curve(
+    chat_per_user_ts: dict[str, list[datetime]],
+) -> dict[str, Any]:
+    """Average week-over-week retention across all cohorts large
+    enough to publish.
+
+    For each user, find the ISO-week of their first chat (the cohort
+    week). For each later week, was the user active? Then for each
+    cohort that has >= min_cohort_size users, compute retention at
+    offsets 1, 2, 4 weeks. Average across qualifying cohorts.
+
+    Returns:
+        weeks: [0, 1, 2, 4]   x-axis labels
+        retained_pct: [100, X, Y, Z]   y-values (week 0 is always 100)
+        n_cohorts: number of cohorts averaged
+        min_cohort_size: the floor applied
+        n_eligible_cohorts: cohorts that had enough size for the >=4w window
+    """
+    floor = settings.stats_minimum_bucket
+    if not chat_per_user_ts:
+        return {
+            "weeks": [0] + _RETENTION_OFFSETS,
+            "retained_pct": [],
+            "n_cohorts": 0,
+            "min_cohort_size": floor,
+        }
+
+    # cohort_week → list of user "active weeks" sets (one set per user)
+    cohorts: dict[tuple[int, int], list[set[tuple[int, int]]]] = defaultdict(list)
+    for msisdn, ts_list in chat_per_user_ts.items():
+        if not ts_list:
+            continue
+        sorted_ts = sorted(ts_list)
+        first_week = _iso_week_key(sorted_ts[0])
+        active_weeks = {_iso_week_key(t) for t in sorted_ts}
+        cohorts[first_week].append(active_weeks)
+
+    # Helper: convert a (year, week) cohort and an offset to a target
+    # (year, week). Uses ISO calendar arithmetic — go via Monday of the
+    # cohort week + offset_weeks days, then take its iso-week.
+    from datetime import date
+
+    def _offset_week(cohort: tuple[int, int], offset: int) -> tuple[int, int]:
+        try:
+            mon = date.fromisocalendar(cohort[0], cohort[1], 1)
+        except ValueError:
+            return cohort
+        target = mon + timedelta(weeks=offset)
+        iso = target.isocalendar()
+        return (iso[0], iso[1])
+
+    # For each offset, average the retention rate across cohorts of
+    # size >= floor.
+    retention_at_offset: list[float] = [100.0]  # week 0 = 100% by definition
+    n_avg = 0
+    for offset in _RETENTION_OFFSETS:
+        rates: list[float] = []
+        for cohort, user_active_sets in cohorts.items():
+            cohort_size = len(user_active_sets)
+            if cohort_size < floor:
+                continue
+            target = _offset_week(cohort, offset)
+            retained = sum(1 for s in user_active_sets if target in s)
+            rates.append(retained / cohort_size * 100)
+        if rates:
+            retention_at_offset.append(round(sum(rates) / len(rates), 1))
+            n_avg = max(n_avg, len(rates))
+        else:
+            retention_at_offset.append(0.0)
+    return {
+        "weeks": [0] + _RETENTION_OFFSETS,
+        "retained_pct": retention_at_offset,
+        "n_cohorts": n_avg,
+        "min_cohort_size": floor,
+    }
+
+
+def _compute_heatmap_dow_hour(
+    chat_lines: list[dict[str, Any]],
+) -> list[dict[str, int]]:
+    """7×24 matrix of chat-message counts by (day_of_week, hour) in
+    Africa/Windhoek local time. Always returns all 168 cells (zeros
+    where empty), in row-major Mon→Sun, 0→23 order.
+
+    Critical: day-of-week here is the LOCAL day, not UTC. A message
+    sent at UTC 23:00 on Sunday is Monday 01:00 in Namibia and counts
+    under Monday — same logic as `by_hour_of_day_local`.
+    """
+    matrix: dict[tuple[int, int], int] = defaultdict(int)
+    for row in chat_lines:
+        dt = _parse_ts(row["ts"])
+        if dt is None:
+            continue
+        local = dt.astimezone(NAMIBIA_TZ)
+        matrix[(local.weekday(), local.hour)] += 1
+    return [
+        {"day": d, "hour": h, "count": matrix.get((d, h), 0)}
+        for d in range(7)
+        for h in range(24)
+    ]
+
+
+def _compute_deltas(
+    chat_lines: list[dict[str, Any]],
+    all_lines: list[dict[str, Any]],
+    trace_rows: list[dict[str, Any]],
+    photos: int,
+    voice_notes: int,
+) -> dict[str, Any]:
+    """Compute KPI deltas: rolling 7-day "current" vs the 7 days
+    immediately before that.
+
+    Anchor on the latest observed timestamp rather than wall-clock
+    `now()` — keeps deltas meaningful when traffic isn't real-time
+    (e.g. when computing this from a snapshot or after a Spark outage).
+
+    For each KPI, returns {current, prior, pct_change}. pct_change is
+    omitted when the prior window has zero observations (avoids inf /
+    misleadingly-large deltas off a tiny base).
+
+    NOTE: photos and voice_notes can't be split per-window without
+    timestamps on those events. For now we omit them from the delta
+    block (the page tile will simply not show a delta sub-row).
+    """
+    timestamps = [t for r in chat_lines if (t := _parse_ts(r["ts"])) is not None]
+    if not timestamps:
+        return {}
+    anchor = max(timestamps)
+    current_start = anchor - timedelta(days=7)
+    prior_start = anchor - timedelta(days=14)
+
+    def _in_window(dt: datetime, start: datetime, end: datetime) -> bool:
+        return start < dt <= end
+
+    def _user_count_in(start: datetime, end: datetime) -> int:
+        users: set[str] = set()
+        for r in chat_lines:
+            dt = _parse_ts(r["ts"])
+            if dt is None:
+                continue
+            if _in_window(dt, start, end):
+                users.add(r["msisdn"])
+        return len(users)
+
+    def _msg_count_in(start: datetime, end: datetime) -> int:
+        return sum(
+            1
+            for r in chat_lines
+            if (dt := _parse_ts(r["ts"])) is not None and _in_window(dt, start, end)
+        )
+
+    def _convs_in(start: datetime, end: datetime) -> int:
+        per_user: dict[str, list[datetime]] = defaultdict(list)
+        for r in chat_lines:
+            dt = _parse_ts(r["ts"])
+            if dt is None:
+                continue
+            if _in_window(dt, start, end):
+                per_user[r["msisdn"]].append(dt)
+        return _count_conversations(per_user)
+
+    def _tokens_out_in(start: datetime, end: datetime) -> int:
+        return sum(
+            int(r["tokens_out"])
+            for r in chat_lines
+            if (dt := _parse_ts(r["ts"])) is not None and _in_window(dt, start, end)
+        )
+
+    def _trace_count_in(start: datetime, end: datetime, predicate) -> int:
+        n = 0
+        for tr in trace_rows:
+            dt = _parse_ts(tr.get("ts", ""))
+            if dt is None:
+                continue
+            if not _in_window(dt, start, end):
+                continue
+            if predicate(tr):
+                n += 1
+        return n
+
+    def _web_search_in(start: datetime, end: datetime) -> int:
+        def has_search(tr: dict[str, Any]) -> bool:
+            for call in tr.get("calls", []) or []:
+                for tc in call.get("tool_calls", []) or []:
+                    if tc.get("name") == "web_search":
+                        return True
+            return False
+        return _trace_count_in(start, end, has_search)
+
+    def _delta(curr: int, prior: int) -> dict[str, Any]:
+        out = {"current": curr, "prior": prior}
+        if prior > 0:
+            out["pct_change"] = round((curr - prior) / prior * 100, 1)
+        return out
+
+    return {
+        "window_days": 7,
+        "anchor": anchor.isoformat(),
+        "unique_users": _delta(
+            _user_count_in(current_start, anchor),
+            _user_count_in(prior_start, current_start),
+        ),
+        "conversations": _delta(
+            _convs_in(current_start, anchor),
+            _convs_in(prior_start, current_start),
+        ),
+        "messages_user": _delta(
+            _msg_count_in(current_start, anchor),
+            _msg_count_in(prior_start, current_start),
+        ),
+        "free_tokens_generated": _delta(
+            _tokens_out_in(current_start, anchor),
+            _tokens_out_in(prior_start, current_start),
+        ),
+        "web_searches": _delta(
+            _web_search_in(current_start, anchor),
+            _web_search_in(prior_start, current_start),
+        ),
+    }
+
+
 # --- Synthesis-block reader (qualitative output) ----------------------------
 
 def _format_synthesis_block(
@@ -384,9 +751,14 @@ def _compute_sync() -> dict[str, Any]:
             msisdn_first_seen[msisdn] = dt
         if row["search"]:
             web_searches += 1
+        # IMPORTANT: weekday + hour are LOCAL (Africa/Windhoek). A
+        # message sent at UTC 23:00 Sunday is Monday 01:00 in Namibia
+        # and counts under Monday — not Sunday. Same convention as the
+        # heatmap below.
+        local_dt = dt.astimezone(NAMIBIA_TZ)
         hour_utc_counts[dt.hour] += 1
-        hour_local_counts[dt.astimezone(NAMIBIA_TZ).hour] += 1
-        dow_counts[dt.weekday()] += 1  # Mon=0
+        hour_local_counts[local_dt.hour] += 1
+        dow_counts[local_dt.weekday()] += 1  # Mon=0
 
     for msisdn, dt in msisdn_first_seen.items():
         new_users_per_day[dt.date().isoformat()] += 1
@@ -402,7 +774,9 @@ def _compute_sync() -> dict[str, Any]:
     total_trace_turns = 0
     latencies: list[int] = []
 
-    for tr in _parse_trace_lines(excluded):
+    # Materialise trace rows so we can also use them for deltas.
+    trace_rows: list[dict[str, Any]] = list(_parse_trace_lines(excluded))
+    for tr in trace_rows:
         total_trace_turns += 1
         calls = tr.get("calls", []) or []
         any_tool_called = False
@@ -549,8 +923,24 @@ def _compute_sync() -> dict[str, Any]:
         else 0.0,
     }
 
-    # ---- Conversations count ----
-    conversations = _count_conversations(chat_per_user_ts)
+    # ---- Conversations: total count + per-conversation length list (for depth) ----
+    conversation_lengths = _conversation_lengths(chat_per_user_ts)
+    conversations = len(conversation_lengths)
+
+    # ---- Engagement helpers (retention / per-user / depth) ----
+    engagement_block = {
+        "retention_curve": _compute_retention_curve(chat_per_user_ts),
+        "per_user_distribution": _compute_engagement_distribution(chat_per_user_ts),
+        "conversation_depth": _compute_conversation_depth(conversation_lengths),
+    }
+
+    # ---- WoW deltas ----
+    deltas_block = _compute_deltas(
+        chat_lines, all_lines, trace_rows, photos, voice_notes
+    )
+
+    # ---- 7×24 heatmap (local time) ----
+    heatmap_matrix = _compute_heatmap_dow_hour(chat_lines)
 
     # ---- Totals ----
     tokens_in_total = sum(r["tokens_in"] for r in all_lines)
@@ -583,6 +973,8 @@ def _compute_sync() -> dict[str, Any]:
             "photos": photos,
             "deletions_invoked": deletions,
         },
+        "totals_deltas": deltas_block,
+        "engagement": engagement_block,
         "timeseries": {
             "daily_active_users": [list(t) for t in daily_active_users_series],
             "new_users_per_day": [list(t) for t in new_users_per_day_series],
@@ -596,6 +988,9 @@ def _compute_sync() -> dict[str, Any]:
             "by_hour_of_day_utc": by_hour_utc,
             "by_hour_of_day_local": by_hour_local,
             "by_day_of_week": by_day_of_week,
+            # 7×24 matrix in Africa/Windhoek local time. Replaces the
+            # two separate histograms above on the rendered page.
+            "heatmap_dow_hour": heatmap_matrix,
             # by_language is added by Phase 3 once detection is wired
         },
         "topics": _format_synthesis_block(
