@@ -53,23 +53,29 @@ _NAMIBIA_TZ = timezone(timedelta(hours=2))
 
 
 def _today_in_namibia_prompt() -> str:
-    """Short system message anchoring the model to today's real date.
+    """Short system message anchoring the model to today's real date AND time.
 
     Critical for SEARCH replies: web results commonly include events
     dated in the past, and a date-blind model presents them as
     "upcoming". Without this anchor the model defaults to its training-
     cutoff sense of "now" (typically 2024-25 for current Gemma builds),
     which is months stale.
+
+    Time matters too — "is the bank open right now", "what time does X
+    close", "is it past sundown" all need the current local time.
+    Namibia uses Central Africa Time (UTC+2) year-round, no DST.
     """
-    today = datetime.now(_NAMIBIA_TZ)
+    now = datetime.now(_NAMIBIA_TZ)
     return (
-        f"Today is {today.strftime('%A, %d %B %Y')} (Namibia, CAT timezone).\n"
-        "Anchor all 'soon', 'upcoming', 'recent', 'this week', 'next week' "
-        "reasoning to THIS date.\n"
-        "When web_search results include dated events, compare the event date "
-        "to today: events BEFORE today have already happened — never present "
-        "them as upcoming. If all results are about past events, say so "
-        "plainly instead of pretending they're scheduled."
+        f"Right now in Namibia it is {now.strftime('%A, %d %B %Y, %H:%M')} "
+        f"(Central Africa Time / UTC+2, no DST).\n"
+        "Anchor all 'soon', 'upcoming', 'recent', 'this week', 'next week', "
+        "'open right now', 'still open', 'tonight' reasoning to THIS date "
+        "and time.\n"
+        "When web_search results include dated events, compare the event "
+        "date to today: events BEFORE today have already happened — never "
+        "present them as upcoming. If all results are about past events, "
+        "say so plainly instead of pretending they're scheduled."
     )
 
 

@@ -54,31 +54,35 @@ async def test_assemble_messages_text_only_no_memory():
         content_parts=[{"type": "text", "text": "hi"}],
     )
     result = await provider.assemble_messages(msg, Policy(name="p"), [])
-    # SYS prompt + today's-date system + user. No mem0 hits, no history.
+    # SYS prompt + today's date+time system + user. No mem0 hits, no history.
     assert len(result) == 3
     assert result[0] == {"role": "system", "content": "SYS"}
     assert result[1]["role"] == "system"
-    assert "Today is" in result[1]["content"]
-    assert "Namibia" in result[1]["content"]
+    assert "Right now in Namibia" in result[1]["content"]
+    assert "Central Africa Time" in result[1]["content"]
     assert result[2] == {"role": "user", "content": "hi"}
 
 
 @pytest.mark.asyncio
-async def test_assemble_messages_includes_current_date():
-    """The date system message anchors the model to today's actual date
-    (Namibia time). Without it, the model defaults to its training
-    cutoff and presents stale events as upcoming."""
+async def test_assemble_messages_includes_current_date_and_time():
+    """The system message anchors the model to today's actual date AND
+    local time (Namibia, CAT). Without it, the model defaults to its
+    training cutoff and presents stale events as upcoming, or guesses
+    on time-sensitive questions like 'is the bank still open'."""
     from datetime import datetime, timedelta, timezone
     namibia = datetime.now(timezone(timedelta(hours=2)))
-    expected_date = namibia.strftime("%A, %d %B %Y")
+    expected_full = namibia.strftime("%A, %d %B %Y, %H:%M")
 
     provider = _provider()
     msg = InboundMessage(
         user_id="u", msg_id="m", text="hi", content_parts=[],
     )
     result = await provider.assemble_messages(msg, Policy(name="p"), [])
-    date_msg = next(m for m in result if "Today is" in m.get("content", ""))
-    assert expected_date in date_msg["content"]
+    anchor = next(m for m in result if "Right now in Namibia" in m.get("content", ""))
+    # We don't strictly require the EXACT minute (timing race) but the
+    # date + hour should land.
+    expected_date_hour = namibia.strftime("%A, %d %B %Y, %H:")
+    assert expected_date_hour in anchor["content"]
 
 
 @pytest.mark.asyncio
@@ -100,7 +104,7 @@ async def test_assemble_messages_with_history_and_mem0():
 
     assert result[0] == {"role": "system", "content": "SYS"}
     # result[1] is the today-date system message.
-    assert "Today is" in result[1]["content"]
+    assert "Right now in Namibia" in result[1]["content"]
     assert result[2]["role"] == "system"
     assert "Lives in Oshakati" in result[2]["content"]
     assert result[3] == {"role": "user", "content": "earlier"}
@@ -142,7 +146,7 @@ async def test_assemble_messages_skips_empty_mem0_block():
     # SYS prompt + today's date — but NOT a third 'What you know about you' block.
     assert len(system_msgs) == 2
     assert system_msgs[0]["content"] == "SYS"
-    assert "Today is" in system_msgs[1]["content"]
+    assert "Right now in Namibia" in system_msgs[1]["content"]
 
 
 # ---------- record_turn ----------
