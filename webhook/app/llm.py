@@ -561,7 +561,22 @@ async def respond(
             tools=TOOLS,
             tool_choice=turn_tool_choice,
             temperature=0.6,
-            max_tokens=600,
+            # Generous budget — Gemma needs room for chain-of-thought
+            # reasoning (when enable_thinking is on, the reasoning chain
+            # is generated alongside the final reply and BOTH count against
+            # max_tokens), web_search result digestion (typically 2-3KB of
+            # context), multi-paragraph answer, citation lines, and the
+            # next-step question. Typical replies still finish naturally
+            # around 250-500 tokens; this just gives headroom for the
+            # long tail (procedural how-to walkthroughs, multi-source
+            # citation answers, complex reasoning chains).
+            max_tokens=4000,
+            # Turn on Gemma 4 thinking mode for the main chat call only.
+            # The router / mem0 / summarizer don't benefit from reasoning
+            # (binary or short outputs) and keep their faster default
+            # behaviour. Reasoning output lands in response.reasoning_content,
+            # not response.content — see the empty-content fallback below.
+            extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         )
         call_usage = resp.usage
         # billable_in subtracts prefix-cached tokens (free GPU-wise) so the
@@ -585,7 +600,24 @@ async def respond(
         tool_calls = msg.tool_calls or []
 
         if not tool_calls:
-            reply = (msg.content or "").strip() or "Sorry, I couldn't come up with a reply."
+            # With Gemma 4 thinking mode enabled, the visible reply is in
+            # msg.content; the chain-of-thought is in msg.reasoning_content
+            # (vLLM splits them via the gemma4 reasoning parser). On normal
+            # turns content is populated and we use it. If max_tokens got
+            # hit mid-reasoning and content is empty, the reasoning text
+            # alone is at least *something* useful — way better than the
+            # "Sorry, couldn't come up with a reply" non-answer. Log it so
+            # we can see how often we hit this path.
+            content = (msg.content or "").strip()
+            if not content:
+                reasoning = (getattr(msg, "reasoning_content", "") or "").strip()
+                if reasoning:
+                    log.warning(
+                        "empty content with %d chars of reasoning — falling back to reasoning text",
+                        len(reasoning),
+                    )
+                    content = reasoning
+            reply = content or "Sorry, I couldn't come up with a reply."
             trace.reply_len = len(reply)
             trace.used_search = used_search
             trace.deleted_data = deleted_data
