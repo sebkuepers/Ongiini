@@ -34,6 +34,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -530,7 +531,12 @@ async def run_extract_pass(analysis: Analysis, excluded: frozenset[str]) -> tupl
 # --- Synthesis pass --------------------------------------------------------
 
 _MAX_SYNTH_ITEMS = 1000   # cap descriptions fed to the LLM in one synthesis call
-_SYNTH_TIMEOUT_SECONDS = 120
+_SYNTH_TIMEOUT_SECONDS = 180
+# Synthesis can return a lot of JSON when there are dozens of items to
+# assign. 4000 was empirically too tight — the LLM truncated mid-cluster
+# and we lost everything to the 'Other' fallback. 12000 gives plenty of
+# headroom; the local model can handle it cheaply.
+_SYNTH_MAX_TOKENS = 12000
 
 
 from .synthesis_io import synthesis_path as _synthesis_path  # noqa: E402
@@ -590,7 +596,7 @@ async def run_synthesis(analysis: Analysis) -> dict | None:
                     {"role": "user", "content": payload},
                 ],
                 temperature=0.2,
-                max_tokens=4000,
+                max_tokens=_SYNTH_MAX_TOKENS,
             ),
             timeout=_SYNTH_TIMEOUT_SECONDS,
         )
@@ -608,6 +614,20 @@ async def run_synthesis(analysis: Analysis) -> dict | None:
         return None
 
     # Compute per-cluster counts by summing counts of assigned items.
+    # Match items case- and punctuation-insensitively: the LLM often
+    # returns "Yellowing Maize Leaves" when the input was "yellowing
+    # maize leaves" or strips/adds a trailing period. Without
+    # normalisation, every cluster ends up with total=0 and everything
+    # rolls into Other.
+    def _norm(s: str) -> str:
+        s = s.strip().lower()
+        # Collapse runs of whitespace; strip trailing punctuation.
+        s = re.sub(r"\s+", " ", s)
+        s = s.strip(".,;:!?\"'`")
+        return s
+
+    norm_to_label: dict[str, str] = {_norm(lbl): lbl for lbl in counts.keys()}
+
     cluster_out: list[dict] = []
     assigned_items: set[str] = set()
     for cluster in parsed.get("clusters", []):
@@ -621,12 +641,18 @@ async def run_synthesis(analysis: Analysis) -> dict | None:
         total = 0
         kept_items: list[str] = []
         for it in items:
-            it = str(it).strip()
-            if not it or it in assigned_items:
+            it_norm = _norm(str(it))
+            if not it_norm:
                 continue
-            assigned_items.add(it)
-            total += counts.get(it, 0)
-            kept_items.append(it)
+            # Resolve back to the actual stored label via the
+            # normalised-key map. If the model invented an item that
+            # doesn't match any input phrase, skip it.
+            matched = norm_to_label.get(it_norm)
+            if matched is None or matched in assigned_items:
+                continue
+            assigned_items.add(matched)
+            total += counts.get(matched, 0)
+            kept_items.append(matched)
         if label and total > 0:
             cluster_out.append(
                 {
