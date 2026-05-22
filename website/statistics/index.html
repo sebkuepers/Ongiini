@@ -1103,6 +1103,26 @@
       'var(--olive-light)',
     ];
 
+    // Two empty-state messages, picked by whether the block has
+    // observations or not. "Below privacy floor" means we have data
+    // but every cluster fell under the 5-user / 5-mention threshold so
+    // we can't publish without risking identification. "Computing…"
+    // means synthesis truly hasn't run yet for this dimension.
+    function emptyStatePlaceholder(hasObservations, computingNote) {
+      const div = el('div', { className: 'stat-placeholder' });
+      if (hasObservations) {
+        div.appendChild(el('strong', { text: 'Below the privacy floor' }));
+        div.appendChild(document.createTextNode(
+          'Categories surface only when at least 5 users share them. ' +
+          'Data exists but is too sparse to publish without risking identification.'
+        ));
+      } else {
+        div.appendChild(el('strong', { text: 'Computing…' }));
+        div.appendChild(document.createTextNode(computingNote || 'No data yet.'));
+      }
+      return div;
+    }
+
     function renderUseCases(block, totalMessages) {
       const parent = document.getElementById('chart-usecases');
       const subEl = document.getElementById('usecases-sub');
@@ -1115,10 +1135,7 @@
         subEl.textContent = 'Based on ' + fmtInt.format(n) + ' classified messages · ' + covText;
       }
       if (cats.length === 0) {
-        const div = el('div', { className: 'stat-placeholder' });
-        div.appendChild(el('strong', { text: 'Computing…' }));
-        div.appendChild(document.createTextNode(block.status || 'No data yet.'));
-        parent.appendChild(div);
+        parent.appendChild(emptyStatePlaceholder(n > 0, block.status));
         return;
       }
       // Donut chart
@@ -1182,18 +1199,18 @@
       const subEl = document.getElementById('toptopics-sub');
       clear(parent);
       const labels = (block && block.labels) || [];
+      const nDistinct = (block && block.n_distinct) || 0;
       if (subEl) {
         if (labels.length === 0) {
-          subEl.textContent = 'Computing…';
+          subEl.textContent = nDistinct > 0
+            ? 'Below the privacy floor · ' + fmtInt.format(nDistinct) + ' distinct phrases extracted, none mentioned by 5+ users yet'
+            : 'Computing…';
         } else {
-          subEl.textContent = 'Showing top ' + labels.length + ' of ' + fmtInt.format(block.n_distinct) + ' distinct phrases';
+          subEl.textContent = 'Showing top ' + labels.length + ' of ' + fmtInt.format(nDistinct) + ' distinct phrases';
         }
       }
       if (labels.length === 0) {
-        const div = el('div', { className: 'stat-placeholder' });
-        div.appendChild(el('strong', { text: 'Computing…' }));
-        div.appendChild(document.createTextNode(block.status || 'No data yet.'));
-        parent.appendChild(div);
+        parent.appendChild(emptyStatePlaceholder(nDistinct > 0, block.status));
         return;
       }
       const wrap = el('div', { className: 'stat-bars' });
@@ -1245,11 +1262,8 @@
       clear(parent);
       const cats = (block && block.categories) || [];
       if (cats.length === 0) {
-        const div = el('div', { className: 'stat-placeholder' });
-        div.appendChild(el('strong', { text: 'Computing…' }));
-        const note = block && block.status ? block.status : 'No data yet.';
-        div.appendChild(document.createTextNode(note));
-        parent.appendChild(div);
+        const nObs = (block && block.n_observations) || 0;
+        parent.appendChild(emptyStatePlaceholder(nObs > 0, block && block.status));
         return;
       }
       const wrap = el('div', { className: 'stat-bars' });
