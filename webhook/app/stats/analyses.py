@@ -44,6 +44,7 @@ from openai import AsyncOpenAI
 
 from .. import mem
 from ..config import settings
+from .safety import ANTI_PII_PROMPT, sanitise_label as _sanitise_label
 from .taxonomy import ANALYSIS_VERSION
 
 log = logging.getLogger("ongiini.stats")
@@ -264,14 +265,16 @@ TOPICS_ANALYSIS = Analysis(
     description="Per-message topic phrase; clusters become use-cases",
     source=_iter_user_messages,
     extract_system=(
-        "You read one short message from a user of a free Namibian AI helper. "
-        "Reply with a SHORT noun phrase (3-7 words) describing WHAT the user is "
-        "asking about — the topic, not the answer. Be specific and concrete.\n\n"
-        "Rules:\n"
-        "- Output ONLY the phrase. No quotes, no punctuation at the end, no explanation.\n"
+        ANTI_PII_PROMPT
+        + "Task: You read one short message from a user of a free Namibian AI "
+        "helper. Reply with a SHORT GENERIC noun phrase (3-7 words) describing "
+        "WHAT TYPE of question the user is asking — the topic category, not the "
+        "specifics. Strip all identifying details per the rules above.\n\n"
+        "Format rules:\n"
+        "- Output ONLY the phrase. No quotes, no trailing punctuation, no explanation.\n"
         "- Use English regardless of the message's language.\n"
-        "- Prefer concrete nouns over generic categories ('yellowing maize leaves' "
-        "  beats 'agriculture'; 'grade 11 chemistry homework' beats 'school').\n"
+        "- Prefer concrete category nouns ('crop disease' over 'agriculture'; "
+        "  'grade 11 chemistry homework' over 'school'; 'fever symptoms' over 'health').\n"
         "- For pure greetings, thanks, or yes/no with no topic, output 'small talk'.\n"
     ),
     synthesize_system=(
@@ -316,12 +319,15 @@ ROLES_ANALYSIS = Analysis(
     description="What roles/professions describe the user base",
     source=_iter_user_profiles,
     extract_system=(
-        "You read facts about one user of a free Namibian AI helper. Reply with "
-        "a SHORT role descriptor (1-4 words) capturing the person's main role or "
-        "occupation — e.g. 'smallholder farmer', 'matric student', 'taxi driver', "
-        "'small shop owner', 'nurse', 'pastor', 'unemployed jobseeker'.\n\n"
-        "Rules:\n"
+        ANTI_PII_PROMPT
+        + "Task: You read profile facts about one user. Reply with a SHORT GENERIC "
+        "role descriptor (1-4 words) capturing the person's MAIN role or occupation "
+        "category — e.g. 'smallholder farmer', 'matric student', 'taxi driver', "
+        "'shop owner', 'nurse', 'pastor', 'unemployed jobseeker'.\n\n"
+        "Format rules:\n"
         "- Output ONLY the role phrase. No quotes, no punctuation, no explanation.\n"
+        "- Strip ALL identifying details — never include employer name, school name, "
+        "  specific shop/clinic name, family member names, or specific town.\n"
         "- If no role is stated or inferable, output 'unknown'.\n"
         "- Use English regardless of the facts' language.\n"
     ),
@@ -335,16 +341,31 @@ ROLES_ANALYSIS = Analysis(
 
 REGIONS_ANALYSIS = Analysis(
     name="regions",
-    description="Where in Namibia users are located",
+    description="Which Namibian administrative region users are in",
     source=_iter_user_profiles,
     extract_system=(
-        "You read facts about one user of a free Namibian AI helper. Reply with "
-        "a SHORT region or town name (1-3 words) — e.g. 'Oshakati', 'Windhoek', "
-        "'Northern Namibia', 'Kavango', 'rural area'.\n\n"
-        "Rules:\n"
-        "- Output ONLY the place name. No quotes, no punctuation, no explanation.\n"
+        # The standard anti-PII prefix forbids town/village names. For
+        # this analysis we override the geographic part: a REGION is a
+        # large administrative unit (100k+ people), publishable in
+        # aggregate. Names, dates, counts, employers etc. remain forbidden.
+        "PRIVACY RULES — THIS OUTPUT WILL BE PUBLISHED IN AGGREGATE STATISTICS, "
+        "SO IT MUST BE GENERIC:\n"
+        "- NEVER include a person's name, employer, school, clinic, or any "
+        "  identifying detail other than the region.\n"
+        "- NEVER include specific numbers (ages, dates, quantities).\n"
+        "- You MAY output one of Namibia's 14 administrative regions OR a "
+        "  coarse cardinal descriptor: Erongo, Hardap, ǁKaras, Kavango East, "
+        "  Kavango West, Khomas, Kunene, Ohangwena, Omaheke, Omusati, Oshana, "
+        "  Oshikoto, Otjozondjupa, Zambezi, 'northern Namibia', 'central "
+        "  Namibia', 'southern Namibia', 'coastal Namibia', 'rural Namibia'.\n"
+        "- If the user mentioned a town (e.g. Oshakati), output the region it "
+        "  is in (Oshana for Oshakati, Khomas for Windhoek, etc.) — NOT the "
+        "  town itself.\n"
         "- If no location is stated or inferable, output 'unknown'.\n"
-        "- Prefer the most specific named place mentioned.\n"
+        "- If you cannot generalise without naming a specific town, output "
+        "  'REDACTED'.\n\n"
+        "Format rules:\n"
+        "- Output ONLY the region name. No quotes, no punctuation, no explanation.\n"
     ),
     synthesize_system=(
         "You are analysing where users live, in the user base of a Namibian AI "
@@ -359,12 +380,15 @@ FAMILY_ANALYSIS = Analysis(
     description="Family / household situation",
     source=_iter_user_profiles,
     extract_system=(
-        "You read facts about one user of a free Namibian AI helper. Reply with "
-        "a SHORT family/household descriptor (1-4 words) — e.g. 'parent of 3', "
-        "'single mother', 'married couple', 'lives with parents', 'caring for "
-        "elderly relative', 'no dependents'.\n\n"
-        "Rules:\n"
+        ANTI_PII_PROMPT
+        + "Task: You read profile facts about one user. Reply with a SHORT GENERIC "
+        "family/household descriptor (1-4 words) — e.g. 'parent', 'single mother', "
+        "'married couple', 'lives with parents', 'caring for elderly relative', "
+        "'no dependents'.\n\n"
+        "Format rules:\n"
         "- Output ONLY the descriptor. No quotes, no punctuation, no explanation.\n"
+        "- NEVER include the count of children, their names, or specific ages — "
+        "  'parent' is correct; 'parent of three' is forbidden.\n"
         "- If no family or household info is stated, output 'unknown'.\n"
     ),
     synthesize_system=(
@@ -381,10 +405,14 @@ LANGUAGES_ANALYSIS = Analysis(
     description="Preferred language",
     source=_iter_user_profile_pref,
     extract_system=(
-        "You read facts about one user of a free Namibian AI helper. Reply with "
-        "a SHORT language descriptor (1-2 words) capturing the preferred reply "
-        "language — e.g. 'English', 'Afrikaans', 'Oshiwambo', 'mixed'.\n\n"
-        "Rules:\n"
+        # Languages are inherently a small closed set of public names —
+        # the anti-PII prefix doesn't add much here, but inclusion keeps
+        # the model from echoing other parts of the profile by accident.
+        ANTI_PII_PROMPT
+        + "Task: Reply with a SHORT language descriptor (1-2 words) capturing the "
+        "preferred reply language — e.g. 'English', 'Afrikaans', 'Oshiwambo', "
+        "'Oshikwanyama', 'Khoekhoegowab', 'Otjiherero', 'mixed'.\n\n"
+        "Format rules:\n"
         "- Output ONLY the language name. No quotes, no punctuation, no explanation.\n"
         "- If no preference is stated, output 'unknown'.\n"
     ),
@@ -401,13 +429,15 @@ SITUATIONS_ANALYSIS = Analysis(
     description="Current life situations users are working through",
     source=_iter_user_situations,
     extract_system=(
-        "You read short notes about one user's current situation, written as "
-        "facts about ongoing topics they are dealing with. Reply with a SHORT "
-        "phrase (3-6 words) describing the dominant current situation — e.g. "
-        "'planting maize this season', 'preparing for matric exams', "
-        "'navigating a new business registration', 'looking after a sick child'.\n\n"
-        "Rules:\n"
+        ANTI_PII_PROMPT
+        + "Task: You read short notes about one user's current situation. Reply "
+        "with a SHORT GENERIC phrase (3-6 words) describing the dominant current "
+        "situation TYPE — e.g. 'planting season for crops', 'preparing for matric "
+        "exams', 'navigating business registration', 'caring for a sick relative'.\n\n"
+        "Format rules:\n"
         "- Output ONLY the phrase. No quotes, no punctuation, no explanation.\n"
+        "- Strip identifying details: no names, no specific schools/businesses, no "
+        "  specific places below country, no specific dates.\n"
         "- If situations are unclear or absent, output 'unspecified'.\n"
     ),
     synthesize_system=(
@@ -458,7 +488,13 @@ async def _extract_one(prompt_system: str, text: str) -> str:
 
 
 async def run_extract_pass(analysis: Analysis, excluded: frozenset[str]) -> tuple[int, int]:
-    """Extract labels for unseen items of one analysis. Returns (new, skipped)."""
+    """Extract labels for unseen items of one analysis. Returns (new, skipped).
+
+    Every label is passed through `_sanitise_label` before storage; labels
+    that fail safety checks are dropped and never written to the cache.
+    Skipped counts include both LLM-empty-responses and labels rejected
+    by the sanitiser — the loop logs both so a sudden spike is visible.
+    """
     await asyncio.to_thread(_init_db_sync)
     known = await asyncio.to_thread(_known_hashes_sync, analysis.name)
     new = 0
@@ -468,12 +504,24 @@ async def run_extract_pass(analysis: Analysis, excluded: frozenset[str]) -> tupl
         if item_hash in known or item_hash in seen_this_pass:
             continue
         seen_this_pass.add(item_hash)
-        label = await _extract_one(analysis.extract_system, text)
-        if not label:
+        raw = await _extract_one(analysis.extract_system, text)
+        if not raw:
             skipped += 1
             await asyncio.sleep(0)
             continue
-        await asyncio.to_thread(_store_extraction_sync, analysis.name, item_hash, label)
+        safe = _sanitise_label(raw)
+        if safe is None:
+            # Model produced something we judged unsafe — drop entirely.
+            # The sanitiser is the last gate before storage; once a
+            # label is in qualia.sqlite it can flow to the API.
+            log.info(
+                "topic sanitiser rejected label for analysis=%s: %r",
+                analysis.name, raw[:80],
+            )
+            skipped += 1
+            await asyncio.sleep(0)
+            continue
+        await asyncio.to_thread(_store_extraction_sync, analysis.name, item_hash, safe)
         new += 1
         await asyncio.sleep(0)
     return new, skipped

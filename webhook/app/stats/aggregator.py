@@ -317,16 +317,18 @@ def _top_topics_block(top_n: int = 20) -> dict[str, Any]:
             "labels": [],
             "status": "Computing — first extraction pass not yet complete.",
         }
-    # Top-topics has a LOWER threshold than the per-user bucket floor:
-    # individual topic phrases don't identify a person the way roles or
-    # locations might. We filter true singletons (count==1) which are
-    # mostly noise (verbatim once-off phrasings the model produced).
-    # Two-or-more keeps things interesting without privacy harm. Also
-    # drop 'small talk' — it's a placeholder, not a real topic.
+    # Top-topics uses the same privacy floor as use-case clusters
+    # (default 5). Even though the extraction layer aggressively
+    # rejects PII before storage, we belt-and-braces: a topic phrase
+    # only goes on the public page once at least N distinct messages
+    # produced the same label. This makes accidental specificity-leak
+    # (e.g. one user with an unusual life situation) statistically
+    # unlikely to surface. Also drop 'small talk' — placeholder.
+    floor = settings.stats_minimum_bucket
     rows = [
         {"label": lbl, "count": c}
         for lbl, c in counts.items()
-        if c >= 2 and lbl.lower() != "small talk"
+        if c >= floor and lbl.lower() != "small talk"
     ]
     rows.sort(key=lambda r: r["count"], reverse=True)
     shown = rows[:top_n]

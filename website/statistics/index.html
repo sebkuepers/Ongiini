@@ -527,6 +527,8 @@
 
         <p><strong>Privacy floor.</strong> Any cluster or category represented by fewer than five people / fewer than five mentions is folded into <em>"Other"</em> so no single user can be identified.</p>
 
+        <p><strong>Anti-leak guardrails on every label.</strong> The model is explicitly instructed to never echo names, towns, ages, dates, employers, or any identifying detail — and to output <em>"REDACTED"</em> if it cannot generalise a message without leaking specifics. Every label the model returns then passes a second, regex-level filter: anything containing a 4-digit number (years, IDs), a capitalised possessive ("Joseph's"), a known Namibian town name, or any pattern our PII scrubber recognises (email, ID number, card number, IBAN) is dropped without being stored. The label only enters the analytics cache once both layers have signed off.</p>
+
         <p><strong>Right to object.</strong> If you'd rather your data not be counted in any of these statistics — current or future — write to the address in our <a href="/privacy/">Privacy Policy</a> with the subject <em>"object to research processing"</em> and your phone number. Your messages stop contributing immediately and retroactively.</p>
       </div>
     </div>
