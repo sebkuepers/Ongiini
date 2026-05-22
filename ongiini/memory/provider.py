@@ -177,9 +177,13 @@ class OngiiniMemoryProvider:
         for step in reversed(prior_steps):
             if isinstance(step, PlanStep) and step.plan_text:
                 return (
-                    "Your plan for this turn (built before the search "
-                    "step). Follow it as a guide — adjust if a search "
-                    "result reveals something the plan didn't anticipate:\n"
+                    "You wrote this plan BEFORE seeing any search results. "
+                    "Treat the TOOL PLAN section as DIRECT INSTRUCTIONS for "
+                    "which tools to call in which order — not optional "
+                    "suggestions. If the TOOL PLAN says to call fetch_urls "
+                    "after web_search, you MUST call fetch_urls. The plan "
+                    "only deviates if a tool result reveals the question "
+                    "needs a different approach.\n\n"
                     f"{step.plan_text}"
                 )
         return ""

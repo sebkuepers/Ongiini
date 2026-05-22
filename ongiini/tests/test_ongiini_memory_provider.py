@@ -153,7 +153,9 @@ async def test_assemble_messages_injects_plan_when_planstep_present():
         None,
     )
     assert plan_msg is not None
-    assert "Your plan for this turn" in plan_msg["content"]
+    # Wrapper text emphasises that TOOL PLAN entries are imperatives.
+    assert "DIRECT INSTRUCTIONS" in plan_msg["content"]
+    assert "TOOL PLAN" in plan_msg["content"]
     assert "Bank Windhoek rate" in plan_msg["content"]
 
 
