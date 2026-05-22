@@ -507,31 +507,41 @@ async def respond(
     #
     # Verdict ∈ {SEARCH, DOCS, NONE}. NONE falls through to tool_choice
     # ="auto" — i.e. the model can still freely call any tool.
-    # Pull the most recent user turn from history so the router can
-    # resolve pronouns ("what is HER stance on AI?" → who's "her"?).
-    # Without this, the classifier saw 'what is her stance on AI' alone
-    # and routed it to DOCS thinking 'her' meant Ongiini — producing a
-    # confused product.md-driven reply instead of a fresh web search
-    # for the person the user actually meant.
-    prev_user_text = ""
-    for h in reversed(history):
-        if h.get("role") == "user":
-            c = h.get("content", "")
-            if isinstance(c, list):
-                # multipart content (e.g. image+text) — extract text parts
-                c = " ".join(
-                    p.get("text", "")
-                    for p in c
-                    if isinstance(p, dict) and p.get("type") == "text"
-                )
-            prev_user_text = (c or "").strip()
-            break
+    # Tool router — but only for text-only messages. For images, the
+    # IMAGE itself is the context (Gemma sees it; the router doesn't),
+    # so a short caption like "how do I use this?" or "what is this?"
+    # routinely gets misclassified as DOCS (router reads it as "how
+    # does Ongiini work?"). And forcing tool_choice=lookup_ongiini_docs
+    # on an image-bearing call has occasionally tripped vLLM into a 500.
+    # For image-bearing messages we let Gemma decide (tool_choice=auto)
+    # since it has the actual content to reason about.
+    if has_image:
+        router_verdict = "NONE"
+        first_turn_tool_choice = "auto"
+        log.info("router skipped (image attached) for msisdn=%s caption_len=%d",
+                 msisdn, user_msg_len)
+    else:
+        # Pull the most recent user turn from history so the router can
+        # resolve pronouns ("what is HER stance on AI?" → who's "her"?).
+        prev_user_text = ""
+        for h in reversed(history):
+            if h.get("role") == "user":
+                c = h.get("content", "")
+                if isinstance(c, list):
+                    c = " ".join(
+                        p.get("text", "")
+                        for p in c
+                        if isinstance(p, dict) and p.get("type") == "text"
+                    )
+                prev_user_text = (c or "").strip()
+                break
 
-    router_verdict = await router.classify(
-        search_query, msisdn=msisdn, prev_user_text=prev_user_text
-    )
-    first_turn_tool_choice = router.tool_choice_for(router_verdict)
-    log.info("router verdict=%s for msisdn=%s msg_len=%d", router_verdict, msisdn, user_msg_len)
+        router_verdict = await router.classify(
+            search_query, msisdn=msisdn, prev_user_text=prev_user_text
+        )
+        first_turn_tool_choice = router.tool_choice_for(router_verdict)
+        log.info("router verdict=%s for msisdn=%s msg_len=%d",
+                 router_verdict, msisdn, user_msg_len)
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     if memory_block:
