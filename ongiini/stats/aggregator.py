@@ -55,18 +55,47 @@ def _objections_path() -> Path:
 
 
 def _memory_glob() -> Iterator[Path]:
-    """Yield per-user short-term-memory files in the data dir.
+    """Yield per-user short-term-memory files for REAL Namibian users.
 
-    Pattern: digit-only filenames ending in .json. Filters out
-    qdrant/, mem0_history.db, topic_cache.sqlite, etc.
+    Pattern: filename stem must be a valid Namibian msisdn (11 digits,
+    starts with 264). Filters out qdrant/, mem0_history.db,
+    topic_cache.sqlite, AND any synthetic / non-Namibian / operator-test
+    memory files that may exist alongside.
     """
     for p in settings.data_dir.glob("*.json"):
-        stem = p.stem
-        if stem.isdigit():
+        if _is_real_namibian_msisdn(p.stem):
             yield p
 
 
 # --- Opt-out filter ---------------------------------------------------------
+
+# Real Namibian phone numbers, post-normalisation, are exactly 12 digits:
+# country-code 264 (3) + national number (9). Mobile prefixes after 264
+# are 81 / 82 / 85 / 86 (Namibian operators) plus a 7-digit subscriber.
+# The application's intake filter (ongiini/filters.py::is_allowed) already
+# enforces this shape for INBOUND message routing, but usage.log +
+# trace.jsonl also receive synthetic entries from eval / smoke-test runs
+# (e.g. "+264baseline_medical_aid"), from the operator's own testing
+# number (a German +49... number), and from a pre-prod test entry
+# (99000000777777).
+#
+# The transparency surface (/stats.json + /statistics) is meant to
+# reflect REAL Namibian users — not the operator, not synthetic eval
+# traffic, not pre-prod test data. This validator gates every read of
+# usage.log, trace.jsonl, and per-user memory files so non-Namibian
+# msisdns never enter the aggregate.
+_NAMIBIAN_MSISDN_RE = re.compile(r"^264\d{9}$")
+
+
+def _is_real_namibian_msisdn(msisdn: str) -> bool:
+    """True iff the string is a valid post-normalisation Namibian
+    phone number (11 digits, country-code 264). Filters out:
+      - synthetic eval entries (non-digit chars like '+', '_')
+      - non-Namibian operator/test numbers (49..., 99...)
+      - malformed log lines
+    """
+    return bool(_NAMIBIAN_MSISDN_RE.match(msisdn))
+
 
 def _load_objections() -> frozenset[str]:
     """Return MSISDNs that have objected to research processing.
@@ -114,6 +143,8 @@ def _parse_usage_lines(excluded: frozenset[str]) -> Iterator[dict[str, Any]]:
             msisdn = m["msisdn"]
             if msisdn in excluded:
                 continue
+            if not _is_real_namibian_msisdn(msisdn):
+                continue
             yield {
                 "ts": m["ts"],
                 "msisdn": msisdn,
@@ -141,6 +172,8 @@ def _parse_trace_lines(excluded: frozenset[str]) -> Iterator[dict[str, Any]]:
                 continue
             msisdn = str(obj.get("msisdn", ""))
             if msisdn in excluded:
+                continue
+            if not _is_real_namibian_msisdn(msisdn):
                 continue
             yield obj
 
