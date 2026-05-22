@@ -711,14 +711,28 @@ async def respond(
                 deleted_data = True
                 if removed_short or removed_long:
                     result = (
-                        "Done. The user's short-term conversation history "
-                        "AND every stored long-term fact about them have "
-                        "been wiped."
+                        "Done. The user's short-term conversation history AND "
+                        "every stored long-term fact about them have been wiped. "
+                        "IMPORTANT — your reply MUST make the privacy model "
+                        "explicit so the user understands what just happened. "
+                        "Tell them clearly, in their language: (1) their data "
+                        "is now deleted; (2) if they close WhatsApp now and "
+                        "don't message you again, you'll have nothing about "
+                        "them — they walk away clean; (3) deletion is a RESET, "
+                        "not an opt-out — the moment they send a new message, "
+                        "you'll start remembering again, because that's how "
+                        "conversational memory works; (4) they can run "
+                        "'delete my data' any time to reset again. Warm tone, "
+                        "no legalese, no corporate hedging."
                     )
                 else:
                     result = (
                         "There was nothing stored for this user — short-term "
-                        "history and long-term memory are both empty."
+                        "history and long-term memory are both empty. Confirm "
+                        "to them in a friendly one-liner that there was nothing "
+                        "to delete (e.g. 'You're already a clean slate — "
+                        "nothing was stored about you'), and mention that any "
+                        "new message will start a fresh memory record."
                     )
             elif name == "whats_in_my_memory":
                 used_whats_in_my_memory = True

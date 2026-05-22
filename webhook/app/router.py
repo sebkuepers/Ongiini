@@ -76,18 +76,31 @@ _client = AsyncOpenAI(base_url=settings.vllm_base_url, api_key="not-needed")
 CLASSIFIER_PROMPT = """\
 You classify requests for Ongiini, an AI helper for people in Namibia on WhatsApp.
 
-Decide which of three buckets the request falls in:
+Decide which of four buckets the request falls in:
 
 SEARCH — the answer involves specific Namibian businesses, services, providers,
 fees, prices, exchange rates, opening hours, recent news, current events, or
 named recommendations. Training data is stale for these.
 
-DOCS — the user is asking about Ongiini itself: pricing, privacy policy, terms,
-how it works, languages supported, hardware, who built it, EU AI Act, the
-Common Intelligence Foundation, monthly token limits as a policy.
+DOCS — the user is asking ABOUT Ongiini's policies / docs (questions about
+pricing structure, privacy policy, terms, how it works, languages supported,
+hardware, who built it, EU AI Act, the Common Intelligence Foundation, monthly
+token limits as a policy concept).
+
+ADMIN — the user is requesting an ACTION on their own data or session:
+"delete my data" / "forget everything" / "wis my data" / "vergeet alles";
+"what do you remember about me?" / "wat onthou jy?" / "show me my data";
+"how many tokens have I used?" / "hoeveel tokens het ek gebruik?"
+These need actual tool execution (delete_my_data, whats_in_my_memory,
+my_token_usage), NOT a docs lookup.
 
 NONE — general knowledge (science, math, philosophy), generic how-to with no
 local angle, emotional support, casual conversation.
+
+The DOCS / ADMIN distinction is critical: "what's your privacy policy" → DOCS
+(asking about the document); "delete my data" → ADMIN (action on user state).
+"What data do you store about me?" → DOCS (policy question). "Show me what
+you've stored about me" → ADMIN (recall my actual data).
 
 Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu, Katima
 Mulilo) and institutions (BIPA, NamRA, Bank of Namibia, Ministry of Home
@@ -211,4 +224,10 @@ def tool_choice_for(verdict: str) -> ToolChoice:
         return {"type": "function", "function": {"name": "web_search"}}
     if verdict == "DOCS":
         return {"type": "function", "function": {"name": "lookup_ongiini_docs"}}
+    # ADMIN and NONE both fall through to "auto" so Gemma uses the
+    # existing system-prompt tool dispatch (delete_my_data /
+    # whats_in_my_memory / my_token_usage for ADMIN; nothing forced
+    # for NONE). The router's job for ADMIN is to NOT route to DOCS
+    # (which is the bug we're fixing) — the actual tool selection
+    # stays with the model via prompt rules.
     return "auto"
