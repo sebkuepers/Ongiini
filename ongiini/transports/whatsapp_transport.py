@@ -55,7 +55,10 @@ class WhatsAppTransport:
     def __init__(
         self,
         *,
-        interstitial_text: str = "Looking into this — give me about 20-30 seconds.",
+        interstitial_text: str = (
+            "Looking into this for you — give me a moment, this kind of "
+            "question usually needs a few sources."
+        ),
         dead_url_check_timeout_s: float = 2.0,
     ) -> None:
         self.interstitial_text = interstitial_text
