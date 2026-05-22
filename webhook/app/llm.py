@@ -560,16 +560,16 @@ async def respond(
             tools=TOOLS,
             tool_choice=turn_tool_choice,
             temperature=0.6,
-            # Generous budget — Gemma needs room for chain-of-thought
-            # reasoning (when enable_thinking is on, the reasoning chain
-            # is generated alongside the final reply and BOTH count against
-            # max_tokens), web_search result digestion (typically 2-3KB of
-            # context), multi-paragraph answer, citation lines, and the
-            # next-step question. Typical replies still finish naturally
-            # around 250-500 tokens; this just gives headroom for the
-            # long tail (procedural how-to walkthroughs, multi-source
-            # citation answers, complex reasoning chains).
-            max_tokens=4000,
+            # 1500 is the sweet spot between reasoning quality and
+            # WhatsApp UX. At 4000 tokens, Gemma 4 26B with reasoning
+            # on takes 20-40s per turn on the Spark — which is past
+            # WhatsApp's 25s typing-indicator timeout, producing the
+            # awful "typing → stops → silence → reply" experience.
+            # At 1500 tokens (reasoning + visible reply combined),
+            # most replies finish in 8-15s — comfortably inside the
+            # typing window. The empty-content fallback below catches
+            # the rare case where reasoning eats the whole budget.
+            max_tokens=1500,
             # Turn on Gemma 4 thinking mode for the main chat call only.
             # The router / mem0 / summarizer don't benefit from reasoning
             # (binary or short outputs) and keep their faster default
