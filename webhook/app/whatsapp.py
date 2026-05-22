@@ -106,6 +106,43 @@ async def send_text(to: str, body: str) -> None:
         raise last_error
 
 
+async def mark_as_read(message_id: str) -> None:
+    """Tell Meta the user's message has been read.
+
+    Flips the user's blue checkmarks from grey (delivered) to blue (read)
+    in their WhatsApp chat. Otherwise their messages sit at "delivered"
+    forever, which feels like the bot is ignoring them. Best fired as soon
+    as the webhook receives the payload, before downstream processing
+    (rate-limit checks, model generation, etc.) — that way blue checkmarks
+    appear within a second of the user sending.
+
+    Soft-fail: a billing-blocked WABA or transient Meta 5xx shouldn't break
+    the reply path. Log the failure and continue.
+    """
+    if not settings.whatsapp_token or not settings.whatsapp_phone_id or not message_id:
+        return
+    url = f"{GRAPH_URL}/{settings.whatsapp_phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.whatsapp_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": message_id,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.post(url, headers=headers, json=payload)
+            if r.status_code >= 300:
+                log.warning(
+                    "mark_as_read non-2xx for %s: %s %s",
+                    message_id, r.status_code, r.text[:200],
+                )
+    except Exception as exc:
+        log.warning("mark_as_read failed for %s: %s", message_id, exc)
+
+
 def extract_messages(payload: dict) -> list[dict]:
     """Yield simplified message dicts from a WhatsApp webhook payload.
 

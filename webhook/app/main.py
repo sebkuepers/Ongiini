@@ -17,7 +17,7 @@ from .filters import InvalidMsisdn, is_allowed, normalize
 from .llm import maybe_summarize, respond
 from .stats import analyses as stats_analyses
 from .stats.api import router as stats_router
-from .whatsapp import download_media, extract_messages, send_text, verify_signature
+from .whatsapp import download_media, extract_messages, mark_as_read, send_text, verify_signature
 
 logging.basicConfig(
     level=logging.INFO,
@@ -245,6 +245,17 @@ async def receive(
         return Response(status_code=400)
 
     messages = extract_messages(payload)
+
+    # Fire read receipts immediately, before any downstream processing.
+    # That flips the user's WhatsApp checkmarks from grey (delivered) to
+    # blue (read) within a second of them sending — the natural feedback
+    # that "your message was received and is being worked on", rather than
+    # leaving them wondering if the bot ignored them. Done in parallel via
+    # asyncio.gather so multiple message_ids in a single webhook payload
+    # don't serialize.
+    msg_ids = [m["id"] for m in messages if m.get("id")]
+    if msg_ids:
+        asyncio.create_task(asyncio.gather(*(mark_as_read(mid) for mid in msg_ids)))
 
     for m in messages:
         sender = m["from"]
