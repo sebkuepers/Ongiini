@@ -12,13 +12,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from PIL import Image
 
-from . import audio, mem, memory, pii, ratelimit, usage
+from owela import InboundMessage
+
+from . import audio, mem, memory, pii, ratelimit
 from .config import settings
 from .filters import InvalidMsisdn, is_allowed, normalize
-from .llm import maybe_summarize, respond
+from .summary import maybe_summarize
+from .ongiini_runtime import build_agent
 from .stats import analyses as stats_analyses
 from .stats.api import router as stats_router
 from .whatsapp import download_media, extract_messages, mark_as_read, send_text, verify_signature
+
+# Single per-process Owela agent. Built lazily in lifespan so the
+# embedded mem0/qdrant + whisper warmup logs land before this prints
+# "runtime ready".
+agent = None    # set during lifespan startup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +36,7 @@ log = logging.getLogger("ongiini")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global agent
     # Eagerly initialise the mem0 client + embedding model on startup
     # so the first real message doesn't pay the ~10s cold-load cost.
     # mem.warmup() is no-op-on-failure; if it fails, search/add calls
@@ -41,6 +50,10 @@ async def lifespan(app: FastAPI):
     log.info("warming faster-whisper…")
     await asyncio.to_thread(audio.warmup)
     log.info("faster-whisper ready")
+    # Build the Owela Runtime + Agent once. The Runtime captures every
+    # Ongiini-specific choice (model, transport, tools, policies, hooks)
+    # and is reused for every inbound message — no per-request rebuild.
+    agent = build_agent()
     # Kick off the LLM-driven qualitative-analysis loop (topics, roles).
     # Runs in the background; never blocks message handling. Pauses
     # between passes; one-shot failures are caught inside.
@@ -430,15 +443,13 @@ async def handle_image_message(
     sender: str, media_id: str, mime_type: str, caption: str
 ) -> None:
     """Inbound WhatsApp image — same overall flow as text messages
-    (normalise → allow check → rate limit → load history → respond →
-    send → save → record usage), with an extra step to pull the bytes
+    (normalise → allow check → rate limit → load history → agent.handle →
+    Owela hooks persist + bill), with an extra step to pull the bytes
     from Meta and an OpenAI-style multipart user content payload.
 
-    The image itself is NOT persisted. Short-term memory stores a
-    compact "[image] <caption>" placeholder so the model on the next
-    text turn knows an image was shared, while mem0 (vision-enabled)
-    extracts a durable typed fact like '[SITUATION] Shared photo of
-    yellowing maize leaves' that persists across all future sessions.
+    The image itself is NOT persisted. The OngiiniMemoryRecordingHook
+    routes image-bearing turns through ``record_image_turn`` which
+    stores only the placeholder + caption + reply (never the bytes).
     """
     try:
         msisdn = normalize(sender)
@@ -489,8 +500,8 @@ async def handle_image_message(
     # PII scrub: the caption text is treated like any other user message
     # — emails / IDs / IBANs / card numbers go through the same redaction
     # the text path uses, BEFORE it reaches the LLM, mem0, or the on-disk
-    # placeholder. This closes a gap noted in code review where the raw
-    # caption could leak PII into long-term memory.
+    # placeholder. This closes a gap where the raw caption could leak
+    # PII into long-term memory.
     safe_caption = pii.sanitize(caption) if caption else ""
     user_text_part = safe_caption or (
         "I just sent you a photo. Have a look and tell me what you see — "
@@ -503,41 +514,21 @@ async def handle_image_message(
 
     async with memory.lock_for(msisdn):
         history = memory.load(msisdn)
-        result = await respond(history, user_content, msisdn)
-        await send_text(sender, result.reply)
+        history = await maybe_summarize(history, msisdn=msisdn)
 
-        if not result.deleted_data:
-            # Short-term memory: compact textual placeholder, NOT the
-            # base64 image bytes. The model on future turns sees that
-            # an image was shared (and the PII-scrubbed caption if any)
-            # — enough context to continue the conversation. Durable
-            # image-aware facts live in mem0 from the add_image_turn
-            # call below.
-            placeholder = "[image attached]"
-            if safe_caption:
-                placeholder += f" {safe_caption}"
-            history.append(
-                pii.sanitize_message({"role": "user", "content": placeholder})
-            )
-            history.append(
-                pii.sanitize_message({"role": "assistant", "content": result.reply})
-            )
-            history = await maybe_summarize(history, msisdn=msisdn)
-            memory.save(msisdn, history)
-
-            # Long-term: feed mem0 a synthesised text-only version of
-            # the image turn. mem0's extraction LLM never sees the raw
-            # base64 bytes — its prompt is calibrated for "[image
-            # attached] <caption>" + the assistant's textual description
-            # of what it saw, which is far more reliable than asking
-            # mem0's vision path to do another visual pass. The caption
-            # is passed PII-sanitised (closes the gap that mem0 could
-            # otherwise persist raw user data as a typed fact).
-            await asyncio.to_thread(
-                mem.add_image_turn, msisdn, safe_caption, pii.sanitize(result.reply)
-            )
-
-        usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
+        # msg_id="" because main.py already fired mark_as_read on webhook
+        # receipt — the executor's transport.acknowledge would no-op.
+        msg = InboundMessage(
+            user_id=msisdn,
+            msg_id="",
+            text=safe_caption,
+            content_parts=user_content,
+            has_image=True,
+            history=history,
+        )
+        await agent.handle(msg)
+        # Persistence, billing, tracing all handled by the Owela hooks
+        # fired inside the executor's on_turn_complete.
 
 
 async def handle_audio_message(
@@ -633,6 +624,15 @@ async def handle_audio_message(
 
 
 async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> None:
+    """Inbound text-or-transcript handler.
+
+    Loads history under a per-user lock, summarises if it crossed the
+    rolling threshold, hands an InboundMessage to the Owela agent.
+    Persistence (short-term + mem0), billing, and tracing all happen
+    inside ``agent.handle`` via Owela hooks — main.py's only job is
+    transport-layer concerns (signature verify, msisdn normalise, allow
+    check, rate limit, lock acquisition).
+    """
     try:
         msisdn = normalize(sender)
     except InvalidMsisdn as exc:
@@ -653,41 +653,27 @@ async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> 
         await send_text(sender, reason)
         return
 
-    # Serialize the load → respond → save block per-user so rapid-fire
+    # Serialise the load → handle → persist block per-user so rapid-fire
     # messages from the same number can't race and clobber each other's
     # memory file. Different users run concurrently.
     async with memory.lock_for(msisdn):
         history = memory.load(msisdn)
-        result = await respond(history, text, msisdn)
+        history = await maybe_summarize(history, msisdn=msisdn)
 
-        await send_text(sender, result.reply)
+        # ``storage_text`` carries the persistence-side label (e.g.
+        # "[voice note] <transcript>" for audio turns). The model sees
+        # the raw ``text``; the hook sees ``storage_text`` if set.
+        storage_text = (
+            f"{memory_prefix} {text}".strip() if memory_prefix else ""
+        )
 
-        # When the model fires the deletion tool, leave no trace of this turn
-        # either — the file is already wiped by the tool handler, and we
-        # deliberately skip the history.append/save below so the deletion
-        # request itself isn't re-persisted.
-        if not result.deleted_data:
-            # PII sanitisation happens at WRITE time: the LLM call above
-            # already saw the un-redacted user text (so it could answer the
-            # actual question). What lands on disk for future-turn replay
-            # is the scrubbed version.
-            stored_text = f"{memory_prefix} {text}".strip() if memory_prefix else text
-            history.append(pii.sanitize_message({"role": "user", "content": stored_text}))
-            history.append(pii.sanitize_message({"role": "assistant", "content": result.reply}))
-            history = await maybe_summarize(history, msisdn=msisdn)
-            memory.save(msisdn, history)
-
-            # Long-term semantic memory: feed the just-completed turn to
-            # mem0 so it can extract or update durable facts about this
-            # user. Done AFTER send_text so it never blocks the live
-            # reply. We pass the PII-sanitised text — mem0 should not see
-            # raw emails or ID numbers any more than the disk does.
-            #
-            # Awaited inside the per-user lock so the next message from
-            # this same user starts with fresh memory; different users
-            # never block each other (their locks are independent).
-            await asyncio.to_thread(
-                mem.add_turn, msisdn, pii.sanitize(text), pii.sanitize(result.reply)
-            )
-
-        usage.record(msisdn, result.tokens_in, result.tokens_out, result.used_search)
+        msg = InboundMessage(
+            user_id=msisdn,
+            msg_id="",   # main.py already mark_as_read'd on receipt
+            text=text,
+            content_parts=[{"type": "text", "text": text}],
+            history=history,
+            storage_text=storage_text,
+        )
+        await agent.handle(msg)
+        # Persistence + billing + tracing handled by Owela hooks.
