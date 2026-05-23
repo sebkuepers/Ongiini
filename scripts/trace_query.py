@@ -171,6 +171,11 @@ def cmd_critique_timeout_rate(args, traces: list[dict[str, Any]]) -> dict[str, A
     Counts only phases marked ``kind=critique`` — does NOT include
     turns that didn't run critique at all (e.g. NONE-policy casual
     chat) since their critique was never even attempted.
+
+    TODO: this function and ``cmd_planner_fail_rate`` are structurally
+    identical — both walk phases counting an error/predicate. If a
+    third near-identical phase-counter lands, extract a generic
+    ``_phase_error_rate(traces, phase_kind, predicate)`` helper.
     """
     runs = 0
     timeouts = 0

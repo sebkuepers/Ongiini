@@ -160,6 +160,12 @@ _VERDICT_RE = re.compile(r"(?mi)^\s*VERDICT:\s*(PASS|REVISE)\s*$")
 # times out, revise doesn't fire — so confabulated drafts shipped
 # uncorrected. 10s gives ~70% headroom over the typical completed
 # critique latency (3-6s).
+#
+# Budget interaction: critique(10s) + revise(20s) = 30s worst-case
+# tail past the act-loop's compose latency. WhatsApp's typing-window
+# is 25s; the second interstitial at T+15s buys air cover. DO NOT
+# bump either timeout further without also revisiting the second-
+# interstitial design — these knobs are coupled.
 _CRITIQUE_TIMEOUT_S = 10.0
 _REVISE_TIMEOUT_S = 20.0
 

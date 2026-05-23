@@ -111,6 +111,9 @@ question is ambiguous in isolation — that's exactly when the history
 context is most valuable.
 
 CONCRETE EXAMPLE — pronoun resolution
+(Entity names below are from production trace data 2026-05 —
+real Namibian data center providers. Refresh if any provider
+exits the market.)
 Conversation just before this question:
   PREVIOUS USER: How many data centers exist in Namibia?
   PREVIOUS REPLY: There are about 6: Paratus Armada, IT Guru,
