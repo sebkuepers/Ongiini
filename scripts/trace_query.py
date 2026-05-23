@@ -163,6 +163,31 @@ def cmd_reasoning_leak_count(args, traces: list[dict[str, Any]]) -> dict[str, An
     }
 
 
+def cmd_critique_timeout_rate(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    """How often does the critique time out (and therefore revise
+    doesn't fire)? A high rate means the critique timeout budget is
+    too tight — drafts ship without the quality-control pass.
+
+    Counts only phases marked ``kind=critique`` — does NOT include
+    turns that didn't run critique at all (e.g. NONE-policy casual
+    chat) since their critique was never even attempted.
+    """
+    runs = 0
+    timeouts = 0
+    for t in traces:
+        for p in t.get("phases", []):
+            if p.get("kind") == "critique":
+                runs += 1
+                if p.get("error") == "timeout":
+                    timeouts += 1
+    pct = (timeouts / runs * 100) if runs else 0.0
+    return {
+        "critique_runs": runs,
+        "timeouts": timeouts,
+        "timeout_rate_pct": round(pct, 1),
+    }
+
+
 def cmd_planner_fail_rate(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
     """How often does the planner emit zero queries when invoked?
     ``queries_count == 0`` means the planner soft-failed (malformed
@@ -283,6 +308,7 @@ def cmd_token_spend(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
 
 COMMANDS = {
     "revise-rate": cmd_revise_rate,
+    "critique-timeout-rate": cmd_critique_timeout_rate,
     "reasoning-leak-count": cmd_reasoning_leak_count,
     "planner-fail-rate": cmd_planner_fail_rate,
     "queries-count-distribution": cmd_queries_count_distribution,

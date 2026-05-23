@@ -270,3 +270,34 @@ def test_parse_window_rejects_pure_number_with_helpful_message():
     with pytest.raises(ValueError) as exc:
         trace_query._parse_window("7")
     assert "missing unit suffix" in str(exc.value)
+
+
+# ---------- critique-timeout-rate ----------
+
+def test_critique_timeout_rate_counts_timeouts():
+    traces = [
+        {"phases": [{"kind": "critique", "verdict": "PASS", "error": None}]},
+        {"phases": [{"kind": "critique", "verdict": "PASS", "error": "timeout"}]},
+        {"phases": [{"kind": "critique", "verdict": "REVISE", "error": None}]},
+        {"phases": [{"kind": "critique", "verdict": "PASS", "error": "timeout"}]},
+    ]
+    r = trace_query.cmd_critique_timeout_rate(None, traces)
+    assert r["critique_runs"] == 4
+    assert r["timeouts"] == 2
+    assert r["timeout_rate_pct"] == 50.0
+
+
+def test_critique_timeout_rate_ignores_turns_without_critique():
+    traces = [
+        {"phases": [{"kind": "plan", "queries_count": 3}]},          # no critique
+        {"phases": [{"kind": "critique", "verdict": "PASS", "error": None}]},
+    ]
+    r = trace_query.cmd_critique_timeout_rate(None, traces)
+    assert r["critique_runs"] == 1
+    assert r["timeouts"] == 0
+
+
+def test_critique_timeout_rate_empty():
+    r = trace_query.cmd_critique_timeout_rate(None, [])
+    assert r["critique_runs"] == 0
+    assert r["timeout_rate_pct"] == 0.0

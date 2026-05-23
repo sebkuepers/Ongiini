@@ -664,3 +664,11 @@ def test_strip_trailing_punct_preserves_balanced_parens():
     assert _strip_trailing_punct_balanced(
         "https://example.com/path,"
     ) == "https://example.com/path"
+
+
+def test_critique_timeout_constant_is_10s():
+    """v1.5 bumped 6→10s after production data showed 42% of critiques
+    hit the 6s budget. Lock the new value — a future contributor
+    lowering it would silently regress the quality-control pass."""
+    from ongiini.reviewer import _CRITIQUE_TIMEOUT_S
+    assert _CRITIQUE_TIMEOUT_S == 10.0

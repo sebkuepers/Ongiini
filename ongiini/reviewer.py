@@ -151,10 +151,16 @@ _VERDICT_RE = re.compile(r"(?mi)^\s*VERDICT:\s*(PASS|REVISE)\s*$")
 
 # Latency budgets. Critique should fail fast — if it doesn't come
 # back in time, we ship the draft unchanged. v1.3.1 bumped revise
-# 12→20s: live trace showed the 12s budget routinely timed out on
-# longer drafts (2000+ char comparisons) and the original (uncited)
-# draft was sent unchanged. With 20s, revise actually completes.
-_CRITIQUE_TIMEOUT_S = 6.0
+# 12→20s after live traces showed the 12s budget routinely timed out
+# on longer drafts. v1.5 bumped critique 6→10s after a separate
+# investigation: with v1.3.1's 24K-char tool block aggregate cap,
+# the critique prompt itself is ~6-8K tokens. Gemma 4 26B reading
+# that + generating 5-dim verdicts routinely took 5-6s, and 42% of
+# recent production critiques hit the 6s ceiling. When critique
+# times out, revise doesn't fire — so confabulated drafts shipped
+# uncorrected. 10s gives ~70% headroom over the typical completed
+# critique latency (3-6s).
+_CRITIQUE_TIMEOUT_S = 10.0
 _REVISE_TIMEOUT_S = 20.0
 
 # Aggregate cap over the multi-step tool block fed to critique/revise.
