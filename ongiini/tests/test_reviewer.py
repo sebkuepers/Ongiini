@@ -102,18 +102,23 @@ async def test_critique_unparseable_output_defaults_to_pass():
 
 
 @pytest.mark.asyncio
-async def test_critique_timeout_falls_back_to_pass():
-    async def slow(*args, **kwargs):
-        await asyncio.sleep(10.0)
-        return None
-    client = MagicMock()
-    client.chat = MagicMock()
-    client.chat.completions = MagicMock()
-    client.chat.completions.create = slow
-    rev = OngiiniReviewer(base_url="x", model_id="g", client=client, critique_timeout_s=0.05)
-    step = await rev.critique(_msg(), "draft", [], Policy(name="search_deep"))
-    assert step.verdict == "PASS"
-    assert step.attrs.get("error") == "timeout"
+async def test_critique_slow_call_logs_warning_but_does_not_kill(caplog):
+    """v1.6.2 removed the kill-and-soft-fail timeout. Slow critiques
+    now log a warning above the perf budget but still complete and
+    return their real verdict. The previous behaviour (PASS-on-timeout)
+    was masking real grounding failures under load."""
+    import logging
+    client = _client_returning("VERDICT: REVISE\n- claim X not grounded")
+    rev = OngiiniReviewer(
+        base_url="x", model_id="g", client=client, perf_budget_s=0.0,
+    )
+    with caplog.at_level(logging.WARNING, logger="ongiini.reviewer"):
+        step = await rev.critique(_msg(), "draft", [], Policy(name="search_deep"))
+    # The verdict is the real one (REVISE), NOT a forced PASS.
+    assert step.verdict == "REVISE"
+    assert step.attrs.get("error") is None
+    # The warning fired because perf_budget_s=0.
+    assert any("exceeded perf budget" in r.message for r in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -200,21 +205,23 @@ async def test_revise_returns_revised_text():
 
 
 @pytest.mark.asyncio
-async def test_revise_timeout_falls_back_to_original():
-    """If revise times out, the user gets the original draft — better
-    than the empty-body fallback."""
-    async def slow(*args, **kwargs):
-        await asyncio.sleep(20.0)
-        return None
-    client = MagicMock()
-    client.chat = MagicMock()
-    client.chat.completions = MagicMock()
-    client.chat.completions.create = slow
-    rev = OngiiniReviewer(base_url="x", model_id="g", client=client, revise_timeout_s=0.05)
+async def test_revise_slow_call_logs_warning_but_completes(caplog):
+    """v1.6.2 removed the 20s wait_for. Earlier behaviour silently
+    shipped the un-revised confabulated draft after the budget — exactly
+    masking the kind of grounding failure critique had just caught.
+    Now: log a warning, let the call complete."""
+    import logging
+    client = _client_returning("Here's a corrected version of the reply.")
+    rev = OngiiniReviewer(
+        base_url="x", model_id="g", client=client, perf_budget_s=0.0,
+    )
     critique = CritiqueStep(verdict="REVISE", reasons=["x"])
-    step = await rev.revise(_msg(), "original", critique, [], Policy(name="search_deep"))
-    assert step.attrs["revised_reply"] == "original"
-    assert step.attrs.get("error") == "timeout"
+    with caplog.at_level(logging.WARNING, logger="ongiini.reviewer"):
+        step = await rev.revise(_msg(), "original", critique, [], Policy(name="search_deep"))
+    # The revised draft is the real model output, NOT a fallback to "original".
+    assert step.attrs["revised_reply"] == "Here's a corrected version of the reply."
+    assert step.attrs.get("error") is None
+    assert any("exceeded perf budget" in r.message for r in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -596,11 +603,18 @@ async def test_revise_prompt_includes_available_urls_block():
     assert "https://real.example/article-42" in sent
 
 
-def test_revise_timeout_constant_is_20s():
-    """v1.3.1 bumped 12→20s. Lock the constant — production traces
-    showed 12s routinely timing out on 2000+ char drafts."""
-    from ongiini.reviewer import _REVISE_TIMEOUT_S
-    assert _REVISE_TIMEOUT_S == 20.0
+def test_kill_timeouts_removed_in_v162():
+    """v1.6.2 removed the _CRITIQUE_TIMEOUT_S / _REVISE_TIMEOUT_S
+    kill-and-soft-fail timeouts. Production data showed they were
+    silently shipping ungrounded drafts under load. Lock that the
+    constants are GONE so a future contributor doesn't reintroduce
+    the silent-fallback pattern. See feedback memory
+    `timeouts-as-silent-quality-loss` for the rationale."""
+    import ongiini.reviewer as rev_mod
+    assert not hasattr(rev_mod, "_CRITIQUE_TIMEOUT_S")
+    assert not hasattr(rev_mod, "_REVISE_TIMEOUT_S")
+    # The new constant is observation-only — log threshold, not kill.
+    assert hasattr(rev_mod, "_PERF_BUDGET_S")
 
 
 def test_tool_summary_aggregate_cap():
@@ -666,9 +680,7 @@ def test_strip_trailing_punct_preserves_balanced_parens():
     ) == "https://example.com/path"
 
 
-def test_critique_timeout_constant_is_10s():
-    """v1.5 bumped 6→10s after production data showed 42% of critiques
-    hit the 6s budget. Lock the new value — a future contributor
-    lowering it would silently regress the quality-control pass."""
-    from ongiini.reviewer import _CRITIQUE_TIMEOUT_S
-    assert _CRITIQUE_TIMEOUT_S == 10.0
+# NOTE: ``test_critique_timeout_constant_is_10s`` and
+# ``test_revise_timeout_constant_is_20s`` were removed in v1.6.2 when
+# the kill-and-soft-fail timeouts were dropped. Replaced by
+# ``test_kill_timeouts_removed_in_v162`` above.

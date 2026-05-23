@@ -32,7 +32,6 @@ drift.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 import time
@@ -157,17 +156,19 @@ _VERDICT_RE = re.compile(r"(?mi)^\s*VERDICT:\s*(PASS|REVISE)\s*$")
 # the critique prompt itself is ~6-8K tokens. Gemma 4 26B reading
 # that + generating 5-dim verdicts routinely took 5-6s, and 42% of
 # recent production critiques hit the 6s ceiling. When critique
-# times out, revise doesn't fire — so confabulated drafts shipped
-# uncorrected. 10s gives ~70% headroom over the typical completed
-# critique latency (3-6s).
-#
-# Budget interaction: critique(10s) + revise(20s) = 30s worst-case
-# tail past the act-loop's compose latency. WhatsApp's typing-window
-# is 25s; the second interstitial at T+15s buys air cover. DO NOT
-# bump either timeout further without also revisiting the second-
-# interstitial design — these knobs are coupled.
-_CRITIQUE_TIMEOUT_S = 10.0
-_REVISE_TIMEOUT_S = 20.0
+# v1.6.2: critique + revise no longer wrap the model call in
+# `asyncio.wait_for`. Earlier versions had 10s/20s soft-fail budgets;
+# under production load they fired ~7% of the time on revise, silently
+# shipping the un-revised confabulated draft instead of waiting for a
+# fix. Two failure modes were stacked:
+#   - critique-timeout → PASS verdict (no quality check fires)
+#   - revise-timeout   → original draft ships (the catch was wasted)
+# Production data: revise_rate 67%, search_pass_rate 33% — the rescue
+# loop is the main pipeline running twice. Cutting it short was making
+# things worse, not safer. The AsyncOpenAI client's default 600s
+# timeout is the real backstop; the soft budget below is observation-
+# only and never kills the call.
+_PERF_BUDGET_S = 30.0    # log a warning if critique or revise exceeds this
 
 # Aggregate cap over the multi-step tool block fed to critique/revise.
 # Per-step truncation is _TOOL_RESULT_TRUNCATION (8000); with multi-
@@ -193,12 +194,14 @@ class OngiiniReviewer:
         model_id: str,
         *,
         client: AsyncOpenAI | None = None,
-        critique_timeout_s: float = _CRITIQUE_TIMEOUT_S,
-        revise_timeout_s: float = _REVISE_TIMEOUT_S,
+        perf_budget_s: float = _PERF_BUDGET_S,
     ) -> None:
         self.model_id = model_id
-        self.critique_timeout_s = critique_timeout_s
-        self.revise_timeout_s = revise_timeout_s
+        # ``perf_budget_s`` is observation-only: critique/revise log a
+        # warning if they exceed it but the call is never killed. v1.6.2
+        # removed the kill-and-soft-fail timeouts that were causing
+        # silent quality regressions under load.
+        self.perf_budget_s = perf_budget_s
         self._client = client or AsyncOpenAI(base_url=base_url, api_key="not-needed")
 
     async def critique(
@@ -222,38 +225,39 @@ class OngiiniReviewer:
         tool_names, tool_block = self._tool_summary(prior_steps)
 
         try:
-            resp = await asyncio.wait_for(
-                self._client.chat.completions.create(
-                    model=self.model_id,
-                    messages=[{
-                        "role": "user",
-                        "content": _CRITIQUE_PROMPT.format(
-                            user_question=user_question,
-                            tool_names=tool_names or "(none)",
-                            tool_results=tool_block or "(no tool calls this turn)",
-                            draft_reply=draft,
-                        ),
-                    }],
-                    temperature=0.0,
-                    max_tokens=400,
-                ),
-                timeout=self.critique_timeout_s,
+            resp = await self._client.chat.completions.create(
+                model=self.model_id,
+                messages=[{
+                    "role": "user",
+                    "content": _CRITIQUE_PROMPT.format(
+                        user_question=user_question,
+                        tool_names=tool_names or "(none)",
+                        tool_results=tool_block or "(no tool calls this turn)",
+                        draft_reply=draft,
+                    ),
+                }],
+                temperature=0.0,
+                max_tokens=400,
             )
-        except asyncio.TimeoutError:
-            log.warning(
-                "critique timed out after %ss — shipping draft unchanged",
-                self.critique_timeout_s,
-            )
-            step.verdict = "PASS"
-            step.attrs["error"] = "timeout"
-            step.ended_at = time.monotonic()
-            return step
         except Exception as exc:                       # noqa: BLE001 — soft-fail
+            # Real failures (network drop, model crash) still flow
+            # through here. We can't critique without a model response,
+            # so we PASS the draft and log loudly. This is NOT a budget
+            # cap — the AsyncOpenAI client's default 600s timeout is the
+            # backstop. We never kill a critique call for being slow.
             log.warning("critique failed (%s) — shipping draft unchanged", exc)
             step.verdict = "PASS"
             step.attrs["error"] = str(exc)
             step.ended_at = time.monotonic()
             return step
+
+        elapsed = time.monotonic() - started
+        if elapsed > self.perf_budget_s:
+            log.warning(
+                "critique exceeded perf budget: %.1fs > %.1fs (not killed; "
+                "monitor revise_rate / search_pass_rate before tuning)",
+                elapsed, self.perf_budget_s,
+            )
 
         billable_in, completion, cached = _billable(resp.usage)
         step.tokens_in = billable_in
@@ -319,40 +323,43 @@ class OngiiniReviewer:
         else:
             urls_block = "(no deep URLs gathered this turn)"
 
+        revise_started = time.monotonic()
         try:
-            resp = await asyncio.wait_for(
-                self._client.chat.completions.create(
-                    model=self.model_id,
-                    messages=[{
-                        "role": "user",
-                        "content": _REVISE_PROMPT.format(
-                            reasons=reasons,
-                            available_urls=urls_block,
-                            tool_results=tool_block or "(no tool calls this turn)",
-                            draft=draft,
-                            user_question=user_question,
-                        ),
-                    }],
-                    temperature=0.4,
-                    max_tokens=1200,
-                ),
-                timeout=self.revise_timeout_s,
+            resp = await self._client.chat.completions.create(
+                model=self.model_id,
+                messages=[{
+                    "role": "user",
+                    "content": _REVISE_PROMPT.format(
+                        reasons=reasons,
+                        available_urls=urls_block,
+                        tool_results=tool_block or "(no tool calls this turn)",
+                        draft=draft,
+                        user_question=user_question,
+                    ),
+                }],
+                temperature=0.4,
+                max_tokens=1200,
             )
-        except asyncio.TimeoutError:
-            log.warning(
-                "revise timed out after %ss — falling back to original draft",
-                self.revise_timeout_s,
-            )
-            step.attrs["error"] = "timeout"
-            step.attrs["revised_reply"] = draft   # fall back to original
-            step.ended_at = time.monotonic()
-            return step
         except Exception as exc:                       # noqa: BLE001 — soft-fail
+            # Real failures (network drop, model crash) still flow
+            # through here. v1.6.2 removed the wait_for budget cap:
+            # silently shipping the original ungrounded draft after a
+            # 20s budget was masking the very confabulation critique
+            # had just caught. The AsyncOpenAI client's default 600s
+            # timeout is the real backstop.
             log.warning("revise failed (%s) — falling back to original draft", exc)
             step.attrs["error"] = str(exc)
             step.attrs["revised_reply"] = draft
             step.ended_at = time.monotonic()
             return step
+
+        elapsed = time.monotonic() - revise_started
+        if elapsed > self.perf_budget_s:
+            log.warning(
+                "revise exceeded perf budget: %.1fs > %.1fs (not killed; "
+                "monitor turn latency)",
+                elapsed, self.perf_budget_s,
+            )
 
         billable_in, completion, cached = _billable(resp.usage)
         step.tokens_in = billable_in
