@@ -30,7 +30,8 @@ from owela import (
 from . import pii, usage
 from .config import settings
 from .hooks import (
-    BillingHook, OngiiniMemoryRecordingHook, SourceIndexHook, TracingHook,
+    BillingHook, OngiiniMemoryRecordingHook, ReviseEvalCaptureHook,
+    SourceIndexHook, TracingHook,
 )
 from .memory import (
     OngiiniMemoryProvider,
@@ -271,7 +272,17 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
             "output that may reference user-question content. Do NOT export "
             "this file to external systems while the flag is on."
         )
-    hooks = HookRegistry([
+    if settings.capture_revise_eval:
+        log.warning(
+            "ONGIINI_CAPTURE_REVISE_EVAL is set — every REVISE turn will "
+            "write BOTH drafts (compose + revise) plus the user question "
+            "to data/revise_eval/<msg_id>.json. This breaks the no-content- "
+            "on-disk PII contract by design (the data is the question + "
+            "reply by definition). Local-only, gitignored, never export. "
+            "Disable this flag and rm -rf data/revise_eval/ when the "
+            "evaluation window closes."
+        )
+    hooks_list = [
         BillingHook(recorder=usage),
         TracingHook(
             trace_path=trace_destination,
@@ -279,7 +290,10 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         ),
         OngiiniMemoryRecordingHook(sanitiser=pii.sanitize),
         SourceIndexHook(),
-    ])
+    ]
+    if settings.capture_revise_eval:
+        hooks_list.append(ReviseEvalCaptureHook())
+    hooks = HookRegistry(hooks_list)
 
     rt = Runtime(
         model=model,

@@ -323,6 +323,12 @@ class OngiiniReviewer:
         else:
             urls_block = "(no deep URLs gathered this turn)"
 
+        # v1.7-eval: preserve the compose draft so the eval-capture hook
+        # can compare it against the revised version. The two together
+        # are the dataset for answering "does revise actually improve
+        # output?" — see scripts/review_revises.py.
+        step.attrs["compose_draft"] = draft
+
         revise_started = time.monotonic()
         try:
             resp = await self._client.chat.completions.create(

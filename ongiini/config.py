@@ -98,6 +98,21 @@ class Settings:
         os.getenv("ONGIINI_TRACE_CRITIQUE_DETAIL", "").lower() in ("1", "true", "yes")
     )
 
+    # Revise-loop validation capture (v1.7 eval work). When set, every
+    # turn that triggers REVISE writes BOTH drafts (compose + revise) to
+    # data/revise_eval/<msg_id>.json so the operator can compare them
+    # side by side and decide whether the critique-revise loop is
+    # actually improving output quality. See scripts/review_revises.py.
+    #
+    # Privacy note: this DELIBERATELY breaks the "no message content on
+    # disk" PII contract — both drafts contain reply text, and the user
+    # question is preserved so a human reviewer has context. Capture is
+    # local-only, gitignored, never exported. Flip OFF when the eval
+    # window closes; the dir can be rm -rf'd at any time.
+    capture_revise_eval: bool = (
+        os.getenv("ONGIINI_CAPTURE_REVISE_EVAL", "").lower() in ("1", "true", "yes")
+    )
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
