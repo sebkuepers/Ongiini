@@ -654,6 +654,12 @@ async def test_critique_prompt_uses_v131_grounding_wording():
     # Citation dim allows single deep URL for multi-turn synthesis.
     assert "single deep URL" in sent or "SINGLE deep URL" in sent
     assert "earlier turns of THIS conversation" in sent
+    # v1.6.2: positive-framed carve-out ("PASS replies that...") instead
+    # of negative ("Do NOT FAIL replies that..."). Production data showed
+    # critique was emitting the exception clause itself as a FAIL reason
+    # — the `Do NOT` was getting lost in pattern matching.
+    assert "PASS replies that primarily reuse facts" in sent
+    assert "Do NOT FAIL replies that primarily reuse facts" not in sent
 
 
 def test_strip_trailing_punct_preserves_balanced_parens():

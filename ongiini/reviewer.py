@@ -95,9 +95,9 @@ substance, grounding, and language.)
    DEEP URL is cited (prefixed "— source:" on its own line, with a
    path — not just a publication homepage). A SINGLE deep URL at the
    bottom is sufficient when the reply builds on the same source
-   throughout. Do NOT FAIL replies that primarily reuse facts
-   established in earlier turns of THIS conversation — those don't
-   need re-citation:
+   throughout. PASS replies that primarily reuse facts established
+   in earlier turns of THIS conversation — those don't need
+   re-citation:
 4. If the tool results were thin or empty, the reply admits this
    plainly instead of inventing specifics:
 5. Language matches the user's (EN or AF) — same language they asked
