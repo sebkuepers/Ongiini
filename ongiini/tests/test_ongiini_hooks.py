@@ -419,3 +419,22 @@ async def test_hooks_fire_through_registry(tmp_path: Path):
 
     recorder.record.assert_called_once()
     assert trace_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_tracing_surfaces_reasoning_leak_stripped_audit_flag(tmp_path: Path):
+    """v1.4 audit: when the model adapter scrubbed Gemma 4 channel
+    tokens, ModelCallStep.attrs["reasoning_leak_stripped"] carries
+    the count. TracingHook surfaces it in the calls[] entry so
+    operators can monitor recurrence."""
+    hook = TracingHook(trace_path=tmp_path / "t.jsonl")
+    clean = ModelCallStep(turn=1, tokens_in=10, tokens_out=5)
+    leaked = ModelCallStep(turn=2, tokens_in=10, tokens_out=5)
+    leaked.attrs["reasoning_leak_stripped"] = 3
+    steps = [clean, leaked, ReplyStep(sent=True)]
+    await hook.on_turn_complete(steps, _ctx())
+    entry = json.loads((tmp_path / "t.jsonl").read_text().strip())
+    # Clean call: 0 (default).
+    assert entry["calls"][0]["reasoning_leak_stripped"] == 0
+    # Scrub fired: count surfaced.
+    assert entry["calls"][1]["reasoning_leak_stripped"] == 3

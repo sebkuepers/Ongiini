@@ -102,6 +102,16 @@ How to pick queries:
 Cap at 5 queries maximum. Keep queries SHORT and ENTITY-SPECIFIC — they
 become real search engine queries; padding hurts recall.
 
+PRONOUN RESOLUTION: if the user refers to entities mentioned earlier
+in the conversation ("them", "those", "the same", "what about it",
+"compare them", "tell me more about the third one"), INFER which
+entities they mean from the recent-history block above and generate
+ONE query per entity. Do NOT emit an empty queries list because the
+question is ambiguous in isolation — that's exactly when the history
+context is most valuable. Example: if the previous reply listed
+[Paratus, IT Guru, MTN Windhoek] and the user now says "compare
+them", emit three queries — one per provider — not zero.
+
 End with PLAN_DONE.
 """
 

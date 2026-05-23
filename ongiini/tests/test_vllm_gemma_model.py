@@ -284,7 +284,9 @@ def test_strip_gemma_reasoning_leak_preserves_clean_content():
     from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
 
     clean = "Thoughtfully designed houses tend to use cross-ventilation."
-    assert _strip_gemma_reasoning_leak(clean) == clean
+    out, count = _strip_gemma_reasoning_leak(clean)
+    assert out == clean
+    assert count == 0
 
 
 def test_strip_gemma_reasoning_leak_keeps_text_when_no_paragraph_break():
@@ -294,11 +296,12 @@ def test_strip_gemma_reasoning_leak_keeps_text_when_no_paragraph_break():
     from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
 
     leak = "thought<|channel|> some reasoning content all on one line"
-    out = _strip_gemma_reasoning_leak(leak)
+    out, count = _strip_gemma_reasoning_leak(leak)
     # Token stripped.
     assert "<|" not in out
     # But we kept the rest (no paragraph break to use as delimiter).
     assert "reasoning content" in out
+    assert count == 1
 
 
 def test_strip_gemma_reasoning_leak_handles_wait_prefix():
@@ -308,12 +311,16 @@ def test_strip_gemma_reasoning_leak_handles_wait_prefix():
     from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
 
     leak = "(Wait, user asked<|channel|> in English)\n\nThe answer is X."
-    out = _strip_gemma_reasoning_leak(leak)
+    out, count = _strip_gemma_reasoning_leak(leak)
     assert "Wait" not in out
     assert "The answer is X." in out
+    assert count == 1
 
 
 def test_strip_gemma_reasoning_leak_empty_string():
     from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
-    assert _strip_gemma_reasoning_leak("") == ""
-    assert _strip_gemma_reasoning_leak("   ") == ""
+    assert _strip_gemma_reasoning_leak("") == ("", 0)
+    # Empty after strip: whitespace counts strip → return ("", 0).
+    out, count = _strip_gemma_reasoning_leak("   ")
+    assert out == ""
+    assert count == 0

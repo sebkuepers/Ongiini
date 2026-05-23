@@ -44,11 +44,17 @@ log = logging.getLogger("ongiini.models.vllm_gemma")
 _GEMMA_SPECIAL_TOKEN_RE = re.compile(r"<\|?[a-zA-Z0-9_\-]+\|?>")
 
 
-def _strip_gemma_reasoning_leak(text: str) -> str:
+def _strip_gemma_reasoning_leak(text: str) -> tuple[str, int]:
     """Remove Gemma 4 special tokens from a content string and, if any
     were present, also strip a leaked reasoning preamble (everything up
     to the first paragraph break) when the cleaned text starts with
     obvious thought-channel detritus.
+
+    Returns ``(cleaned_text, num_tokens_stripped)``. The integer count
+    is 0 on a clean reply, positive when the scrub fired — the model
+    adapter forwards it via ``ModelResponse.attrs["reasoning_leak_stripped"]``
+    so the TracingHook can surface it in the per-turn trace and
+    operators can monitor recurrence without grepping raw replies.
 
     The preamble-strip is gated on having seen at least one ``<|...|>``
     token in the input — that's the strong signal that a reasoning
@@ -57,10 +63,11 @@ def _strip_gemma_reasoning_leak(text: str) -> str:
     won't be touched.
     """
     if not text:
-        return text
-    had_tokens = bool(_GEMMA_SPECIAL_TOKEN_RE.search(text))
+        return text, 0
+    matches = _GEMMA_SPECIAL_TOKEN_RE.findall(text)
+    leak_count = len(matches)
     cleaned = _GEMMA_SPECIAL_TOKEN_RE.sub("", text).strip()
-    if had_tokens:
+    if leak_count > 0:
         # The reasoning leak pattern starts with "thought" or "Wait" or
         # similar reasoning preamble, then a paragraph break, then the
         # actual answer. Find the first ``\n\n`` and discard the
@@ -75,7 +82,7 @@ def _strip_gemma_reasoning_leak(text: str) -> str:
             idx = cleaned.find("\n\n")
             if idx != -1:
                 cleaned = cleaned[idx + 2:].lstrip()
-    return cleaned
+    return cleaned, leak_count
 
 
 def _billable_from_usage(usage_obj: Any) -> tuple[int, int, int]:
@@ -158,7 +165,9 @@ class VLLMGemmaModel(Model):
         # tokens unconditionally; only strip the preamble paragraph
         # when we ALSO detected leaked tokens (to avoid eating
         # legitimate replies that happen to start with "thought").
-        content = _strip_gemma_reasoning_leak(content)
+        # v1.4 audit: track count so the trace can show recurrence.
+        content, leak_count_primary = _strip_gemma_reasoning_leak(content)
+        leak_count_total = leak_count_primary
         if not content:
             reasoning = ""
             for candidate in (
@@ -183,7 +192,8 @@ class VLLMGemmaModel(Model):
                     "surfacing reasoning text as content",
                     len(reasoning),
                 )
-                content = _strip_gemma_reasoning_leak(reasoning)
+                content, leak_count_fallback = _strip_gemma_reasoning_leak(reasoning)
+                leak_count_total += leak_count_fallback
 
         tool_calls_raw = getattr(msg, "tool_calls", None) or []
         tool_calls: list[dict[str, Any]] = []
@@ -198,6 +208,14 @@ class VLLMGemmaModel(Model):
                 },
             })
 
+        attrs: dict[str, Any] = {}
+        if leak_count_total > 0:
+            # v1.4 audit: scrub detected leaked Gemma 4 channel tokens.
+            # Surface the count so TracingHook can record it and the
+            # `trace_query.py reasoning-leak-count` CLI can spot
+            # recurrence without operators having to grep raw replies.
+            attrs["reasoning_leak_stripped"] = leak_count_total
+
         return ModelResponse(
             content=content,
             tool_calls=tool_calls,
@@ -206,4 +224,5 @@ class VLLMGemmaModel(Model):
             tokens_out=completion,
             cached_tokens=cached,
             raw=resp,
+            attrs=attrs,
         )

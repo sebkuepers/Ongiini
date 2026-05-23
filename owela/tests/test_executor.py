@@ -553,6 +553,69 @@ async def test_depth_routes_to_different_policy():
 
 
 # =====================================================================
+# v1.4 — ModelResponse.attrs propagation
+# =====================================================================
+
+
+@pytest.mark.asyncio
+async def test_executor_merges_resp_attrs_into_call_step_attrs():
+    """v1.4: ModelResponse gained `attrs: dict` so adapters can surface
+    audit metadata (e.g. Gemma's `reasoning_leak_stripped`). The
+    executor must merge resp.attrs into ModelCallStep.attrs so the
+    TracingHook can persist them."""
+    model = ScriptedModel([
+        _ScriptedResponse(
+            content="ok",
+            # ScriptedResponse uses a dataclass shape; emulate attrs
+            # via a custom subclass below.
+        ),
+    ])
+    # Patch the ScriptedModel.complete to inject attrs on the response.
+    original_complete = model.complete
+
+    async def patched(req):
+        resp = await original_complete(req)
+        # type: ignore[attr-defined]
+        resp.attrs = {"reasoning_leak_stripped": 3, "custom_audit": "marker"}
+        return resp
+
+    model.complete = patched  # type: ignore[assignment]
+    rt = _make_runtime(model=model)
+    result = await Agent(rt).handle(_msg())
+    call_step = next(s for s in result.steps if isinstance(s, ModelCallStep))
+    # Adapter-supplied attrs reached the step.
+    assert call_step.attrs["reasoning_leak_stripped"] == 3
+    assert call_step.attrs["custom_audit"] == "marker"
+
+
+@pytest.mark.asyncio
+async def test_executor_attrs_merge_does_not_let_adapter_shadow_content():
+    """LOAD-BEARING: the executor merges resp.attrs INTO call_step.attrs
+    BEFORE setting attrs["content"] = resp.content. This ordering
+    guarantees an adapter can't accidentally (or maliciously) shadow
+    the real reply content by putting "content" in its attrs dict.
+    A future contributor reversing the two lines would silently break
+    this invariant — pin it here."""
+    model = ScriptedModel([_ScriptedResponse(content="real reply")])
+    original_complete = model.complete
+
+    async def patched(req):
+        resp = await original_complete(req)
+        # type: ignore[attr-defined]
+        resp.attrs = {"content": "shadowed value", "reasoning_leak_stripped": 1}
+        return resp
+
+    model.complete = patched  # type: ignore[assignment]
+    rt = _make_runtime(model=model)
+    result = await Agent(rt).handle(_msg())
+    call_step = next(s for s in result.steps if isinstance(s, ModelCallStep))
+    # Real content wins.
+    assert call_step.attrs["content"] == "real reply"
+    # But other audit attrs (e.g. leak count) DID merge through.
+    assert call_step.attrs["reasoning_leak_stripped"] == 1
+
+
+# =====================================================================
 # v1.3 — synthesised phases (multi-query fan-out + auto-followup)
 # =====================================================================
 

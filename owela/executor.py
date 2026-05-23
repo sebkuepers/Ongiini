@@ -183,6 +183,11 @@ async def execute_turn(runtime: "Runtime", msg: InboundMessage) -> list[Step]:
             cached_tokens=resp.cached_tokens,
         )
         call_step.ended_at = time.monotonic()
+        # Merge adapter-supplied audit attrs (e.g., a Gemma 4 adapter
+        # setting reasoning_leak_stripped) BEFORE content so a stray
+        # "content" key in resp.attrs can't shadow the real reply text.
+        if resp.attrs:
+            call_step.attrs.update(resp.attrs)
         call_step.attrs["content"] = resp.content
         steps.append(call_step)
         await runtime.hooks.on_step(call_step, ctx)

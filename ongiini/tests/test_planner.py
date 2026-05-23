@@ -395,3 +395,23 @@ async def test_planner_history_skips_non_string_content():
     assert "I see a chart" in sent
     # No fallback marker for the skipped image-bearing turn.
     assert "image_url" not in sent
+
+
+@pytest.mark.asyncio
+async def test_planner_prompt_includes_pronoun_resolution_guidance():
+    """v1.4: the planner prompt explicitly instructs Gemma 4 to resolve
+    pronouns from the recent-history block and emit one query per
+    entity. Lock the wording so a future contributor doesn't accidentally
+    soften it. Without this guidance, Gemma routinely emits 0 queries
+    when the user says 'compare them'."""
+    body = json.dumps({"facts_known": "x", "queries": [{"query": "q"}]}) + "\nPLAN_DONE"
+    client = _client_returning(body)
+    planner = OngiiniPlanner(base_url="x", model_id="gemma", client=client)
+    await planner.plan(_msg(), Policy(name="search_deep"), [])
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "PRONOUN RESOLUTION" in sent
+    # Mandate: don't emit empty list when history disambiguates.
+    assert "Do NOT emit an empty queries list" in sent or \
+           "do NOT emit an empty" in sent.lower().replace("queries list", "queries list")
+    # Concrete example so the model has a shape to match.
+    assert "compare them" in sent

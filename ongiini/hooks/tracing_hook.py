@@ -94,6 +94,12 @@ class TracingHook:
                     # were forced by deterministic policy.
                     "synthesized": s.synthesized,
                     "decision_source": s.attrs.get("decision_source"),
+                    # v1.4 audit: count of Gemma 4 channel tokens the
+                    # model adapter scrubbed from this call's content.
+                    # 0 means the reasoning parser worked; >0 means the
+                    # scrubber fired (operators can monitor recurrence
+                    # via `trace_query.py reasoning-leak-count`).
+                    "reasoning_leak_stripped": s.attrs.get("reasoning_leak_stripped", 0),
                 })
                 total_latency_ms += s.latency_ms()
                 total_tokens_in += s.tokens_in
