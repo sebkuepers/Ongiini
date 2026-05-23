@@ -103,6 +103,13 @@ def build_policy_table() -> PolicyTable:
     # optionally call fetch_url for one deeper read.
     # Critique ON: this is the path the hackathon-confabulation
     # incident travelled — exactly where critique adds value.
+    #
+    # v1.3 truncation caps: Tavily's upgraded /search (advanced +
+    # include_raw_content + chunks_per_source=3 + max_results=10) can
+    # return 100K+ chars per call. Without per-tool caps, the model
+    # would spend ~30s digesting a single search result. Cap web_search
+    # at 6K chars (slightly larger than DEEP's 4K because SHALLOW only
+    # gets one call), fetch_url/fetch_urls at 12K.
     table.set(
         VERDICT_SEARCH, DEPTH_SHALLOW,
         Policy(
@@ -110,6 +117,11 @@ def build_policy_table() -> PolicyTable:
             first_tool=force_tool("web_search"),
             max_steps=6,
             enable_critique=_critique_on(),
+            tool_result_message_caps={
+                "web_search": 6000,
+                "fetch_url": 12000,
+                "fetch_urls": 12000,
+            },
         ),
     )
 
