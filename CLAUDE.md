@@ -44,6 +44,7 @@ deployment recipe, and AI Act compliance posture.
 | a Gemma 4 quirk (image dims, reasoning) | `ongiini/models/vllm_gemma.py` or `ongiini/api/main.py` |
 | a WhatsApp behaviour (sending, formatting, dead URLs) | `ongiini/transports/whatsapp_transport.py` |
 | a tool the model can call | `ongiini/tools/ongiini_tools.py` |
+| a skill (Oshiwambo, future reference content) | `ongiini/skills/<name>/SKILL.md` (Claude-format frontmatter) |
 | the system prompt | `ongiini/system_prompt.py` |
 | classifier prompt or depth output | `ongiini/routers/gemma_classifier.py` |
 | short-term memory (per-user JSON history) | `ongiini/memory/short_term.py` |

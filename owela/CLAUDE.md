@@ -301,6 +301,39 @@ Tests: add one in `tests/test_executor.py` using the `ScriptedModel`
 fixture pattern; assert the new step appears in the result and the
 hook layer sees it.
 
+### Register a skill
+
+Skills are named reference blocks the application registers with the
+Runtime. The framework provides `Skill` and `SkillRegistry`; rendering
+into the system prompt and the on-demand load tool live in the
+application layer.
+
+```python
+from owela import Skill, SkillRegistry
+
+registry = SkillRegistry([
+    Skill(
+        name="oshiwambo",
+        description="...what + when...",
+        content="...full markdown...",
+        load="always",  # or "on_demand" (default)
+    ),
+])
+runtime = Runtime(..., skills=registry)
+```
+
+The application's `MemoryProvider` calls `runtime.skills.manifest()` to
+get a system message containing the catalogue (and inlined content of
+every `load="always"` skill). On-demand skills appear as manifest
+entries only; the application supplies a `load_skill(name)` tool that
+reads `ctx.runtime.skills.get(name)` and returns the content. See
+`ongiini/tools/skill_tools.py` and `ongiini/skills_loader.py` for the
+canonical filesystem-loader pattern.
+
+The frontmatter format matches Claude's skill standard (just `name` +
+`description`); the `load` field is an Owela extension that Claude
+ignores. A skill file works in both ecosystems without changes.
+
 ---
 
 ## What NOT to put in Owela

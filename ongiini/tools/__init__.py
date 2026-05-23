@@ -11,7 +11,7 @@ a ``ToolRegistry`` from the list exported here.
 """
 
 from .ongiini_tools import (
-    ALL_TOOLS,
+    ALL_TOOLS as _PRODUCT_TOOLS,
     delete_my_data,
     fetch_url,
     fetch_urls,
@@ -20,12 +20,20 @@ from .ongiini_tools import (
     web_search,
     whats_in_my_memory,
 )
+from .skill_tools import load_skill
+
+# Canonical tool list passed to ToolRegistry at runtime build time.
+# load_skill is appended last because the model interacts with it less
+# than the product tools (it's only relevant when an on-demand skill
+# matches the user's message), so it gets the smallest prior.
+ALL_TOOLS = (*_PRODUCT_TOOLS, load_skill)
 
 __all__ = [
     "ALL_TOOLS",
     "delete_my_data",
     "fetch_url",
     "fetch_urls",
+    "load_skill",
     "lookup_ongiini_docs",
     "my_token_usage",
     "web_search",

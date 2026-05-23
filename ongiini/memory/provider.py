@@ -40,7 +40,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
-from owela import InboundMessage, PlanStep, Policy, Step
+from owela import InboundMessage, PlanStep, Policy, SkillRegistry, Step
 
 log = logging.getLogger("ongiini.memory_provider")
 
@@ -115,6 +115,7 @@ class OngiiniMemoryProvider:
         source_index_loader: Callable[[str], list[dict[str, Any]]] | None = None,
         source_index_formatter: Callable[[list[dict[str, Any]]], str] | None = None,
         source_index_deleter: Callable[[str], bool] | None = None,
+        skills: SkillRegistry | None = None,
     ) -> None:
         self.system_prompt = system_prompt
         self._short = short_term
@@ -127,6 +128,10 @@ class OngiiniMemoryProvider:
         self._load_source_index = source_index_loader
         self._format_source_index = source_index_formatter
         self._delete_source_index = source_index_deleter
+        # Skills are referenced from the message-assembly path so the
+        # manifest (and any always-loaded content) lands in the system
+        # prompt. None / empty registry → no manifest injection.
+        self._skills = skills
 
     async def assemble_messages(
         self,
@@ -153,6 +158,16 @@ class OngiiniMemoryProvider:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
         ]
+        # Skill manifest — lists registered skills (name + description)
+        # and inlines the content of any ``load: always`` skills. Goes
+        # after SYSTEM_PROMPT and before the date anchor so the static
+        # prompt stays prefix-cached; the manifest changes only when a
+        # skill is added/removed at startup, so it's cache-stable across
+        # turns within a deploy.
+        if self._skills is not None:
+            manifest = self._skills.manifest()
+            if manifest:
+                messages.append({"role": "system", "content": manifest})
         # Today's date as its own short system message. Goes AFTER the
         # static system prompt so the prefix cache still hits everything
         # above it. The date itself rotates daily — fine, the cache miss

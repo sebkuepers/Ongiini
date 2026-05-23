@@ -55,6 +55,7 @@ from .policy import (
 )
 from .router import Classifier, ClassifierResult
 from .runtime import Planner, Reviewer, Runtime
+from .skills import Skill, SkillRegistry
 from .step import (
     CritiqueStep, ModelCallStep, PlanStep, QueryVariant, ReplyStep,
     ReviseStep, RouterStep, Step, ToolStep,
@@ -110,6 +111,9 @@ __all__ = [
     "CritiqueStep",
     "ReviseStep",
     "ReplyStep",
+    # Skills
+    "Skill",
+    "SkillRegistry",
     # Tools
     "tool",
     "ToolRegistry",
