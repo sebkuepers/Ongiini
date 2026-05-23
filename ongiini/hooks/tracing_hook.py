@@ -87,6 +87,13 @@ class TracingHook:
                         }
                         for tc in s.tool_calls
                     ],
+                    # v1.3 audit: distinguish real model calls from
+                    # policy-synthesised dispatches (multi-query fan-out
+                    # or auto-followup). EU AI Act provenance — make it
+                    # clear which tool calls the model chose vs which
+                    # were forced by deterministic policy.
+                    "synthesized": s.synthesized,
+                    "decision_source": s.attrs.get("decision_source"),
                 })
                 total_latency_ms += s.latency_ms()
                 total_tokens_in += s.tokens_in
@@ -98,6 +105,10 @@ class TracingHook:
                     "tokens_out": s.tokens_out,
                     "cached_tokens": s.cached_tokens,
                     "plan_len": len(s.plan_text),
+                    # v1.3: planner emits structured query variants
+                    # that the executor synthesises as parallel tool
+                    # calls. Surface the count for trace consumers.
+                    "queries_count": len(s.queries),
                     "latency_ms": s.latency_ms(),
                     "error": s.attrs.get("error"),
                 }
@@ -152,12 +163,20 @@ class TracingHook:
                 if s.tool_name in ("web_search", "fetch_url", "fetch_urls"):
                     used_search = True
                 if calls:
+                    # v1.3: tool result entry always carries the audit
+                    # keys with None defaults — stable trace schema for
+                    # downstream JSON parsers. None means "model chose
+                    # this tool", a non-None value means "policy
+                    # synthesised it" (EU AI Act provenance).
                     calls[-1].setdefault("tool_results", []).append({
                         "name": s.tool_name,
                         "args_len": s.args_len,
                         "result_len": s.result_len,
                         "error": s.error,
                         "latency_ms": s.latency_ms(),
+                        "synthesized_by_policy": s.attrs.get("synthesized_by_policy"),
+                        "decision_source": s.attrs.get("decision_source"),
+                        "query_variant_index": s.attrs.get("query_variant_index"),
                     })
 
         return {

@@ -71,6 +71,60 @@ class Policy:
     # (e.g. casual chat exposing no tools at all).
     expose_tools: tuple[str, ...] | None = None
 
+    # Planner-driven multi-query fan-out. When ``planner_query_tool``
+    # is set AND a prior PlanStep carries non-empty ``queries``, the
+    # executor synthesises one parallel call to this tool per
+    # QueryVariant on turn 1 — bypassing the model's first call.
+    #
+    # The variant's ``query`` string becomes the kwarg named by
+    # ``planner_query_arg``; ``variant.extra`` (a dict) is spread as
+    # additional kwargs. The string is opaque to Owela — the
+    # application registers a tool by this name. Per anti-trap #8 no
+    # tool name is hardcoded in the executor.
+    planner_query_tool: str | None = None
+    planner_query_arg: str = "query"
+
+    # Deterministic follow-up tool synthesis. When ``auto_followup_after``
+    # is set, the executor watches each ToolStep: if its ``tool_name``
+    # matches the trigger AND ``attrs[auto_followup_attr]`` is non-empty,
+    # the executor synthesises a single call to ``auto_followup_tool``
+    # with that attribute value passed as the ``auto_followup_arg``
+    # kwarg. Rule-based (not one-shot): fires after every matching
+    # ToolStep, including subsequent iterations on the same turn loop.
+    #
+    # ``auto_followup_after`` AND ``auto_followup_tool`` must be set
+    # together; either None disables follow-up. ``auto_followup_attr``
+    # and ``auto_followup_arg`` default to "urls" — the conventional
+    # name for the typical search→fetch escalation — but apps may
+    # override.
+    auto_followup_after: str | None = None
+    auto_followup_tool: str | None = None
+    auto_followup_attr: str = "urls"
+    auto_followup_arg: str = "urls"
+    # Cap on items passed to ``auto_followup_tool``. The executor
+    # consolidates ``attrs[auto_followup_attr]`` from every matching
+    # ToolStep this turn (multi-query fan-out can produce many), then
+    # dedupes and trims to this count. Default 5 mirrors typical search-
+    # fetch pipelines (e.g. Tavily's /extract batch cap).
+    auto_followup_max_items: int = 5
+    # When True (default), the consolidated pool keeps only one item
+    # per URL host — typical case is search results where multiple
+    # pages from the same domain compete. Set False when you want
+    # multiple items per host (e.g. fetching multiple PDFs from one
+    # government site).
+    auto_followup_one_per_host: bool = True
+
+    # Per-tool char caps for results placed into the model's message
+    # list. The FULL pre-truncation text is preserved in
+    # ``ToolStep.attrs["result"]`` for reviewer + trace use; this only
+    # bounds the model-visible context. Default empty dict = no
+    # truncation (apps explicitly opt in by tool name).
+    #
+    # Frozen dataclass field caveat: dicts are technically mutable
+    # internals. Treat as immutable by convention; do not mutate after
+    # Policy construction.
+    tool_result_message_caps: dict[str, int] = field(default_factory=dict)
+
 
 class PolicyTable:
     """Maps (verdict, depth) tuples to Policies.

@@ -148,15 +148,24 @@ async def test_assemble_messages_injects_plan_when_planstep_present():
     ))
     result = await provider.assemble_messages(msg, Policy(name="search_deep"), [plan_step])
 
+    # v1.3: the wrapper is now neutral context-priming. The model sees
+    # the plan_text (facts_known prose) as context to rely on without
+    # searching. Tool steering happens deterministically in the executor,
+    # NOT via prose injection.
+    # v1.3: the wrapper is now neutral context-priming. The model sees
+    # the plan_text (facts_known prose) as context to rely on without
+    # searching. Tool steering happens deterministically in the executor,
+    # NOT via prose injection.
     plan_msg = next(
-        (m for m in result if m["role"] == "system" and "FACTS TO LOOK UP" in m["content"]),
+        (m for m in result if m["role"] == "system" and "Pre-search context" in m["content"]),
         None,
     )
     assert plan_msg is not None
-    # Wrapper text emphasises that TOOL PLAN entries are imperatives.
-    assert "DIRECT INSTRUCTIONS" in plan_msg["content"]
-    assert "TOOL PLAN" in plan_msg["content"]
     assert "Bank Windhoek rate" in plan_msg["content"]
+    # The imperative tool-steering wrapping is GONE — the deterministic
+    # executor handles that.
+    assert "DIRECT INSTRUCTIONS" not in plan_msg["content"]
+    assert "MUST call fetch_urls" not in plan_msg["content"]
 
 
 @pytest.mark.asyncio

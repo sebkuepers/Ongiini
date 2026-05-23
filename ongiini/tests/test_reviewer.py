@@ -149,8 +149,10 @@ async def test_critique_includes_tool_results_in_prompt():
 @pytest.mark.asyncio
 async def test_critique_truncates_long_tool_results():
     """The prompt must cap each tool result so a giant fetch_url doesn't
-    blow up the critique prompt size."""
-    big_result = "x" * 5000
+    blow up the critique prompt size. v1.3 bumped the per-result cap
+    8000 → critique gets enough context to verify grounding against
+    fetched pages, but truly massive results are still bounded."""
+    big_result = "x" * 12000
     client = _client_returning("VERDICT: PASS")
     rev = OngiiniReviewer(base_url="x", model_id="g", client=client)
     await rev.critique(
@@ -160,8 +162,29 @@ async def test_critique_truncates_long_tool_results():
     )
     sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "[…truncated]" in sent
-    # Should NOT contain the full 5000 x's
-    assert sent.count("x") < 3000
+    # Should NOT contain the full 12000 x's
+    assert sent.count("x") < 10000
+
+
+@pytest.mark.asyncio
+async def test_critique_does_not_truncate_results_under_new_cap():
+    """v1.3 bumped the cap to 8000 chars. Results that fit fully (e.g.
+    a 4000-char fetched page) must NOT be truncated — the reviewer
+    needs full context to verify grounding."""
+    medium_result = "x" * 4000
+    client = _client_returning("VERDICT: PASS")
+    rev = OngiiniReviewer(base_url="x", model_id="g", client=client)
+    await rev.critique(
+        _msg(), "draft",
+        [_tool_step("fetch_url", medium_result)],
+        Policy(name="search_shallow"),
+    )
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "[…truncated]" not in sent
+    # ≥ 4000 to allow for the few 'x' chars in the prompt template
+    # itself (e.g. "EXACTLY"). The key assertion is that nothing was
+    # truncated.
+    assert sent.count("x") >= 4000
 
 
 # ---------- revise() ----------

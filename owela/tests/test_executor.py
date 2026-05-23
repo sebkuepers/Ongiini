@@ -24,7 +24,7 @@ from owela.policy import (
 from owela.router import Classifier, ClassifierResult
 from owela.runtime import Runtime
 from owela.step import (
-    ModelCallStep, ReplyStep, RouterStep, ToolStep,
+    ModelCallStep, PlanStep, QueryVariant, ReplyStep, RouterStep, ToolStep,
 )
 from owela.tools import ToolContext, ToolRegistry, tool
 from owela.transport import InboundMessage, Transport
@@ -550,3 +550,585 @@ async def test_depth_routes_to_different_policy():
     )
     await Agent(rt_d).handle(_msg())
     assert model_d.calls[0].tool_choice == {"type": "function", "function": {"name": "nope_deep_test"}}
+
+
+# =====================================================================
+# v1.3 — synthesised phases (multi-query fan-out + auto-followup)
+# =====================================================================
+
+
+class FakePlanner:
+    """Returns a fixed PlanStep on every call. Tests use this to
+    drive the multi-query fan-out branch of the executor without
+    spinning up a real Planner.
+    """
+    def __init__(
+        self,
+        queries: list[QueryVariant] | None = None,
+        plan_text: str = "",
+    ) -> None:
+        self.queries = queries or []
+        self.plan_text = plan_text
+        self.calls = 0
+
+    async def plan(self, msg, policy, prior_steps) -> PlanStep:
+        self.calls += 1
+        return PlanStep(plan_text=self.plan_text, queries=list(self.queries))
+
+
+def _make_runtime_with_planner(
+    *,
+    model: Model,
+    planner: FakePlanner,
+    tools: list,
+    policies: PolicyTable,
+    transport: Transport | None = None,
+) -> Runtime:
+    return Runtime(
+        model=model,
+        transport=transport or FakeTransport(),
+        memory=FakeMemory(),
+        classifier=FakeClassifier(verdict=VERDICT_SEARCH, depth=DEPTH_DEEP),
+        tools=ToolRegistry(tools),
+        policies=policies,
+        hooks=HookRegistry(),
+        planner=planner,
+    )
+
+
+@pytest.mark.asyncio
+async def test_executor_synthesises_multi_query_fanout_from_plan_step():
+    """v1.3 contract: when policy.planner_query_tool is set AND the
+    planner emits PlanStep.queries, the executor fans out N parallel
+    tool calls BEFORE the model takes its first turn — no LLM call
+    consumed for the fan-out itself."""
+    web_search_calls: list[str] = []
+
+    @tool(name="web_search_q_fan", params={"query": "Query."})
+    async def web_search(query: str) -> tuple[str, dict]:
+        """Search."""
+        web_search_calls.append(query)
+        return f"snippets for {query}", {"urls": [f"https://{query.replace(' ', '-')}.example/x"]}
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="search_deep_fan",
+            first_tool=force_tool("web_search_q_fan"),
+            max_steps=6,
+            enable_planner=True,
+            planner_query_tool="web_search_q_fan",
+            planner_query_arg="query",
+        ),
+    )
+    planner = FakePlanner(queries=[
+        QueryVariant(query="Bank Windhoek rate"),
+        QueryVariant(query="FNB Namibia rate"),
+        QueryVariant(query="Nedbank rate"),
+    ])
+    # Only ONE scripted response — the model just composes after seeing
+    # the fan-out's results. If the executor accidentally called the
+    # model an extra time, ScriptedModel would raise "exhausted".
+    model = ScriptedModel([
+        _ScriptedResponse(content="here's the comparison"),
+    ])
+    rt = _make_runtime_with_planner(
+        model=model, planner=planner, tools=[web_search], policies=table,
+    )
+    result = await Agent(rt).handle(_msg("compare home loans"))
+
+    assert result.sent is True
+    assert "comparison" in result.reply_text
+    # All three search variants ran in parallel as synthesised calls.
+    assert sorted(web_search_calls) == sorted([
+        "Bank Windhoek rate", "FNB Namibia rate", "Nedbank rate",
+    ])
+    # Three synthesised tool steps + one model call (the composer).
+    tool_steps = [s for s in result.steps if isinstance(s, ToolStep)]
+    assert len(tool_steps) == 3
+    # Audit trail: every fan-out tool_step is marked.
+    for ts in tool_steps:
+        assert ts.attrs["synthesized_by_policy"] == "search_deep_fan"
+        assert ts.attrs["decision_source"] == "plan.queries"
+        assert "query_variant_index" in ts.attrs
+    # The composer turn was NOT forced to call web_search (the fan-out
+    # already covered it).
+    assert model.calls[0].tool_choice == AUTO
+
+
+@pytest.mark.asyncio
+async def test_executor_synthesises_auto_followup_after_web_search():
+    """When auto_followup_after matches a ToolStep's tool_name AND it
+    carries attrs[auto_followup_attr], the executor synthesises a
+    follow-up tool call WITHOUT an LLM call between."""
+    followup_calls: list[list[str]] = []
+
+    @tool(name="web_search_af", params={"query": "Q."})
+    async def web_search(query: str) -> tuple[str, dict]:
+        """Search."""
+        return "snippets", {"urls": ["https://a.example/x", "https://b.example/y"]}
+
+    @tool(name="fetch_urls_af", params={"urls": "URLs to fetch."})
+    async def fetch_urls(urls: list[str]) -> str:
+        """Batch fetch."""
+        followup_calls.append(list(urls))
+        return f"fetched: {urls}"
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="search_deep_af",
+            first_tool=force_tool("web_search_af"),
+            max_steps=6,
+            auto_followup_after="web_search_af",
+            auto_followup_tool="fetch_urls_af",
+        ),
+    )
+    # Model turn 1: emit web_search. Then the executor synthesises
+    # fetch_urls (no LLM). Model turn 2: compose.
+    model = ScriptedModel([
+        _ScriptedResponse(
+            content="",
+            tool_calls=[{
+                "id": "tc1", "type": "function",
+                "function": {"name": "web_search_af",
+                             "arguments": json.dumps({"query": "namibia rates"})},
+            }],
+            finish_reason="tool_calls",
+        ),
+        _ScriptedResponse(content="here's the answer"),
+    ])
+    rt = _make_runtime_with_planner(
+        model=model, planner=FakePlanner(), tools=[web_search, fetch_urls],
+        policies=table,
+    )
+    result = await Agent(rt).handle(_msg("namibia loan rates"))
+
+    assert result.sent is True
+    # fetch_urls was called with the URLs from web_search's attrs.
+    assert followup_calls == [["https://a.example/x", "https://b.example/y"]]
+    # Tool steps in order: model's web_search, synth fetch_urls.
+    tool_steps = [s for s in result.steps if isinstance(s, ToolStep)]
+    assert [ts.tool_name for ts in tool_steps] == ["web_search_af", "fetch_urls_af"]
+    # Only the synth step carries the audit attr.
+    assert "synthesized_by_policy" not in tool_steps[0].attrs
+    assert tool_steps[1].attrs["synthesized_by_policy"] == "search_deep_af"
+    assert tool_steps[1].attrs["decision_source"] == "auto_followup"
+
+
+@pytest.mark.asyncio
+async def test_no_auto_followup_when_url_pool_is_empty():
+    """If web_search returns no URLs, the executor must NOT synthesise
+    a follow-up (would call fetch_urls([])) — fall through and let the
+    model handle the empty-pool case."""
+    @tool(name="web_search_empty", params={"q": "Q."})
+    async def web_search(q: str) -> tuple[str, dict]:
+        """Search."""
+        return "no results", {"urls": []}
+
+    @tool(name="fetch_urls_empty", params={"urls": "URLs."})
+    async def fetch_urls(urls: list[str]) -> str:
+        """Fetch."""
+        return f"fetched {urls}"
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="search_empty",
+            first_tool=force_tool("web_search_empty"),
+            max_steps=6,
+            auto_followup_after="web_search_empty",
+            auto_followup_tool="fetch_urls_empty",
+        ),
+    )
+    model = ScriptedModel([
+        _ScriptedResponse(
+            content="",
+            tool_calls=[{
+                "id": "tc1", "type": "function",
+                "function": {"name": "web_search_empty",
+                             "arguments": json.dumps({"q": "x"})},
+            }],
+            finish_reason="tool_calls",
+        ),
+        _ScriptedResponse(content="couldn't find anything"),
+    ])
+    rt = _make_runtime_with_planner(
+        model=model, planner=FakePlanner(), tools=[web_search, fetch_urls],
+        policies=table,
+    )
+    result = await Agent(rt).handle(_msg())
+    tool_steps = [s for s in result.steps if isinstance(s, ToolStep)]
+    # Only the one model-emitted call; no fetch_urls synthesis.
+    assert len(tool_steps) == 1
+    assert tool_steps[0].tool_name == "web_search_empty"
+
+
+@pytest.mark.asyncio
+async def test_url_pool_dedup_and_host_diversity():
+    """When multiple parallel searches return overlapping URLs and
+    multiple URLs from the same host, the executor consolidates:
+    dedupe by canonical form + prefer one URL per host. The follow-up
+    sees the diversified pool."""
+    seen: list[list[str]] = []
+
+    @tool(name="ws_div", params={"q": "Q."})
+    async def web_search(q: str) -> tuple[str, dict]:
+        """Search."""
+        # Each variant returns 2 URLs; many overlap.
+        # Variant 1: a.com, b.com
+        # Variant 2: a.com (dup), c.com
+        # Variant 3: b.com (dup), b.com/2 (same host)
+        urls_map = {
+            "v1": ["https://a.com/x", "https://b.com/y"],
+            "v2": ["https://a.com/x", "https://c.com/z"],
+            "v3": ["https://b.com/y", "https://b.com/y2"],
+        }
+        return "snippets", {"urls": urls_map[q]}
+
+    @tool(name="fu_div", params={"urls": "URLs."})
+    async def fetch_urls(urls: list[str]) -> str:
+        """Fetch."""
+        seen.append(list(urls))
+        return "ok"
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="search_div",
+            first_tool=AUTO,
+            max_steps=6,
+            enable_planner=True,
+            planner_query_tool="ws_div",
+            planner_query_arg="q",
+            auto_followup_after="ws_div",
+            auto_followup_tool="fu_div",
+        ),
+    )
+    planner = FakePlanner(queries=[
+        QueryVariant(query="v1"),
+        QueryVariant(query="v2"),
+        QueryVariant(query="v3"),
+    ])
+    model = ScriptedModel([_ScriptedResponse(content="done")])
+    rt = _make_runtime_with_planner(
+        model=model, planner=planner, tools=[web_search, fetch_urls],
+        policies=table,
+    )
+    await Agent(rt).handle(_msg())
+
+    # One follow-up was made with the consolidated pool.
+    assert len(seen) == 1
+    pool = seen[0]
+    # Distinct hosts only: a.com, b.com, c.com — in encounter order
+    # across the three variants.
+    hosts = [s.split("/")[2] for s in pool]
+    assert hosts == ["a.com", "b.com", "c.com"]
+
+
+@pytest.mark.asyncio
+async def test_synthesised_phases_do_not_count_toward_max_steps():
+    """The fan-out + auto-followup add several Steps but the model
+    still gets its full ``max_steps`` worth of model-driven turns."""
+    model_turns_observed: list[int] = []
+
+    @tool(name="ws_max", params={"q": "Q."})
+    async def web_search(q: str) -> tuple[str, dict]:
+        """Search."""
+        return "ok", {"urls": ["https://a.example/x"]}
+
+    @tool(name="fu_max", params={"urls": "URLs."})
+    async def fetch_urls(urls: list[str]) -> str:
+        """Fetch."""
+        return "fetched"
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="max_steps_test",
+            first_tool=AUTO,
+            max_steps=2,    # only 2 model-driven turns allowed
+            enable_planner=True,
+            planner_query_tool="ws_max",
+            planner_query_arg="q",
+            auto_followup_after="ws_max",
+            auto_followup_tool="fu_max",
+        ),
+    )
+    planner = FakePlanner(queries=[QueryVariant(query="q1")])
+
+    # Model wants TWO real turns: turn 1 emits a tool call, turn 2 composes.
+    # If synth steps incorrectly counted toward max_steps, the second
+    # model call would never happen.
+    model = ScriptedModel([
+        _ScriptedResponse(
+            content="",
+            tool_calls=[{
+                "id": "x", "type": "function",
+                "function": {"name": "ws_max",
+                             "arguments": json.dumps({"q": "extra"})},
+            }],
+            finish_reason="tool_calls",
+        ),
+        _ScriptedResponse(content="composed answer"),
+    ])
+
+    def _on_call(req):
+        model_turns_observed.append(len(model_turns_observed) + 1)
+
+    # Wrap model.complete to count real calls.
+    original_complete = model.complete
+    async def counting_complete(req):
+        _on_call(req)
+        return await original_complete(req)
+    model.complete = counting_complete  # type: ignore
+
+    rt = _make_runtime_with_planner(
+        model=model, planner=planner, tools=[web_search, fetch_urls],
+        policies=table,
+    )
+    result = await Agent(rt).handle(_msg())
+    # Model got both its turns — synthesised steps didn't burn the budget.
+    assert len(model_turns_observed) == 2
+    assert result.reply_text == "composed answer"
+
+
+@pytest.mark.asyncio
+async def test_no_fanout_when_planner_query_tool_is_none():
+    """Safe skip: planner emits PlanStep.queries but the policy did
+    NOT declare a planner_query_tool. The executor should fall back
+    to normal model-driven turn 1 and HONOUR ``policy.first_tool``."""
+    @tool(name="ws_safe", params={"q": "Q."})
+    async def web_search(q: str) -> tuple[str, dict]:
+        """Search."""
+        return "snip", {"urls": []}
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="no_fanout",
+            first_tool=force_tool("ws_safe"),
+            max_steps=6,
+            enable_planner=True,
+            # NOTE: planner_query_tool is NOT set; planner.queries are ignored.
+        ),
+    )
+    planner = FakePlanner(queries=[QueryVariant(query="x")])
+    model = ScriptedModel([
+        _ScriptedResponse(
+            content="",
+            tool_calls=[{
+                "id": "tc1", "type": "function",
+                "function": {"name": "ws_safe", "arguments": json.dumps({"q": "x"})},
+            }],
+            finish_reason="tool_calls",
+        ),
+        _ScriptedResponse(content="ok"),
+    ])
+    rt = _make_runtime_with_planner(
+        model=model, planner=planner, tools=[web_search], policies=table,
+    )
+    result = await Agent(rt).handle(_msg())
+    # No synthesised fan-out occurred — only the model-driven web_search.
+    synth_steps = [
+        s for s in result.steps
+        if isinstance(s, ToolStep) and s.attrs.get("synthesized_by_policy")
+    ]
+    assert synth_steps == []
+    # Model's first turn was forced to call ws_safe.
+    assert model.calls[0].tool_choice == {"type": "function",
+                                          "function": {"name": "ws_safe"}}
+
+
+@pytest.mark.asyncio
+async def test_auto_followup_does_not_recurse_on_its_own_output():
+    """Loop-prevention: if ``auto_followup_after == auto_followup_tool``
+    (a misconfigured policy), the executor must NOT feed the follow-up
+    its own output. The ``decision_source == "auto_followup"`` filter
+    is what guards this."""
+    call_count: dict[str, int] = {"n": 0}
+
+    @tool(name="self_followup", params={"urls": "URLs."})
+    async def self_followup(urls: list[str]) -> tuple[str, dict]:
+        """Returns same trigger attr."""
+        call_count["n"] += 1
+        return "fetched", {"urls": ["https://x.example/y"]}
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="recurse_test",
+            first_tool=AUTO,
+            max_steps=4,
+            auto_followup_after="self_followup",
+            auto_followup_tool="self_followup",   # same name → would loop
+        ),
+    )
+    model = ScriptedModel([
+        _ScriptedResponse(
+            content="",
+            tool_calls=[{
+                "id": "t1", "type": "function",
+                "function": {"name": "self_followup",
+                             "arguments": json.dumps({"urls": ["https://a.example/x"]})},
+            }],
+            finish_reason="tool_calls",
+        ),
+        _ScriptedResponse(content="done"),
+    ])
+    rt = _make_runtime_with_planner(
+        model=model, planner=FakePlanner(), tools=[self_followup], policies=table,
+    )
+    result = await Agent(rt).handle(_msg())
+    # Model's turn 1 invocation + ONE synthesised follow-up = 2 total.
+    # If the follow-up's own output re-triggered, we'd see 3+ calls.
+    assert call_count["n"] == 2
+    assert result.reply_text == "done"
+
+
+@pytest.mark.asyncio
+async def test_search_deep_end_to_end_planner_to_fanout_to_followup():
+    """Integration test for the v1.3 SEARCH_DEEP pipeline shape:
+    planner emits queries → executor fans out parallel web_search →
+    executor synthesises fetch_urls from URL pool → model composes
+    final reply. Exercises the wiring across Planner + Policy +
+    executor synthesis + tool dispatch."""
+    search_calls: list[str] = []
+    fetch_calls: list[list[str]] = []
+
+    @tool(name="e2e_search", params={"query": "Q."})
+    async def search(query: str) -> tuple[str, dict]:
+        """Search."""
+        search_calls.append(query)
+        # Two unique URLs per query.
+        return f"snippets for {query}", {
+            "urls": [
+                f"https://{query.split()[0].lower()}.example/a",
+                f"https://{query.split()[0].lower()}.example/b",
+            ],
+        }
+
+    @tool(name="e2e_fetch", params={"urls": "URLs."})
+    async def fetch(urls: list[str]) -> str:
+        """Fetch."""
+        fetch_calls.append(list(urls))
+        return f"fetched: {urls}"
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="e2e_search_deep",
+            first_tool=force_tool("e2e_search"),
+            max_steps=4,
+            enable_planner=True,
+            planner_query_tool="e2e_search",
+            planner_query_arg="query",
+            auto_followup_after="e2e_search",
+            auto_followup_tool="e2e_fetch",
+            auto_followup_attr="urls",
+            auto_followup_arg="urls",
+            auto_followup_max_items=5,
+            auto_followup_one_per_host=True,
+            tool_result_message_caps={"e2e_search": 4000, "e2e_fetch": 12000},
+        ),
+    )
+    planner = FakePlanner(queries=[
+        QueryVariant(query="alpha first"),
+        QueryVariant(query="beta second"),
+        QueryVariant(query="gamma third"),
+    ])
+    # Only ONE scripted response — the composer turn. If the executor
+    # accidentally called the model for the fan-out, ScriptedModel
+    # would raise "exhausted".
+    model = ScriptedModel([
+        _ScriptedResponse(content="comparison complete with all three"),
+    ])
+    rt = _make_runtime_with_planner(
+        model=model, planner=planner, tools=[search, fetch], policies=table,
+    )
+    result = await Agent(rt).handle(_msg("compare three things"))
+
+    # 1. Planner ran exactly once.
+    assert planner.calls == 1
+    # 2. Three parallel searches ran (one per QueryVariant).
+    assert sorted(search_calls) == sorted([
+        "alpha first", "beta second", "gamma third",
+    ])
+    # 3. ONE fetch_urls call consolidated URLs from all three searches,
+    #    deduped by host, capped at 5.
+    assert len(fetch_calls) == 1
+    fetched_pool = fetch_calls[0]
+    hosts = {u.split("/")[2] for u in fetched_pool}
+    # Three distinct hosts (one per QueryVariant).
+    assert hosts == {"alpha.example", "beta.example", "gamma.example"}
+    # 4. Only ONE real model call was made (the composer). All other
+    #    activity was synthesised.
+    assert len(model.calls) == 1
+    # 5. Audit trail: every synthesised tool step carries the policy attrs.
+    tool_steps = [s for s in result.steps if isinstance(s, ToolStep)]
+    assert len(tool_steps) == 4    # 3 searches + 1 fetch
+    for ts in tool_steps:
+        assert ts.attrs["synthesized_by_policy"] == "e2e_search_deep"
+        assert ts.attrs["decision_source"] in ("plan.queries", "auto_followup")
+    # 6. Reply went out.
+    assert result.sent is True
+    assert "comparison" in result.reply_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_result_truncation_keeps_full_text_in_attrs_but_caps_messages():
+    """Per-tool message caps bound model-visible context. The full
+    pre-truncation text remains in ``ToolStep.attrs["result"]`` so
+    reviewers + traces can still inspect it."""
+    big = "x" * 5000
+
+    @tool(name="big_tool_trunc", params={"q": "Q."})
+    async def big_tool(q: str) -> str:
+        """Returns a long string."""
+        return big
+
+    table = PolicyTable().set(
+        VERDICT_NONE, DEPTH_SHALLOW,
+        Policy(
+            name="trunc_test",
+            first_tool=AUTO,
+            max_steps=4,
+            tool_result_message_caps={"big_tool_trunc": 200},
+        ),
+    )
+
+    # Capture messages on the second model.complete call (after the tool
+    # ran). The model's view of the tool result should be truncated.
+    seen_messages: list[list[dict]] = []
+
+    class CapturingModel(ScriptedModel):
+        async def complete(self, req):
+            seen_messages.append(list(req.messages))
+            return await super().complete(req)
+
+    model = CapturingModel([
+        _ScriptedResponse(
+            content="",
+            tool_calls=[{
+                "id": "t1", "type": "function",
+                "function": {"name": "big_tool_trunc",
+                             "arguments": json.dumps({"q": "x"})},
+            }],
+            finish_reason="tool_calls",
+        ),
+        _ScriptedResponse(content="done"),
+    ])
+    rt = _make_runtime(model=model, tools=[big_tool], policies=table)
+    result = await Agent(rt).handle(_msg())
+
+    # The model's second-turn messages: the tool result block should
+    # be truncated to ~200 chars + truncation marker.
+    tool_message = next(
+        m for m in seen_messages[1] if m.get("role") == "tool"
+    )
+    assert len(tool_message["content"]) < 350    # cap + marker
+    assert "truncated at 200" in tool_message["content"]
+    # But the ToolStep retains the FULL text in attrs.
+    tool_step = next(s for s in result.steps if isinstance(s, ToolStep))
+    assert len(tool_step.attrs["result"]) == 5000
+    assert tool_step.attrs["result"] == big

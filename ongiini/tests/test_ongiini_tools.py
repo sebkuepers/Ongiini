@@ -59,13 +59,21 @@ def test_context_tools_have_needs_context_flag():
 # ---------- fetch_urls ----------
 
 @pytest.mark.asyncio
-async def test_fetch_urls_fans_out_in_parallel():
+async def test_fetch_urls_batches_via_extract_endpoint():
+    """v1.3: fetch_urls calls Tavily /extract ONCE with a URL list,
+    instead of N parallel HTTP calls. The tool delegates to the search
+    layer's extract_urls(), which returns a dict {url: text_or_error}."""
+    async def fake_extract(urls):
+        return {u: f"body of {u}" for u in urls}
+
     with patch(
-        "ongiini.tools.ongiini_tools._fetch_url_impl",
-        new=AsyncMock(side_effect=lambda u: f"body of {u}"),
-    ) as mock_fetch:
+        "ongiini.tools.ongiini_tools._extract_urls_impl",
+        new=AsyncMock(side_effect=fake_extract),
+    ) as mock_extract:
         result = await fetch_urls(["https://a.example", "https://b.example"])
-    assert mock_fetch.call_count == 2
+    # One batched call, not two.
+    assert mock_extract.call_count == 1
+    assert mock_extract.call_args.args[0] == ["https://a.example", "https://b.example"]
     assert "## https://a.example" in result
     assert "body of https://a.example" in result
     assert "## https://b.example" in result
@@ -74,16 +82,22 @@ async def test_fetch_urls_fans_out_in_parallel():
 
 @pytest.mark.asyncio
 async def test_fetch_urls_caps_at_five():
+    """Tool-level cap is 5 URLs even though Tavily /extract accepts up
+    to 20 — prompt-budget reasons (the model gets the top 5)."""
     urls = [f"https://{i}.example" for i in range(10)]
+
+    async def fake_extract(passed_urls):
+        return {u: "x" for u in passed_urls}
+
     with patch(
-        "ongiini.tools.ongiini_tools._fetch_url_impl",
-        new=AsyncMock(return_value="x"),
-    ) as mock_fetch:
+        "ongiini.tools.ongiini_tools._extract_urls_impl",
+        new=AsyncMock(side_effect=fake_extract),
+    ) as mock_extract:
         await fetch_urls(urls)
-    assert mock_fetch.call_count == 5     # silent cap
-    # Lock against accidental `urls[-5:]` — must keep the FIRST 5.
-    called_urls = [c.args[0] for c in mock_fetch.call_args_list]
-    assert called_urls == [f"https://{i}.example" for i in range(5)]
+    # ONE batched call, with the FIRST 5 URLs (not the last 5).
+    assert mock_extract.call_count == 1
+    passed = mock_extract.call_args.args[0]
+    assert passed == [f"https://{i}.example" for i in range(5)]
 
 
 @pytest.mark.asyncio
@@ -93,19 +107,23 @@ async def test_fetch_urls_empty_list_returns_friendly_message():
 
 
 @pytest.mark.asyncio
-async def test_fetch_urls_one_failure_does_not_block_others():
-    async def maybe_fail(url: str) -> str:
-        if "bad" in url:
-            raise RuntimeError("simulated failure")
-        return f"body of {url}"
+async def test_fetch_urls_per_url_failure_inlined_in_result():
+    """One URL fails → its block shows the error, others show their
+    content. The batched /extract call returns per-URL outcomes in
+    one dict."""
+    async def fake_extract(urls):
+        return {
+            "https://good.example": "body of https://good.example",
+            "https://bad.example": "Failed to fetch https://bad.example: simulated failure",
+        }
 
     with patch(
-        "ongiini.tools.ongiini_tools._fetch_url_impl",
-        new=AsyncMock(side_effect=maybe_fail),
+        "ongiini.tools.ongiini_tools._extract_urls_impl",
+        new=AsyncMock(side_effect=fake_extract),
     ):
         result = await fetch_urls(["https://good.example", "https://bad.example"])
     assert "body of https://good.example" in result
-    assert "fetch failed" in result
+    assert "Failed to fetch https://bad.example" in result
 
 
 # ---------- delete_my_data ----------
@@ -181,14 +199,51 @@ async def test_lookup_docs_falls_back_when_file_missing():
 # ---------- web_search / fetch_url ----------
 
 @pytest.mark.asyncio
-async def test_web_search_delegates_to_impl():
+async def test_web_search_returns_text_and_urls_tuple():
+    """v1.3: web_search tool returns (text, {"urls": [...]}) so the
+    @tool registry can attach the URL list to the ToolStep.attrs
+    without exposing the structured form to the model."""
     with patch(
         "ongiini.tools.ongiini_tools._web_search_impl",
-        new=AsyncMock(return_value="search results here"),
+        new=AsyncMock(return_value=("search results here", ["https://a.com", "https://b.com"])),
     ) as mock:
         result = await web_search("test query")
-    mock.assert_awaited_once_with("test query")
-    assert result == "search results here"
+    # _web_search_impl is called with the keyword args topic + time_range.
+    mock.assert_awaited_once()
+    call = mock.call_args
+    assert call.args == ("test query",)
+    assert call.kwargs == {"topic": "general", "time_range": None}
+    # The tool wraps the (text, urls) impl response into (text, {"urls": urls}).
+    assert isinstance(result, tuple)
+    assert result[0] == "search results here"
+    assert result[1] == {"urls": ["https://a.com", "https://b.com"]}
+
+
+@pytest.mark.asyncio
+async def test_web_search_forwards_topic_and_time_range_kwargs():
+    """The planner emits topic + time_range per QueryVariant; when the
+    executor synthesises a tool call with those args, the tool must
+    forward them to the search impl."""
+    with patch(
+        "ongiini.tools.ongiini_tools._web_search_impl",
+        new=AsyncMock(return_value=("news block", [])),
+    ) as mock:
+        await web_search("medicine shortage", topic="news", time_range="week")
+    call = mock.call_args
+    assert call.kwargs == {"topic": "news", "time_range": "week"}
+
+
+@pytest.mark.asyncio
+async def test_web_search_empty_time_range_normalised_to_none():
+    """Tool signature uses str default '' instead of None (Owela's
+    @tool decoder doesn't support Optional[str] yet). The tool
+    normalises an empty string to None before calling the impl."""
+    with patch(
+        "ongiini.tools.ongiini_tools._web_search_impl",
+        new=AsyncMock(return_value=("ok", [])),
+    ) as mock:
+        await web_search("q", topic="general", time_range="")
+    assert mock.call_args.kwargs == {"topic": "general", "time_range": None}
 
 
 @pytest.mark.asyncio

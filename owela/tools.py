@@ -303,7 +303,33 @@ class ToolRegistry:
             step.error = repr(exc)
             step.attrs["result"] = f"Tool {name} failed: {exc}"
         else:
-            step.attrs["result"] = result if isinstance(result, str) else str(result)
+            # Tools may OPTIONALLY return a (text, attrs_dict) tuple to
+            # attach structured metadata to the resulting ToolStep
+            # without putting it in the model-visible result text.
+            # Typical case: a search tool returns (formatted snippets,
+            # {"urls": [...]}) so the executor can use the URL list for
+            # follow-up synthesis without exposing the structured form
+            # to the model. Plain string returns continue to work
+            # unchanged.
+            if isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], str):
+                if isinstance(result[1], dict):
+                    result_text, extra_attrs = result
+                    step.attrs.update(extra_attrs)
+                    step.attrs["result"] = result_text
+                else:
+                    # Two-tuple but second element isn't a dict — almost
+                    # certainly a tool that returned (text, some_list) by
+                    # mistake. The model would otherwise see the
+                    # ``str(tuple)`` rendering which is useless. Warn
+                    # loudly and recover by using just the text.
+                    log.warning(
+                        "tool %s returned a 2-tuple whose second element is %s "
+                        "(expected dict for attrs metadata); using text only",
+                        name, type(result[1]).__name__,
+                    )
+                    step.attrs["result"] = result[0]
+            else:
+                step.attrs["result"] = result if isinstance(result, str) else str(result)
 
         step.result_len = len(step.attrs["result"])
         step.ended_at = time.monotonic()

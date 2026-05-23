@@ -299,3 +299,88 @@ async def test_send_handles_url_with_trailing_punctuation():
                new=AsyncMock()):
         with patch("httpx.AsyncClient.head", new=fake_head):
             await t.send("+264user", body, Policy(name="x"), used_search=True)
+
+
+# ---------- v1.3 second interstitial ----------
+
+@pytest.mark.asyncio
+async def test_send_interstitial_schedules_followup_task():
+    """v1.3: send_interstitial sends the first message AND schedules a
+    follow-up task that will fire at T+followup_delay_s if the real
+    reply hasn't arrived."""
+    import asyncio
+    t = WhatsAppTransport(
+        interstitial_text="first",
+        followup_interstitial_text="follow",
+        followup_delay_s=0.05,
+    )
+    sent: list[str] = []
+
+    async def fake_send(uid, body):
+        sent.append(body)
+
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock(side_effect=fake_send)):
+        await t.send_interstitial("+264user", Policy(name="x"))
+        # First interstitial sent synchronously.
+        assert sent == ["first"]
+        # Task is alive and pending.
+        task = t._followup_tasks.get("+264user")
+        assert task is not None and not task.done()
+        # Wait for the followup to fire.
+        await asyncio.sleep(0.08)
+    assert sent == ["first", "follow"]
+
+
+@pytest.mark.asyncio
+async def test_send_cancels_pending_followup_task():
+    """When send() runs (the real reply lands), the pending followup
+    interstitial is cancelled cleanly — no second interstitial is sent."""
+    import asyncio
+    t = WhatsAppTransport(
+        interstitial_text="first",
+        followup_interstitial_text="follow",
+        followup_delay_s=1.0,    # plenty of time to cancel
+    )
+    sent: list[str] = []
+
+    async def fake_send(uid, body):
+        sent.append(body)
+
+    async def fake_head(self, url, **kwargs):
+        return httpx.Response(200)
+
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock(side_effect=fake_send)):
+        with patch("httpx.AsyncClient.head", new=fake_head):
+            await t.send_interstitial("+264user", Policy(name="x"))
+            assert sent == ["first"]
+            # Reply arrives BEFORE the 1s followup_delay elapses.
+            await t.send("+264user", "real reply", Policy(name="x"))
+            # Give the cancelled task a chance to settle.
+            await asyncio.sleep(0.02)
+    # Only "first" interstitial + "real reply" — no follow-up.
+    assert sent == ["first", "real reply"]
+    # Task entry removed from the tracking dict.
+    assert "+264user" not in t._followup_tasks
+
+
+@pytest.mark.asyncio
+async def test_followup_task_per_user_does_not_clobber_other_users():
+    """The followup task dict is keyed by user_id; one user's
+    interstitial doesn't affect another's."""
+    import asyncio
+    t = WhatsAppTransport(
+        followup_interstitial_text="follow",
+        followup_delay_s=10.0,    # long enough we never reach it
+    )
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock()):
+        await t.send_interstitial("+264alice", Policy(name="x"))
+        await t.send_interstitial("+264bob", Policy(name="x"))
+        assert "+264alice" in t._followup_tasks
+        assert "+264bob" in t._followup_tasks
+        # Cancel cleanly to avoid leaving tasks running in test teardown.
+        for task in list(t._followup_tasks.values()):
+            task.cancel()
+        await asyncio.sleep(0.01)

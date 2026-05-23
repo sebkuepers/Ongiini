@@ -113,13 +113,24 @@ def build_policy_table() -> PolicyTable:
         ),
     )
 
-    # SEARCH_DEEP — multi-source research. Force web_search on turn 1
-    # for the same reason SEARCH_SHALLOW does: with first_tool=AUTO,
-    # Gemma 4 26B was observed (May 2026) deciding to skip the search
-    # entirely and reply from training data — even when the planner
-    # explicitly identified things to look up. Forcing the tool on
-    # turn 1 removes that option. Subsequent turns fall back to AUTO
-    # so the model can chain fetch_urls or another web_search freely.
+    # SEARCH_DEEP — multi-source research. v1.3 turns this into a
+    # fully-deterministic search-quality pipeline:
+    #
+    #   - Planner emits structured QueryVariants (JSON output)
+    #   - Executor synthesises N parallel web_search calls from those
+    #     queries (``planner_query_tool="web_search"``)
+    #   - After every web_search ToolStep, executor consolidates URLs
+    #     and synthesises a fetch_urls call automatically
+    #     (``auto_followup_after`` / ``auto_followup_tool``)
+    #   - Per-tool message truncation bounds the model's context window
+    #
+    # ``first_tool=force_tool("web_search")`` is still set as a safety
+    # net: if the planner soft-fails (returns empty queries), the model
+    # gets forced into web_search on turn 1 instead of trying to answer
+    # from training data. With successful planner JSON, the executor
+    # bypasses ``first_tool`` because the synthesised fan-out already
+    # ran the searches.
+    #
     # ALL THREE v1 phases on: plan decomposes the question, critique
     # checks the answer, interstitial tells the user we're working.
     table.set(
@@ -131,6 +142,25 @@ def build_policy_table() -> PolicyTable:
             enable_planner=_planner_on(),
             enable_critique=_critique_on(),
             enable_interstitial=_interstitial_on(),
+            # v1.3 deterministic search pipeline:
+            planner_query_tool="web_search",
+            planner_query_arg="query",
+            auto_followup_after="web_search",
+            auto_followup_tool="fetch_urls",
+            auto_followup_attr="urls",
+            auto_followup_arg="urls",
+            auto_followup_max_items=5,
+            auto_followup_one_per_host=True,
+            # Per-tool context caps. With multi-query fan-out potentially
+            # producing 4 × 4000 = 16K chars of search snippets, plus
+            # synthesised fetch_urls returning 5 × ~12K = 60K chars, we
+            # cap the model-visible view per-result. Full content
+            # remains in ToolStep.attrs["result"] for the reviewer.
+            tool_result_message_caps={
+                "web_search": 4000,
+                "fetch_urls": 12000,
+                "fetch_url": 12000,
+            },
         ),
     )
 

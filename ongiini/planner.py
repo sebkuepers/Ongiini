@@ -1,106 +1,126 @@
-"""Planner — pre-act-loop decomposition for SEARCH_DEEP turns.
+"""Planner — pre-act-loop query decomposition for SEARCH_DEEP turns.
 
-When the depth-aware classifier returns SEARCH_DEEP (multi-source
-comparison, list of N items, "what's going on with X and Y"), running
-the act loop immediately tends to produce one shallow search instead
-of the structured multi-step research the question actually needs.
-The planner step interrupts this: before the first model call, ask
-Gemma to enumerate what's already known, what to look up, and the
-order of searches.
+v1.3 changes the planner's job: instead of writing PROSE that tries to
+steer the model's tool selection (which Gemma 4 routinely ignored —
+see live-test history), the planner now emits **structured query
+variants** that the executor materialises into parallel tool calls.
 
-The planner's output is injected as a system message by the
-``OngiiniMemoryProvider`` when assembling the act-loop's first prompt.
-The model then enters the act loop with a written plan in scope and
-tends to follow it.
+Output shape (JSON, terminated by the literal token ``PLAN_DONE``)::
 
-Prompt adapted from smolagents' ``initial_plan`` YAML, tightened for
-the WhatsApp shape (output cap ~200 tokens, no markdown, plain text
-suitable for prepending to a chat prompt).
+    {
+      "facts_known": "1-2 sentence context the model can rely on without searching",
+      "queries": [
+        {"query": "Bank Windhoek home loan rate 2026", "topic": "general", "time_range": null},
+        {"query": "FNB Namibia home loan rate 2026",  "topic": "general", "time_range": null},
+        {"query": "Nedbank Namibia home loan rate 2026", "topic": "general", "time_range": null},
+        {"query": "Namibia prime lending rate", "topic": "general", "time_range": "month"}
+      ]
+    }
+    PLAN_DONE
 
-Soft-fail contract: any timeout, parse failure, or other error
-returns ``PlanStep(plan_text="")``. An empty plan_text means the
-MemoryProvider skips the injection entirely — the act loop runs
-exactly as it would without a planner. Never a hard failure.
+The executor reads ``PlanStep.queries`` and synthesises one parallel
+``web_search`` call per variant — no LLM step between plan and fan-out.
+``PlanStep.plan_text`` carries the prose ``facts_known`` for the
+MemoryProvider to inject as context.
+
+Soft-fail contract: any timeout, JSON parse failure, or other error
+returns ``PlanStep(plan_text="", queries=[])``. Empty queries means
+the executor falls back to letting the model pick the search itself
+on turn 1 (gated by ``policy.first_tool``).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import Any
 
 from openai import AsyncOpenAI
 
-from owela import InboundMessage, PlanStep, Policy, Step
+from owela import InboundMessage, PlanStep, Policy, QueryVariant, Step
 
 log = logging.getLogger("ongiini.planner")
 
 
-# Adapted from smolagents/src/smolagents/prompts/code_agent.yaml::initial_plan,
-# narrowed for the WhatsApp / Namibia shape. The four sections
-# (FACTS I ALREADY KNOW / FACTS TO LOOK UP / SEARCH PLAN / TOOL PLAN)
-# decompose the question AND tell the model which tools to use to
-# gather what's missing. The TOOL PLAN section was added after live
-# testing showed Gemma 4 sticking to web_search even when the question
-# needed verbatim content from a specific document — without explicit
-# guidance, the model never escalates to fetch_url / fetch_urls.
-#
-# The ``PLAN_DONE`` sentinel mirrors smolagents' ``<end_plan>`` —
-# gives the parser a reliable stop and protects against the model
-# rambling into the act loop content.
+# Prompt: ask Gemma for JSON only, with explicit examples per question
+# shape. Examples are load-bearing — Gemma 4 emits much cleaner JSON
+# with concrete shape templates than with abstract schema descriptions.
 _PLAN_PROMPT = """You're about to help a user in Namibia answer this question on WhatsApp:
 
   {question}
 
-Before any search, write a 4-section plan in plain text. Keep the total
-output under 250 tokens. No markdown, no preamble. Use this exact shape:
+Plan the search BEFORE any tool runs. Output ONLY a JSON object in this
+exact shape (no extra text before or after), then the literal token
+PLAN_DONE on its own line.
 
-FACTS I ALREADY KNOW:
-- 1-2 bullets of background you can answer confidently without searching
-  (e.g. general geography, well-known institutions, language facts).
-- Write "none" if it's genuinely all unknown to you.
+Shape:
+{{
+  "facts_known": "1-2 sentences of background you can rely on confidently without searching (e.g. general geography, well-known institutions). Use 'none' if nothing.",
+  "queries": [
+    {{"query": "<specific search query>", "topic": "general" | "news", "time_range": null | "day" | "week" | "month" | "year"}}
+  ]
+}}
 
-FACTS TO LOOK UP:
-- 1-3 bullets of specific things you'll need to search for (names of
-  Namibian businesses / current prices / opening hours / current events).
-- Each bullet should be one concrete sub-question.
+How to pick queries:
 
-SEARCH PLAN:
-- 1-2 lines describing the search order. Mention whether to broaden or
-  narrow the query if first results are thin.
+- COMPARISON questions ("compare X, Y, Z", "best 3 banks for...", "cheapest
+  medical aid"): emit ONE query per entity AND one context query. Each
+  query names the specific entity + the specific fact. 3-5 queries total.
+  Example for "compare home loan rates at 3 Namibian banks":
+  [
+    {{"query": "Bank Windhoek home loan interest rate 2026", "topic": "general", "time_range": null}},
+    {{"query": "FNB Namibia home loan rate 2026", "topic": "general", "time_range": null}},
+    {{"query": "Nedbank Namibia home loan rate 2026", "topic": "general", "time_range": null}},
+    {{"query": "Namibia prime lending rate 2026", "topic": "general", "time_range": "month"}}
+  ]
 
-TOOL PLAN:
-- Tell yourself HOW to use the tools, not just what to look up. Use
-  these rules:
-  - For COMPARISON questions ("compare X, Y, Z", "which is cheapest",
-    "best 3 banks for..."), call ``web_search`` to find the top sources
-    first, then call ``fetch_urls`` on the 3-5 best results IN ONE CALL
-    to read them in parallel.
-  - For VERBATIM or SPECIFIC DATA (an exact price, a clause, an exact
-    schedule, an official document), call ``web_search`` to find the
-    authoritative source, then call ``fetch_url`` to read the full
-    page — search snippets routinely truncate the data you need.
-  - For NEWS / CURRENT EVENTS / WHAT'S HAPPENING questions, a single
-    ``web_search`` is usually enough — the snippets carry the
-    headlines and you can quote them directly.
-  - For HOW-TO and PROCESS questions about Namibia, search once and
-    fetch the most authoritative source (gov website, BIPA, NamRA).
+- NEWS / CURRENT EVENTS ("what's happening with...", "is there a strike",
+  "any new policy on..."): topic "news", time_range "week" or "month".
+  1-2 queries. Example for "Namibian medicine shortage latest":
+  [
+    {{"query": "Namibia medicine shortage 2026", "topic": "news", "time_range": "month"}},
+    {{"query": "Namibia health ministry response medicine shortage", "topic": "news", "time_range": "month"}}
+  ]
 
-End with the literal token PLAN_DONE.
+- VERBATIM / SPECIFIC DATA (an exact price, law section, exact schedule):
+  1-2 specific queries; the executor will fetch the source pages
+  automatically. Example for "what does Article 16 of the Namibian
+  constitution say":
+  [
+    {{"query": "Article 16 Namibian constitution full text", "topic": "general", "time_range": null}}
+  ]
+
+- SINGLE-SOURCE LOOKUPS ("exchange rate today", "BoN repo rate"):
+  1 query. Recency-sensitive ones use time_range "day" or "week".
+  Example for "BoN exchange rate today":
+  [
+    {{"query": "Bank of Namibia exchange rate today USD ZAR", "topic": "general", "time_range": "day"}}
+  ]
+
+Cap at 5 queries maximum. Keep queries SHORT and ENTITY-SPECIFIC — they
+become real search engine queries; padding hurts recall.
+
+End with PLAN_DONE.
 """
 
 
-# Hard cap on plan output. The act loop will see this as a system
-# message; bloating it eats prefix-cache headroom and slows the chat
-# call. ~270 completion tokens accommodates the new TOOL PLAN section
-# above.
-_PLAN_MAX_TOKENS = 280
+# Output cap. JSON shape with up to 5 query objects fits comfortably
+# under 300 completion tokens. Generous to allow for verbose entity
+# names ("Bank Windhoek Namibia home loan plus first-time buyer...").
+_PLAN_MAX_TOKENS = 320
 
 # Latency budget. If Gemma can't produce a plan in this time, the
 # planner returns an empty PlanStep and the executor proceeds without
-# a plan — same shape as a v0 SEARCH_DEEP turn.
+# fan-out — same shape as a v0 SEARCH_DEEP turn.
 _TIMEOUT_S = 4.0
+
+# Soft cap on parsed queries — the executor would dispatch all of
+# them but Tavily credits and prompt-budget concerns favour staying
+# small. The prompt asks for ≤5; we enforce it on the parser side
+# too in case the model emits more.
+_MAX_QUERIES = 5
 
 
 class OngiiniPlanner:
@@ -154,9 +174,6 @@ class OngiiniPlanner:
                     }],
                     temperature=0.3,
                     max_tokens=self.max_tokens,
-                    # stop=["PLAN_DONE"] would also work but some vLLM
-                    # builds emit a partial last token when the stop
-                    # fires — easier to strip the sentinel after.
                 ),
                 timeout=self.timeout_s,
             )
@@ -182,14 +199,108 @@ class OngiiniPlanner:
         if resp.choices:
             raw = (resp.choices[0].message.content or "").strip()
 
-        # Strip the sentinel and anything after it. The model occasionally
-        # appends a stray paragraph after PLAN_DONE — ignore it.
-        if "PLAN_DONE" in raw:
-            raw = raw.split("PLAN_DONE", 1)[0].rstrip()
-
-        step.plan_text = raw
+        facts_known, queries = _parse_plan(raw)
+        step.plan_text = facts_known
+        step.queries = queries
         step.ended_at = time.monotonic()
         return step
+
+
+def _parse_plan(raw: str) -> tuple[str, list[QueryVariant]]:
+    """Parse the planner's JSON response.
+
+    Returns ``(facts_known, queries)`` — empty strings/lists on any
+    parse failure (soft-fail). The executor treats empty queries as
+    "no fan-out — model picks the first query itself."
+
+    Tolerant: ignores text before/after the JSON object, accepts
+    malformed queries (skips them while keeping good ones), and
+    silently caps at ``_MAX_QUERIES``.
+    """
+    if not raw:
+        return "", []
+
+    # Strip everything from PLAN_DONE onward. Gemma occasionally
+    # appends commentary.
+    if "PLAN_DONE" in raw:
+        raw = raw.split("PLAN_DONE", 1)[0].rstrip()
+
+    # Find first balanced { } block. We don't trust regex with
+    # nested braces; manual depth tracking is reliable.
+    start = raw.find("{")
+    if start == -1:
+        return "", []
+    depth = 0
+    end = -1
+    in_string = False
+    escape = False
+    for i in range(start, len(raw)):
+        ch = raw[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end == -1:
+        return "", []
+
+    try:
+        obj = json.loads(raw[start:end])
+    except json.JSONDecodeError as exc:
+        log.warning("planner JSON parse failed: %s", exc)
+        return "", []
+
+    if not isinstance(obj, dict):
+        return "", []
+
+    facts_known_raw = obj.get("facts_known")
+    facts_known = facts_known_raw.strip() if isinstance(facts_known_raw, str) else ""
+    if facts_known.lower() == "none":
+        facts_known = ""
+
+    queries: list[QueryVariant] = []
+    raw_queries = obj.get("queries")
+    if isinstance(raw_queries, list):
+        for q in raw_queries:
+            if not isinstance(q, dict):
+                continue
+            text = q.get("query")
+            if not isinstance(text, str):
+                continue
+            text = text.strip()
+            if not text:
+                continue
+            extra: dict[str, Any] = {}
+            # Topic — only "news" needs to land in extra; "general" is
+            # the Tavily default and the web_search tool's default,
+            # so omitting it from extra is both correct AND keeps the
+            # synthesized tool_call args slim.
+            topic = q.get("topic")
+            if isinstance(topic, str) and topic.strip() == "news":
+                extra["topic"] = "news"
+            # Time range — null / missing / invalid → omitted (no
+            # time restriction).
+            tr = q.get("time_range")
+            if isinstance(tr, str) and tr.strip() in ("day", "week", "month", "year"):
+                extra["time_range"] = tr.strip()
+            queries.append(QueryVariant(query=text, extra=extra))
+            if len(queries) >= _MAX_QUERIES:
+                break
+
+    return facts_known, queries
 
 
 def _billable(usage_obj: Any) -> tuple[int, int, int]:

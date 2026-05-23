@@ -59,10 +59,23 @@ class WhatsAppTransport:
             "Looking into this for you — give me a moment, this kind of "
             "question usually needs a few sources."
         ),
+        followup_interstitial_text: str = (
+            "Still working on this — pulling extra sources to make sure "
+            "the answer is grounded."
+        ),
+        followup_delay_s: float = 15.0,
         dead_url_check_timeout_s: float = 2.0,
     ) -> None:
         self.interstitial_text = interstitial_text
+        self.followup_interstitial_text = followup_interstitial_text
+        self.followup_delay_s = followup_delay_s
         self.dead_url_check_timeout_s = dead_url_check_timeout_s
+        # In-flight followup tasks, keyed by user_id. The send() method
+        # cancels these when the real reply lands. If two consecutive
+        # turns from the same user fire send_interstitial in close
+        # succession, the second overwrites the first task (the first's
+        # send_interstitial run has already finished anyway).
+        self._followup_tasks: dict[str, asyncio.Task] = {}
 
     async def acknowledge(self, msg: InboundMessage) -> None:
         """Read receipt + typing indicator. Soft-fail (logged inside
@@ -75,8 +88,42 @@ class WhatsAppTransport:
         """v1 — sends a "still working" message during long turns. The
         text is configurable at construction time so other transports
         with different latency budgets (Signal, Telegram) can override.
+
+        v1.3 — also schedules a follow-up interstitial at T+
+        ``followup_delay_s`` seconds. The follow-up fires if and only
+        if the real reply hasn't landed by then. ``send()`` cancels
+        the pending follow-up cleanly. Multi-query fan-out + advanced
+        Tavily extract can push tail latency past WhatsApp's 25s
+        typing-indicator window; the follow-up keeps the user informed.
         """
         await _send_text(user_id, self.interstitial_text)
+        # Replace any previous still-pending followup for this user.
+        prev = self._followup_tasks.pop(user_id, None)
+        if prev is not None and not prev.done():
+            prev.cancel()
+        self._followup_tasks[user_id] = asyncio.create_task(
+            self._followup_after_delay(user_id),
+        )
+
+    async def _followup_after_delay(self, user_id: str) -> None:
+        """Sleep for ``followup_delay_s`` then send the followup
+        interstitial. ``send()`` cancels this task via
+        ``asyncio.CancelledError`` when the real reply lands; we treat
+        cancellation as the success path and stay silent. Any other
+        error is logged but not raised — interstitial UX is soft-fail
+        per the transport contract.
+        """
+        try:
+            await asyncio.sleep(self.followup_delay_s)
+            await _send_text(user_id, self.followup_interstitial_text)
+        except asyncio.CancelledError:
+            # Normal: the reply landed before T+15s.
+            raise
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("followup interstitial failed for %s: %s", user_id, exc)
+        finally:
+            # Self-cleanup so the dict doesn't grow unbounded.
+            self._followup_tasks.pop(user_id, None)
 
     async def send(
         self,
@@ -107,6 +154,12 @@ class WhatsAppTransport:
         Returns True on successful send. Transport-side failures bubble
         up as RuntimeError; the executor catches and records ReplyStep.sent=False.
         """
+        # Cancel any pending follow-up interstitial — the real reply is
+        # arriving, no need for "still working" any more.
+        pending = self._followup_tasks.pop(user_id, None)
+        if pending is not None and not pending.done():
+            pending.cancel()
+
         cleaned = (body or "").strip()
         if not cleaned:
             cleaned = "Sorry, I couldn't come up with a reply."

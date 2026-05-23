@@ -48,20 +48,70 @@ class RouterStep(Step):
     depth: str = "SHALLOW"        # SHALLOW / DEEP — only meaningful for SEARCH
 
 
+@dataclass(frozen=True)
+class QueryVariant:
+    """One query emitted by a Planner for multi-query fan-out.
+
+    The Planner is a state-setter — it can hand the executor a list of
+    structured queries that get synthesised into parallel tool calls
+    on turn 1, instead of relying on the model to pick a single
+    query. The executor materialises each variant into a tool call:
+    ``query`` becomes the primary kwarg (name configured by
+    ``Policy.planner_query_arg``), and ``extra`` is spread as
+    additional kwargs.
+
+    ``extra`` is opaque to Owela — Owela just forwards it to the
+    application's tool implementation. Engine-specific knobs (search
+    topic, time-range biasing, language hints, source filters, etc.)
+    live there. Per anti-trap principle #8, the framework declares
+    no specific keys.
+
+    ``frozen=True`` prevents attribute reassignment. ``extra`` is
+    a dict (mutable internally) — by convention, planners construct
+    fresh variants per turn and don't mutate them.
+    """
+    query: str
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass
 class PlanStep(Step):
-    """Reserved for v1: the planner's structured plan text."""
+    """Planner output.
+
+    ``plan_text`` is the prose context the MemoryProvider may inject as
+    a system message before the act loop (preserved for backwards-
+    compat / context priming).
+
+    ``queries`` is the structured fan-out signal. When non-empty AND
+    ``policy.planner_query_tool`` is set, the executor synthesises one
+    parallel tool call per variant on turn 1. Empty list = soft-fail
+    or single-query case; executor falls back to letting the model
+    pick the query.
+    """
     kind: str = "plan"
     plan_text: str = ""
+    queries: list[QueryVariant] = field(default_factory=list)
 
 
 @dataclass
 class ModelCallStep(Step):
-    """One vLLM round-trip (chat.completions.create).
+    """One model round-trip OR a policy-synthesised call.
 
-    ``tool_calls`` is the OpenAI-shape list returned by the model. The
-    executor uses it to decide whether to loop or terminate. ``finish_reason``
-    is the standard OpenAI value (``stop`` / ``tool_calls`` / ``length`` / ...).
+    ``tool_calls`` is the OpenAI-shape list. For real model calls,
+    it's what the model returned. For synthesised calls (v1.3 — the
+    executor fabricates a tool dispatch without an LLM round-trip),
+    it's what the executor built. ``finish_reason`` is the standard
+    OpenAI value (``stop`` / ``tool_calls`` / ``length`` / ...).
+
+    ``turn`` is the 1-indexed model-driven turn this call belongs to.
+    Synthesised calls share the turn number of the upcoming/preceding
+    model turn — disambiguate via the ``synthesized`` flag, not the
+    turn integer.
+
+    ``synthesized`` distinguishes policy-driven synthesis from real
+    model calls. Set True by the executor's synthesis helpers; left
+    False for normal calls. Hooks filtering "real model turns" should
+    check this flag rather than relying on ``turn`` values.
     """
     kind: str = "model_call"
     turn: int = 0
@@ -69,6 +119,7 @@ class ModelCallStep(Step):
     enable_thinking: bool = False
     reasoning_budget: int | None = None
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    synthesized: bool = False
 
 
 @dataclass

@@ -305,9 +305,13 @@ async def test_tracing_attributes_tool_results_to_parent_call(tmp_path: Path):
 
     entry = json.loads((tmp_path / "t.jsonl").read_text().strip())
     # First call gets the tool, second call does not.
+    # v1.3 added audit keys (synthesized_by_policy, decision_source,
+    # query_variant_index) — all None for model-chosen tools.
     assert entry["calls"][0].get("tool_results") == [
         {"name": "web_search", "args_len": 0, "result_len": 2000,
-         "error": None, "latency_ms": 0},
+         "error": None, "latency_ms": 0,
+         "synthesized_by_policy": None, "decision_source": None,
+         "query_variant_index": None},
     ]
     assert "tool_results" not in entry["calls"][1]
     assert entry["used_search"] is True

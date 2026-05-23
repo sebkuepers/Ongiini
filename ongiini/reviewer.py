@@ -47,10 +47,16 @@ from owela import (
 log = logging.getLogger("ongiini.reviewer")
 
 
-# How much of each tool result we feed to the critique. 2k chars is
-# enough context to judge "is this claim backed?" while keeping the
-# critique prompt prefix-cacheable across requests.
-_TOOL_RESULT_TRUNCATION = 2000
+# How much of each tool result we feed to the critique.
+#
+# v1.3 bumped 2000 → 8000. With multi-query fan-out + advanced
+# /search (include_raw_content + chunks_per_source=3) + advanced
+# /extract, tool results carry substantially more content than they
+# used to. The reviewer needs to see enough of each result to verify
+# grounding — at 2000 chars per result, critique would routinely
+# miss the actual cited content from a fetched page. Cost: ~4-6K
+# extra tokens per critique call, well within Gemma 4's context.
+_TOOL_RESULT_TRUNCATION = 8000
 
 
 _CRITIQUE_PROMPT = """A WhatsApp helper for users in Namibia ("Ongiini") drafted the reply

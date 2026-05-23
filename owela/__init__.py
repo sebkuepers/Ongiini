@@ -56,8 +56,8 @@ from .policy import (
 from .router import Classifier, ClassifierResult
 from .runtime import Planner, Reviewer, Runtime
 from .step import (
-    CritiqueStep, ModelCallStep, PlanStep, ReplyStep, ReviseStep,
-    RouterStep, Step, ToolStep,
+    CritiqueStep, ModelCallStep, PlanStep, QueryVariant, ReplyStep,
+    ReviseStep, RouterStep, Step, ToolStep,
 )
 from .tools import (
     ToolContext, ToolRegistry, ToolSpec, reset_global_registry, tool,
@@ -104,6 +104,7 @@ __all__ = [
     "Step",
     "RouterStep",
     "PlanStep",
+    "QueryVariant",
     "ModelCallStep",
     "ToolStep",
     "CritiqueStep",

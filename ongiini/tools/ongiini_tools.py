@@ -26,10 +26,16 @@ from owela import ToolContext, tool
 
 from .. import usage as _usage
 from ..memory import short_term as _memory
+from ..search import extract_urls as _extract_urls_impl
 from ..search import fetch_url as _fetch_url_impl
 from ..search import web_search as _web_search_impl
 
 log = logging.getLogger("ongiini.tools")
+
+
+# Tools cap fetch_urls at 5 for prompt-budget reasons (Tavily's /extract
+# accepts up to 20 per batch — see ongiini/search.py).
+_FETCH_URLS_CAP = 5
 
 
 # ----------------------------- search tools -----------------------------
@@ -51,10 +57,38 @@ log = logging.getLogger("ongiini.tools")
         "least one full deep URL (not the publication homepage) on its "
         "own line before your next-step question."
     ),
-    params={"query": "Search query in natural language. Be specific."},
+    params={
+        "query": "Search query in natural language. Be specific.",
+        "topic": (
+            "Tavily search topic. 'general' for most queries (default). "
+            "'news' for breaking events / current-affairs queries — usually "
+            "the planner pre-selects this for you."
+        ),
+        "time_range": (
+            "Restrict to recent results: 'day', 'week', 'month', 'year'. "
+            "Leave empty for no time restriction. Usually pre-selected by "
+            "the planner for recency-sensitive queries."
+        ),
+    },
 )
-async def web_search(query: str) -> str:
-    return await _web_search_impl(query)
+async def web_search(
+    query: str,
+    topic: str = "general",
+    time_range: str = "",
+) -> tuple[str, dict[str, Any]]:
+    """Wrap ``_web_search_impl`` and surface the URL list to the
+    executor via the tuple-return contract.
+
+    Returning ``(text, attrs_dict)`` lets the @tool registry attach
+    ``{"urls": [...]}`` to the ToolStep.attrs — the executor's auto-
+    follow-up synthesis machinery reads URLs from there to escalate
+    from search to fetch_urls without an LLM call. The model only
+    sees ``text``.
+    """
+    text, urls = await _web_search_impl(
+        query, topic=topic, time_range=time_range or None,
+    )
+    return text, {"urls": urls}
 
 
 @tool(
@@ -94,24 +128,24 @@ async def fetch_url(url: str) -> str:
     },
 )
 async def fetch_urls(urls: list[str]) -> str:
-    """Fan-out fetch — concurrent via asyncio.gather. Each fetch shares
-    the same SSRF guard as the single-URL ``fetch_url``."""
+    """Batched fetch — ONE Tavily ``/extract`` call returns all results.
+
+    Saves N-1 HTTP round trips vs the old asyncio.gather-per-URL
+    approach. Tavily handles parallelism server-side. Per-URL failures
+    land as inline ``[fetch failed: ...]`` markers so the model can
+    work with whichever pages came back.
+    """
     if not urls:
         return "No URLs supplied."
-    if len(urls) > 5:
-        urls = urls[:5]    # cap silently — model gets the top 5
+    if len(urls) > _FETCH_URLS_CAP:
+        urls = urls[:_FETCH_URLS_CAP]    # cap silently — model gets the top N
 
-    results = await asyncio.gather(
-        *[_fetch_url_impl(u) for u in urls],
-        return_exceptions=True,
-    )
+    results = await _extract_urls_impl(urls)
 
     parts: list[str] = []
-    for url, res in zip(urls, results):
-        if isinstance(res, Exception):
-            parts.append(f"## {url}\n[fetch failed: {res}]")
-        else:
-            parts.append(f"## {url}\n{res}")
+    for url in urls:
+        body = results.get(url, f"[fetch failed: no result for {url}]")
+        parts.append(f"## {url}\n{body}")
     return "\n\n".join(parts)
 
 

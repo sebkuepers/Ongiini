@@ -171,19 +171,25 @@ class OngiiniMemoryProvider:
 
     @staticmethod
     def _extract_plan_message(prior_steps: list[Step]) -> str:
-        """Pull the latest PlanStep's text out of the step list and
-        format it as a system-message body. Empty plan_text means the
-        Planner soft-failed; treat as no plan."""
+        """Pull the latest PlanStep's ``plan_text`` (the ``facts_known``
+        prose, post v1.3) and format it as a context-priming system
+        message body.
+
+        v1.3 removed the imperative tool-steering wrapper: the executor
+        now synthesises searches deterministically from
+        ``PlanStep.queries``, so the model no longer needs prose
+        instructions on which tool to call. What remains is the
+        planner's pre-search context — facts the model can rely on
+        without searching. Surface it neutrally as additional context.
+
+        Empty ``plan_text`` means the planner soft-failed or had no
+        context to add; return empty string and skip injection.
+        """
         for step in reversed(prior_steps):
             if isinstance(step, PlanStep) and step.plan_text:
                 return (
-                    "You wrote this plan BEFORE seeing any search results. "
-                    "Treat the TOOL PLAN section as DIRECT INSTRUCTIONS for "
-                    "which tools to call in which order — not optional "
-                    "suggestions. If the TOOL PLAN says to call fetch_urls "
-                    "after web_search, you MUST call fetch_urls. The plan "
-                    "only deviates if a tool result reveals the question "
-                    "needs a different approach.\n\n"
+                    "Pre-search context (search results will appear "
+                    "in the conversation below):\n"
                     f"{step.plan_text}"
                 )
         return ""

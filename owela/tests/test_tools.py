@@ -166,6 +166,54 @@ async def test_registry_executes_context_tool():
 
 
 @pytest.mark.asyncio
+async def test_registry_unpacks_tuple_return_into_step_attrs():
+    """v1.3 contract: tools may optionally return ``(text, attrs_dict)``
+    to attach structured metadata (e.g. URL lists from web_search) to
+    the resulting ToolStep without exposing it to the model in the
+    visible result text. The registry detects the tuple shape and
+    merges the dict into ``step.attrs`` while keeping ``attrs["result"]``
+    as the plain text."""
+    @tool(name="returns_tuple_test", params={"q": "Query."})
+    async def returns_tuple(q: str) -> tuple[str, dict]:
+        """Returns text plus attrs."""
+        return f"results for {q}", {"urls": ["https://a", "https://b"]}
+
+    reg = ToolRegistry([returns_tuple])
+    ctx = ToolContext(user_id="u", runtime=None, msg=_dummy_msg())  # type: ignore[arg-type]
+    step = await reg.execute(
+        {"id": "c-tuple", "type": "function",
+         "function": {"name": "returns_tuple_test",
+                      "arguments": '{"q": "ham"}'}},
+        ctx,
+    )
+    assert step.attrs["result"] == "results for ham"
+    assert step.attrs["urls"] == ["https://a", "https://b"]
+    assert step.result_len == len("results for ham")
+    assert step.error is None
+
+
+@pytest.mark.asyncio
+async def test_registry_string_return_still_works():
+    """Backwards compat: tools returning a plain string land in
+    ``attrs["result"]`` and no extra attrs are merged."""
+    @tool(name="plain_string_test", params={"q": "Query."})
+    async def plain(q: str) -> str:
+        """Returns text."""
+        return f"plain for {q}"
+
+    reg = ToolRegistry([plain])
+    ctx = ToolContext(user_id="u", runtime=None, msg=_dummy_msg())  # type: ignore[arg-type]
+    step = await reg.execute(
+        {"id": "c-str", "type": "function",
+         "function": {"name": "plain_string_test",
+                      "arguments": '{"q": "spam"}'}},
+        ctx,
+    )
+    assert step.attrs["result"] == "plain for spam"
+    assert "urls" not in step.attrs
+
+
+@pytest.mark.asyncio
 async def test_registry_handles_tool_exception():
     @tool(name="boom_test")
     async def boom() -> str:
