@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-05-22. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-05-23. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Privacy summary (homepage cards)
 
@@ -110,7 +110,7 @@ Every reply Ongiini sends you, including the tokens used to read any photo you a
 
 ### Which languages can I use?
 
-English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it (that's unlikely to happen soon) but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path.
+English and Afrikaans work well today. Adding Oshiwambo is something we're actively working on — the plan is a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. We don't want to promise a date until it's solid enough to use day-to-day.
 
 ### Can I send voice notes?
 

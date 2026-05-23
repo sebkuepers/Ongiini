@@ -61,7 +61,7 @@
     "url": "https://ongiini.ai",
     "applicationCategory": "CommunicationApplication",
     "operatingSystem": "WhatsApp",
-    "description": "A free AI helper on WhatsApp for Namibia. Ask in text or send a photo — school, farming, health, contracts, daily life. English and Afrikaans today, Oshiwambo via a translation layer coming soon. Powered by Google's Gemma 4 26B running locally on an NVIDIA DGX Spark.",
+    "description": "A free AI helper on WhatsApp for Namibia. Ask in text or send a photo — school, farming, health, contracts, daily life. English and Afrikaans. Powered by Google's Gemma 4 26B running locally on an NVIDIA DGX Spark.",
     "inLanguage": ["en", "af"],
     "offers": {
       "@type": "Offer",
@@ -104,7 +104,7 @@
       {"@type": "Question", "name": "Does it cost anything?", "acceptedAnswer": {"@type": "Answer", "text": "No. Each user gets one million free tokens per month, which covers about 500 normal conversations — easily more than typical daily use. The cap resets on the 1st of every month. WhatsApp's normal data charges from your mobile provider still apply, but Ongiini itself is free."}},
       {"@type": "Question", "name": "What is a token?", "acceptedAnswer": {"@type": "Answer", "text": "It's how AI measures the text it reads and writes — roughly three-quarters of a word, including punctuation. 'How are you?' is about 4 tokens. 'My maize leaves are turning yellow' is about 9. One million tokens — your free monthly cap — works out to roughly 500 normal back-and-forth conversations over a month."}},
       {"@type": "Question", "name": "What exactly counts toward my monthly tokens?", "acceptedAnswer": {"@type": "Answer", "text": "Every reply Ongiini sends you, including the tokens used to read any photo you attach. Plus a small amount for the behind-the-scenes work of keeping your long-term memory in sync after each message, and the occasional summary that compresses old turns of a long conversation. Reading existing memory back to you is free. Asking 'how many tokens have I used this month?' on WhatsApp gives you a breakdown across all three."}},
-      {"@type": "Question", "name": "Which languages can I use?", "acceptedAnswer": {"@type": "Answer", "text": "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."}},
+      {"@type": "Question", "name": "Which languages can I use?", "acceptedAnswer": {"@type": "Answer", "text": "English and Afrikaans work well today. Adding Oshiwambo is something we're actively working on — the plan is a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. We don't want to promise a date until it's solid enough to use day-to-day."}},
       {"@type": "Question", "name": "Can I send voice notes?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Press and hold the microphone button in WhatsApp, speak your question, release to send. English and Afrikaans both work; up to about 90 seconds per note. Ongiini transcribes the recording on the Spark itself using Whisper. The transcript is treated exactly like a typed message. Audio bytes are discarded right after transcription. Replies still come back as text for now; voice replies are on the roadmap."}},
       {"@type": "Question", "name": "What can I ask it?", "acceptedAnswer": {"@type": "Answer", "text": "Lots of the things you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice. You can also send a photo if it's easier to show than tell."}},
       {"@type": "Question", "name": "Can I send photos?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Take a photo on WhatsApp, add a question as the caption, send. Ongiini can look at the picture and answer questions about it — useful for a sick plant, a strange rash, an ingredient label, a contract page you can't quite read, or a handwritten note. The photo itself isn't kept — Ongiini reads it in memory and then discards the file. Only what it learned from the picture goes into long-term memory, and 'delete my data' wipes those learnings too."}},
@@ -1028,7 +1028,6 @@
         <div class="og-lang" role="group" aria-label="Language">
           <button type="button" class="og-lang-seg is-active" data-set-locale="en">EN</button>
           <button type="button" class="og-lang-seg" data-set-locale="af">AF</button>
-          <span class="og-lang-seg og-lang-soon" title="Oshiwambo coming soon via a translation layer">OW <span class="og-soon-pill">SOON</span></span>
         </div>
       </div>
     </header>
@@ -1042,7 +1041,7 @@
         </div>
 
         <h1 class="og-mark">
-          <span class="og-sr-only">Ongiini — a free AI helper on WhatsApp for Namibia. Ask in text or send a photo: school, farming, health, contracts, daily life. English and Afrikaans, Oshiwambo coming soon. No app to install.</span>
+          <span class="og-sr-only">Ongiini — a free AI helper on WhatsApp for Namibia. Ask in text or send a photo: school, farming, health, contracts, daily life. English and Afrikaans. No app to install.</span>
           <span aria-hidden="true">Ongiini<span class="og-mark-dot">.</span></span>
         </h1>
 
@@ -1052,8 +1051,8 @@
             <div class="og-tag-line1" data-af>Die lewe is vol vrae.</div>
             <div class="og-tag-line2" data-en>We're here to help.</div>
             <div class="og-tag-line2" data-af>Ons is hier om te help.</div>
-            <div class="og-tag-sub" data-en>School, farming, health, contracts, daily life — ask any time. Free, in English &amp; Afrikaans. Oshiwambo coming soon.</div>
-            <div class="og-tag-sub" data-af>Skool, boerdery, gesondheid, kontrakte, die alledaagse — vra enige tyd. Gratis, in Engels &amp; Afrikaans. Oshiwambo binnekort.</div>
+            <div class="og-tag-sub" data-en>School, farming, health, contracts, daily life — ask any time. Free, in English &amp; Afrikaans.</div>
+            <div class="og-tag-sub" data-af>Skool, boerdery, gesondheid, kontrakte, die alledaagse — vra enige tyd. Gratis, in Engels &amp; Afrikaans.</div>
           </div>
 
           <div class="og-hero-cta">
@@ -1791,8 +1790,8 @@
           af: ["Wat is 'n token?", "Dit is hoe KI die teks meet wat dit lees en skryf — sowat drie-kwart van 'n woord, leestekens ingesluit. \"Hoe gaan dit?\" is omtrent 4 tokens. \"My mielieblare word geel\" is omtrent 7. Een miljoen tokens — jou gratis maandlimiet — kom neer op sowat 500 normale heen-en-weer-gesprekke oor 'n maand."] },
         { en: ["What exactly counts toward my monthly tokens?", "Every reply Ongiini sends you, including the tokens used to read any photo you attach. Plus a small amount for the behind-the-scenes work of keeping your long-term memory in sync after each message, and the occasional summary that compresses old turns of a long conversation. Reading existing memory back to you is free. Asking 'how many tokens have I used this month?' on WhatsApp gives you a breakdown across all three."],
           af: ["Wat tel presies teen my maandelikse tokens?", "Elke antwoord wat Ongiini stuur, insluitend die tokens om enige foto wat jy aanstuur te lees. Plus 'n klein bietjie vir die agtergrondwerk om jou langtermyngeheue ná elke boodskap by te werk, en die nou en dan opsomming wat ou dele van 'n lang gesprek saampers. Om bestaande geheue terug te lees, is gratis. Vra 'hoeveel tokens het ek hierdie maand gebruik?' op WhatsApp en jy kry 'n uiteensetting oor al drie."] },
-        { en: ["Which languages can I use?", "English and Afrikaans work well today. Oshiwambo is coming soon — not by waiting for a model that natively understands it (that's unlikely to happen soon) but by adding a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. Otjiherero and Damara-Nama are on the same path."],
-          af: ["Watter tale kan ek gebruik?", "Engels en Afrikaans werk vandag goed. Oshiwambo kom binnekort — nie deur te wag vir 'n model wat dit van nature verstaan nie (dit gebeur waarskynlik nie binnekort nie), maar deur 'n vertaallaag wat onder die enjinkap na en van Engels omskakel, terwyl Gemma 4 die brein bly. Otjiherero en Damara-Nama is op dieselfde pad."] },
+        { en: ["Which languages can I use?", "English and Afrikaans work well today. Adding Oshiwambo is something we're actively working on — the plan is a translation layer that converts to and from English under the hood, while keeping Gemma 4 as the brain. We don't want to promise a date until it's solid enough to use day-to-day."],
+          af: ["Watter tale kan ek gebruik?", "Engels en Afrikaans werk vandag goed. Ons werk aktief daaraan om Oshiwambo by te voeg — die plan is 'n vertaallaag wat onder die enjinkap na en van Engels omskakel, terwyl Gemma 4 die brein bly. Ons wil nie 'n datum belowe voordat dit goed genoeg is om alledaags te gebruik nie."] },
         { en: ["Can I send voice notes?", "Yes. Press and hold the microphone button in WhatsApp, speak your question, release to send — exactly the same flow you'd use with a friend. English and Afrikaans both work; up to about 90 seconds per note. Ongiini transcribes the recording on the Spark itself using Whisper (running on CPU so it doesn't compete with the chat model for GPU). The transcript is treated exactly like a typed message — same memory, same tools, same English / Afrikaans language rule. Audio bytes are discarded right after transcription; nothing audio-shaped is ever stored. Replies still come back as text for now — voice replies are on the roadmap."],
           af: ["Kan ek stemnotas stuur?", "Ja. Hou die mikrofoonknoppie in WhatsApp ingedruk, praat jou vraag, laat los om te stuur — presies dieselfde manier as met 'n vriend. Engels en Afrikaans werk albei; tot omtrent 90 sekondes per nota. Ongiini skryf die opname op die Spark self uit met Whisper (op die SVE, sodat dit nie met die KI-model meeding vir GPU nie). Die uitgeskrewe teks word behandel net soos 'n getikte boodskap — selfde geheue, selfde gereedskap, selfde Engels-of-Afrikaans-reël. Die klankgreepe word weggegooi sodra dit uitgeskryf is; niks oudio word ooit gestoor nie. Antwoorde kom voorlopig steeds as teks terug — stem-antwoorde is op die padkaart."] },
         { en: ["What can I ask it?", "Lots of the things you'd ask a knowledgeable friend. Explain a school topic, help you understand a contract or news article, translate, draft a CV or email, work through a maths problem, summarise a document, ask about a sick maize plant, a fever, a legal notice — learning and everyday questions of many kinds. You can also send a photo if it's easier to show than tell."],
