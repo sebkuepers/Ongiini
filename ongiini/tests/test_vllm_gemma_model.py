@@ -258,3 +258,62 @@ async def test_complete_passes_none_tools_when_empty():
     await model.complete(_basic_request())
     call_kwargs = client.chat.completions.create.call_args.kwargs
     assert call_kwargs["tools"] is None
+
+
+# ---------- v1.3.2 hotfix: reasoning-leak scrubber ----------
+
+def test_strip_gemma_reasoning_leak_removes_channel_tokens():
+    """Live production bug 2026-05-23: vLLM's reasoning parser let
+    Gemma 4 channel tokens leak into msg.content. Defensive strip
+    removes <|...|> patterns unconditionally."""
+    from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
+
+    leak = "thought<|channel><|channel>thought la l'une des langues ?\n\nNamibia has 12 languages."
+    out = _strip_gemma_reasoning_leak(leak)
+    # Special tokens gone.
+    assert "<|" not in out
+    # Reasoning preamble (gated on token-detected signal) gone.
+    assert "thought" not in out
+    assert "Namibia has 12 languages." in out
+
+
+def test_strip_gemma_reasoning_leak_preserves_clean_content():
+    """If no special tokens were present, the content is returned
+    unchanged. Defensive: a legitimate reply starting with the word
+    'Thought' must NOT be eaten."""
+    from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
+
+    clean = "Thoughtfully designed houses tend to use cross-ventilation."
+    assert _strip_gemma_reasoning_leak(clean) == clean
+
+
+def test_strip_gemma_reasoning_leak_keeps_text_when_no_paragraph_break():
+    """If we detected leaked tokens but the rest of the content has no
+    paragraph break to delimit the leak from the answer, we leave the
+    token-stripped text alone rather than risk eating the whole reply."""
+    from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
+
+    leak = "thought<|channel|> some reasoning content all on one line"
+    out = _strip_gemma_reasoning_leak(leak)
+    # Token stripped.
+    assert "<|" not in out
+    # But we kept the rest (no paragraph break to use as delimiter).
+    assert "reasoning content" in out
+
+
+def test_strip_gemma_reasoning_leak_handles_wait_prefix():
+    """Reasoning leaks sometimes start with '(Wait, user asked...' or
+    similar. The 'wait' prefix also triggers the preamble-strip when
+    paired with detected special tokens."""
+    from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
+
+    leak = "(Wait, user asked<|channel|> in English)\n\nThe answer is X."
+    out = _strip_gemma_reasoning_leak(leak)
+    assert "Wait" not in out
+    assert "The answer is X." in out
+
+
+def test_strip_gemma_reasoning_leak_empty_string():
+    from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
+    assert _strip_gemma_reasoning_leak("") == ""
+    assert _strip_gemma_reasoning_leak("   ") == ""

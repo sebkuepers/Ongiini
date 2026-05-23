@@ -22,6 +22,7 @@ What's special here, vs. just hitting AsyncOpenAI directly:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -29,6 +30,52 @@ from openai import AsyncOpenAI
 from owela import Model, ModelRequest, ModelResponse
 
 log = logging.getLogger("ongiini.models.vllm_gemma")
+
+
+# Gemma 4 chat-template special tokens. These should be stripped or
+# extracted into ``msg.reasoning`` by vLLM's ``--reasoning-parser gemma4``
+# — but live trace 2026-05-23 caught the parser letting them through
+# into ``msg.content``. Forms observed in the wild:
+#   - ``<|channel|>``        (double-pipe variant — standard form)
+#   - ``<|channel>``         (single-pipe + ``>`` — partial / malformed)
+#   - ``<channel|>`` etc.
+# The pattern matches any ``<|...>`` or ``<...|>`` shape; we don't
+# enforce the closing-pipe so partial tokens get cleaned too.
+_GEMMA_SPECIAL_TOKEN_RE = re.compile(r"<\|?[a-zA-Z0-9_\-]+\|?>")
+
+
+def _strip_gemma_reasoning_leak(text: str) -> str:
+    """Remove Gemma 4 special tokens from a content string and, if any
+    were present, also strip a leaked reasoning preamble (everything up
+    to the first paragraph break) when the cleaned text starts with
+    obvious thought-channel detritus.
+
+    The preamble-strip is gated on having seen at least one ``<|...|>``
+    token in the input — that's the strong signal that a reasoning
+    leak occurred, so we trust the heuristic. A legitimate reply that
+    happens to start with the word "thought" but had no special tokens
+    won't be touched.
+    """
+    if not text:
+        return text
+    had_tokens = bool(_GEMMA_SPECIAL_TOKEN_RE.search(text))
+    cleaned = _GEMMA_SPECIAL_TOKEN_RE.sub("", text).strip()
+    if had_tokens:
+        # The reasoning leak pattern starts with "thought" or "Wait" or
+        # similar reasoning preamble, then a paragraph break, then the
+        # actual answer. Find the first ``\n\n`` and discard the
+        # preamble. If no clean break exists, leave the (still-token-
+        # stripped) text — don't risk eating the whole reply.
+        head_lower = cleaned[:50].lower()
+        if (
+            head_lower.startswith("thought")
+            or head_lower.startswith("wait")
+            or head_lower.startswith("(wait")
+        ):
+            idx = cleaned.find("\n\n")
+            if idx != -1:
+                cleaned = cleaned[idx + 2:].lstrip()
+    return cleaned
 
 
 def _billable_from_usage(usage_obj: Any) -> tuple[int, int, int]:
@@ -102,6 +149,16 @@ class VLLMGemmaModel(Model):
         # ``model_extra`` since the OpenAI SDK stores unknown response
         # fields there if the typed model didn't define them.
         content = (getattr(msg, "content", "") or "").strip()
+        # Defensive scrub: Gemma 4 reasoning channel tokens (and the
+        # "thought" preamble they sometimes drag with them) can leak
+        # into ``msg.content`` when vLLM's --reasoning-parser gemma4
+        # mis-routes them. Live trace 2026-05-23 showed
+        # ``thought<|channel><|channel>thought la l'une des langues...``
+        # in front of an otherwise excellent reply. Strip the special
+        # tokens unconditionally; only strip the preamble paragraph
+        # when we ALSO detected leaked tokens (to avoid eating
+        # legitimate replies that happen to start with "thought").
+        content = _strip_gemma_reasoning_leak(content)
         if not content:
             reasoning = ""
             for candidate in (
@@ -126,7 +183,7 @@ class VLLMGemmaModel(Model):
                     "surfacing reasoning text as content",
                     len(reasoning),
                 )
-                content = reasoning
+                content = _strip_gemma_reasoning_leak(reasoning)
 
         tool_calls_raw = getattr(msg, "tool_calls", None) or []
         tool_calls: list[dict[str, Any]] = []
