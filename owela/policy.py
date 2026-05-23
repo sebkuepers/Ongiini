@@ -83,6 +83,12 @@ class Policy:
     # tool name is hardcoded in the executor.
     planner_query_tool: str | None = None
     planner_query_arg: str = "query"
+    # Default kwargs merged into every synthesised planner-fan-out tool
+    # call BEFORE ``QueryVariant.extra``. Use for policy-level tool
+    # configuration that should apply to all variants (e.g. a search
+    # policy that wants every search to skip full-page content because
+    # an auto-followup will fetch it). Variant-level ``extra`` overrides.
+    planner_query_default_args: dict[str, Any] = field(default_factory=dict)
 
     # Deterministic follow-up tool synthesis. When ``auto_followup_after``
     # is set, the executor watches each ToolStep: if its ``tool_name``

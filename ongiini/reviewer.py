@@ -84,12 +84,21 @@ transport layer. Do NOT critique formatting — focus only on
 substance, grounding, and language.)
 
 1. Answers the user's actual question (not a tangent or partial answer):
-2. Every factual claim about Namibia (places, businesses, prices,
-   dates, schedules) is grounded in the tool results above — no
-   training-data confabulation:
-3. If web_search / fetch_url / fetch_urls fired, at least one DEEP
-   URL is cited in the reply (prefixed "— source:" on its own line),
-   not just a publication homepage:
+2. Every Namibia-specific factual claim in the reply — a business
+   name, a service offering, a price, a contact method, a date — must
+   be DIRECTLY VISIBLE in the TOOL RESULTS above. If the reply
+   infers something the tool results don't explicitly state (even if
+   the inference is reasonable), that's a FAIL. Quote a snippet from
+   the tool results that supports each specific claim mentally as
+   you read; if you can't quote it, it's confabulation:
+3. If web_search / fetch_url / fetch_urls fired AND the reply makes
+   specific factual claims drawn from those results, at least one
+   DEEP URL is cited (prefixed "— source:" on its own line, with a
+   path — not just a publication homepage). A SINGLE deep URL at the
+   bottom is sufficient when the reply builds on the same source
+   throughout. Do NOT FAIL replies that primarily reuse facts
+   established in earlier turns of THIS conversation — those don't
+   need re-citation:
 4. If the tool results were thin or empty, the reply admits this
    plainly instead of inventing specifics:
 5. Language matches the user's (EN or AF) — same language they asked
@@ -117,6 +126,9 @@ on its own line.
 
 Do NOT add commentary about the revision. Reply with the revised text only.
 
+AVAILABLE DEEP URLS for citation (use these — don't invent any):
+{available_urls}
+
 Tool results from this turn (for context, in case a claim needs to
 be re-grounded):
 {tool_results}
@@ -138,9 +150,21 @@ User's original question:
 _VERDICT_RE = re.compile(r"(?mi)^\s*VERDICT:\s*(PASS|REVISE)\s*$")
 
 # Latency budgets. Critique should fail fast — if it doesn't come
-# back in time, we ship the draft unchanged.
+# back in time, we ship the draft unchanged. v1.3.1 bumped revise
+# 12→20s: live trace showed the 12s budget routinely timed out on
+# longer drafts (2000+ char comparisons) and the original (uncited)
+# draft was sent unchanged. With 20s, revise actually completes.
 _CRITIQUE_TIMEOUT_S = 6.0
-_REVISE_TIMEOUT_S = 12.0
+_REVISE_TIMEOUT_S = 20.0
+
+# Aggregate cap over the multi-step tool block fed to critique/revise.
+# Per-step truncation is _TOOL_RESULT_TRUNCATION (8000); with multi-
+# query fan-out + fetch_urls a turn can have 5+ ToolSteps, which
+# without an aggregate cap meant ~40K chars of tool block per critique
+# call. The aggregate cap caps the total at this many chars, dropping
+# whole later steps (preserves at least the FIRST search + fetch
+# bodies which carry the bulk of grounding).
+_TOOL_BLOCK_AGGREGATE_CAP = 24000
 
 
 class OngiiniReviewer:
@@ -271,7 +295,17 @@ class OngiiniReviewer:
             )
 
         _, tool_block = self._tool_summary(prior_steps)
+        available_urls = _extract_available_urls(prior_steps)
         user_question = (msg.text or "").strip()
+
+        # Render the URL list for the prompt. When critique flags
+        # "missing — source:" the model often invents a plausible URL;
+        # surfacing the actual deep URLs from this turn's ToolSteps
+        # gives revise a list to pick from.
+        if available_urls:
+            urls_block = "\n".join(f"- {u}" for u in available_urls)
+        else:
+            urls_block = "(no deep URLs gathered this turn)"
 
         try:
             resp = await asyncio.wait_for(
@@ -281,6 +315,7 @@ class OngiiniReviewer:
                         "role": "user",
                         "content": _REVISE_PROMPT.format(
                             reasons=reasons,
+                            available_urls=urls_block,
                             tool_results=tool_block or "(no tool calls this turn)",
                             draft=draft,
                             user_question=user_question,
@@ -332,9 +367,19 @@ class OngiiniReviewer:
 
         Returns ("", "") if no tools fired this turn — caller swaps in
         a friendlier placeholder for the prompt.
+
+        Two truncation passes:
+          - Per-step: each tool's body is capped at _TOOL_RESULT_TRUNCATION
+            (8000 chars) so a single huge fetch can't dominate.
+          - Aggregate: the assembled block is capped at
+            _TOOL_BLOCK_AGGREGATE_CAP (24000 chars) so a multi-query
+            fan-out (5+ ToolSteps × 8000) can't blow the critique
+            context budget. The cap drops whole tail steps; the first
+            steps (which carry the bulk of grounding) are preserved.
         """
         names: list[str] = []
         chunks: list[str] = []
+        running_len = 0
         for s in prior_steps:
             if not isinstance(s, ToolStep) or not s.tool_name:
                 continue
@@ -342,11 +387,80 @@ class OngiiniReviewer:
             result = (s.attrs.get("result") or "")
             if len(result) > _TOOL_RESULT_TRUNCATION:
                 result = result[:_TOOL_RESULT_TRUNCATION] + " […truncated]"
-            chunks.append(f"--- {s.tool_name} ({s.result_len} chars) ---\n{result}")
+            chunk = f"--- {s.tool_name} ({s.result_len} chars) ---\n{result}"
+            # Aggregate cap: if adding this chunk would push us past
+            # the budget, drop it (and all subsequent chunks).
+            if running_len + len(chunk) > _TOOL_BLOCK_AGGREGATE_CAP:
+                chunks.append(
+                    f"--- [{len(prior_steps) - len(chunks)} more tool result(s) "
+                    f"omitted to fit reviewer context budget] ---"
+                )
+                break
+            chunks.append(chunk)
+            running_len += len(chunk) + 2   # +2 for the join separator
         return ", ".join(names), "\n\n".join(chunks)
 
 
 # ----------- helpers -----------
+
+def _extract_available_urls(prior_steps: list[Step]) -> list[str]:
+    """Walk the act-loop's ToolSteps for deep URLs the revise call
+    can cite from. Sources:
+
+      - Search ToolSteps: ``attrs["urls"]`` populated by the
+        web_search tool (executor-side stashing).
+      - Fetch ToolSteps: the result text starts with ``Fetched: <url>``
+        or contains ``## <url>`` blocks (fetch_urls format).
+
+    Dedupes while preserving encounter order. Caps at 10 URLs — that's
+    more than enough for revise to pick the right ``— source:`` line.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+
+    for s in prior_steps:
+        if not isinstance(s, ToolStep):
+            continue
+        # Web_search stashes the structured URL list directly.
+        stashed = s.attrs.get("urls")
+        if isinstance(stashed, (list, tuple)):
+            for u in stashed:
+                if isinstance(u, str) and u and u not in seen:
+                    seen.add(u)
+                    out.append(u)
+                    if len(out) >= 10:
+                        return out
+        # Fetch tool results carry URLs inline; extract them with a
+        # cheap regex match. The result format is documented in
+        # ongiini/search.py (Fetched: <url>\n\n<body>) and
+        # ongiini/tools/ongiini_tools.py (## <url>\n<body>).
+        result = s.attrs.get("result")
+        if isinstance(result, str):
+            for match in re.findall(r"^(?:Fetched:|##)\s*(https?://\S+)", result, flags=re.MULTILINE):
+                # Strip trailing punctuation, but keep balanced parens
+                # so Wikipedia-style URLs like .../Foo_(bar) survive.
+                url = _strip_trailing_punct_balanced(match)
+                if url and url not in seen:
+                    seen.add(url)
+                    out.append(url)
+                    if len(out) >= 10:
+                        return out
+    return out
+
+
+def _strip_trailing_punct_balanced(url: str) -> str:
+    """Strip trailing ``.,;:!?)`` from a URL while preserving a final
+    ``)`` that matches an opening ``(`` earlier in the URL. Handles
+    Wikipedia-style paths like ``.../Foo_(bar)`` cleanly."""
+    # Always strip these from the tail (never legitimate in a URL).
+    while url and url[-1] in ".,;:!?":
+        url = url[:-1]
+    # Only strip trailing ``)`` if it's UNMATCHED (no opening ``(``
+    # before it). Balanced paren stays as-is.
+    if url.endswith(")") and url.count("(") < url.count(")"):
+        url = url[:-1]
+    return url
+
 
 def _billable(usage_obj: Any) -> tuple[int, int, int]:
     if usage_obj is None:

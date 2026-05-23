@@ -522,3 +522,145 @@ async def test_revise_strips_none_msg_text():
     # The prompt's "User's original question:" line should be followed
     # by an empty string, not the literal "None"
     assert "None" not in sent.split("User's original question:")[-1].split("\n")[0]
+
+
+# ---------- v1.3.1: source-aware revise + bumped timeout + agg cap ----------
+
+def test_extract_available_urls_from_web_search_attrs():
+    """Web_search ToolSteps stash a structured URL list on attrs["urls"];
+    revise must surface them so it knows what deep URLs to cite."""
+    from ongiini.reviewer import _extract_available_urls
+    from owela import ToolStep
+
+    s1 = ToolStep(tool_name="web_search", result_len=200)
+    s1.attrs["urls"] = ["https://a.example/x", "https://b.example/y"]
+    s2 = ToolStep(tool_name="web_search", result_len=200)
+    # Duplicate URL — must NOT appear twice in the output.
+    s2.attrs["urls"] = ["https://b.example/y", "https://c.example/z"]
+    urls = _extract_available_urls([s1, s2])
+    assert urls == [
+        "https://a.example/x",
+        "https://b.example/y",
+        "https://c.example/z",
+    ]
+
+
+def test_extract_available_urls_from_fetch_results():
+    """fetch_url's text starts with 'Fetched: <url>' and fetch_urls'
+    text contains '## <url>' blocks. Parse both."""
+    from ongiini.reviewer import _extract_available_urls
+    from owela import ToolStep
+
+    s1 = ToolStep(tool_name="fetch_url", result_len=200)
+    s1.attrs["result"] = "Fetched: https://single.example/x\n\nbody body body"
+    s2 = ToolStep(tool_name="fetch_urls", result_len=200)
+    s2.attrs["result"] = (
+        "## https://a.example/y\nbody A\n\n"
+        "## https://b.example/z\nbody B\n"
+    )
+    urls = _extract_available_urls([s1, s2])
+    assert "https://single.example/x" in urls
+    assert "https://a.example/y" in urls
+    assert "https://b.example/z" in urls
+
+
+def test_extract_available_urls_caps_at_10():
+    from ongiini.reviewer import _extract_available_urls
+    from owela import ToolStep
+
+    s = ToolStep(tool_name="web_search", result_len=0)
+    s.attrs["urls"] = [f"https://x{i}.example/" for i in range(25)]
+    urls = _extract_available_urls([s])
+    assert len(urls) == 10
+
+
+@pytest.mark.asyncio
+async def test_revise_prompt_includes_available_urls_block():
+    """v1.3.1: when a critique flags 'missing — source:', revise must
+    see the actual deep URLs from this turn's ToolSteps so it can pick
+    them. Otherwise the model invents plausible-looking URLs."""
+    from owela import ToolStep
+
+    s = ToolStep(tool_name="web_search", result_len=0)
+    s.attrs["urls"] = ["https://real.example/article-42"]
+    s.attrs["result"] = "snippets"
+
+    crit = CritiqueStep(verdict="REVISE", reasons=["FAIL: missing — source:"])
+
+    client = _client_returning("revised text")
+    rev = OngiiniReviewer(base_url="x", model_id="g", client=client)
+    await rev.revise(_msg(), "original draft", crit, [s], Policy(name="x"))
+
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "AVAILABLE DEEP URLS" in sent
+    assert "https://real.example/article-42" in sent
+
+
+def test_revise_timeout_constant_is_20s():
+    """v1.3.1 bumped 12→20s. Lock the constant — production traces
+    showed 12s routinely timing out on 2000+ char drafts."""
+    from ongiini.reviewer import _REVISE_TIMEOUT_S
+    assert _REVISE_TIMEOUT_S == 20.0
+
+
+def test_tool_summary_aggregate_cap():
+    """v1.3.1: per-step truncation isn't enough when multi-query fan-out
+    produces 5+ ToolSteps. The aggregate cap drops whole tail steps
+    once the running length exceeds 24K chars."""
+    from owela import ToolStep
+    big_body = "x" * 8000   # each chunk renders to ~8000 + framing chars
+    steps = []
+    for i in range(6):
+        s = ToolStep(tool_name=f"tool_{i}", result_len=8000)
+        s.attrs["result"] = big_body
+        steps.append(s)
+
+    _, block = OngiiniReviewer._tool_summary(steps)
+    # 6 × 8000 = 48000, capped at 24000. Some early steps included,
+    # later ones dropped with a marker.
+    assert "more tool result(s) omitted" in block
+    # The aggregate cap is 24000; allow some framing-bytes overhead.
+    assert len(block) < 26000
+
+
+@pytest.mark.asyncio
+async def test_critique_prompt_uses_v131_grounding_wording():
+    """v1.3.1: dimension 2 (grounding) was rebalanced — positive framing
+    ("DIRECTLY VISIBLE", "quote a snippet") catches confabulation better
+    than the previous negative framing ("no training-data confabulation").
+    Lock the new wording to prevent regression."""
+    client = _client_returning("VERDICT: PASS")
+    rev = OngiiniReviewer(base_url="x", model_id="g", client=client)
+    await rev.critique(_msg(), "draft", [_tool_step("web_search", "result")],
+                       Policy(name="search_deep"))
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    # Grounding dim asks for visible quotes, not negative-framed "no confab".
+    assert "DIRECTLY VISIBLE" in sent
+    assert "Quote a snippet" in sent or "quote a snippet" in sent
+    # Citation dim allows single deep URL for multi-turn synthesis.
+    assert "single deep URL" in sent or "SINGLE deep URL" in sent
+    assert "earlier turns of THIS conversation" in sent
+
+
+def test_strip_trailing_punct_preserves_balanced_parens():
+    """Wikipedia-style URLs like .../Foo_(bar) must survive the
+    URL-extraction trailing-punct cleanup. Unbalanced trailing ``)``
+    (e.g. URL captured from inside parens) is stripped."""
+    from ongiini.reviewer import _strip_trailing_punct_balanced
+
+    # Balanced — keep the trailing paren.
+    assert _strip_trailing_punct_balanced(
+        "https://en.wikipedia.org/wiki/Foo_(bar)"
+    ) == "https://en.wikipedia.org/wiki/Foo_(bar)"
+    # Trailing period (and a balanced paren before it) — strip period.
+    assert _strip_trailing_punct_balanced(
+        "https://en.wikipedia.org/wiki/Foo_(bar)."
+    ) == "https://en.wikipedia.org/wiki/Foo_(bar)"
+    # Unbalanced trailing paren — strip it.
+    assert _strip_trailing_punct_balanced(
+        "https://example.com/path)"
+    ) == "https://example.com/path"
+    # Trailing comma — strip.
+    assert _strip_trailing_punct_balanced(
+        "https://example.com/path,"
+    ) == "https://example.com/path"

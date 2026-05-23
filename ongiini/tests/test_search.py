@@ -123,11 +123,57 @@ async def test_web_search_returns_text_and_urls_tuple(monkeypatch):
     payload = mock_post.call_args.kwargs["json"]
     assert payload["search_depth"] == "advanced"
     assert payload["include_raw_content"] is True
-    assert payload["chunks_per_source"] == 3
+    # v1.3.1: chunks_per_source 3→1 (no longer needed once
+    # include_raw_content=False on SEARCH_DEEP; SHALLOW still works
+    # fine with 1 chunk).
+    assert payload["chunks_per_source"] == 1
     assert payload["country"] == "namibia"
     assert payload["include_answer"] is True
     # time_range NOT in payload when None — Tavily treats absent key as no restriction.
     assert "time_range" not in payload
+
+
+@pytest.mark.asyncio
+async def test_web_search_include_raw_content_false_skips_raw_in_payload(monkeypatch):
+    """v1.3.1: SEARCH_DEEP sets include_raw_content=False because the
+    auto-followup fetch_urls supplies depth. Verify the Tavily payload
+    flips accordingly."""
+    _search._SEARCH_CACHE.clear()
+    monkeypatch.setattr(_search.settings, "tavily_api_key", "fake-key")
+    fake_response = MagicMock()
+    fake_response.raise_for_status = MagicMock()
+    fake_response.json = MagicMock(return_value={"results": []})
+
+    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake_response)) as mock_post:
+        await _search.web_search("hello", include_raw_content=False)
+    payload = mock_post.call_args.kwargs["json"]
+    assert payload["include_raw_content"] is False
+
+
+@pytest.mark.asyncio
+async def test_web_search_cache_key_distinguishes_raw_content_flag(monkeypatch):
+    """Cache must NOT alias raw-content-on results with raw-content-off
+    results — they're materially different payloads."""
+    _search._SEARCH_CACHE.clear()
+    monkeypatch.setattr(_search.settings, "tavily_api_key", "fake-key")
+
+    posts: list[dict] = []
+    async def fake_post(self, url, **kwargs):
+        posts.append(kwargs["json"])
+        fake = MagicMock()
+        fake.raise_for_status = MagicMock()
+        fake.json = MagicMock(return_value={
+            "results": [{"title": "T", "content": "c", "url": "https://x/", "raw_content": ""}],
+        })
+        return fake
+
+    with patch("httpx.AsyncClient.post", new=fake_post):
+        await _search.web_search("q", include_raw_content=True)
+        await _search.web_search("q", include_raw_content=False)
+    # Two distinct Tavily calls — cache did not alias them.
+    assert len(posts) == 2
+    assert posts[0]["include_raw_content"] is True
+    assert posts[1]["include_raw_content"] is False
 
 
 @pytest.mark.asyncio

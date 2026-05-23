@@ -208,11 +208,17 @@ async def test_web_search_returns_text_and_urls_tuple():
         new=AsyncMock(return_value=("search results here", ["https://a.com", "https://b.com"])),
     ) as mock:
         result = await web_search("test query")
-    # _web_search_impl is called with the keyword args topic + time_range.
+    # _web_search_impl is called with kwargs topic + time_range +
+    # include_raw_content (v1.3.1 added the latter — defaults True
+    # because the tool's signature default is True; SEARCH_DEEP overrides
+    # to False via Policy.planner_query_default_args).
     mock.assert_awaited_once()
     call = mock.call_args
     assert call.args == ("test query",)
-    assert call.kwargs == {"topic": "general", "time_range": None}
+    assert call.kwargs == {
+        "topic": "general", "time_range": None,
+        "include_raw_content": True,
+    }
     # The tool wraps the (text, urls) impl response into (text, {"urls": urls}).
     assert isinstance(result, tuple)
     assert result[0] == "search results here"
@@ -230,7 +236,10 @@ async def test_web_search_forwards_topic_and_time_range_kwargs():
     ) as mock:
         await web_search("medicine shortage", topic="news", time_range="week")
     call = mock.call_args
-    assert call.kwargs == {"topic": "news", "time_range": "week"}
+    assert call.kwargs == {
+        "topic": "news", "time_range": "week",
+        "include_raw_content": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -243,7 +252,10 @@ async def test_web_search_empty_time_range_normalised_to_none():
         new=AsyncMock(return_value=("ok", [])),
     ) as mock:
         await web_search("q", topic="general", time_range="")
-    assert mock.call_args.kwargs == {"topic": "general", "time_range": None}
+    assert mock.call_args.kwargs == {
+        "topic": "general", "time_range": None,
+        "include_raw_content": True,
+    }
 
 
 @pytest.mark.asyncio

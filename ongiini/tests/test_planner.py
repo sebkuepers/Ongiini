@@ -291,3 +291,107 @@ async def test_planner_prompt_carries_question_and_sentinel():
     # number of entity queries — confirm the COMPARISON branch exists.
     assert "COMPARISON" in sent
     assert call_kwargs["max_tokens"] == 320
+
+
+# ---------- v1.3.1: conversation context resolution ----------
+
+@pytest.mark.asyncio
+async def test_planner_prompt_includes_recent_history_block_when_present():
+    """When msg.history has prior turns, the planner prompt includes a
+    'Conversation just before this question' block so the model can
+    resolve pronouns like 'them', 'this', 'compare them'."""
+    body = json.dumps({"facts_known": "x", "queries": [{"query": "q"}]}) + "\nPLAN_DONE"
+    client = _client_returning(body)
+    planner = OngiiniPlanner(base_url="x", model_id="gemma", client=client)
+
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="compare them",
+        content_parts=[{"type": "text", "text": "compare them"}],
+        history=[
+            {"role": "user", "content": "How many datacenters in Namibia?"},
+            {"role": "assistant", "content": "There are 6 main ones: Paratus, FNB, ..."},
+        ],
+    )
+    await planner.plan(msg, Policy(name="search_deep"), [])
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "PREVIOUS USER: How many datacenters in Namibia?" in sent
+    assert "PREVIOUS REPLY:" in sent
+    assert "Paratus" in sent
+    # And the actual question is still in the prompt.
+    assert "compare them" in sent
+
+
+@pytest.mark.asyncio
+async def test_planner_prompt_unchanged_when_history_empty():
+    """When msg.history is empty (first-turn query), the prompt MUST be
+    byte-identical to v1.3 — preserves prefix-cache hits."""
+    body = json.dumps({"facts_known": "x", "queries": [{"query": "q"}]}) + "\nPLAN_DONE"
+    client = _client_returning(body)
+    planner = OngiiniPlanner(base_url="x", model_id="gemma", client=client)
+
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="a question",
+        content_parts=[{"type": "text", "text": "a question"}],
+        history=[],
+    )
+    await planner.plan(msg, Policy(name="search_deep"), [])
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    # No history block when history is empty.
+    assert "Conversation just before this question" not in sent
+    assert "PREVIOUS USER" not in sent
+
+
+@pytest.mark.asyncio
+async def test_planner_history_caps_long_messages():
+    """Very long previous messages get capped to ~400 chars — we just
+    need pronoun context, not a full transcript."""
+    body = json.dumps({"facts_known": "x", "queries": []}) + "\nPLAN_DONE"
+    client = _client_returning(body)
+    planner = OngiiniPlanner(base_url="x", model_id="gemma", client=client)
+
+    long_reply = "y" * 2000
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="follow-up",
+        content_parts=[{"type": "text", "text": "follow-up"}],
+        history=[
+            {"role": "user", "content": "x" * 2000},
+            {"role": "assistant", "content": long_reply},
+        ],
+    )
+    await planner.plan(msg, Policy(name="search_deep"), [])
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    # Truncation marker present.
+    assert "…" in sent
+    # Slice the history block: from "Conversation just before" to the
+    # next section ("Plan the search BEFORE..."). Should be ~900 chars
+    # (cap of 400 chars per snippet × 2 snippets + framing), far less
+    # than the 4000 chars of raw history we passed in.
+    history_section_start = sent.index("Conversation just before")
+    next_section = sent.index("Plan the search BEFORE", history_section_start)
+    history_section = sent[history_section_start:next_section]
+    assert len(history_section) < 1500
+
+
+@pytest.mark.asyncio
+async def test_planner_history_skips_non_string_content():
+    """Image-bearing prior turns have list[dict] content_parts; the
+    planner should silently skip those (no value for query decomp)."""
+    body = json.dumps({"facts_known": "x", "queries": []}) + "\nPLAN_DONE"
+    client = _client_returning(body)
+    planner = OngiiniPlanner(base_url="x", model_id="gemma", client=client)
+
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="next question",
+        content_parts=[{"type": "text", "text": "next question"}],
+        history=[
+            {"role": "user", "content": [{"type": "image_url", "image_url": "..."}]},
+            {"role": "assistant", "content": "I see a chart..."},
+        ],
+    )
+    await planner.plan(msg, Policy(name="search_deep"), [])
+    sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    # The text-only assistant reply was surfaced (it's a useful string);
+    # the image-bearing user message was silently skipped.
+    assert "I see a chart" in sent
+    # No fallback marker for the skipped image-bearing turn.
+    assert "image_url" not in sent

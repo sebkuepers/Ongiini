@@ -32,8 +32,11 @@ def _ctx(msisdn: str = "+264u") -> TurnContext:
 # ============================================================
 
 @pytest.mark.asyncio
-async def test_billing_aggregates_chat_across_turns():
-    """Two ModelCallSteps in a turn → ONE 'chat' line summing both."""
+async def test_billing_post_search_compose_input_excluded():
+    """v1.3.1 fairness: a compose ModelCallStep AFTER a search ToolStep
+    has its INPUT tokens excluded from the user's bill (the input is
+    system-added search context, not user payload). Output is still
+    billed."""
     recorder = MagicMock()
     hook = BillingHook(recorder=recorder)
 
@@ -55,39 +58,83 @@ async def test_billing_aggregates_chat_across_turns():
     assert router_call.args[1] == 20    # tokens_in
     assert router_call.args[2] == 5     # tokens_out
 
-    # Chat line — billable aggregate.
+    # Chat line — billable aggregate, with v1.3.1 fairness rules:
     chat_call = next(c for c in calls if c.kwargs.get("kind") == "chat")
-    assert chat_call.args[1] == 150     # 100 + 50
-    assert chat_call.args[2] == 210     # 10 + 200
+    # tokens_in: turn-1 compose (100, before any search) + turn-2 compose
+    # input EXCLUDED (search context already in scope) = 100.
+    assert chat_call.args[1] == 100
+    # tokens_out: both compose outputs counted = 10 + 200 = 210.
+    assert chat_call.args[2] == 210
     assert chat_call.kwargs["used_search"] is True
 
 
 @pytest.mark.asyncio
-async def test_billing_aggregates_v1_phases_into_chat_line():
-    """v1: PlanStep + CritiqueStep + ReviseStep tokens spend real vLLM
-    capacity against the user's request and MUST roll into the chat
-    aggregate. Without this they'd silently vanish from the monthly
-    cap accounting — power-user could effectively get 2x allowance."""
+async def test_billing_v1_phases_apply_per_phase_rules():
+    """v1.3.1 per-phase billing rules:
+      - PlanStep: full bill (planner thinks about the user's question).
+      - Compose BEFORE search: full bill.
+      - Compose AFTER search: input excluded, output billed.
+      - Critique: NOT billed (internal quality control).
+      - Revise: input NOT billed, output billed (revise output replaces
+        the draft and becomes the user-visible reply).
+    """
     recorder = MagicMock()
     hook = BillingHook(recorder=recorder)
     steps = [
         RouterStep(tokens_in=20, tokens_out=5, verdict="SEARCH", depth="DEEP"),
-        PlanStep(tokens_in=30, tokens_out=180),
-        ModelCallStep(turn=1, tokens_in=100, tokens_out=10),
-        ToolStep(tool_name="web_search", result_len=2000),
-        ModelCallStep(turn=2, tokens_in=80, tokens_out=400),
-        CritiqueStep(tokens_in=50, tokens_out=80, verdict="REVISE"),
-        ReviseStep(tokens_in=200, tokens_out=600),
+        PlanStep(tokens_in=30, tokens_out=180),                  # +30 in, +180 out
+        ModelCallStep(turn=1, tokens_in=100, tokens_out=10),     # +100 in, +10 out
+        ToolStep(tool_name="web_search", result_len=2000),       # flips search_ctx_active
+        ModelCallStep(turn=2, tokens_in=80, tokens_out=400),     # +0 in, +400 out
+        CritiqueStep(tokens_in=50, tokens_out=80, verdict="REVISE"),  # +0, +0 (free)
+        ReviseStep(tokens_in=200, tokens_out=600),               # +0 in, +600 out
         ReplyStep(reply_len=400, sent=True),
     ]
     await hook.on_turn_complete(steps, _ctx())
 
     chat_call = next(c for c in recorder.record.call_args_list if c.kwargs.get("kind") == "chat")
-    # 30 (plan) + 100 (call1) + 80 (call2) + 50 (critique) + 200 (revise) = 460
-    assert chat_call.args[1] == 460
-    # 180 (plan) + 10 (call1) + 400 (call2) + 80 (critique) + 600 (revise) = 1270
-    assert chat_call.args[2] == 1270
+    # tokens_in = 30 + 100 = 130
+    assert chat_call.args[1] == 130
+    # tokens_out = 180 + 10 + 400 + 600 = 1190
+    assert chat_call.args[2] == 1190
     assert chat_call.kwargs["used_search"] is True
+
+
+@pytest.mark.asyncio
+async def test_billing_synthesized_model_call_steps_are_free():
+    """v1.3.1: ModelCallSteps with synthesized=True (multi-query fan-out
+    or auto-followup synth dispatches) have no real LLM call and must
+    cost 0 in + 0 out, regardless of token fields."""
+    recorder = MagicMock()
+    hook = BillingHook(recorder=recorder)
+    steps = [
+        # A non-synth model call to establish the baseline.
+        ModelCallStep(turn=1, tokens_in=50, tokens_out=30),
+        # Synth steps — even with non-zero token fields (defensive),
+        # the hook must NOT bill them.
+        ModelCallStep(turn=0, synthesized=True,
+                      tokens_in=999, tokens_out=999),
+    ]
+    await hook.on_turn_complete(steps, _ctx())
+    chat = next(c for c in recorder.record.call_args_list if c.kwargs.get("kind") == "chat")
+    assert chat.args[1] == 50    # only the non-synth call's input
+    assert chat.args[2] == 30    # only the non-synth call's output
+
+
+@pytest.mark.asyncio
+async def test_billing_cached_tokens_subtracted_from_input():
+    """v1.3.1: cached prompt tokens (prefix-cache hits) cost no real
+    GPU work — they should NOT count against the user's monthly bill."""
+    recorder = MagicMock()
+    hook = BillingHook(recorder=recorder)
+    steps = [
+        # 1000 prompt tokens but 800 were cached → billable input is 200.
+        ModelCallStep(turn=1, tokens_in=1000, tokens_out=50, cached_tokens=800),
+    ]
+    await hook.on_turn_complete(steps, _ctx())
+    chat = next(c for c in recorder.record.call_args_list if c.kwargs.get("kind") == "chat")
+    assert chat.args[1] == 200    # 1000 - 800 cached
+    assert chat.args[2] == 50
 
 
 @pytest.mark.asyncio

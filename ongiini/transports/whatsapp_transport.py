@@ -42,6 +42,71 @@ log = logging.getLogger("ongiini.transports.whatsapp")
 # bracket. Trailing punctuation is trimmed at use sites.
 _URL_RE = re.compile(r"https?://[^\s)>\"]+")
 
+# Markdown-table helpers used by ``WhatsAppTransport._tables_to_bullets``.
+# Kept module-private to avoid surfacing them outside this file.
+
+_TABLE_ALIGNMENT_CELL_RE = re.compile(r"^\s*:?-+:?\s*$")
+
+
+def _is_table_row(line: str) -> bool:
+    """A table row is a line that starts with ``|`` and has ≥2 cells
+    (i.e. at least one extra ``|``). The trailing ``|`` is optional."""
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        return False
+    return stripped.count("|") >= 2
+
+
+def _is_table_alignment_row(line: str) -> bool:
+    """Alignment rows look like ``|:---|---:|:---:|`` — cells contain
+    only dashes and optional leading/trailing colons."""
+    if not _is_table_row(line):
+        return False
+    cells = _parse_table_row(line)
+    if not cells:
+        return False
+    return all(_TABLE_ALIGNMENT_CELL_RE.match(c) for c in cells)
+
+
+def _parse_table_row(line: str) -> list[str]:
+    """Split a ``|a|b|c|`` row into ``["a", "b", "c"]``. Strips empty
+    leading/trailing cells (table rows usually have outer pipes)."""
+    parts = [c.strip() for c in line.strip().split("|")]
+    if parts and parts[0] == "":
+        parts = parts[1:]
+    if parts and parts[-1] == "":
+        parts = parts[:-1]
+    return parts
+
+
+def _render_table_as_bullets(headers: list[str], rows: list[list[str]]) -> str:
+    """Render parsed table rows as ``*{cell[0]}*\\n- {h1}: {c1}\\n...``
+    blocks separated by blank lines. Empty cells are skipped silently.
+    """
+    blocks: list[str] = []
+    for row in rows:
+        if not row:
+            continue
+        # First cell becomes the bolded "row header"; remaining cells
+        # become labelled bullets paired with the header row's labels.
+        primary = row[0].strip()
+        body_lines: list[str] = []
+        for col_idx in range(1, len(row)):
+            cell = row[col_idx].strip()
+            if not cell:
+                continue
+            header = headers[col_idx].strip() if col_idx < len(headers) else ""
+            if header:
+                body_lines.append(f"- {header}: {cell}")
+            else:
+                body_lines.append(f"- {cell}")
+        if primary or body_lines:
+            block = f"*{primary}*" if primary else ""
+            if body_lines:
+                block = (block + "\n" if block else "") + "\n".join(body_lines)
+            blocks.append(block)
+    return "\n\n".join(blocks)
+
 
 class WhatsAppTransport:
     """The Ongiini transport. Constructed once at runtime build."""
@@ -264,7 +329,79 @@ class WhatsAppTransport:
             text,
         )
 
+        # Markdown tables → labelled bullet groups. WhatsApp doesn't
+        # render tables at all (no pipe syntax, no HTML tables), so we
+        # convert each row into a *header* + per-cell bullet block.
+        # See the helper for the parse rules + fallback behaviour.
+        text = WhatsAppTransport._tables_to_bullets(text)
+
         return text
+
+    @staticmethod
+    def _tables_to_bullets(text: str) -> str:
+        """Detect Markdown tables and convert to WhatsApp-friendly
+        labelled bullet groups.
+
+        A Markdown table is 3+ consecutive lines where:
+          - Line 1 is the header row (starts with ``|``, has ≥2 cells)
+          - Line 2 is the alignment row (cells are dashes / colons only)
+          - Lines 3+ are data rows (same shape as line 1)
+
+        Each data row becomes a block::
+
+            *{cell[0]}*
+            - {header[1]}: {row[1]}
+            - {header[2]}: {row[2]}
+
+        Empty cells are skipped. Falls back gracefully: if any expected
+        line doesn't match the shape, the block is left as-is (no
+        partial conversion that could break formatting).
+        """
+        lines = text.splitlines(keepends=False)
+        out: list[str] = []
+        i = 0
+        in_fence = False
+        while i < len(lines):
+            # Skip table conversion inside fenced code blocks. A line
+            # starting with ``` (any number of additional backticks /
+            # info string) toggles the fence flag. WhatsApp renders
+            # triple-backtick blocks in monospace — leave them alone.
+            stripped_line = lines[i].lstrip()
+            if stripped_line.startswith("```"):
+                in_fence = not in_fence
+                out.append(lines[i])
+                i += 1
+                continue
+            if in_fence:
+                out.append(lines[i])
+                i += 1
+                continue
+
+            # Look-ahead: is the current line a plausible header row,
+            # and is the NEXT line an alignment row?
+            if (
+                _is_table_row(lines[i])
+                and i + 1 < len(lines)
+                and _is_table_alignment_row(lines[i + 1])
+            ):
+                header_cells = _parse_table_row(lines[i])
+                # Collect data rows until we hit a non-table-row line.
+                j = i + 2
+                data_rows: list[list[str]] = []
+                while j < len(lines) and _is_table_row(lines[j]):
+                    data_rows.append(_parse_table_row(lines[j]))
+                    j += 1
+
+                # If we got at least one data row, convert. Otherwise
+                # bail (header + alignment with no data is malformed).
+                if data_rows and header_cells:
+                    out.append(_render_table_as_bullets(header_cells, data_rows))
+                    i = j
+                    continue
+                # Malformed: pass through unchanged.
+            out.append(lines[i])
+            i += 1
+        return "\n".join(out)
 
     async def _strip_dead_urls(self, reply: str) -> str:
         """HEAD-check every URL in the reply; remove lines containing a

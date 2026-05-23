@@ -157,19 +157,24 @@ def build_policy_table() -> PolicyTable:
             # v1.3 deterministic search pipeline:
             planner_query_tool="web_search",
             planner_query_arg="query",
+            # v1.3.1: skip include_raw_content for SEARCH_DEEP — the
+            # auto-followup fetch_urls supplies depth. Embedding raw
+            # content into the search response too would double-fetch
+            # the same pages (~10× tokens for no quality gain).
+            planner_query_default_args={"include_raw_content": False},
             auto_followup_after="web_search",
             auto_followup_tool="fetch_urls",
             auto_followup_attr="urls",
             auto_followup_arg="urls",
             auto_followup_max_items=5,
             auto_followup_one_per_host=True,
-            # Per-tool context caps. With multi-query fan-out potentially
-            # producing 4 × 4000 = 16K chars of search snippets, plus
-            # synthesised fetch_urls returning 5 × ~12K = 60K chars, we
-            # cap the model-visible view per-result. Full content
-            # remains in ToolStep.attrs["result"] for the reviewer.
+            # Per-tool context caps. v1.3.1 lowered web_search 4000→
+            # 2500 — with include_raw_content off and chunks_per_source
+            # at 1, search snippets are much smaller now; the cap
+            # follows. fetch_urls cap unchanged (it's still the depth
+            # tool).
             tool_result_message_caps={
-                "web_search": 4000,
+                "web_search": 2500,
                 "fetch_urls": 12000,
                 "fetch_url": 12000,
             },

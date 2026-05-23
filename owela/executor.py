@@ -338,9 +338,15 @@ async def _maybe_synthesize_planner_fanout(
 
     tool_calls: list[dict[str, Any]] = []
     for variant in plan.queries:
-        args: dict[str, Any] = {policy.planner_query_arg: variant.query}
+        # Args precedence: policy defaults → variant.extra → primary
+        # query. variant.extra wins over policy defaults so a planner
+        # can opt out of a default for a specific variant; the primary
+        # query string is always last so it can't be accidentally
+        # overwritten by either.
+        args: dict[str, Any] = dict(policy.planner_query_default_args)
         if variant.extra:
             args.update(variant.extra)
+        args[policy.planner_query_arg] = variant.query
         tool_calls.append({
             "id": f"call_synth_q_{uuid.uuid4().hex[:8]}",
             "type": "function",

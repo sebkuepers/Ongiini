@@ -50,7 +50,7 @@ log = logging.getLogger("ongiini.planner")
 _PLAN_PROMPT = """You're about to help a user in Namibia answer this question on WhatsApp:
 
   {question}
-
+{recent_history}
 Plan the search BEFORE any tool runs. Output ONLY a JSON object in this
 exact shape (no extra text before or after), then the literal token
 PLAN_DONE on its own line.
@@ -164,13 +164,23 @@ class OngiiniPlanner:
             step.ended_at = time.monotonic()
             return step
 
+        # v1.3.1: surface the last 2 conversation turns so the planner
+        # can resolve pronouns and follow-up references ("compare them",
+        # "what about X"). Empty history → empty block, prompt is
+        # byte-identical to v1.3 (preserves prefix-cache on first-turn
+        # queries).
+        recent_history = _format_recent_history(msg.history)
+
         try:
             resp = await asyncio.wait_for(
                 self._client.chat.completions.create(
                     model=self.model_id,
                     messages=[{
                         "role": "user",
-                        "content": _PLAN_PROMPT.format(question=question),
+                        "content": _PLAN_PROMPT.format(
+                            question=question,
+                            recent_history=recent_history,
+                        ),
                     }],
                     temperature=0.3,
                     max_tokens=self.max_tokens,
@@ -204,6 +214,54 @@ class OngiiniPlanner:
         step.queries = queries
         step.ended_at = time.monotonic()
         return step
+
+
+def _format_recent_history(history: list[dict[str, Any]]) -> str:
+    """Format the last user+assistant exchange (or just the previous
+    user message) into a prompt-friendly block. Returns "" when there's
+    nothing useful — keeps the prompt byte-stable for prefix-cache hits
+    on first-turn queries.
+
+    We take only the LAST 2 entries (the immediately preceding turn).
+    Pulling deeper history adds tokens without helping resolution —
+    follow-up pronouns almost always point at the IMMEDIATELY prior
+    turn, not three turns back.
+    """
+    if not history:
+        return ""
+    # Find last user message and the assistant response that followed
+    # it (if any). Walk backwards, keeping the last assistant + last
+    # user before it.
+    last_assistant: str | None = None
+    last_user: str | None = None
+    for entry in reversed(history):
+        role = entry.get("role")
+        content = entry.get("content")
+        # Only handle plain string content (image-bearing turns use
+        # list[dict] content_parts; skip those for the planner — the
+        # image isn't useful for query decomposition).
+        if not isinstance(content, str):
+            continue
+        if role == "assistant" and last_assistant is None:
+            last_assistant = content.strip()
+        elif role == "user" and last_user is None:
+            last_user = content.strip()
+            break    # we have the immediately prior user turn
+
+    if not last_user and not last_assistant:
+        return ""
+
+    parts = ["", "Conversation just before this question (for resolving"
+             " pronouns like 'them', 'this', 'what about'):"]
+    if last_user:
+        # Cap to ~400 chars — we just need pronoun context.
+        snippet = last_user[:400] + ("…" if len(last_user) > 400 else "")
+        parts.append(f"  PREVIOUS USER: {snippet}")
+    if last_assistant:
+        snippet = last_assistant[:400] + ("…" if len(last_assistant) > 400 else "")
+        parts.append(f"  PREVIOUS REPLY: {snippet}")
+    parts.append("")
+    return "\n".join(parts)
 
 
 def _parse_plan(raw: str) -> tuple[str, list[QueryVariant]]:

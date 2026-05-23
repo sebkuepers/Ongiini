@@ -67,8 +67,15 @@ FETCH_MAX_CHARS = 12000
 
 # Default /search params. Each is overridable per-call via web_search()
 # kwargs.
-_DEFAULT_MAX_RESULTS = 10
-_DEFAULT_CHUNKS_PER_SOURCE = 3
+#
+# v1.3.1 reduced max_results 10→6 and chunks_per_source 3→1 — for
+# SEARCH_DEEP the auto-follow-up to fetch_urls supplies real depth,
+# so the search response only needs to give the URL ranker enough
+# candidates (6 results × 1 chunk is plenty). Cuts per-search payload
+# size ~5× without losing the diversity needed for top-per-host
+# selection.
+_DEFAULT_MAX_RESULTS = 6
+_DEFAULT_CHUNKS_PER_SOURCE = 1
 _DEFAULT_COUNTRY = "namibia"
 _VALID_TOPICS = {"general", "news"}
 _VALID_TIME_RANGES = {None, "day", "week", "month", "year"}
@@ -219,6 +226,7 @@ async def web_search(
     topic: str = "general",
     time_range: str | None = None,
     max_results: int = _DEFAULT_MAX_RESULTS,
+    include_raw_content: bool = True,
 ) -> tuple[str, list[str]]:
     """Query Tavily and return (formatted_text, urls).
 
@@ -236,6 +244,12 @@ async def web_search(
     ``time_range`` is ``None`` / ``"day"`` / ``"week"`` / ``"month"`` /
     ``"year"``. The planner sets a recency window for queries with
     explicit recency words ("today", "this week", "latest").
+
+    ``include_raw_content`` defaults True (helpful for SEARCH_SHALLOW
+    where no fetch_urls follow-up runs). SEARCH_DEEP sets this False
+    via ``Policy.planner_query_default_args`` — the auto-followup to
+    fetch_urls supplies real depth, so embedding raw_content in the
+    search response too is redundant ~10× tokens.
     """
     if not settings.tavily_api_key:
         return "Web search is not configured.", []
@@ -244,7 +258,7 @@ async def web_search(
     if time_range not in _VALID_TIME_RANGES:
         time_range = None
 
-    cache_key = (query.strip().lower(), topic, time_range)
+    cache_key = (query.strip().lower(), topic, time_range, bool(include_raw_content))
     cached = _SEARCH_CACHE.get(cache_key)
     if cached is not None:
         # Return a fresh mutable list copy of the cached URL tuple so
@@ -270,10 +284,12 @@ async def web_search(
         # executor's auto-follow-up to fetch_urls supplies the real
         # depth.
         "include_answer": True,
-        # Full cleaned page text per result. Multi-query fan-out × this
-        # gives the model dense evidence WITHOUT yet calling fetch_urls
-        # — the synthesise-fetch step on top is additional depth.
-        "include_raw_content": True,
+        # Full cleaned page text per result. SEARCH_SHALLOW gets this
+        # (no fetch_urls follow-up — raw content from the search IS the
+        # depth). SEARCH_DEEP turns this off because fetch_urls auto-
+        # followup supplies the deep read, and embedding raw_content
+        # in the search response would double-fetch the same pages.
+        "include_raw_content": bool(include_raw_content),
         "topic": topic,
     }
     if time_range is not None:

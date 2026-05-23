@@ -657,6 +657,60 @@ async def test_executor_synthesises_multi_query_fanout_from_plan_step():
 
 
 @pytest.mark.asyncio
+async def test_planner_query_default_args_merged_into_synthesised_calls():
+    """v1.3.1: Policy.planner_query_default_args provides policy-level
+    tool kwargs that the executor merges into EVERY synthesised
+    planner-fan-out tool call. Variant.extra overrides; the primary
+    query string is always last so it can't be clobbered."""
+    received_args: list[dict] = []
+
+    @tool(name="ws_defaults", params={
+        "query": "Q.", "topic": "T.", "include_raw_content": "Raw."
+    })
+    async def web_search(
+        query: str, topic: str = "general", include_raw_content: bool = True,
+    ) -> tuple[str, dict]:
+        """Search."""
+        received_args.append({
+            "query": query, "topic": topic,
+            "include_raw_content": include_raw_content,
+        })
+        return "ok", {"urls": []}
+
+    table = PolicyTable().set(
+        VERDICT_SEARCH, DEPTH_DEEP,
+        Policy(
+            name="search_with_defaults",
+            first_tool=AUTO,
+            max_steps=4,
+            enable_planner=True,
+            planner_query_tool="ws_defaults",
+            planner_query_arg="query",
+            planner_query_default_args={"include_raw_content": False},
+        ),
+    )
+    planner = FakePlanner(queries=[
+        QueryVariant(query="q1"),
+        # variant.extra overrides the policy default for THIS variant.
+        QueryVariant(query="q2", extra={"include_raw_content": True, "topic": "news"}),
+    ])
+    model = ScriptedModel([_ScriptedResponse(content="done")])
+    rt = _make_runtime_with_planner(
+        model=model, planner=planner, tools=[web_search], policies=table,
+    )
+    await Agent(rt).handle(_msg())
+
+    assert len(received_args) == 2
+    by_query = {a["query"]: a for a in received_args}
+    # q1: only policy defaults applied → include_raw_content=False
+    assert by_query["q1"]["include_raw_content"] is False
+    assert by_query["q1"]["topic"] == "general"     # tool default
+    # q2: variant.extra wins → include_raw_content=True (overrides policy)
+    assert by_query["q2"]["include_raw_content"] is True
+    assert by_query["q2"]["topic"] == "news"
+
+
+@pytest.mark.asyncio
 async def test_executor_synthesises_auto_followup_after_web_search():
     """When auto_followup_after matches a ToolStep's tool_name AND it
     carries attrs[auto_followup_attr], the executor synthesises a

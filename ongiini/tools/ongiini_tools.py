@@ -69,12 +69,19 @@ _FETCH_URLS_CAP = 5
             "Leave empty for no time restriction. Usually pre-selected by "
             "the planner for recency-sensitive queries."
         ),
+        "include_raw_content": (
+            "Whether to embed the full page text into each search result. "
+            "Defaults True; the SEARCH_DEEP policy sets False because the "
+            "automatic fetch_urls follow-up provides depth and embedding "
+            "raw_content in the search response would double-fetch."
+        ),
     },
 )
 async def web_search(
     query: str,
     topic: str = "general",
     time_range: str = "",
+    include_raw_content: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     """Wrap ``_web_search_impl`` and surface the URL list to the
     executor via the tuple-return contract.
@@ -86,7 +93,10 @@ async def web_search(
     sees ``text``.
     """
     text, urls = await _web_search_impl(
-        query, topic=topic, time_range=time_range or None,
+        query,
+        topic=topic,
+        time_range=time_range or None,
+        include_raw_content=bool(include_raw_content),
     )
     return text, {"urls": urls}
 

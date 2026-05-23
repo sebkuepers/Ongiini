@@ -384,3 +384,109 @@ async def test_followup_task_per_user_does_not_clobber_other_users():
         for task in list(t._followup_tasks.values()):
             task.cancel()
         await asyncio.sleep(0.01)
+
+
+# ---------- v1.3.1 Markdown table → labelled bullets ----------
+
+def test_normalise_simple_table_to_bullets():
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    table = (
+        "| Provider | Example | Best For |\n"
+        "| :--- | :--- | :--- |\n"
+        "| Local (NA) | Paratus | Hosting |\n"
+        "| Global | AWS | Massive AI |\n"
+    )
+    out = n(table)
+    # First column becomes the bolded row header; other columns become
+    # labelled bullets paired with the header row's labels.
+    assert "*Local (NA)*" in out
+    assert "- Example: Paratus" in out
+    assert "- Best For: Hosting" in out
+    assert "*Global*" in out
+    assert "- Example: AWS" in out
+    # Raw pipes are gone.
+    assert "|" not in out
+
+
+def test_normalise_table_embedded_in_prose():
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    text = (
+        "Here is the comparison:\n"
+        "\n"
+        "| Bank | Rate |\n"
+        "| :--- | :--- |\n"
+        "| Bank Windhoek | 13.0% |\n"
+        "\n"
+        "Hope that helps."
+    )
+    out = n(text)
+    assert "Here is the comparison:" in out
+    assert "*Bank Windhoek*" in out
+    assert "- Rate: 13.0%" in out
+    assert "Hope that helps." in out
+
+
+def test_normalise_malformed_table_passes_through():
+    """Header row with no alignment separator → not a valid Markdown
+    table; pass through unchanged so we don't accidentally break
+    something that wasn't a table."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    text = (
+        "Some text with | pipes | in it but no\n"
+        "alignment row below it.\n"
+    )
+    out = n(text)
+    # Pipes preserved — we didn't try to convert.
+    assert "|" in out
+
+
+def test_normalise_table_skips_empty_cells():
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    table = (
+        "| Name | A | B |\n"
+        "| :--- | :--- | :--- |\n"
+        "| Row1 | x |  |\n"
+    )
+    out = n(table)
+    assert "*Row1*" in out
+    assert "- A: x" in out
+    # Empty cell B should not emit a bullet.
+    assert "- B:" not in out
+
+
+def test_normalise_table_alignment_with_no_colons_also_recognised():
+    """Alignment cells can be ``---`` (no colons) too — common when
+    Gemma emits plain Markdown."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    table = (
+        "| H1 | H2 |\n"
+        "| --- | --- |\n"
+        "| a | b |\n"
+    )
+    out = n(table)
+    assert "*a*" in out
+    assert "- H2: b" in out
+
+
+def test_normalise_table_inside_fenced_code_block_is_left_alone():
+    """Markdown tables inside triple-backtick fences are part of a
+    code block — WhatsApp renders those in monospace. Do NOT convert
+    them to bullets."""
+    n = WhatsAppTransport._normalise_markdown_for_whatsapp
+    text = (
+        "Here's an example of Markdown syntax:\n"
+        "\n"
+        "```\n"
+        "| A | B |\n"
+        "| --- | --- |\n"
+        "| 1 | 2 |\n"
+        "```\n"
+        "\n"
+        "Use it like that."
+    )
+    out = n(text)
+    # The pipes inside the fence are preserved.
+    assert "| A | B |" in out
+    assert "| 1 | 2 |" in out
+    # No bullet conversion happened.
+    assert "*1*" not in out
