@@ -291,7 +291,10 @@ TOPICS_ANALYSIS = Analysis(
         "- Assign EVERY input phrase to exactly one cluster.\n"
         "- Output strict JSON in this shape, with no preamble or trailing text:\n"
         '  {"clusters": [{"label": "...", "summary": "...", "items": ["phrase1", "phrase2"]}]}\n'
-        "- Items must be EXACT verbatim copies of the input phrases.\n"
+        "- Items must be EXACT verbatim copies of the input phrases — JUST "
+        "the phrase, NOT the '(count: N)' suffix. Example: an input line "
+        "'small talk (count: 112)' becomes the item 'small talk' — no count, "
+        "no parentheses.\n"
     ),
     item_kind="message",
 )
@@ -530,7 +533,17 @@ async def run_extract_pass(analysis: Analysis, excluded: frozenset[str]) -> tupl
 
 # --- Synthesis pass --------------------------------------------------------
 
-_MAX_SYNTH_ITEMS = 1000   # cap descriptions fed to the LLM in one synthesis call
+_MAX_SYNTH_ITEMS = 80     # cap descriptions fed to the LLM in one synthesis call.
+                          # Hard ceiling — once the label set grew past ~150 in
+                          # production, the synthesis call hit the 180s vLLM
+                          # timeout and returned None, leaving the stale
+                          # synthesis file in place (100% Other). 80 by-count-
+                          # rank labels covers ~85% of items in our distribution
+                          # while keeping the prompt under 4k chars and the
+                          # response under 30s. Long-tail singletons drop into
+                          # Other via the aggregator's existing fall-through,
+                          # which is semantically correct anyway — singletons
+                          # by definition aren't part of a broad bucket.
 _SYNTH_TIMEOUT_SECONDS = 180
 # Synthesis can return a lot of JSON when there are dozens of items to
 # assign. 4000 was empirically too tight — the LLM truncated mid-cluster
@@ -541,6 +554,9 @@ _SYNTH_MAX_TOKENS = 12000
 
 from .synthesis_io import synthesis_path as _synthesis_path  # noqa: E402
 from .synthesis_io import load_synthesis as load_synthesis_sync  # noqa: E402
+
+
+from .synth_match import norm_label as _norm_label  # noqa: E402
 
 
 def _serialise_label_counts(counts: dict[str, int]) -> str:
@@ -613,20 +629,7 @@ async def run_synthesis(analysis: Analysis) -> dict | None:
         log.warning("synthesis '%s' returned unparsable JSON: %r", analysis.name, raw[:300])
         return None
 
-    # Compute per-cluster counts by summing counts of assigned items.
-    # Match items case- and punctuation-insensitively: the LLM often
-    # returns "Yellowing Maize Leaves" when the input was "yellowing
-    # maize leaves" or strips/adds a trailing period. Without
-    # normalisation, every cluster ends up with total=0 and everything
-    # rolls into Other.
-    def _norm(s: str) -> str:
-        s = s.strip().lower()
-        # Collapse runs of whitespace; strip trailing punctuation.
-        s = re.sub(r"\s+", " ", s)
-        s = s.strip(".,;:!?\"'`")
-        return s
-
-    norm_to_label: dict[str, str] = {_norm(lbl): lbl for lbl in counts.keys()}
+    norm_to_label: dict[str, str] = {_norm_label(lbl): lbl for lbl in counts.keys()}
 
     cluster_out: list[dict] = []
     assigned_items: set[str] = set()
@@ -641,7 +644,7 @@ async def run_synthesis(analysis: Analysis) -> dict | None:
         total = 0
         kept_items: list[str] = []
         for it in items:
-            it_norm = _norm(str(it))
+            it_norm = _norm_label(str(it))
             if not it_norm:
                 continue
             # Resolve back to the actual stored label via the
