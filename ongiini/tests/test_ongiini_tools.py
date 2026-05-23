@@ -30,6 +30,7 @@ def test_all_tools_register_in_registry():
     assert names == {
         "web_search", "fetch_url", "fetch_urls", "delete_my_data",
         "whats_in_my_memory", "my_token_usage", "lookup_ongiini_docs",
+        "load_skill",
     }
 
 

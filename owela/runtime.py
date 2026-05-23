@@ -20,6 +20,7 @@ from .memory import MemoryProvider
 from .model import Model
 from .policy import Policy, PolicyTable
 from .router import Classifier
+from .skills import SkillRegistry
 from .step import CritiqueStep, PlanStep, ReviseStep, Step
 from .tools import ToolRegistry
 from .transport import InboundMessage, Transport
@@ -82,3 +83,9 @@ class Runtime:
     # invoking; missing component + flag-on = phase silently skipped.
     planner: Planner | None = None
     reviewer: Reviewer | None = None
+
+    # Skills registry — application-registered reference blocks. The
+    # MemoryProvider impl decides where the manifest lands in the system
+    # prompt; on-demand skills are surfaced via an application-provided
+    # ``load_skill`` tool that reads ``ctx.runtime.skills``.
+    skills: SkillRegistry | None = None

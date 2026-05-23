@@ -103,10 +103,65 @@ quirks to `owela/`; add them here, in the right module.
 | 1M-tokens-per-user-per-month allowance | `usage.py` + `tools/ongiini_tools.py::my_token_usage` |
 | Namibia-only filter (+264 country code) | `filters.py::is_allowed` |
 | Common Intelligence Foundation / Spark / German number context | `system_prompt.py` |
+| Oshiwambo greeting / code-switching reference | `skills/oshiwambo/SKILL.md` |
 
 If you add a new quirk: pick the right module, NOT `owela/`. If
 you can't find a right module, the quirk probably needs its own
 abstraction — that's a design decision worth flagging.
+
+---
+
+## Skills (Claude-compatible reference content)
+
+Drop named reference blocks into `ongiini/skills/<name>/SKILL.md` with
+YAML frontmatter. The Owela framework (`owela.Skill` /
+`owela.SkillRegistry`) renders the manifest into the system prompt and
+exposes a `load_skill` tool for on-demand content.
+
+**Required frontmatter (Claude spec):**
+
+```yaml
+---
+name: <kebab-or-snake-case>
+description: >
+  One paragraph that BOTH explains what the skill is AND when the model
+  should use it. The model decides relevance from the description, so
+  bake the "when to use" guidance directly into it.
+---
+```
+
+**Optional Owela extension (ignored by Claude):**
+
+```yaml
+load: always  # or 'on_demand' (default)
+```
+
+- `load: always` — full content embedded in the system prompt every
+  turn. Use for small skills (~1k tokens) needed unpredictably (e.g.
+  greetings).
+- `load: on_demand` — only the manifest entry (name + description) goes
+  in the system prompt; full content fetched via `load_skill(name)`.
+  Use for large skills (~5k+ tokens) needed only occasionally.
+
+**Where the wiring lives:**
+
+- `ongiini/skills_loader.py` — scans `skills/`, parses frontmatter
+- `ongiini/tools/skill_tools.py::load_skill` — the on-demand tool
+- `ongiini/memory/provider.py::assemble_messages` — injects the
+  manifest as a system message after SYSTEM_PROMPT, before the date
+  anchor
+- `ongiini/runtime.py::build_runtime` — loads skills and passes the
+  registry to both the MemoryProvider and the Runtime
+
+**Anti-trap discipline:**
+
+- Skills don't bundle tools, hooks, or policies — those abstractions
+  already exist and shouldn't be wrapped
+- Skills are static reference content registered at startup, not
+  per-turn state
+- The Owela `Skill` and `SkillRegistry` are pure-library types — every
+  Ongiini specific (the `oshiwambo` content, the loader path, the
+  on-demand tool) lives here in `ongiini/`
 
 ---
 

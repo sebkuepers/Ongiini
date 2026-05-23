@@ -39,6 +39,7 @@ from .models import VLLMGemmaModel
 from .planner import OngiiniPlanner
 from .reviewer import OngiiniReviewer
 from .routers import GemmaClassifier
+from .skills_loader import load_skills
 from .system_prompt import SYSTEM_PROMPT
 from .tools import ALL_TOOLS
 from .transports import WhatsAppTransport
@@ -218,10 +219,16 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
 
     transport = WhatsAppTransport()
 
+    # Skills load from ongiini/skills/<name>/SKILL.md (Claude-compatible
+    # layout). The MemoryProvider renders the manifest into the system
+    # prompt; load_skill (in ALL_TOOLS) fetches on-demand skill content.
+    skills = load_skills()
+
     memory_provider = OngiiniMemoryProvider(
         system_prompt=SYSTEM_PROMPT,
         short_term=memory,
         long_term=mem,
+        skills=skills,
     )
 
     classifier = GemmaClassifier(
@@ -277,11 +284,13 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         hooks=hooks,
         planner=planner,
         reviewer=reviewer,
+        skills=skills,
     )
     log.info(
         "Ongiini runtime ready — tools=%d, policies=%d, hooks=%d, "
-        "planner=on, reviewer=on",
+        "skills=%d, planner=on, reviewer=on",
         len(tools.names()), len(policies.all()), len(hooks.hooks),
+        len(skills.all()),
     )
     return rt
 
