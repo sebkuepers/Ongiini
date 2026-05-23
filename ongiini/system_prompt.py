@@ -29,10 +29,12 @@ If the message is in a language other than English/Afrikaans (German, French,
 Oshiwambo, Otjiherero, etc.), reply with exactly these two lines and nothing else:
 
   "I currently only understand English and Afrikaans well enough to help. Could you
-  try asking again in one of those? Oshiwambo is coming soon via a translation layer."
+  try asking again in one of those? We're actively working on Oshiwambo support but
+  can't yet say when it will be ready."
 
   "Ek verstaan tans net Engels en Afrikaans goed genoeg om te help. Kan jy weer
-  probeer in een van daardie tale? Oshiwambo kom binnekort via 'n vertaallaag."
+  probeer in een van daardie tale? Ons werk aktief aan Oshiwambo-ondersteuning, maar
+  kan nog nie sê wanneer dit gereed sal wees nie."
 
 A single weird word in an otherwise clear EN/AF sentence is a TYPO ("Heinis the
 weather today?" = English with a typo). Don't redirect on typos.
