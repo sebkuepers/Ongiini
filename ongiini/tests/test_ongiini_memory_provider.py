@@ -346,3 +346,128 @@ async def test_list_all_returns_mem0_facts():
     provider = _provider(long=long)
     result = await provider.list_all("+264u")
     assert result == facts
+
+
+# ---------- v1.6-B source-index injection ----------
+
+def _provider_with_source_index(
+    *,
+    loader_value=None,
+    formatter_output: str = "",
+    deleter_value: bool = False,
+):
+    """Build a provider wired with mock source-index callables."""
+    short = _make_short()
+    long = _make_long()
+    loader = MagicMock(return_value=loader_value or [])
+    formatter = MagicMock(return_value=formatter_output)
+    deleter = MagicMock(return_value=deleter_value)
+    provider = OngiiniMemoryProvider(
+        system_prompt="SYS",
+        short_term=short,
+        long_term=long,
+        source_index_loader=loader,
+        source_index_formatter=formatter,
+        source_index_deleter=deleter,
+    )
+    return provider, loader, formatter, deleter
+
+
+@pytest.mark.asyncio
+async def test_source_index_block_is_injected_when_non_empty():
+    """When the loader returns entries and the formatter produces text,
+    a system message carrying that text appears in the assembled list."""
+    provider, loader, formatter, _ = _provider_with_source_index(
+        loader_value=[{"url": "https://a.example", "ts": "x"}],
+        formatter_output="Sources cited earlier:\n- https://a.example",
+    )
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="hi", content_parts=[],
+    )
+    result = await provider.assemble_messages(msg, Policy(name="p"), [])
+    loader.assert_called_once_with("+264u")
+    bodies = [m["content"] for m in result if m["role"] == "system"]
+    assert any("https://a.example" in b for b in bodies)
+
+
+@pytest.mark.asyncio
+async def test_source_index_block_skipped_when_empty():
+    """Empty index → no extra system message."""
+    provider, _, _, _ = _provider_with_source_index(
+        loader_value=[], formatter_output="",
+    )
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="hi", content_parts=[],
+    )
+    result = await provider.assemble_messages(msg, Policy(name="p"), [])
+    # Same baseline as no-source-index case: SYS + date + user = 3 msgs.
+    assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_source_index_disabled_when_callables_not_provided():
+    """Provider falls back to v1.4 behaviour if no source_index_loader
+    was injected — protects backwards-compat for tests that don't care."""
+    provider = _provider()    # no source_index_* args
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="hi", content_parts=[],
+    )
+    # Doesn't crash, doesn't try to inject anything.
+    result = await provider.assemble_messages(msg, Policy(name="p"), [])
+    assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_source_index_loader_exception_is_swallowed():
+    """Soft-fail contract — a broken loader must not crash assembly."""
+    provider, _, _, _ = _provider_with_source_index()
+    provider._load_source_index = MagicMock(side_effect=OSError("disk gone"))
+    msg = InboundMessage(
+        user_id="+264u", msg_id="m", text="hi", content_parts=[],
+    )
+    result = await provider.assemble_messages(msg, Policy(name="p"), [])
+    # Chat still works; the source-index block was just dropped.
+    assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_delete_all_includes_source_index_when_wired():
+    """``delete_my_data`` must wipe the source index too, not just
+    short-term + long-term. Otherwise URLs would survive a 'forget
+    everything' request — a privacy regression."""
+    provider, _, _, deleter = _provider_with_source_index(deleter_value=True)
+    removed = await provider.delete_all("+264u")
+    deleter.assert_called_once_with("+264u")
+    assert removed is True
+
+
+@pytest.mark.asyncio
+async def test_delete_all_returns_true_if_only_source_index_had_data():
+    """Even if short_term and long_term had nothing, deleting source_index
+    counts as 'some data was removed'."""
+    short = _make_short(delete_value=False)
+    long = _make_long(delete_value=False)
+    deleter = MagicMock(return_value=True)
+    provider = OngiiniMemoryProvider(
+        system_prompt="SYS",
+        short_term=short,
+        long_term=long,
+        source_index_deleter=deleter,
+    )
+    assert await provider.delete_all("+264u") is True
+
+
+@pytest.mark.asyncio
+async def test_delete_all_soft_fails_when_source_index_deleter_raises():
+    short = _make_short(delete_value=True)
+    long = _make_long(delete_value=False)
+    deleter = MagicMock(side_effect=OSError("boom"))
+    provider = OngiiniMemoryProvider(
+        system_prompt="SYS",
+        short_term=short,
+        long_term=long,
+        source_index_deleter=deleter,
+    )
+    # short_term still reported deletion; the source_index error must
+    # not propagate.
+    assert await provider.delete_all("+264u") is True

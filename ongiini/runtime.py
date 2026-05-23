@@ -29,11 +29,14 @@ from owela import (
 
 from . import pii, usage
 from .config import settings
-from .hooks import BillingHook, OngiiniMemoryRecordingHook, TracingHook
+from .hooks import (
+    BillingHook, OngiiniMemoryRecordingHook, SourceIndexHook, TracingHook,
+)
 from .memory import (
     OngiiniMemoryProvider,
     long_term as mem,
     short_term as memory,
+    source_index,
 )
 from .models import VLLMGemmaModel
 from .planner import OngiiniPlanner
@@ -222,6 +225,9 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         system_prompt=SYSTEM_PROMPT,
         short_term=memory,
         long_term=mem,
+        source_index_loader=source_index.load,
+        source_index_formatter=source_index.format_for_injection,
+        source_index_deleter=source_index.delete,
     )
 
     classifier = GemmaClassifier(
@@ -265,6 +271,7 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
             include_critique_detail=settings.trace_critique_detail,
         ),
         OngiiniMemoryRecordingHook(sanitiser=pii.sanitize),
+        SourceIndexHook(),
     ])
 
     rt = Runtime(

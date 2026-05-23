@@ -38,7 +38,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from owela import InboundMessage, PlanStep, Policy, Step
 
@@ -112,11 +112,21 @@ class OngiiniMemoryProvider:
         short_term: ShortTermBackend,
         long_term: LongTermBackend,
         mem0_search_limit: int = 5,
+        source_index_loader: Callable[[str], list[dict[str, Any]]] | None = None,
+        source_index_formatter: Callable[[list[dict[str, Any]]], str] | None = None,
+        source_index_deleter: Callable[[str], bool] | None = None,
     ) -> None:
         self.system_prompt = system_prompt
         self._short = short_term
         self._long = long_term
         self.mem0_search_limit = mem0_search_limit
+        # v1.6-B source-index: optional third memory tier that persists
+        # cited URLs across turns. Injected as callables so tests can
+        # substitute fakes without touching the on-disk store; None
+        # cleanly disables the feature.
+        self._load_source_index = source_index_loader
+        self._format_source_index = source_index_formatter
+        self._delete_source_index = source_index_deleter
 
     async def assemble_messages(
         self,
@@ -165,9 +175,35 @@ class OngiiniMemoryProvider:
         if plan_msg:
             messages.append({"role": "system", "content": plan_msg})
 
+        # v1.6-B: surface URLs cited in earlier turns of this conversation
+        # so "give me sources" requests work even past the short-term
+        # rolling-summary horizon. Best-effort: any failure silently
+        # drops the block — chat still works, model just can't replay
+        # buried citations.
+        si_msg = self._format_source_index_message(msg.user_id)
+        if si_msg:
+            messages.append({"role": "system", "content": si_msg})
+
         messages.extend(msg.history)
         messages.append({"role": "user", "content": user_content})
         return messages
+
+    def _format_source_index_message(self, user_id: str) -> str:
+        """Read the per-user source index and format it as a system
+        block. Returns empty string when the feature is disabled (no
+        loader injected) or the index is empty."""
+        if self._load_source_index is None or self._format_source_index is None:
+            return ""
+        try:
+            entries = self._load_source_index(user_id)
+        except Exception as exc:                       # noqa: BLE001 — soft-fail
+            log.warning("source_index load failed for %s: %s", user_id, exc)
+            return ""
+        try:
+            return self._format_source_index(entries)
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("source_index format failed for %s: %s", user_id, exc)
+            return ""
 
     @staticmethod
     def _extract_plan_message(prior_steps: list[Step]) -> str:
@@ -266,11 +302,10 @@ class OngiiniMemoryProvider:
             log.warning("long-term mem.add_image_turn failed for %s: %s", user_id, exc)
 
     async def delete_all(self, user_id: str) -> bool:
-        """Wipe both tiers. Returns True if either tier had data to delete.
+        """Wipe all tiers. Returns True if any tier had data to delete.
 
         Privacy-critical: if one tier raises, we MUST still try the
-        other. A failure in short-term cannot leak long-term data and
-        vice versa.
+        others. A failure in one tier cannot leak data from another.
         """
         short_removed = False
         try:
@@ -282,7 +317,13 @@ class OngiiniMemoryProvider:
             long_removed = await asyncio.to_thread(self._long.delete_all, user_id)
         except Exception as exc:                       # noqa: BLE001
             log.warning("long-term mem.delete_all failed for %s: %s", user_id, exc)
-        return short_removed or long_removed
+        source_removed = False
+        if self._delete_source_index is not None:
+            try:
+                source_removed = self._delete_source_index(user_id)
+            except Exception as exc:                   # noqa: BLE001
+                log.warning("source_index.delete failed for %s: %s", user_id, exc)
+        return short_removed or long_removed or source_removed
 
     async def list_all(self, user_id: str) -> list[dict[str, Any]]:
         """Return the long-term facts. Short-term raw history is

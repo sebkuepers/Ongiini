@@ -194,6 +194,46 @@ async def test_pronoun_triggers_prev_context():
     await c.classify(_msg("what is her policy on healthcare?", history=history))
     sent_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "Previous user message: Who is the President of Namibia?" in sent_msg
+    # v1.6: previous assistant reply is now also surfaced — needed for
+    # source-listing questions where the cited URLs live in the reply.
+    assert "Previous assistant reply: Netumbo Nandi-Ndaitwah is the President." in sent_msg
+
+
+@pytest.mark.asyncio
+async def test_short_message_includes_both_prev_user_and_assistant():
+    """v1.6-A: 'give me sources' is short → context is included. The
+    classifier needs to see the previous ASSISTANT reply (which has the
+    sources) to route this to NONE rather than SEARCH/DOCS."""
+    history = [
+        {"role": "user", "content": "Compare the 3 biggest Namibian banks."},
+        {"role": "assistant", "content": (
+            "Bank Windhoek leads on retail — source: https://bankwindhoek.com.na/about\n"
+            "FNB Namibia is largest by assets — source: https://fnbnamibia.com.na/ir"
+        )},
+    ]
+    client = _client_returning("NONE")
+    c = GemmaClassifier(base_url="x", model_id="g", client=client)
+    await c.classify(_msg("give me your sources", history=history))
+    sent_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "Previous user message: Compare the 3 biggest Namibian banks." in sent_msg
+    assert "Previous assistant reply:" in sent_msg
+    assert "bankwindhoek.com.na" in sent_msg
+
+
+@pytest.mark.asyncio
+async def test_assistant_only_history_still_surfaces_context():
+    """First-turn edge case: assistant said something, user replies with
+    a short follow-up — there's no prior user message but the assistant
+    reply should still be visible to the classifier."""
+    history = [
+        {"role": "assistant", "content": "Welcome! I can help with anything in Namibia."},
+    ]
+    client = _client_returning("NONE")
+    c = GemmaClassifier(base_url="x", model_id="g", client=client)
+    await c.classify(_msg("ok thanks", history=history))
+    sent_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "Previous assistant reply: Welcome!" in sent_msg
+    assert "Previous user message:" not in sent_msg
 
 
 @pytest.mark.asyncio

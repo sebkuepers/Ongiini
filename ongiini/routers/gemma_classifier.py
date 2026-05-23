@@ -96,19 +96,37 @@ These need actual tool execution (delete_my_data, whats_in_my_memory,
 my_token_usage), NOT a docs lookup.
 
 NONE — general knowledge (science, math, philosophy), generic how-to with no
-local angle, emotional support, casual conversation.
+local angle, emotional support, casual conversation, AND meta-questions
+about THIS conversation whose answer is already in the conversation
+history (asking for citations / sources / links that were cited in your
+own earlier replies; asking you to recap or summarise what was just
+discussed; "what did you tell me about X earlier"). These don't need a
+tool call — the answer is in history.
+Examples that route to NONE:
+  "give me some links to your sources" (citations are in prior replies)
+  "what were your sources for that?" (already cited above)
+  "summarise what you just told me" (history has it)
+  "remind me what the third option was" (already in history)
+  "explain that more simply" (rephrase of an answer already given)
 
 The DOCS / ADMIN distinction: "what's your privacy policy" → DOCS
 (asking about the document); "delete my data" → ADMIN (action on user state).
+The NONE / DOCS distinction: "give me your sources" → NONE (sources are
+in this conversation's history); "which languages do you support" → DOCS
+(static Ongiini policy info).
 
 Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu, Katima
 Mulilo) and institutions (BIPA, NamRA, Bank of Namibia, Ministry of Home
 Affairs) imply Namibian context even when "Namibia" isn't explicitly said.
 
-If a previous user message is shown for context, use it to resolve pronouns
-("her", "his", "it", "they") and references like "this" or "that" in the
-current message. The current message is what you classify; the previous
-message is ONLY there to disambiguate what the user is talking about.
+If previous conversation turns are shown for context, use them to:
+  (a) resolve pronouns ("her", "his", "it", "they") and references
+      like "this" or "that" in the current message;
+  (b) detect whether the user is asking ABOUT something already
+      established in the conversation (answer is in history → NONE)
+      vs asking for new external info (needs SEARCH).
+The current message is what you classify; the previous turns are
+ONLY there to disambiguate what the user is talking about.
 
 {context}Current message: {user_text}
 
@@ -157,12 +175,20 @@ class GemmaClassifier:
         if msg.has_image:
             return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_SHALLOW)
 
-        prev = self._extract_prev_user_text(msg)
-        needs_context = bool(prev) and (
+        prev_user, prev_assistant = self._extract_prev_pair(msg)
+        needs_context = bool(prev_user or prev_assistant) and (
             _has_pronoun_or_reference(text)
             or len(text) < self.short_msg_threshold_chars
         )
-        context = f"Previous user message: {prev}\n" if needs_context else ""
+        if needs_context:
+            parts = []
+            if prev_user:
+                parts.append(f"Previous user message: {prev_user}")
+            if prev_assistant:
+                parts.append(f"Previous assistant reply: {prev_assistant}")
+            context = "\n".join(parts) + "\n"
+        else:
+            context = ""
 
         try:
             resp = await asyncio.wait_for(
@@ -199,10 +225,23 @@ class GemmaClassifier:
 
     # ----- internal helpers -----
 
-    def _extract_prev_user_text(self, msg: InboundMessage) -> str:
+    def _extract_prev_pair(self, msg: InboundMessage) -> tuple[str, str]:
+        """Return the last (user, assistant) exchange from msg.history.
+
+        v1.6: classifier needs BOTH prior turns to route "give me sources"-
+        style questions correctly. The cited URLs and discussed entities
+        live in the previous ASSISTANT reply, not the previous user
+        question. Walking only the user side meant the classifier
+        couldn't tell whether a "sources" question referred to something
+        already discussed (→ NONE) vs a fresh external lookup (→ SEARCH).
+
+        Returns ("", "") if neither role yields text. Empty strings are
+        safe — the caller checks ``bool(prev_user or prev_assistant)``.
+        """
+        prev_user = ""
+        prev_assistant = ""
         for h in reversed(msg.history):
-            if h.get("role") != "user":
-                continue
+            role = h.get("role")
             c = h.get("content", "")
             if isinstance(c, list):
                 c = " ".join(
@@ -211,9 +250,14 @@ class GemmaClassifier:
                     if isinstance(p, dict) and p.get("type") == "text"
                 )
             text = (c or "").strip()
-            if text:
-                return text[: self.max_prev_chars]
-        return ""
+            if not text:
+                continue
+            if role == "assistant" and not prev_assistant:
+                prev_assistant = text[: self.max_prev_chars]
+            elif role == "user" and not prev_user:
+                prev_user = text[: self.max_prev_chars]
+                break    # walk back from most-recent user; assistant came after
+        return prev_user, prev_assistant
 
     @staticmethod
     def _parse(resp: Any) -> tuple[str, str]:
