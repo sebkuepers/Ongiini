@@ -93,7 +93,7 @@ Building Oshiwambo translation for Ongiini is a **real engineering project**, no
 
 ---
 
-## Three paths forward, ranked
+## Four paths forward, ranked
 
 ### Path A — Fine-tune NLLB-200 on the Microsoft corpus, run on the Spark (recommended)
 
@@ -131,9 +131,90 @@ Building Oshiwambo translation for Ongiini is a **real engineering project**, no
 
 **Cons:** slow, depends on people not code, doesn't ship this week.
 
+### Path D — Bridge to a frontier LLM API as a stopgap
+
+Route Oshiwambo / Otjiherero / Damara-Nama inputs through **Claude / GPT-4 / Gemini as a translator only** — not as the reply engine. The model receives the user's message in the local language and translates to English; Gemma 4 answers in English; the same frontier model translates the answer back. Gemma stays the brain; the frontier model is a thin translation membrane.
+
+Quality test (Claude, on real Oshiwambo phrases sent to Ongiini in May 2026): correctly identified Oshiwambo vs Otjiherero, parsed morphology of a complex proverb, gave meaningful literal translations with appropriate hedging. **Meaningfully better than Gemma 4** at this task — but **not native-speaker grade**. Formal/written text translates well; slang, dialects, code-switching, and live idioms will trip it. Acceptable for "knowledgeable friend on WhatsApp" use cases with the right disclosure.
+
+**Pros:**
+- Solves the "we lose every indigenous-language user at hello" problem **today**, not in 6+ weeks
+- Zero ML engineering effort — just a per-language routing rule
+- Operationally proven APIs, no infra work
+- Doesn't preclude Path A — build Path A in parallel, migrate when it's ready
+- Quality is a real step-change over Gemma-alone (the actual alternative today)
+
+**Cons:**
+- **Principles trade-off.** Claude's API runs on AWS; GPT-4 on Azure; Gemini on Google Cloud. All three are US-cloud. The foundation site explicitly says *"No US cloud provider sits in the pipeline."* Routing user inputs through any of them as a translation layer walks that back. Has to be disclosed in the Privacy Policy AND on the page, or the on-page promise becomes dishonest.
+- **Per-token cost.** Frontier-LLM API rates at modest user volume work out to ~low single-digit dollars per active user per month for the translation round-trip. Not a financial blocker, but a recurring obligation rather than zero.
+- **Vendor lock-in risk.** If Anthropic / OpenAI / Google deprecate a model, change pricing, or shut down the API, the translation layer breaks or becomes uneconomic. Path A is invariant to all three.
+- **Quality ceiling.** Frontier LLMs miss dialect-specific idioms and modern colloquial speech, same as Path A would. Just at a slightly higher floor — on someone else's servers.
+
+**Verdict on Path D:** This is a real option that has to be **explicitly considered and either accepted or declined**, not ignored. Two defensible stances:
+
+- *"We'd rather lose Namibian indigenous-language users for 6 months than walk back the no-US-cloud promise."* — **mission-purity.** Keeps the foundation's identity coherent. Costs an unknown number of would-be users in the interim.
+- *"We'd rather serve those users imperfectly via Claude/GPT-4 now, disclose it transparently, and migrate to local Path A as soon as it works."* — **user-first.** Costs a temporary deviation from the no-US-cloud promise and the rhetorical clarity that comes with it.
+
+Either choice is honest as long as it's a deliberate choice, not a default.
+
+### Combining A + D — the strongest hybrid
+
+A and D aren't mutually exclusive. Four ways they layer cleanly:
+
+**1. Phased rollout** (the obvious one).
+Path D ships in week 1 — today's Namibian-indigenous-language users get served. Path A builds in parallel over 2–6 weeks. When A's BLEU is acceptable, routing switches from D to A. The US-cloud dependency becomes **time-bounded and transparently disclosed** — a documented temporary detour, not a permanent retreat from the no-US-cloud promise. The page disclosure can honestly read: *"While we build a local Namibian-language translation layer, we temporarily route Oshiwambo / Otjiherero / Damara-Nama through Anthropic / OpenAI / Google for translation only. Replies are still generated locally. We expect to switch to fully-local by [DATE]."*
+
+**2. Training-time support** (the underappreciated cluster).
+Beyond runtime translation, D can play several roles in *building* Path A — each independently valuable, all stackable. This is where D's leverage is highest:
+
+  **2a. Synthetic parallel-corpus generation.** D translates **large monolingual or parallel resources** (full Oshiwambo Bible, Wikipedia, news archives, UN parallel documents) to produce a synthetic Oshiwambo↔English corpus orders of magnitude larger than the ~7.5k-sentence Microsoft baseline. A is fine-tuned on the combined real + synthetic corpus. Standard low-resource MT technique ("knowledge distillation from a teacher model"). Typical lift: 5–10 BLEU. Cost: one-time ~few-hundred-dollar API spend.
+
+  **2b. Back-translation augmentation.** Standard MT-data-augmentation trick. Start with **monolingual Oshiwambo text** (Bible, Wikipedia, NUST publications, online forums). D translates to English. Each translation produces a new (Oshiwambo, English) training pair without needing pre-aligned data. Effectively doubles the training set per piece of monolingual Oshiwambo we can find.
+
+  **2c. Corpus cleaning.** The Microsoft 7.5k corpus has known noise — misalignments, dialect mixing, OCR errors from scanned sources. D verifies each pair: *"Is this Oshindonga sentence a valid translation of this English sentence?"* Bad pairs get filtered out. A smaller but cleaner training set typically beats a noisy larger one.
+
+  **2d. Curriculum + difficulty grading.** Sort training examples by complexity (greetings → simple declaratives → complex morphology → idioms → proverbs). Curriculum-learning: train on easy first, harder progressively. D rates difficulty per example. Speeds convergence and improves final quality on hard cases.
+
+  **2e. Test-set construction.** Build a thoughtful held-out evaluation covering distinct domains (everyday speech, healthcare, schoolwork, government forms, religious register, dialect variations, slang). D generates challenging test sentences. Catches A's blind spots before real users do.
+
+  **2f. Active-learning loop** (post-ship). A translates production-style inputs; D grades the output (*"good / acceptable / wrong, plus why"*); low-graded outputs feed back as new training examples with D's correction. Continuous improvement without manual annotation. Compounds over the months after A's first version ships.
+
+  **2g. Dialect bridging.** The Microsoft corpus is Oshindonga only. Oshikwanyama is the other major Wambo dialect. D converts Oshindonga sentences → Oshikwanyama (with hedging) to seed A's training data for the second dialect. Quality risky but better than no Kwanyama coverage.
+
+Layer them as compute and time allow. **(2a) + (2b) + (2c) probably triple the effective training-data quality vs the bare 7.5k corpus.** (2f) compounds over the months after A ships.
+
+**Honest caveats on D-as-training-source:**
+- **Quality cap.** A model fine-tuned on D's translations can't easily be *better* than D on the same data — it can only match D's quality. If D's Oshiwambo is mediocre on some construction, A will inherit that ceiling.
+- **Bias propagation.** Any systematic error D makes (wrong idiom, wrong dialect default) gets baked into A. A native-speaker QA pass on the synthetic data before training catches a lot of this.
+- **Native verification still needed.** The gold standard remains the participatory community translation work (Path C). Synthetic data accelerates A's progress; it doesn't replace the underlying need for real Oshiwambo speakers verifying the training set. Path C complements 2a–2g rather than competing with them.
+
+**3. Quality fallback** (post-A).
+Even after A is the production translator, use D as a **runtime fallback** for inputs A handles poorly — long-form text, complex morphology, sentences A flags as low-confidence. A handles 95%+ of traffic on-prem; D handles the edge cases. Minimises but doesn't zero the US-cloud dependency, on a clearly bounded slice of traffic.
+
+**4. Evaluation oracle** (offline only).
+Use D as the **benchmark** for evaluating A's quality over time, never on the hot path. Periodically translate held-out test sets through both; the divergence is a signal for what to fine-tune next. Frontier-model touches the offline pipeline only — no production user traffic, no US-cloud dependency at serve time.
+
+These layer cleanly. **A + D-phased (#1) is the minimum viable hybrid.** **A + D-phased + D-distillation (#1 + #2) is probably the strongest practical path** — solves the immediate user problem, accelerates Path A's quality with a one-time synthetic-data investment, then graduates to local-only serving. The principles trade-off becomes much more defensible because the US-cloud detour is explicitly temporary and replaced by a tangible local capability that's being actively built.
+
 ### Recommendation
 
-**A + C in parallel.** A is the engineering track that produces usable Oshindonga↔EN MT in ~2 weeks. C is the relationship track that runs forever. B is a useful same-week prototype but shouldn't be the production architecture.
+**A + D phased, augmented by D-distillation, with C running alongside.**
+
+- **Week 1**: ship D for Oshiwambo / Otjiherero / Damara-Nama. Disclose transparently on the page and in the Privacy Policy. Stop losing indigenous-language users at hello.
+- **Weeks 1–2**: data preparation in parallel.
+  - **2a** — D translates the full Oshiwambo Bible + Wikipedia + any accessible parallel corpora into a synthetic Oshiwambo↔English dataset
+  - **2b** — D back-translates monolingual Oshiwambo text (NUST corpus, online articles) to expand further
+  - **2c** — D verifies the existing ~7.5k Microsoft pairs, dropping the misaligned / noisy ones
+  - **2e** — D drafts a held-out test set covering ~6 register/domain buckets
+  - **2g** — D drafts a first Oshikwanyama synthetic corpus from the Oshindonga set
+- **Weeks 2–4**: build Path A. Fine-tune NLLB-200-distilled-600M on the combined real + synthetic corpus, ideally with curriculum learning per **2d**. BLEU iteration against the test set built in **2e**.
+- **Week ~4–6**: when A's BLEU passes the bar (≥15 conservatively for Oshindonga), switch the primary routing from D to A. Update the page disclosure to remove the US-cloud caveat. Keep D as offline evaluation oracle (#4) plus optional low-confidence runtime fallback (#3).
+- **Post-launch**: enable the **2f** active-learning loop. Every production translation gets graded by D; the lowest-graded outputs become next-cycle training examples. A's quality compounds without manual annotation.
+- **Throughout**: Path C — partnership with the Microsoft Research participatory team, Lelapa AI, NUST / UNAM, and Meyabase (contact `axel@meyabase.com`). Slow burn, mission-aligned, compounds over years. Crucially: **community-verified data overrides D-generated data wherever it exists** — the synthetic corpus is scaffolding, not a substitute.
+
+Path B (few-shot Gemma + retrieval) is no longer needed once D is on — D is strictly better for the same prototype use case at similar cost-to-ship.
+
+Other Namibian languages (Otjiherero, Khoekhoegowab, Lozi, Rukwangali, Thimbukushu) follow the same template. Quality at launch will be lower per language since corpora are smaller, but the framework generalises — and D bridges the quality gap especially well for languages where Path A's training data is thinnest.
 
 Other Namibian languages (Otjiherero, Khoekhoegowab, Lozi, Rukwangali, Thimbukushu) follow the same template with even less corpus data — quality at launch will be lower per language, but the framework generalises.
 
