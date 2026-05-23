@@ -336,9 +336,12 @@ async def test_planner_prompt_unchanged_when_history_empty():
     )
     await planner.plan(msg, Policy(name="search_deep"), [])
     sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
-    # No history block when history is empty.
-    assert "Conversation just before this question" not in sent
-    assert "PREVIOUS USER" not in sent
+    # The variable history block is identified by the
+    # parenthetical "(for resolving pronouns like 'them'...)" — the
+    # v1.5 few-shot example uses similar phrasing but without the
+    # parenthetical, so we assert specifically on the variable-block
+    # header to differentiate.
+    assert "(for resolving pronouns like" not in sent
 
 
 @pytest.mark.asyncio

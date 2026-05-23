@@ -108,9 +108,31 @@ in the conversation ("them", "those", "the same", "what about it",
 entities they mean from the recent-history block above and generate
 ONE query per entity. Do NOT emit an empty queries list because the
 question is ambiguous in isolation — that's exactly when the history
-context is most valuable. Example: if the previous reply listed
-[Paratus, IT Guru, MTN Windhoek] and the user now says "compare
-them", emit three queries — one per provider — not zero.
+context is most valuable.
+
+CONCRETE EXAMPLE — pronoun resolution
+Conversation just before this question:
+  PREVIOUS USER: How many data centers exist in Namibia?
+  PREVIOUS REPLY: There are about 6: Paratus Armada, IT Guru,
+  MTN Windhoek, UNAM Datacenter, SALT DC, Telecom Namibia.
+Current user question: "Compare them and tell me which is best for a small business"
+
+YOUR EXACT OUTPUT:
+{{
+  "facts_known": "none",
+  "queries": [
+    {{"query": "Paratus Armada data center services Namibia business", "topic": "general", "time_range": null}},
+    {{"query": "IT Guru data center Namibia business services", "topic": "general", "time_range": null}},
+    {{"query": "MTN Windhoek data center pricing offerings", "topic": "general", "time_range": null}},
+    {{"query": "Telecom Namibia data center business", "topic": "general", "time_range": null}},
+    {{"query": "SALT DC Namibia data center business hosting", "topic": "general", "time_range": null}}
+  ]
+}}
+PLAN_DONE
+
+Notice: 5 queries, ONE PER ENTITY, named explicitly. Drop UNAM (least
+business-focused) to stay under the 5-query cap. Mirror this shape
+on every pronoun-resolution turn.
 
 End with PLAN_DONE.
 """
