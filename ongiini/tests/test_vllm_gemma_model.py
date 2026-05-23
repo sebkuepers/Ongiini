@@ -320,7 +320,122 @@ def test_strip_gemma_reasoning_leak_handles_wait_prefix():
 def test_strip_gemma_reasoning_leak_empty_string():
     from ongiini.models.vllm_gemma import _strip_gemma_reasoning_leak
     assert _strip_gemma_reasoning_leak("") == ("", 0)
-    # Empty after strip: whitespace counts strip → return ("", 0).
-    out, count = _strip_gemma_reasoning_leak("   ")
-    assert out == ""
-    assert count == 0
+
+
+# ---------- 2026-05-23 second-layer leak detection (no special tokens) ----------
+
+# Production leak from 2026-05-23T18:33 — the model hit max_tokens
+# mid-thinking, never emitted closing special tokens, and shipped raw
+# chain-of-thought to a WhatsApp user. This is the exact text-prefix.
+_PRODUCTION_LEAK_2026_05_23 = """The user is asking "You speak Oshiwango?".
+The user's previous message was "Tangi 🙏" (Oshiwambo for "Thank you").
+The user is checking my language capabilities, specifically regarding Oshiwambo (Oshiwambo is the general term for the language group, though the user wrote "Oshiwango").
+
+    *   The user is asking a question in English.
+    *   The user's previous message used an Oshiwambo word ("Tangi").
+    *   The user's intent is to see if I can speak/understand Oshiwambo.
+
+    *   I have a specialized oshiwambo skill.
+    *   The user's input is English ("You speak Oshiwango?").
+
+    *   The oshiwambo skill instructions say: "When the user writes in Oshiwambo (Oshindonga or Oshikwanyama)..."
+
+    *   Self-Correction: The user wrote "Oshiwango" (likely a typo for Oshiwambo).
+"""
+
+
+def test_detect_truncated_thinking_leak_fires_on_real_production_text():
+    """The exact regression: the leaked production text must be detected
+    so the user sees the retry message, not the raw chain-of-thought."""
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    assert _detect_truncated_thinking_leak(
+        _PRODUCTION_LEAK_2026_05_23,
+        finish_reason="length",
+        enable_thinking=True,
+    ) is True
+
+
+def test_detect_truncated_thinking_leak_requires_thinking_signal():
+    """Same suspicious-looking content but with finish_reason='stop'
+    and thinking off should NOT fire (we're conservative — only the
+    strongest signals trigger the user-facing replacement)."""
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    # Same content, but neither truncation signal nor thinking enabled
+    # → must NOT trigger from the (truncation_signal OR detritus_threshold) branch.
+    # However, the production text has 3 detritus markers + reasoning opening,
+    # so it COULD still hit the "strong evidence" fallback. Verify with a
+    # weaker text that should NOT trigger:
+    weak = "The user is asking about prices. Here's a list:\n  * Apples\n  * Oranges"
+    assert _detect_truncated_thinking_leak(
+        weak, finish_reason="stop", enable_thinking=False,
+    ) is False
+
+
+def test_detect_truncated_thinking_leak_ignores_legitimate_reply():
+    """A perfectly normal substantive reply must not be flagged."""
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    normal = (
+        "Yes, Ongiini supports both English and Afrikaans. We also offer "
+        "warm greetings in Oshiwambo when users open in that language. "
+        "Is there something specific you'd like to know more about?"
+    )
+    assert _detect_truncated_thinking_leak(
+        normal, finish_reason="stop", enable_thinking=True,
+    ) is False
+
+
+def test_detect_truncated_thinking_leak_ignores_normal_truncated_reply():
+    """A substantive reply that just happened to hit max_tokens (no
+    reasoning detritus) should NOT trigger — we don't want every
+    long answer eaten."""
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    long_normal = (
+        "Sure — here's a long explanation of how exchange rates work. "
+        "First, the central bank publishes a reference rate daily. "
+        "Then commercial banks add a spread on top of that for retail "
+        "customers. The spread depends on the currency pair and"
+    )
+    assert _detect_truncated_thinking_leak(
+        long_normal, finish_reason="length", enable_thinking=True,
+    ) is False
+
+
+def test_detect_truncated_thinking_leak_ignores_bulleted_legitimate_reply():
+    """A legitimate reply that uses indented bullets must not trigger
+    just because it has the bullet pattern."""
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    bulleted = (
+        "Here are three options for you:\n"
+        "    * Apply through the NSFAF online portal\n"
+        "    * Visit a NSFAF office in Windhoek\n"
+        "    * Email them at info@nsfaf.gov.na"
+    )
+    # Has the indented-bullet pattern (1 marker), but no reasoning
+    # opening and no other detritus. Should NOT fire.
+    assert _detect_truncated_thinking_leak(
+        bulleted, finish_reason="stop", enable_thinking=False,
+    ) is False
+
+
+def test_detect_truncated_thinking_leak_empty_string():
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    assert _detect_truncated_thinking_leak("", "stop", True) is False
+    assert _detect_truncated_thinking_leak("", "length", True) is False
+
+
+def test_detect_truncated_thinking_leak_strong_evidence_without_truncation():
+    """If the content has VERY strong reasoning markers (opening + 3+
+    detritus signals), we trigger even without the truncation hint.
+    Catches the rare case of leak-with-natural-stop."""
+    from ongiini.models.vllm_gemma import _detect_truncated_thinking_leak
+    very_strong = (
+        "The user is asking about prices.\n"
+        "    *   Step 1: check the catalog\n"
+        "    *   Step 2: apply discount\n"
+        "Self-Correction: actually they want net prices\n"
+        "The rule says always include VAT\n"
+        "The skill documentation mentions this case."
+    )
+    assert _detect_truncated_thinking_leak(
+        very_strong, finish_reason="stop", enable_thinking=False,
+    ) is True

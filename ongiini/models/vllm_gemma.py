@@ -85,6 +85,83 @@ def _strip_gemma_reasoning_leak(text: str) -> tuple[str, int]:
     return cleaned, leak_count
 
 
+# Production 2026-05-23 (turn 18:33): user asked "You speak Oshiwango?".
+# DOCS policy → critique on → thinking on. Model started reasoning about
+# which rule applies, hit max_tokens=1500 mid-thought, never emitted the
+# closing thinking tag, and shipped 5570 chars of raw chain-of-thought
+# directly to a user via WhatsApp. The special-token-based stripper
+# above missed it because no tokens were ever emitted — the leak was
+# pure raw thinking text in msg.content.
+#
+# This is a SECOND defensive layer: heuristically detect raw thinking
+# WITHOUT relying on special tokens. Strict gating (multiple
+# co-occurring signals required) to avoid eating legitimate replies.
+_RAW_THINKING_OPENING_RE = re.compile(
+    r"^\s*(?:"
+    r"the\s+user\s+(?:is\s+asking|wants?|said|wrote|wrote\s+a|asked|previously|just|seems|appears)|"
+    r"looking\s+at\s+(?:the|this|the\s+user)|"
+    r"i\s+(?:should|will|need\s+to|must|have\s+to|am\s+going\s+to|'ll)\s+"
+    r"(?:consider|think|reason|check|look|first|analyse|analyze|use|follow|respond|reply)|"
+    r"let\s+me\s+(?:think|consider|reason|analyse|analyze|check|look)|"
+    r"step\s+\d+|"
+    r"first[,:]"
+    r")",
+    re.IGNORECASE,
+)
+_RAW_THINKING_DETRITUS_PATTERNS = (
+    re.compile(r"self[-\s]?correction\s*:", re.IGNORECASE),
+    re.compile(r"^\s*\*\s{3}", re.MULTILINE),     # "*   " bullet, indented reasoning style
+    re.compile(r"^\s{2,}\*\s", re.MULTILINE),     # indented "*  " bullet
+    re.compile(r"\b(?:instruction|skill\s+documentation|the\s+(?:rule|pattern|skill)\s+says)\b",
+               re.IGNORECASE),
+    re.compile(r"\b(?:wait\b.*?actually|but\s+wait\b|hmm[,.]\s+let\s+me)", re.IGNORECASE),
+)
+
+
+_TRUNCATED_THINKING_REPLY = (
+    "Sorry — I got tangled up while thinking through that. "
+    "Could you try asking again, maybe a bit more simply?"
+)
+
+
+def _detect_truncated_thinking_leak(
+    content: str,
+    finish_reason: str,
+    enable_thinking: bool,
+) -> bool:
+    """Heuristic detector for raw chain-of-thought that leaked into
+    msg.content with NO special tokens to anchor on.
+
+    Triggers only when MULTIPLE strong signals co-occur, so legitimate
+    replies that happen to start with "The user said..." or contain a
+    bulleted list don't get eaten.
+
+    Strongest signal: ``finish_reason == "length"`` AND
+    ``enable_thinking == True`` — means the model was thinking, got
+    cut off mid-stream, and never finished. If the truncated content
+    ALSO looks like reasoning detritus → almost certainly a leak.
+    """
+    if not content:
+        return False
+    truncated_while_thinking = (
+        finish_reason == "length" and enable_thinking
+    )
+    starts_like_reasoning = bool(_RAW_THINKING_OPENING_RE.search(content[:200]))
+    detritus_hits = sum(
+        1 for p in _RAW_THINKING_DETRITUS_PATTERNS if p.search(content)
+    )
+    # Strict gating: only fire if the truncation signal is present AND
+    # the content also looks like reasoning. Falls back to detritus-
+    # heavy detection when the model thought-then-stopped-naturally
+    # but still leaked (rarer but possible).
+    if truncated_while_thinking and (starts_like_reasoning or detritus_hits >= 2):
+        return True
+    # Without the truncation signal, require very strong evidence.
+    if starts_like_reasoning and detritus_hits >= 3:
+        return True
+    return False
+
+
 def _billable_from_usage(usage_obj: Any) -> tuple[int, int, int]:
     """Extract (billable_in, completion, cached) from a vLLM/OpenAI usage object.
 
@@ -208,6 +285,8 @@ class VLLMGemmaModel(Model):
                 },
             })
 
+        finish_reason = getattr(choice, "finish_reason", "") if choice else ""
+
         attrs: dict[str, Any] = {}
         if leak_count_total > 0:
             # v1.4 audit: scrub detected leaked Gemma 4 channel tokens.
@@ -216,10 +295,31 @@ class VLLMGemmaModel(Model):
             # recurrence without operators having to grep raw replies.
             attrs["reasoning_leak_stripped"] = leak_count_total
 
+        # Second-layer defence (added 2026-05-23 after production leak
+        # shipped 5570 chars of raw chain-of-thought via WhatsApp):
+        # detect raw thinking text that leaked WITHOUT special tokens.
+        # Most common cause: thinking-mode truncation by max_tokens —
+        # the model never gets to emit its closing thinking tag, so
+        # the special-token stripper has nothing to anchor on.
+        # We only fire on no-tool-call replies (a leaked-thinking turn
+        # that ALSO somehow produced tool calls is a much weirder beast
+        # and we don't want to blow away its tool output).
+        if not tool_calls and _detect_truncated_thinking_leak(
+            content, finish_reason, req.enable_thinking,
+        ):
+            log.warning(
+                "truncated/raw thinking detected in reply (finish_reason=%s, "
+                "enable_thinking=%s, content_len=%d) — replacing with retry "
+                "message to avoid leaking chain-of-thought to user",
+                finish_reason, req.enable_thinking, len(content),
+            )
+            content = _TRUNCATED_THINKING_REPLY
+            attrs["truncated_thinking_blocked"] = True
+
         return ModelResponse(
             content=content,
             tool_calls=tool_calls,
-            finish_reason=getattr(choice, "finish_reason", "") if choice else "",
+            finish_reason=finish_reason,
             tokens_in=billable_in,
             tokens_out=completion,
             cached_tokens=cached,

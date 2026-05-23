@@ -83,10 +83,18 @@ to study computer science in Namibia", "what's happening with the
 medicine shortage and what's being done", "give me 3 ideas for a small
 business in Windhoek".
 
-DOCS — the user is asking ABOUT Ongiini's policies / docs (questions about
-pricing structure, privacy policy, terms, how it works, languages supported,
-hardware, who built it, EU AI Act, the Common Intelligence Foundation, monthly
-token limits as a policy concept).
+DOCS — the user is asking a SUBSTANTIVE question about Ongiini's policies,
+hardware, or institutional context that genuinely needs a docs lookup:
+pricing structure, privacy policy, terms of use, EU AI Act compliance, who
+built it, the Common Intelligence Foundation, hardware specifics, monthly
+token limits as a policy concept, how the data flows internally.
+
+DOCS is NOT for trivial capability checks like "do you speak X?" / "what
+languages do you understand?" / "can you do Y?" / "what can you do?" —
+those are answered by the system prompt and skill content already in the
+model's context. They route to NONE. Sending them to DOCS triggers a
+costly docs-lookup + critique-and-revise pipeline for a question whose
+answer is a single sentence.
 
 ADMIN — the user is requesting an ACTION on their own data or session:
 "delete my data" / "forget everything" / "wis my data" / "vergeet alles";
@@ -111,9 +119,13 @@ Examples that route to NONE:
 
 The DOCS / ADMIN distinction: "what's your privacy policy" → DOCS
 (asking about the document); "delete my data" → ADMIN (action on user state).
-The NONE / DOCS distinction: "give me your sources" → NONE (sources are
-in this conversation's history); "which languages do you support" → DOCS
-(static Ongiini policy info).
+The NONE / DOCS distinction:
+  - "give me your sources" → NONE (sources are in this conversation's history)
+  - "do you speak Oshiwambo?" / "what languages do you support?" / "can you
+    help with X?" / "what can you do?" → NONE (capability check, answer is
+    in system prompt + skill content already)
+  - "what's your privacy policy?" / "who built Ongiini?" / "what hardware
+    do you run on?" → DOCS (substantive lookup needed)
 
 Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu, Katima
 Mulilo) and institutions (BIPA, NamRA, Bank of Namibia, Ministry of Home

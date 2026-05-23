@@ -100,6 +100,15 @@ def build_policy_table() -> PolicyTable:
             first_tool=force_tool("lookup_ongiini_docs"),
             max_steps=4,
             enable_critique=_critique_on(),
+            # DOCS turns load the full product.md verbatim — the model
+            # just needs to paraphrase the relevant section, not
+            # synthesise across multiple sources. Thinking-after-long-
+            # results is overkill here and risks runaway reasoning that
+            # leaks via the truncated-thinking path (production bug
+            # 2026-05-23T18:33: model spent 1500 tokens reasoning about
+            # a one-line capability question and shipped raw
+            # chain-of-thought to a WhatsApp user).
+            enable_thinking_after_long_results=False,
         ),
     )
 
