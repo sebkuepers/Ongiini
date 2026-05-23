@@ -220,6 +220,13 @@ def _build_config() -> dict:
                 "collection_name": "ongiini_memories",
                 "path": _qdrant_storage_path(),
                 "embedding_model_dims": 384,
+                # CRITICAL — without this, mem0's QdrantDB.__init__
+                # calls shutil.rmtree(path) on every init, wiping all
+                # accumulated facts. See mem0 0.1.116
+                # vector_stores/qdrant.py:65-67. Bug discovered
+                # 2026-05-23 after 87% of today's mem0 ADD events
+                # disappeared across 6 container restarts.
+                "on_disk": True,
             },
         },
         "embedder": {
@@ -264,6 +271,64 @@ def warmup() -> None:
         _client()
     except Exception as exc:
         log.warning("mem0 warmup failed: %s", exc)
+    _check_qdrant_consistency()
+
+
+def _check_qdrant_consistency() -> None:
+    """Sanity check the qdrant point count against the mem0 history.
+
+    Catches silent regressions of the 2026-05-23 data-loss bug: mem0's
+    QdrantDB.__init__ rmtrees the qdrant directory when on_disk is
+    falsy. If on_disk=True regressed (or some other path-wiping bug
+    surfaced), qdrant would be empty while mem0_history.db retained the
+    full audit trail. Loud WARN log so it shows up in tracing without
+    breaking startup.
+
+    Soft-fail by design — if any query fails (corrupt DB, schema
+    change), log and move on; the consistency check is observability,
+    not a hard contract."""
+    import sqlite3
+    try:
+        mem = _client()
+        # mem0's Memory exposes the underlying vector_store
+        vs = getattr(mem, "vector_store", None)
+        if vs is None or not hasattr(vs, "client"):
+            return
+        actual = vs.client.count(collection_name="ongiini_memories").count
+        history_db = settings.data_dir / "mem0_history.db"
+        if not history_db.exists():
+            return
+        h = sqlite3.connect(str(history_db))
+        try:
+            adds = h.execute(
+                "SELECT COUNT(*) FROM history WHERE event='ADD'"
+            ).fetchone()[0]
+            dels = h.execute(
+                "SELECT COUNT(*) FROM history WHERE event='DELETE'"
+            ).fetchone()[0]
+        finally:
+            h.close()
+        expected = adds - dels
+        if expected <= 0:
+            log.info("qdrant consistency: %d points, history empty — fresh install", actual)
+            return
+        ratio = actual / expected if expected else 1.0
+        if ratio < 0.5:
+            log.warning(
+                "qdrant point count %d significantly below expected %d "
+                "(history ADD=%d DEL=%d, ratio=%.2f). Likely regression of "
+                "the 2026-05-23 mem0 on_disk data-loss bug — verify "
+                "_build_config() still sets on_disk=True.",
+                actual, expected, adds, dels, ratio,
+            )
+        else:
+            log.info(
+                "qdrant consistency OK: %d points, expected ~%d "
+                "(history ADD=%d DEL=%d, ratio=%.2f)",
+                actual, expected, adds, dels, ratio,
+            )
+    except Exception as exc:                       # noqa: BLE001 — observability never breaks startup
+        log.warning("qdrant consistency check failed: %s", exc)
 
 
 def format_relevant(memories: list[dict]) -> str:
