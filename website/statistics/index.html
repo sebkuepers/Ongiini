@@ -305,6 +305,12 @@
     .stat-chart .line { stroke: var(--ink); stroke-width: 1.5; fill: none; }
     .stat-chart .area { fill: var(--terracotta-light); opacity: 0.4; }
     .stat-chart .point { fill: var(--ink); }
+    .stat-chart .value-label {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      fill: var(--ink);
+      font-weight: 600;
+    }
     .stat-chart .empty-note {
       font-family: 'Geist', sans-serif;
       font-size: 13px;
@@ -315,6 +321,8 @@
     #chart-cumulative .line { stroke: var(--teal-deep); }
     #chart-cumulative .area { fill: var(--teal-light); opacity: 0.55; }
     #chart-cumulative .point { fill: var(--teal-deep); }
+    #chart-dau .bar { fill: var(--teal-deep); }
+    #chart-dau .bar-secondary { fill: var(--teal-deep); }
     #chart-dow .bar { fill: var(--teal-deep); }
     #chart-dow .bar-secondary { fill: var(--teal-light); }
 
@@ -998,15 +1006,19 @@
     }
 
     function renderDau(series) {
+      // Daily-active-users is naturally per-day distinct — bar chart
+      // reads more honestly than a line, especially when the series is
+      // only a handful of days long (a line collapses 3 points into a
+      // smooth curve and you lose the per-day signal entirely).
       if (!series || series.length === 0) return emptyChart('chart-dau', 'No data yet.');
-      renderLineChart('chart-dau', series, { area: false });
+      renderBarTimeseries('chart-dau', series);
     }
 
     function renderLineChart(parentId, series, opts) {
       const parent = document.getElementById(parentId);
       clear(parent);
       const W = 480, H = 160;
-      const padL = 32, padR = 8, padT = 10, padB = 22;
+      const padL = 32, padR = 8, padT = 14, padB = 22;
       const innerW = W - padL - padR;
       const innerH = H - padT - padB;
       const values = series.map(p => p[1]);
@@ -1025,22 +1037,139 @@
       const zeroLabel = svgEl('text', { x: padL - 4, y: padT + innerH + 3, 'text-anchor': 'end', class: 'axis-tick' });
       zeroLabel.textContent = '0';
       svg.appendChild(zeroLabel);
-      const firstLabel = svgEl('text', { x: padL, y: H - 4, 'text-anchor': 'start', class: 'axis-tick' });
-      firstLabel.textContent = shortDate(series[0][0]);
-      svg.appendChild(firstLabel);
-      if (series.length > 1) {
-        const lastLabel = svgEl('text', { x: W - padR, y: H - 4, 'text-anchor': 'end', class: 'axis-tick' });
-        lastLabel.textContent = shortDate(series[series.length - 1][0]);
-        svg.appendChild(lastLabel);
-      }
+
+      // Path first, so dots/labels sit on top.
       const pathD = series.map((p, i) => (i === 0 ? 'M' : 'L') + xFor(i).toFixed(1) + ' ' + yFor(p[1]).toFixed(1)).join(' ');
       if (opts.area) {
         const closeD = pathD + ' L ' + xFor(series.length - 1).toFixed(1) + ' ' + (padT + innerH).toFixed(1) + ' L ' + padL + ' ' + (padT + innerH).toFixed(1) + ' Z';
         svg.appendChild(svgEl('path', { d: closeD, class: 'area' }));
       }
       svg.appendChild(svgEl('path', { d: pathD, class: 'line' }));
-      if (series.length === 1) {
-        svg.appendChild(svgEl('circle', { cx: xFor(0), cy: yFor(series[0][1]), r: 3, class: 'point' }));
+
+      // Always render a dot at each data point. Without this, 3-day
+      // series look like smooth curves and the per-day deltas are
+      // invisible — the bug Sebastian reported on 2026-05-24.
+      const showAllLabels = series.length <= 14;
+      series.forEach((p, i) => {
+        const cx = xFor(i);
+        const cy = yFor(p[1]);
+        svg.appendChild(svgEl('circle', { cx: cx, cy: cy, r: 2.5, class: 'point' }));
+        // Value label above each point when the series is short enough
+        // to render without overlap. For longer series, just the dots.
+        if (showAllLabels) {
+          const tx = svgEl('text', {
+            x: cx,
+            y: Math.max(padT + 4, cy - 6),
+            'text-anchor': 'middle',
+            class: 'value-label',
+          });
+          tx.textContent = fmtCompact.format(p[1]);
+          svg.appendChild(tx);
+        }
+      });
+
+      // X-axis date labels — every day when there are ≤14 points, else
+      // just the endpoints (the previous behaviour, which is right for
+      // a 30+ day series where per-day labels would collide).
+      if (showAllLabels) {
+        series.forEach((p, i) => {
+          const x = xFor(i);
+          const anchor = i === 0 ? 'start' : (i === series.length - 1 ? 'end' : 'middle');
+          const t = svgEl('text', { x: x, y: H - 4, 'text-anchor': anchor, class: 'axis-tick' });
+          t.textContent = shortDate(p[0]);
+          svg.appendChild(t);
+        });
+      } else {
+        const firstLabel = svgEl('text', { x: padL, y: H - 4, 'text-anchor': 'start', class: 'axis-tick' });
+        firstLabel.textContent = shortDate(series[0][0]);
+        svg.appendChild(firstLabel);
+        const lastLabel = svgEl('text', { x: W - padR, y: H - 4, 'text-anchor': 'end', class: 'axis-tick' });
+        lastLabel.textContent = shortDate(series[series.length - 1][0]);
+        svg.appendChild(lastLabel);
+      }
+      parent.appendChild(svg);
+    }
+
+    function renderBarTimeseries(parentId, series) {
+      // Bar chart for daily-counted series (DAU). Each bar is one day;
+      // value label sits above the bar when series is short, date label
+      // sits below. For long series (>14 days) we drop the value labels
+      // and only show the date on every Nth bar to avoid overlap.
+      const parent = document.getElementById(parentId);
+      clear(parent);
+      const W = 480, H = 160;
+      const padL = 32, padR = 8, padT = 14, padB = 22;
+      const innerW = W - padL - padR;
+      const innerH = H - padT - padB;
+      const values = series.map(p => p[1]);
+      const maxV = Math.max(1, ...values);
+      const svg = svgNode(W, H);
+
+      // Match the gridline style of the line charts so the two cards
+      // read as a pair.
+      for (let i = 1; i <= 3; i++) {
+        const y = padT + (innerH * i) / 4;
+        svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: 'grid-line' }));
+      }
+      const maxLabel = svgEl('text', { x: padL - 4, y: padT + 4, 'text-anchor': 'end', class: 'axis-tick' });
+      maxLabel.textContent = fmtCompact.format(maxV);
+      svg.appendChild(maxLabel);
+      const zeroLabel = svgEl('text', { x: padL - 4, y: padT + innerH + 3, 'text-anchor': 'end', class: 'axis-tick' });
+      zeroLabel.textContent = '0';
+      svg.appendChild(zeroLabel);
+
+      // Bar width: small gap, max width capped so a 3-day chart doesn't
+      // produce three giant blocks. 40px feels right with the 480px
+      // canvas and the surrounding tile padding.
+      const barGap = 4;
+      const naturalW = (innerW - barGap * (series.length - 1)) / series.length;
+      const barW = Math.min(40, naturalW);
+      const groupW = barW + barGap;
+      const groupOffset = (innerW - (series.length * groupW - barGap)) / 2;
+      const showAllLabels = series.length <= 14;
+
+      series.forEach((p, i) => {
+        const x = padL + groupOffset + i * groupW;
+        const h = (p[1] / maxV) * innerH;
+        const y = padT + innerH - h;
+        svg.appendChild(svgEl('rect', {
+          x: x.toFixed(1),
+          y: y.toFixed(1),
+          width: barW.toFixed(1),
+          height: Math.max(1, h).toFixed(1),
+          class: 'bar',
+          rx: 2,
+        }));
+        if (showAllLabels) {
+          const tx = svgEl('text', {
+            x: (x + barW / 2).toFixed(1),
+            y: Math.max(padT + 4, y - 4).toFixed(1),
+            'text-anchor': 'middle',
+            class: 'value-label',
+          });
+          tx.textContent = fmtCompact.format(p[1]);
+          svg.appendChild(tx);
+          const dt = svgEl('text', {
+            x: (x + barW / 2).toFixed(1),
+            y: H - 4,
+            'text-anchor': 'middle',
+            class: 'axis-tick',
+          });
+          dt.textContent = shortDate(p[0]);
+          svg.appendChild(dt);
+        }
+      });
+
+      if (!showAllLabels) {
+        // Long series: just the endpoints.
+        const firstX = padL + groupOffset + barW / 2;
+        const lastX = padL + groupOffset + (series.length - 1) * groupW + barW / 2;
+        const firstLabel = svgEl('text', { x: firstX, y: H - 4, 'text-anchor': 'start', class: 'axis-tick' });
+        firstLabel.textContent = shortDate(series[0][0]);
+        svg.appendChild(firstLabel);
+        const lastLabel = svgEl('text', { x: lastX, y: H - 4, 'text-anchor': 'end', class: 'axis-tick' });
+        lastLabel.textContent = shortDate(series[series.length - 1][0]);
+        svg.appendChild(lastLabel);
       }
       parent.appendChild(svg);
     }
