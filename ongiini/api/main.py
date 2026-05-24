@@ -71,6 +71,11 @@ async def lifespan(app: FastAPI):
         instrument.snapshot_loop(interval_s=60), name="resource-snapshot"
     )
     log.info("resource-snapshot loop scheduled (interval=60s)")
+    # Prometheus exporter on a dedicated port. The container exposes
+    # 9101 only to 127.0.0.1 on the host (via docker-compose), so the
+    # /metrics endpoint never leaks through the public Cloudflare-fronted
+    # webhook port.
+    instrument.start_metrics_server(port=9101)
     try:
         yield
     finally:

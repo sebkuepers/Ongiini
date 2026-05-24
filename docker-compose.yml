@@ -42,6 +42,10 @@ services:
       - ./data:/data
     ports:
       - "127.0.0.1:8445:8080"
+      # Prometheus exporter for the resource_snapshot loop. Bound to
+      # 127.0.0.1 on the host so /metrics never leaks via Cloudflare.
+      # Scraped by the host-level Prometheus at localhost:9101.
+      - "127.0.0.1:9101:9101"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Healthcheck added 2026-05-24 after the webhook process wedged
