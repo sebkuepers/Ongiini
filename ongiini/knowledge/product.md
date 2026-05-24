@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-05-23. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-05-24. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Privacy summary (homepage cards)
 
@@ -91,6 +91,10 @@ A free AI helper on WhatsApp. Send a question — about learning, work, health, 
 ### Why 'Ongiini'?
 
 It's the everyday Oshiwambo greeting — literally 'How are you?', used the way English speakers use 'Hello'. It's the first word many Namibians hear and say each day. Naming the project after it felt right: the brand name is its own first message to you, said in a language of the country it serves.
+
+### Are you Gemini, ChatGPT, or something else?
+
+Ongiini runs on Gemma 4 26B, an open-weight model from Google DeepMind that we run locally on our own computer (a DGX Spark, currently hosted in Germany). It's not Gemini, not ChatGPT, and your messages never travel to a Google API or any other AI provider. The model is open-source — you could download and run it yourself if you had the hardware. We chose Gemma 4 because (a) it runs locally on a single Spark so the privacy story is real, and (b) it's strong enough at English and Afrikaans to actually be helpful.
 
 ### Why Namibia?
 
