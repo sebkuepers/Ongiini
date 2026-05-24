@@ -114,7 +114,15 @@ services:
     # this scraping into Prometheus, we get historical PID/thread
     # growth curves for every container — exactly what we wished we
     # had during the leak investigation.
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    #
+    # Version note: v0.49.1's bundled Docker client speaks API 1.41,
+    # which the Spark's docker daemon (requires ≥1.44) rejects, causing
+    # the docker container factory to fail registration. v0.52.x has
+    # a newer client. We also DON'T pass `--docker_only=true` because
+    # it filters to docker-only metrics that depend on the docker
+    # factory; with the containerd + raw factories cAdvisor reads
+    # cgroups directly and surfaces all containers correctly.
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
     container_name: ongiini-cadvisor
     restart: unless-stopped
     privileged: true
@@ -132,7 +140,6 @@ services:
       # Reduce scrape footprint — we don't need every kernel/cgroup
       # counter, just the per-container basics.
       - "--housekeeping_interval=15s"
-      - "--docker_only=true"
 
   node-exporter:
     # Host-level metrics (CPU/memory/disk/network on the Spark itself).
