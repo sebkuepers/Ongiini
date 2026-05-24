@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Ongiini on Spark \u2014 host, containers, vLLM, GPU, leak signals. v2.",
+  "description": "Ongiini on Spark \u2014 host, containers, vLLM, GPU, leak signals. v3 (per-group thread diagnostic).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -1156,7 +1156,7 @@
     {
       "type": "stat",
       "title": "Webhook restart count (1h)",
-      "description": "How often autoheal fired in the last hour. Should be 0. Non-zero = container was unhealthy and got restarted.",
+      "description": "Number of webhook restarts in the last hour. Counts distinct cAdvisor container ids (each restart spawns a new id), minus 1 for the currently-running container. Should be 0 in steady state; non-zero = autoheal fired.",
       "gridPos": {
         "h": 5,
         "w": 8,
@@ -1170,7 +1170,7 @@
       },
       "targets": [
         {
-          "expr": "changes(container_start_time_seconds{name=\"ongiini-webhook\"}[1h])",
+          "expr": "count(count_over_time(container_start_time_seconds{name=\"ongiini-webhook\"}[1h])) - 1",
           "refId": "A"
         }
       ],
@@ -1221,7 +1221,7 @@
       },
       "targets": [
         {
-          "expr": "time() - container_start_time_seconds{name=\"ongiini-webhook\"}",
+          "expr": "time() - max(container_start_time_seconds{name=\"ongiini-webhook\"})",
           "refId": "A"
         }
       ],
@@ -1255,7 +1255,7 @@
       },
       "targets": [
         {
-          "expr": "time() - container_start_time_seconds{name=\"gemma4-vllm\"}",
+          "expr": "time() - max(container_start_time_seconds{name=\"gemma4-vllm\"})",
           "refId": "A"
         }
       ],
@@ -1394,13 +1394,121 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Python threads by group \u2014 which pool is leaking",
+      "description": "Stacked breakdown of Python-visible threads by name pattern. If a single group climbs linearly during the leak window (e.g. ThreadPoolExecutor-0), that's the smoking gun. If TOTAL OS threads grow but every Python group stays flat, the leak is in a C extension (torch / faster-whisper / ctranslate2) and won't show here \u2014 the gap is the diagnostic.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 75
+      },
+      "id": 39,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "ongiini_webhook_python_threads_by_group",
+          "legendFormat": "{{group}}",
+          "refId": "A"
+        },
+        {
+          "expr": "ongiini_webhook_threads",
+          "legendFormat": "TOTAL OS threads (incl. C-ext)",
+          "refId": "B"
+        },
+        {
+          "expr": "ongiini_webhook_python_threads",
+          "legendFormat": "Python-visible total",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "lineWidth": 2,
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TOTAL OS threads (incl. C-ext)"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    5
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Python-visible total"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "All containers \u2014 overview",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 83
       },
       "id": 104,
       "collapsed": false,
@@ -1413,7 +1521,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 76
+        "y": 84
       },
       "id": 40,
       "datasource": {
@@ -1457,7 +1565,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 76
+        "y": 84
       },
       "id": 41,
       "datasource": {
@@ -1502,7 +1610,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 84
+        "y": 92
       },
       "id": 42,
       "datasource": {
@@ -1548,7 +1656,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 100
       },
       "id": 105,
       "collapsed": false,
@@ -1561,7 +1669,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 93
+            "y": 101
           },
           "id": 50,
           "datasource": {
@@ -1605,7 +1713,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 101
           },
           "id": 51,
           "datasource": {
@@ -1647,7 +1755,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 100
+            "y": 108
           },
           "id": 52,
           "datasource": {
@@ -1706,7 +1814,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 100
+            "y": 108
           },
           "id": 53,
           "datasource": {
