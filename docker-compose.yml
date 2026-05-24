@@ -44,6 +44,30 @@ services:
       - "127.0.0.1:8445:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Healthcheck added 2026-05-24 after the webhook process wedged
+    # silently for ~6.5 hours overnight. Container stayed "Up" (no
+    # crash) but FastAPI stopped accepting connections. Docker's
+    # restart policy doesn't trigger on wedging — only on crash — so
+    # we need an active probe + an external watchdog (autoheal, below)
+    # that restarts the container on unhealthy. Targets the existing
+    # /health endpoint at the container-internal port 8080.
+    healthcheck:
+      # Uses Python stdlib (urllib) instead of curl — the slim base
+      # image doesn't ship curl, and we don't want to bloat the image
+      # for one probe. The 3s timeout means a wedged process (which
+      # would silently hang on connect) trips the probe quickly.
+      test:
+        - "CMD"
+        - "python3"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health',timeout=3).status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    # Labels: autoheal picks containers by label below.
+    labels:
+      autoheal: "true"
 
   website:
     image: nginx:1.27-alpine
@@ -54,3 +78,78 @@ services:
       - ./website-config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "127.0.0.1:18789:80"
+
+  # Watchdog — restarts any container labelled `autoheal=true` if its
+  # Docker healthcheck reports `unhealthy`. Tiny image (~10 MB),
+  # mounts the Docker socket read-only and uses the Docker API to
+  # poll health status + issue restart commands. Added 2026-05-24
+  # after the overnight wedge incident — without this, the next
+  # process leak would again result in hours of downtime until a
+  # human notices.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: ongiini-autoheal
+    restart: always
+    environment:
+      # Watch only containers explicitly labelled — keeps scope tight
+      # and avoids surprises on other host containers.
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      # Wait a few seconds after detecting unhealthy before restarting,
+      # in case the unhealthy state is transient (e.g. a single missed
+      # 30s probe).
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: "10"
+      AUTOHEAL_INTERVAL: "10"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # ----- Monitoring (Prometheus targets, scraped by the existing
+  # host-level prometheus at /home/nexus/ollama-metrics/prometheus.yml).
+  # Both exporters publish on localhost ports so the host-network
+  # prometheus can reach them without joining a docker network.
+  # Added 2026-05-24 to fill the historical-resource-data gap we had
+  # during the 2026-05-23 wedge investigation.
+
+  cadvisor:
+    # Per-container CPU / memory / network / PIDs / FS metrics. With
+    # this scraping into Prometheus, we get historical PID/thread
+    # growth curves for every container — exactly what we wished we
+    # had during the leak investigation.
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: ongiini-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "127.0.0.1:8090:8080"
+    command:
+      # Reduce scrape footprint — we don't need every kernel/cgroup
+      # counter, just the per-container basics.
+      - "--housekeeping_interval=15s"
+      - "--docker_only=true"
+
+  node-exporter:
+    # Host-level metrics (CPU/memory/disk/network on the Spark itself).
+    # Lets us separate "the host is loaded" from "a container is
+    # leaking" when something goes wrong.
+    image: prom/node-exporter:v1.8.2
+    container_name: ongiini-node-exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "127.0.0.1:9100:9100"

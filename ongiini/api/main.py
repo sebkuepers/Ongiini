@@ -14,7 +14,7 @@ from PIL import Image
 
 from owela import InboundMessage
 
-from .. import audio, pii, ratelimit
+from .. import audio, instrument, pii, ratelimit
 from ..config import settings
 from ..filters import InvalidMsisdn, is_allowed, normalize
 from ..memory import long_term as mem, short_term as memory
@@ -62,14 +62,24 @@ async def lifespan(app: FastAPI):
         stats_analyses.run_forever(), name="stats-analyses"
     )
     log.info("qualitative analysis background loop scheduled")
+    # Diagnostic resource-snapshot logger — per-minute thread/fd/asyncio
+    # task counts + RSS memory. Added 2026-05-24 after the webhook
+    # accumulated 11,154 OS threads over 10 hours and wedged. We had
+    # no historical resource data; this fills that gap so the next
+    # leak (if any) leaves a trail.
+    snapshot_task = asyncio.create_task(
+        instrument.snapshot_loop(interval_s=60), name="resource-snapshot"
+    )
+    log.info("resource-snapshot loop scheduled (interval=60s)")
     try:
         yield
     finally:
-        stats_task.cancel()
-        try:
-            await stats_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        for t in (stats_task, snapshot_task):
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 app = FastAPI(title="Ongiini Webhook", lifespan=lifespan)
