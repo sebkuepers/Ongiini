@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -12,7 +15,7 @@
       }
     ]
   },
-  "description": "Ongiini on Spark — host, containers, inference, leak signals. v1.",
+  "description": "Ongiini on Spark \u2014 host, containers, vLLM, GPU, leak signals. v2.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -22,8 +25,13 @@
   "panels": [
     {
       "type": "row",
-      "title": "Spark host — at a glance",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "title": "Spark host \u2014 at a glance",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 100,
       "collapsed": false,
       "panels": []
@@ -31,32 +39,68 @@
     {
       "type": "stat",
       "title": "Load avg (1m)",
-      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
       "id": 1,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "node_load1", "refId": "A"}],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "node_load1",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 8},
-              {"color": "red", "value": 16}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 8
+              },
+              {
+                "color": "red",
+                "value": 16
+              }
             ]
           }
         }
       },
-      "options": {"colorMode": "value", "graphMode": "area", "textMode": "auto"}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
     },
     {
       "type": "stat",
       "title": "Memory used",
-      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
       "id": 2,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
@@ -67,25 +111,47 @@
         "defaults": {
           "unit": "percent",
           "decimals": 1,
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 75},
-              {"color": "red", "value": 90}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
             ]
           }
         }
       },
-      "options": {"colorMode": "value", "graphMode": "area"}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
     },
     {
       "type": "stat",
       "title": "Root disk used",
-      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
       "id": 3,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"})",
@@ -96,35 +162,76 @@
         "defaults": {
           "unit": "percent",
           "decimals": 1,
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 70},
-              {"color": "red", "value": 85}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
             ]
           }
         }
       },
-      "options": {"colorMode": "value", "graphMode": "area"}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
     },
     {
       "type": "stat",
       "title": "Host uptime",
-      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
-      "id": 4,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "time() - node_boot_time_seconds", "refId": "A"}],
-      "fieldConfig": {
-        "defaults": {"unit": "s", "color": {"mode": "fixed", "fixedColor": "blue"}}
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
       },
-      "options": {"colorMode": "value", "graphMode": "none"}
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "time() - node_boot_time_seconds",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none"
+      }
     },
     {
       "type": "row",
-      "title": "Spark host — CPU, memory, network, disk",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "title": "Spark host \u2014 CPU, memory, network, disk",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
       "id": 101,
       "collapsed": false,
       "panels": []
@@ -132,9 +239,17 @@
     {
       "type": "timeseries",
       "title": "CPU usage by mode",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
       "id": 10,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "sum by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\"}[$__rate_interval])) / on() group_left sum(rate(node_cpu_seconds_total[$__rate_interval])) * 100",
@@ -147,41 +262,99 @@
           "unit": "percent",
           "min": 0,
           "max": 100,
-          "custom": {"drawStyle": "line", "fillOpacity": 30, "stacking": {"mode": "normal"}}
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
         }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "Memory breakdown",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
       "id": 11,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes - node_memory_SReclaimable_bytes",
           "legendFormat": "Used",
           "refId": "A"
         },
-        {"expr": "node_memory_Buffers_bytes", "legendFormat": "Buffers", "refId": "B"},
-        {"expr": "node_memory_Cached_bytes + node_memory_SReclaimable_bytes", "legendFormat": "Cache", "refId": "C"},
-        {"expr": "node_memory_MemFree_bytes", "legendFormat": "Free", "refId": "D"}
+        {
+          "expr": "node_memory_Buffers_bytes",
+          "legendFormat": "Buffers",
+          "refId": "B"
+        },
+        {
+          "expr": "node_memory_Cached_bytes + node_memory_SReclaimable_bytes",
+          "legendFormat": "Cache",
+          "refId": "C"
+        },
+        {
+          "expr": "node_memory_MemFree_bytes",
+          "legendFormat": "Free",
+          "refId": "D"
+        }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "custom": {"drawStyle": "line", "fillOpacity": 40, "stacking": {"mode": "normal"}}
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
         }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "Network throughput",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
       "id": 12,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "sum by (device) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))",
@@ -195,16 +368,39 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {"unit": "Bps", "custom": {"drawStyle": "line", "fillOpacity": 20}}
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20
+          }
+        }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "Disk I/O",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
       "id": 13,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "sum by (device) (rate(node_disk_read_bytes_total{device!~\"loop.*|dm-.*\"}[$__rate_interval]))",
@@ -218,16 +414,39 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {"unit": "Bps", "custom": {"drawStyle": "line", "fillOpacity": 20}}
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20
+          }
+        }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "table",
       "title": "Disk space by mount",
-      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 22},
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "id": 14,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"}",
@@ -254,18 +473,33 @@
       "transformations": [
         {
           "id": "joinByField",
-          "options": {"byField": "mountpoint", "mode": "outer"}
+          "options": {
+            "byField": "mountpoint",
+            "mode": "outer"
+          }
         },
         {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time 1": true, "Time 2": true, "Time 3": true,
-              "__name__ 1": true, "__name__ 2": true, "__name__ 3": true,
-              "device 1": true, "device 2": true, "device 3": true,
-              "fstype 1": true, "fstype 2": true, "fstype 3": true,
-              "instance 1": true, "instance 2": true, "instance 3": true,
-              "job 1": true, "job 2": true, "job 3": true
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "__name__ 3": true,
+              "device 1": true,
+              "device 2": true,
+              "device 3": true,
+              "fstype 1": true,
+              "fstype 2": true,
+              "fstype 3": true,
+              "instance 1": true,
+              "instance 2": true,
+              "instance 3": true,
+              "job 1": true,
+              "job 2": true,
+              "job 3": true
             },
             "renameByName": {
               "mountpoint": "Mount",
@@ -277,27 +511,74 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {"custom": {"align": "auto"}},
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
         "overrides": [
-          {"matcher": {"id": "byName", "options": "Total"}, "properties": [{"id": "unit", "value": "bytes"}]},
-          {"matcher": {"id": "byName", "options": "Available"}, "properties": [{"id": "unit", "value": "bytes"}]},
           {
-            "matcher": {"id": "byName", "options": "Used %"},
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
             "properties": [
-              {"id": "unit", "value": "percent"},
-              {"id": "decimals", "value": 1},
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Available"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Used %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
               {
                 "id": "custom.cellOptions",
-                "value": {"type": "color-background", "mode": "gradient"}
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
               },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    {"color": "green", "value": null},
-                    {"color": "yellow", "value": 70},
-                    {"color": "red", "value": 85}
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 70
+                    },
+                    {
+                      "color": "red",
+                      "value": 85
+                    }
                   ]
                 }
               }
@@ -305,127 +586,434 @@
           }
         ]
       },
-      "options": {"showHeader": true}
+      "options": {
+        "showHeader": true
+      }
     },
     {
       "type": "row",
-      "title": "Inference — vLLM / Gemma 4",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 28},
+      "title": "Inference \u2014 vLLM / Gemma 4",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
       "id": 102,
       "collapsed": false,
       "panels": []
     },
     {
       "type": "stat",
-      "title": "Decode tokens/sec (live)",
-      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 29},
+      "title": "Decode tokens/sec (1m avg)",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 29
+      },
       "id": 20,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "inference_decode_tokens_per_second", "refId": "A"}],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(vllm:generation_tokens_total[1m]))",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "none",
           "decimals": 1,
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "red", "value": null},
-              {"color": "yellow", "value": 20},
-              {"color": "green", "value": 40}
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "green",
+                "value": 40
+              }
             ]
           }
         }
       },
-      "options": {"colorMode": "value", "graphMode": "area"}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
     },
     {
       "type": "stat",
       "title": "Requests / min",
-      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 29},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 29
+      },
       "id": 21,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
-        {"expr": "60 * rate(inference_request_duration_seconds_count[$__rate_interval])", "refId": "A"}
+        {
+          "expr": "60 * sum(rate(vllm:request_success_total[$__rate_interval]))",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": {"defaults": {"unit": "none", "decimals": 1, "color": {"mode": "fixed", "fixedColor": "blue"}}},
-      "options": {"colorMode": "value", "graphMode": "area"}
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
     },
     {
       "type": "stat",
       "title": "Generated tokens (24h)",
-      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 29},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 29
+      },
       "id": 22,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "increase(inference_generated_tokens_total[24h])", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "green"}}},
-      "options": {"colorMode": "value", "graphMode": "area"}
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(vllm:generation_tokens_total[24h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
     },
     {
       "type": "stat",
       "title": "Prompt tokens (24h)",
-      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 29},
-      "id": 23,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "increase(inference_prompt_tokens_total[24h])", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "purple"}}},
-      "options": {"colorMode": "value", "graphMode": "area"}
-    },
-    {
-      "type": "timeseries",
-      "title": "Tokens/sec — decode rate over time",
-      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 33},
-      "id": 24,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [
-        {"expr": "inference_decode_tokens_per_second", "legendFormat": "decode tok/s", "refId": "A"}
-      ],
-      "fieldConfig": {
-        "defaults": {"unit": "none", "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 2}}
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 29
       },
-      "options": {"legend": {"displayMode": "list", "placement": "bottom"}}
-    },
-    {
-      "type": "timeseries",
-      "title": "Request rate & avg duration",
-      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 33},
-      "id": 25,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "id": 23,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
-          "expr": "60 * rate(inference_request_duration_seconds_count[$__rate_interval])",
-          "legendFormat": "req/min",
+          "expr": "sum(increase(vllm:prompt_tokens_total[24h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tokens/sec \u2014 decode + prompt processing",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(vllm:generation_tokens_total[$__rate_interval]))",
+          "legendFormat": "generation tok/s",
           "refId": "A"
         },
         {
-          "expr": "rate(inference_request_duration_seconds_sum[$__rate_interval]) / clamp_min(rate(inference_request_duration_seconds_count[$__rate_interval]), 0.0001)",
-          "legendFormat": "avg duration (s)",
+          "expr": "sum(rate(vllm:prompt_tokens_total[$__rate_interval]))",
+          "legendFormat": "prompt tok/s (prefill)",
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}},
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate & p50/p95/p99 latency",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 25,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "60 * sum(rate(vllm:request_success_total[$__rate_interval]))",
+          "legendFormat": "req/min",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p50 latency",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95 latency",
+          "refId": "C"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p99 latency",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
         "overrides": [
-          {"matcher": {"id": "byName", "options": "avg duration (s)"}, "properties": [{"id": "unit", "value": "s"}, {"id": "custom.axisPlacement", "value": "right"}]}
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50 latency"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95 latency"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99 latency"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
         ]
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "vLLM queue depth & KV cache pressure",
+      "description": "num_requests_running: in-flight. num_requests_waiting: queued (= reply latency). KV cache % >80 is throughput-throttling.",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 26,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "vllm:num_requests_running",
+          "legendFormat": "running",
+          "refId": "A"
+        },
+        {
+          "expr": "vllm:num_requests_waiting",
+          "legendFormat": "waiting",
+          "refId": "B"
+        },
+        {
+          "expr": "vllm:kv_cache_usage_perc * 100",
+          "legendFormat": "KV cache %",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "KV cache %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "row",
-      "title": "Webhook — leak signals (the one we needed during the outage)",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 40},
+      "title": "Webhook \u2014 leak signals (the one we needed during the outage)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
       "id": 103,
       "collapsed": false,
       "panels": []
     },
     {
       "type": "timeseries",
-      "title": "Webhook process count (cgroup PIDs) — runaway = wedge",
+      "title": "Webhook process count (cgroup PIDs) \u2014 runaway = wedge",
       "description": "If this grows linearly without bound, threads are leaking. Steady ~30-60 is normal.",
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 41},
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
       "id": 30,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "container_tasks_state{name=\"ongiini-webhook\"}",
@@ -437,41 +1025,105 @@
         "defaults": {
           "unit": "short",
           "decimals": 0,
-          "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 2, "spanNulls": true},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 500},
-              {"color": "red", "value": 2000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
             ]
           },
-          "custom.thresholdsStyle": {"mode": "line+area"}
+          "custom.thresholdsStyle": {
+            "mode": "line+area"
+          }
         }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "Webhook memory (RSS / working set)",
-      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 49},
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
       "id": 31,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
-        {"expr": "container_memory_rss{name=\"ongiini-webhook\"}", "legendFormat": "RSS", "refId": "A"},
-        {"expr": "container_memory_working_set_bytes{name=\"ongiini-webhook\"}", "legendFormat": "working set", "refId": "B"}
+        {
+          "expr": "container_memory_rss{name=\"ongiini-webhook\"}",
+          "legendFormat": "RSS",
+          "refId": "A"
+        },
+        {
+          "expr": "container_memory_working_set_bytes{name=\"ongiini-webhook\"}",
+          "legendFormat": "working set",
+          "refId": "B"
+        }
       ],
       "fieldConfig": {
-        "defaults": {"unit": "bytes", "custom": {"drawStyle": "line", "fillOpacity": 20}}
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20
+          }
+        }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "Webhook CPU usage",
-      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 49},
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
       "id": 32,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "rate(container_cpu_usage_seconds_total{name=\"ongiini-webhook\"}[$__rate_interval])",
@@ -483,18 +1135,39 @@
         "defaults": {
           "unit": "none",
           "decimals": 2,
-          "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 2}
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
         }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "stat",
       "title": "Webhook restart count (1h)",
       "description": "How often autoheal fired in the last hour. Should be 0. Non-zero = container was unhealthy and got restarted.",
-      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 56},
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 63
+      },
       "id": 33,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "changes(container_start_time_seconds{name=\"ongiini-webhook\"}[1h])",
@@ -505,43 +1178,230 @@
         "defaults": {
           "unit": "short",
           "decimals": 0,
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1},
-              {"color": "red", "value": 3}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
             ]
           }
         }
       },
-      "options": {"colorMode": "background", "graphMode": "area"}
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area"
+      }
     },
     {
       "type": "stat",
       "title": "Webhook uptime",
-      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 56},
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 63
+      },
       "id": 34,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "time() - container_start_time_seconds{name=\"ongiini-webhook\"}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "s", "color": {"mode": "fixed", "fixedColor": "blue"}}},
-      "options": {"colorMode": "value", "graphMode": "none"}
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "time() - container_start_time_seconds{name=\"ongiini-webhook\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none"
+      }
     },
     {
       "type": "stat",
       "title": "vLLM uptime",
-      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 56},
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 63
+      },
       "id": 35,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-      "targets": [{"expr": "time() - container_start_time_seconds{name=\"gemma4-vllm\"}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "s", "color": {"mode": "fixed", "fixedColor": "blue"}}},
-      "options": {"colorMode": "value", "graphMode": "none"}
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "time() - container_start_time_seconds{name=\"gemma4-vllm\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Webhook OS threads (from /proc/self/task)",
+      "description": "Same number cgroup tracks (validation). Steady = healthy. Linear growth = leak.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 68
+      },
+      "id": 36,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "ongiini_webhook_threads",
+          "legendFormat": "threads",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Webhook open file descriptors",
+      "description": "Sockets, files, pipes. FD exhaustion is a separate failure mode from threads.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 68
+      },
+      "id": 37,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "ongiini_webhook_open_fds",
+          "legendFormat": "open fds",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Webhook asyncio tasks",
+      "description": "Pending coroutines in the event loop. Spikes = many fire-and-forget handlers in flight.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 68
+      },
+      "id": 38,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
+      "targets": [
+        {
+          "expr": "ongiini_webhook_asyncio_tasks",
+          "legendFormat": "asyncio tasks",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
     },
     {
       "type": "row",
-      "title": "All containers — overview",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 61},
+      "title": "All containers \u2014 overview",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 75
+      },
       "id": 104,
       "collapsed": false,
       "panels": []
@@ -549,9 +1409,17 @@
     {
       "type": "timeseries",
       "title": "Memory by container",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 62},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 76
+      },
       "id": 40,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "container_memory_rss{name!=\"\"}",
@@ -560,16 +1428,42 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {"unit": "bytes", "custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}}}
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "CPU by container",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 62},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
       "id": 41,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "rate(container_cpu_usage_seconds_total{name!=\"\"}[$__rate_interval])",
@@ -578,16 +1472,43 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {"unit": "none", "decimals": 2, "custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}}}
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "timeseries",
-      "title": "Container network — sent/received",
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 70},
+      "title": "Container network \u2014 sent/received",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
       "id": 42,
-      "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cfhyzy3slg1dsf"
+      },
       "targets": [
         {
           "expr": "rate(container_network_receive_bytes_total{name!=\"\"}[$__rate_interval])",
@@ -601,48 +1522,244 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {"unit": "Bps", "custom": {"drawStyle": "line", "fillOpacity": 10}}
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        }
       },
-      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]}}
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      }
     },
     {
       "type": "row",
-      "title": "GPU (NVIDIA GB10) — enable nvidia_gpu_exporter at :9835 to populate",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 78},
+      "title": "GPU \u2014 NVIDIA GB10",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 92
+      },
       "id": 105,
-      "collapsed": true,
+      "collapsed": false,
       "panels": [
         {
           "type": "timeseries",
-          "title": "GPU utilization %",
-          "gridPos": {"h": 7, "w": 12, "x": 0, "y": 79},
+          "title": "GPU utilization",
+          "description": "Fraction of time the GPU was executing during the sample. >0.9 sustained = busy serving requests.",
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 93
+          },
           "id": 50,
-          "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-          "targets": [{"expr": "nvidia_smi_utilization_gpu_ratio * 100 or DCGM_FI_DEV_GPU_UTIL", "legendFormat": "GPU {{gpu}}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}},
-          "options": {"legend": {"displayMode": "list", "placement": "bottom"}}
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cfhyzy3slg1dsf"
+          },
+          "targets": [
+            {
+              "expr": "nvidia_smi_utilization_gpu_ratio * 100",
+              "legendFormat": "{{name}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 30,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            }
+          }
         },
         {
           "type": "timeseries",
-          "title": "GPU memory used",
-          "gridPos": {"h": 7, "w": 12, "x": 12, "y": 79},
+          "title": "GPU power draw",
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 93
+          },
           "id": 51,
-          "datasource": {"type": "prometheus", "uid": "cfhyzy3slg1dsf"},
-          "targets": [{"expr": "nvidia_smi_memory_used_bytes or DCGM_FI_DEV_FB_USED * 1048576", "legendFormat": "GPU {{gpu}}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "bytes"}},
-          "options": {"legend": {"displayMode": "list", "placement": "bottom"}}
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cfhyzy3slg1dsf"
+          },
+          "targets": [
+            {
+              "expr": "nvidia_smi_power_draw_watts",
+              "legendFormat": "{{name}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "GPU temperature",
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 100
+          },
+          "id": 52,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cfhyzy3slg1dsf"
+          },
+          "targets": [
+            {
+              "expr": "nvidia_smi_temperature_gpu",
+              "legendFormat": "{{name}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "lineWidth": 2
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 75
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "GPU SM clock",
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 100
+          },
+          "id": 53,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cfhyzy3slg1dsf"
+          },
+          "targets": [
+            {
+              "expr": "nvidia_smi_clocks_current_sm_clock_hz",
+              "legendFormat": "{{name}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "hertz",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            }
+          }
         }
       ]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["ongiini", "spark"],
-  "templating": {"list": []},
-  "time": {"from": "now-3h", "to": "now"},
+  "tags": [
+    "ongiini",
+    "spark"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Ongiini Spark — Service Health",
+  "title": "Ongiini Spark \u2014 Service Health",
   "uid": "ongiini-spark-v1",
   "version": 1,
   "weekStart": ""

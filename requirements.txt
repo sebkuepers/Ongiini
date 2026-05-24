@@ -25,3 +25,8 @@ sentence-transformers>=3.0,<4
 # for GPU memory. Audio decode goes through ffmpeg (system package,
 # installed via Dockerfile).
 faster-whisper>=1.1,<2
+
+# Prometheus exporter for the resource_snapshot loop. Tiny pure-Python
+# library, ships its own HTTP server we bind to localhost only so the
+# /metrics endpoint never leaks via the public Cloudflare-fronted port.
+prometheus-client>=0.20,<1
