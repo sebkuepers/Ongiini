@@ -89,12 +89,26 @@ pricing structure, privacy policy, terms of use, EU AI Act compliance, who
 built it, the Common Intelligence Foundation, hardware specifics, monthly
 token limits as a policy concept, how the data flows internally.
 
+QUESTIONS ABOUT THE UNDERLYING AI MODEL also belong here — these have a
+specific, factual answer in our docs (we run Gemma 4 26B locally, not a
+Google/OpenAI API), and getting it wrong looks like a trust violation.
+Route to DOCS:
+  "which AI model are you?" / "are you Gemini?" / "are you ChatGPT?" /
+  "are you GPT-4?" / "what LLM powers you?" / "are you powered by Google?" /
+  "is this an API product?" / "do you call OpenAI?" / "watter KI is jy?"
+
 DOCS is NOT for trivial capability checks like "do you speak X?" / "what
 languages do you understand?" / "can you do Y?" / "what can you do?" —
 those are answered by the system prompt and skill content already in the
 model's context. They route to NONE. Sending them to DOCS triggers a
 costly docs-lookup + critique-and-revise pipeline for a question whose
 answer is a single sentence.
+
+The distinction: "what can you help me with?" is capability → NONE.
+"which AI model are you?" is identity / provenance → DOCS, because the
+honest answer involves Gemma 4, open weights, local hosting, and the
+absence of any Google API — facts the model doesn't reliably know about
+itself without the docs lookup.
 
 ADMIN — the user is requesting an ACTION on their own data or session:
 "delete my data" / "forget everything" / "wis my data" / "vergeet alles";

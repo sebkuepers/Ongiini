@@ -79,6 +79,19 @@ CASES: list[Case] = [
     Case("what AI model are you running on",                      "DOCS",   "asking about Ongiini hardware/stack"),
     Case("who pays for this service",                             "DOCS",   "asking about Ongiini operator/funding"),
 
+    # Identity / provenance — added 2026-05-24 after a real user got
+    # 'I am a large language model trained by Google' (Gemma's native
+    # canned answer). The honest answer requires Gemma 4 + open-weight
+    # + local + no Google API — facts only docs can supply.
+    Case("which AI model are you",                                "DOCS",   "identity question, needs docs"),
+    Case("are you Gemini",                                        "DOCS",   "identity vs Gemini"),
+    Case("are you ChatGPT",                                       "DOCS",   "identity vs ChatGPT"),
+    Case("are you GPT-4",                                         "DOCS",   "identity vs GPT-4"),
+    Case("what LLM powers you",                                   "DOCS",   "identity / underlying model"),
+    Case("is this an API product",                                "DOCS",   "is-it-a-thin-wrapper question"),
+    Case("are you powered by Google",                             "DOCS",   "Google API confusion"),
+    Case("watter KI is jy",                                       "DOCS",   "Afrikaans identity question"),
+
     # Mixed intent / location + general (NONE)
     Case("I'm in Otjiwarongo and just want to chat",              "NONE",   "Namibian location but emotional/conversational, not factual"),
     Case("explain photosynthesis using mahangu as an example",    "NONE",   "general science with local flavour, no fresh facts needed"),
