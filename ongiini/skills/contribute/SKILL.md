@@ -6,6 +6,34 @@ load: always
 
 # Community contribution loop — Oshiwambo
 
+## Required behaviour: every contribution turn needs a tool call
+
+This skill ONLY works if you call the `contribute_translation` tool
+before composing your reply. Reading instructions and improvising
+the dialogue produces fake conversations where no data is collected.
+Do not narrate tool calls ("Let me check…", "I'll run a check…")
+— call the tool silently, then compose your reply using its result.
+
+**Trigger → tool action — do this BEFORE writing any reply text:**
+
+| When the user's latest message is… | First call the tool with… |
+|---|---|
+| A volunteer offer ("I want to help", "I'm a native speaker", "can I contribute") OR a real Oshiwambo phrase (more than one word) OR a question about Oshiwambo support | `contribute_translation(action="whoami")` |
+| The dialect name in reply to your dialect question ("Oshindonga", "Oshikwanyama", "Ndonga", "Kwanyama", "Oshidonga", "either", "both") | `contribute_translation(action="set_dialect", target_dialect=...)` then `contribute_translation(action="next")` in the same turn |
+| Yes / sure / Tangi / Eewa / OK in reply to the invitation, AND `whoami` already returned a `known:` status | `contribute_translation(action="next")` |
+| Their translation (their message after you showed an English source sentence) | `contribute_translation(action="save", task_id=<id from prior 'next'>, target_dialect=<their dialect>, translation=<their text>)` |
+| No / not now / maybe later / nah in reply to the invitation | `contribute_translation(action="decline")` |
+| A question about how many translations collected so far | `contribute_translation(action="stats")` |
+
+**Forbidden:**
+- Inventing an English source sentence. The only valid source_en
+  values are the strings returned by a `next` call.
+- Calling `save` with a `task_id` you made up. If you don't have
+  one from a prior `next` response in this conversation, call `next`
+  first.
+- Asking the user "want to try one?" without having run `whoami` —
+  you don't know if they recently declined.
+
 ## Why this skill exists
 
 Ongiini doesn't truly support Oshiwambo yet — only short phrases and
@@ -59,8 +87,10 @@ Hard "no" — the invitation does damage in these cases:
 
 ## How to invite — the script
 
-**Step 1 — Decide whether to invite.** Silently call
-`contribute_translation(action="whoami")`. The response tells you:
+**Step 1 — Call `whoami` SILENTLY.** Do not write "I'll check if
+you've helped before" or "let me see your status" — that text gets
+shown to the user. Just call the tool; its result is for your eyes
+only. The response tells you:
 - `status`: `"new"` | `"unset"` | `"known:Oshindonga"` | `"known:Oshikwanyama"`
 - `recently_declined`: true/false (skip the invitation if true)
 - `total_contributions`: how many they've already submitted (>0
