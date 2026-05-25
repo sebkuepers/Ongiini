@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en" data-locale="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f5efe4" />
+  <title>Help Ongiini speak Oshiwambo — Contribute</title>
+  <meta name="description" content="Big-tech AI doesn't speak Oshindonga or Oshikwanyama. So we're building it ourselves. We need 10,000 English↔Oshiwambo sentence pairs per dialect. The dataset will be free, open, and useful to every Namibian project that comes after. Help us via WhatsApp." />
+  <link rel="canonical" href="https://ongiini.ai/contribute/" />
+
+  <meta property="og:title" content="Help Ongiini speak Oshiwambo" />
+  <meta property="og:description" content="No big company will build proper Oshiwambo AI — there's no commercial reason. So we do it ourselves. Free, open, public-good. 10,000 pairs per dialect, one sentence at a time. Help us now." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://ongiini.ai/contribute/" />
+  <meta property="og:image" content="https://ongiini.ai/assets/ongiini-icon-512-v2.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:site_name" content="Ongiini" />
+  <meta property="og:locale" content="en_NA" />
+  <meta property="og:locale:alternate" content="af_NA" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Help Ongiini speak Oshiwambo" />
+  <meta name="twitter:description" content="No big company will build proper Oshiwambo AI. So we do it ourselves. 10,000 pairs per dialect — help us via WhatsApp." />
+  <meta name="twitter:image" content="https://ongiini.ai/assets/ongiini-icon-512-v2.png" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/ongiini-icon-192-v2.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:     oklch(0.60  0.14  45);
+      --terracotta-deep:oklch(0.48  0.13  40);
+      --rule:           oklch(0.85  0.018 70);
+      --rule-faint:     oklch(0.90  0.014 70);
+      --gutter: 22px;
+      --maxw-prose: 720px;
+      --maxw-wide:  920px;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4;
+        --bone-deep: #ede5d6;
+        --sand: #e8dfcd;
+        --ink: #2a2522;
+        --ink-soft: #6a625d;
+        --ink-faint: #968d87;
+        --terracotta: #c46c3f;
+        --terracotta-deep: #9a4f2d;
+        --rule: #d1c8b9;
+        --rule-faint: #ddd5c6;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { color: var(--terracotta); }
+
+    /* Sticky bar matches imprint/privacy/terms */
+    .ct-bar {
+      background: color-mix(in oklab, var(--bone) 86%, transparent);
+      backdrop-filter: saturate(140%) blur(10px);
+      -webkit-backdrop-filter: saturate(140%) blur(10px);
+      border-bottom: 1px solid var(--rule-faint);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .ct-bar-inner {
+      max-width: var(--maxw-wide); margin: 0 auto;
+      padding: 0 var(--gutter);
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .ct-wordmark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+    .ct-wordmark img { width: 28px; height: 28px; display: block; }
+    .ct-wordmark-text {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic; font-size: 18px; letter-spacing: -0.01em;
+    }
+    .ct-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
+    .ct-back {
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-size: 13px; font-weight: 500;
+      color: var(--terracotta-deep); text-decoration: none;
+    }
+    .ct-back:hover { color: var(--terracotta); }
+
+    /* Lang toggle (mirrors homepage) */
+    .ct-lang { display: inline-flex; gap: 6px; align-items: center; }
+    .ct-lang button {
+      background: transparent; border: 1px solid var(--rule);
+      color: var(--ink-soft); font: inherit; font-size: 11px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 4px 8px; border-radius: 999px; cursor: pointer;
+    }
+    .ct-lang button[aria-pressed="true"] {
+      background: var(--terracotta); color: white; border-color: var(--terracotta);
+    }
+
+    /* ── HERO ──────────────────────────────────────────────────── */
+    .ct-hero {
+      max-width: var(--maxw-wide);
+      margin: 0 auto;
+      padding: 64px var(--gutter) 32px;
+    }
+    .ct-eyebrow {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin: 0 0 18px;
+    }
+    .ct-headline {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(44px, 7vw, 76px);
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+      margin: 0 0 24px;
+      color: var(--ink);
+      max-width: 18ch;
+    }
+    .ct-headline em { font-style: italic; color: var(--terracotta-deep); }
+    .ct-lede {
+      font-size: clamp(18px, 1.7vw, 22px);
+      line-height: 1.45;
+      color: var(--ink-soft);
+      max-width: 55ch;
+      margin: 0 0 36px;
+    }
+    .ct-hero-cta {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      margin-bottom: 12px;
+    }
+    .ct-cta {
+      display: inline-flex; align-items: center; gap: 12px;
+      text-decoration: none;
+      font-family: 'Geist', ui-sans-serif, system-ui;
+      font-weight: 500;
+      font-size: 15px;
+      padding: 14px 22px;
+      border-radius: 999px;
+      background: var(--terracotta);
+      color: white;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 16px 36px -18px rgba(154, 79, 45, 0.55);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .ct-cta:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 24px 50px -22px rgba(154, 79, 45, 0.65); color: white; }
+    .ct-cta--ghost { background: transparent; color: var(--terracotta-deep); border: 1px solid var(--terracotta); box-shadow: none; }
+    .ct-cta--ghost:hover { background: color-mix(in oklab, var(--terracotta) 8%, transparent); color: var(--terracotta-deep); }
+    .ct-cta-arrow { display: inline-block; transform: translateX(0); transition: transform 0.15s; }
+    .ct-cta:hover .ct-cta-arrow { transform: translateX(2px); }
+
+    /* ── STATS BLOCK ──────────────────────────────────────────── */
+    .ct-stats {
+      max-width: var(--maxw-wide);
+      margin: 32px auto 0;
+      padding: 0 var(--gutter);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+    }
+    .ct-stat {
+      padding: 24px 22px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule-faint);
+      border-radius: 14px;
+    }
+    .ct-stat-num {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(36px, 5vw, 48px);
+      line-height: 1;
+      color: var(--terracotta-deep);
+      margin-bottom: 8px;
+    }
+    .ct-stat-label {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+
+    /* ── SECTIONS ─────────────────────────────────────────────── */
+    .ct-section {
+      max-width: var(--maxw-prose);
+      margin: 0 auto;
+      padding: 64px var(--gutter) 0;
+    }
+    .ct-section--wide { max-width: var(--maxw-wide); }
+    .ct-section--sand {
+      max-width: none;
+      background: var(--sand);
+      margin-top: 80px;
+      padding-top: 72px; padding-bottom: 72px;
+    }
+    .ct-section--sand .ct-section-inner {
+      max-width: var(--maxw-prose); margin: 0 auto;
+      padding: 0 var(--gutter);
+    }
+    .ct-section--sand.ct-section--wide .ct-section-inner { max-width: var(--maxw-wide); }
+    .ct-section-eyebrow {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin: 0 0 14px;
+    }
+    .ct-h2 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(30px, 4vw, 42px);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      margin: 0 0 20px;
+      color: var(--ink);
+      max-width: 22ch;
+    }
+    .ct-section p { margin: 0 0 1.1em; }
+    .ct-section p strong { font-weight: 600; color: var(--ink); }
+    .ct-section ul { padding-left: 1.2em; margin: 0 0 1.2em; }
+    .ct-section li { margin-bottom: 0.5em; }
+
+    /* ── HOW IT WORKS — numbered steps ────────────────────────── */
+    .ct-steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+      margin-top: 30px;
+    }
+    .ct-step {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 18px;
+      align-items: start;
+      padding: 22px 0;
+      border-top: 1px solid var(--rule-faint);
+    }
+    .ct-step:first-child { border-top: none; padding-top: 8px; }
+    .ct-step-num {
+      font-family: 'Instrument Serif', serif;
+      font-size: 32px;
+      line-height: 1;
+      color: var(--terracotta);
+    }
+    .ct-step-body h3 {
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      margin: 0 0 8px;
+      color: var(--ink);
+    }
+    .ct-step-body p { margin: 0; color: var(--ink-soft); }
+
+    /* ── DIALOGUE EXAMPLE ────────────────────────────────────── */
+    .ct-dialogue {
+      margin-top: 30px;
+      padding: 24px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule-faint);
+      border-radius: 14px;
+    }
+    .ct-bubble {
+      display: block;
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      max-width: 80%;
+    }
+    .ct-bubble--user {
+      background: #d9fdd3;
+      color: #111b21;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+    .ct-bubble--bot {
+      background: white;
+      color: #111b21;
+      border-bottom-left-radius: 4px;
+    }
+    .ct-bubble-meta { font-size: 11px; color: var(--ink-faint); margin-top: 4px; font-family: 'Geist Mono', monospace; }
+
+    /* ── CONSENT CALLOUT ─────────────────────────────────────── */
+    .ct-callout {
+      margin: 32px 0;
+      padding: 24px 26px;
+      background: var(--bone-deep);
+      border-left: 3px solid var(--terracotta);
+      border-radius: 0 10px 10px 0;
+    }
+    .ct-callout h3 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: 22px;
+      margin: 0 0 10px;
+      color: var(--ink);
+    }
+    .ct-callout p { margin: 0 0 0.8em; color: var(--ink-soft); }
+    .ct-callout p:last-child { margin-bottom: 0; }
+
+    /* ── CLOSING CTA ─────────────────────────────────────────── */
+    .ct-close {
+      background: var(--bone-deep);
+      padding: 72px var(--gutter);
+      text-align: center;
+      margin-top: 64px;
+    }
+    .ct-close-inner { max-width: var(--maxw-prose); margin: 0 auto; }
+    .ct-close h2 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(32px, 4.5vw, 44px);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      margin: 0 0 14px;
+    }
+    .ct-close p { font-size: 17px; color: var(--ink-soft); margin: 0 0 28px; }
+    .ct-close-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+    /* Footer */
+    .ct-footer {
+      padding: 40px var(--gutter);
+      text-align: center;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-faint);
+      border-top: 1px solid var(--rule-faint);
+    }
+    .ct-footer a { color: var(--ink-soft); }
+    .ct-footer a:hover { color: var(--terracotta); }
+
+    /* Bilingual visibility — controlled by data-locale on <html> */
+    [data-af] { display: none; }
+    [data-en="i"] { display: inline; }
+    [data-af="i"] { display: none; }
+    html[data-locale="af"] [data-en] { display: none; }
+    html[data-locale="af"] [data-af] { display: block; }
+    html[data-locale="af"] [data-en="i"] { display: none; }
+    html[data-locale="af"] [data-af="i"] { display: inline; }
+  </style>
+</head>
+<body>
+  <header class="ct-bar">
+    <div class="ct-bar-inner">
+      <a class="ct-wordmark" href="/" aria-label="Ongiini">
+        <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
+        <span class="ct-wordmark-text">Ongiini<span class="dot">.</span></span>
+      </a>
+      <div class="ct-lang" role="group" aria-label="Language">
+        <button type="button" data-set-locale="en" aria-pressed="true">EN</button>
+        <button type="button" data-set-locale="af" aria-pressed="false">AF</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+  <!-- HERO -->
+  <section class="ct-hero">
+    <div class="ct-eyebrow">
+      <span data-en>Contribute · Oshiwambo dataset</span>
+      <span data-af>Bydra · Oshiwambo-datastel</span>
+    </div>
+    <h1 class="ct-headline" data-en>Make Ongiini speak <em>Oshiwambo.</em></h1>
+    <h1 class="ct-headline" data-af>Maak dat Ongiini <em>Oshiwambo</em> praat.</h1>
+
+    <p class="ct-lede" data-en>Roughly half of all Namibians speak Oshiwambo — Oshindonga or Oshikwanyama. No big AI company will ever build proper Oshiwambo support, because there's no commercial reason to. So we're going to do it ourselves. Free. Open. One sentence at a time.</p>
+    <p class="ct-lede" data-af>Omtrent die helfte van alle Namibiërs praat Oshiwambo — Oshindonga of Oshikwanyama. Geen groot KI-maatskappy gaan ooit behoorlike Oshiwambo-ondersteuning bou nie, want daar is geen kommersiële rede daarvoor nie. So ons gaan dit self doen. Gratis. Oop. Een sin op 'n slag.</p>
+
+    <div class="ct-hero-cta">
+      <a class="ct-cta" href="https://wa.me/4915888635886?text=I%20want%20to%20help%20translate" target="_blank" rel="noopener noreferrer">
+        <span data-en="i">Help on WhatsApp</span><span data-af="i">Help op WhatsApp</span>
+        <span class="ct-cta-arrow">→</span>
+      </a>
+      <a class="ct-cta ct-cta--ghost" href="#how">
+        <span data-en="i">How it works</span><span data-af="i">Hoe dit werk</span>
+        <span class="ct-cta-arrow">↓</span>
+      </a>
+    </div>
+
+    <!-- STATS -->
+    <div class="ct-stats">
+      <div class="ct-stat">
+        <div class="ct-stat-num">10,000</div>
+        <div class="ct-stat-label" data-en>Pairs per dialect — our target</div>
+        <div class="ct-stat-label" data-af>Pare per dialek — ons teiken</div>
+      </div>
+      <div class="ct-stat">
+        <div class="ct-stat-num">2</div>
+        <div class="ct-stat-label" data-en>Dialects collected from day one</div>
+        <div class="ct-stat-label" data-af>Dialekte vanaf dag een versamel</div>
+      </div>
+      <div class="ct-stat">
+        <div class="ct-stat-num">~30s</div>
+        <div class="ct-stat-label" data-en>One sentence, one translation</div>
+        <div class="ct-stat-label" data-af>Een sin, een vertaling</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY THIS MATTERS -->
+  <section class="ct-section">
+    <p class="ct-section-eyebrow" data-en>Why this matters</p>
+    <p class="ct-section-eyebrow" data-af>Hoekom dit saak maak</p>
+    <h2 class="ct-h2" data-en>If we don't, nobody will.</h2>
+    <h2 class="ct-h2" data-af>As ons nie doen nie, doen niemand dit nie.</h2>
+
+    <p data-en>Today's AI models — GPT, Gemini, Claude, Llama, Gemma — all know a lot of languages. Oshindonga and Oshikwanyama are not on that list. Not because the languages are hard, but because there's almost no English↔Oshiwambo training data anywhere. Wikipedia has 1,500 articles in Oshindonga and a handful in Oshikwanyama. The standard multilingual translation models cover 200+ languages and miss both.</p>
+    <p data-af>Vandag se KI-modelle — GPT, Gemini, Claude, Llama, Gemma — ken baie tale. Oshindonga en Oshikwanyama is nie op daardie lys nie. Nie omdat die tale moeilik is nie, maar omdat daar amper geen Engels↔Oshiwambo opleidingsdata enige plek bestaan nie. Wikipedia het 1 500 artikels in Oshindonga en 'n handjievol in Oshikwanyama. Die standaard meertalige vertaalmodelle dek 200+ tale en mis beide.</p>
+
+    <p data-en>Other low-resource African languages got their first real datasets through research projects at Masakhane, Mozilla Common Voice, university partnerships. Oshiwambo missed those waves. Waiting for the next one means waiting forever.</p>
+    <p data-af>Ander lae-hulpbron Afrikaanse tale het hul eerste regte datastel deur navorsingsprojekte by Masakhane, Mozilla Common Voice en universiteitsvennootskappe gekry. Oshiwambo het daardie golwe gemis. Om vir die volgende te wag, beteken om vir altyd te wag.</p>
+
+    <p data-en><strong>We have a working AI helper that already talks to thousands of Namibians.</strong> The people who chat with it every day, in mixed English / Afrikaans / Oshiwambo, are exactly the people who can teach it to speak their language properly. So we're asking them. One sentence at a time.</p>
+    <p data-af><strong>Ons het 'n werkende KI-hulpmiddel wat reeds met duisende Namibiërs gesels.</strong> Die mense wat elke dag daarmee gesels, in gemengde Engels / Afrikaans / Oshiwambo, is presies die mense wat hom kan leer om hul taal behoorlik te praat. So ons vra hulle. Een sin op 'n slag.</p>
+  </section>
+
+  <!-- THE TWO DIALECTS -->
+  <section class="ct-section">
+    <p class="ct-section-eyebrow" data-en>Both dialects, from day one</p>
+    <p class="ct-section-eyebrow" data-af>Albei dialekte, vanaf dag een</p>
+    <h2 class="ct-h2" data-en>Oshindonga and Oshikwanyama, side by side.</h2>
+    <h2 class="ct-h2" data-af>Oshindonga en Oshikwanyama, langs mekaar.</h2>
+
+    <p data-en>Oshindonga is the most widely spoken Oshiwambo variant, with around 470,000 first-language speakers. Oshikwanyama follows at around 250,000. The two are mutually intelligible but lexically and orthographically distinct, especially in formal writing.</p>
+    <p data-af>Oshindonga is die wydste gepraatste Oshiwambo-variant, met ongeveer 470 000 eerste-taalsprekers. Oshikwanyama volg met ongeveer 250 000. Die twee is wedersyds verstaanbaar maar leksikaal en ortografies onderskeibaar, veral in formele skryfwerk.</p>
+
+    <p data-en>From the very first contribution, every translation in our dataset is labelled with its dialect. You tell Ongiini which one you speak, and that label travels with your translation through review, publication, and eventually into model fine-tuning. The result will be one open Oshiwambo dataset with two clearly-separated subsets, usable by anyone who wants to train models in either dialect or both.</p>
+    <p data-af>Vanaf die heel eerste bydrae word elke vertaling in ons datastel met sy dialek gemerk. Jy sê vir Ongiini watter een jy praat, en daardie merker reis saam met jou vertaling deur die hersiening, publikasie, en uiteindelik in modelverfyning. Die resultaat sal een oop Oshiwambo-datastel wees met twee duidelik-geskeide subgroepe, bruikbaar deur enigeen wat modelle in een of albei dialekte wil oplei.</p>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="ct-section" id="how">
+    <p class="ct-section-eyebrow" data-en>How it works</p>
+    <p class="ct-section-eyebrow" data-af>Hoe dit werk</p>
+    <h2 class="ct-h2" data-en>Send one message. Get one sentence. Translate.</h2>
+    <h2 class="ct-h2" data-af>Stuur een boodskap. Kry een sin. Vertaal.</h2>
+
+    <p data-en>The whole flow lives inside WhatsApp. No app to install, no website to log into, no account to create. You message Ongiini the way you'd message a friend.</p>
+    <p data-af>Die hele vloei is binne WhatsApp. Geen toepassing om te installeer nie, geen webwerf om in te teken nie, geen rekening om te skep nie. Jy boodskap Ongiini op dieselfde manier as wat jy 'n vriend sou boodskap.</p>
+
+    <div class="ct-steps">
+      <div class="ct-step">
+        <div class="ct-step-num">1</div>
+        <div class="ct-step-body">
+          <h3 data-en>Say you want to help</h3>
+          <h3 data-af>Sê jy wil help</h3>
+          <p data-en>Message Ongiini with "I want to help translate", or just answer in Oshiwambo when you chat with it. We'll explain the loop and ask which dialect you speak.</p>
+          <p data-af>Stuur Ongiini "I want to help translate", of antwoord net in Oshiwambo wanneer jy met dit gesels. Ons sal die proses verduidelik en vra watter dialek jy praat.</p>
+        </div>
+      </div>
+      <div class="ct-step">
+        <div class="ct-step-num">2</div>
+        <div class="ct-step-body">
+          <h3 data-en>Translate one English sentence</h3>
+          <h3 data-af>Vertaal een Engelse sin</h3>
+          <p data-en>We'll send you a short English sentence — the kind of thing Namibians actually ask Ongiini every day: a CV question, a study tip, a banking question, an encouragement. Reply with how you'd say it in your dialect. About 30 seconds.</p>
+          <p data-af>Ons stuur 'n kort Engelse sin — die soort ding wat Namibiërs elke dag vir Ongiini vra: 'n CV-vraag, 'n studiewenk, 'n bankvraag, 'n bemoediging. Antwoord met hoe jy dit in jou dialek sou sê. Omtrent 30 sekondes.</p>
+        </div>
+      </div>
+      <div class="ct-step">
+        <div class="ct-step-num">3</div>
+        <div class="ct-step-body">
+          <h3 data-en>Do another, or stop any time</h3>
+          <h3 data-af>Doen 'n volgende, of stop enige tyd</h3>
+          <p data-en>After each translation we ask "want another?". Say yes for the next sentence; say no and we stop until you message us again. No quota, no streaks, no badges. Just one sentence at a time, as many or as few as you have time for.</p>
+          <p data-af>Na elke vertaling vra ons "nog een?". Sê ja vir die volgende sin; sê nee en ons hou op totdat jy ons weer boodskap. Geen kwota, geen reekse, geen kentekens nie. Net een sin op 'n slag, soveel of so min as wat jy tyd voor het.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ct-dialogue" aria-label="Example WhatsApp exchange">
+      <span class="ct-bubble ct-bubble--user">I want to help translate</span>
+      <span class="ct-bubble ct-bubble--bot">By the way — you speak Oshiwambo, and that's a rare and valuable thing for us. We're building a free, open Oshindonga / Oshikwanyama dataset that any Namibian or researcher can use to make AI tools like this one truly speak Oshiwambo. Would you help with one short sentence? Important: once you submit a translation, it becomes part of the public dataset and <strong>cannot be taken back</strong> — but you can stop contributing any time. Want to try one?</span>
+      <span class="ct-bubble ct-bubble--user">yes</span>
+      <span class="ct-bubble ct-bubble--bot">Tangi! Quick first — which Oshiwambo dialect are you most fluent in? Reply <strong>Oshindonga</strong> or <strong>Oshikwanyama</strong>. Both are great — we're collecting both, and we just need to label your translations.</span>
+      <span class="ct-bubble ct-bubble--user">Oshindonga</span>
+      <span class="ct-bubble ct-bubble--bot">Tangi! Stored. Here's the first one — how would you say this in Oshindonga?<br/><em>'I am very happy to see you.'</em></span>
+      <span class="ct-bubble ct-bubble--user">Ondi hala oku ku mona nawa</span>
+      <span class="ct-bubble ct-bubble--bot">Tangi unene! Saved — that's contribution 1 for you. Want another sentence, or done for now?</span>
+    </div>
+  </section>
+
+  <!-- THE CONTRACT -->
+  <section class="ct-section">
+    <p class="ct-section-eyebrow" data-en>What you're agreeing to</p>
+    <p class="ct-section-eyebrow" data-af>Waarmee jy saamstem</p>
+    <h2 class="ct-h2" data-en>One unusual rule. The rest is plain.</h2>
+    <h2 class="ct-h2" data-af>Een ongewone reël. Die res is eenvoudig.</h2>
+
+    <div class="ct-callout">
+      <h3 data-en>Contributions are permanent.</h3>
+      <h3 data-af>Bydraes is permanent.</h3>
+      <p data-en>Once you send a translation, it becomes part of the public Oshiwambo dataset. It can't be taken back — the same way Wikipedia edits can't be retracted without compromising the resource for everyone else who depends on it. Submitting <em>is</em> the consent.</p>
+      <p data-af>Wanneer jy 'n vertaling stuur, word dit deel van die openbare Oshiwambo-datastel. Dit kan nie teruggetrek word nie — op dieselfde manier as wat Wikipedia-wysigings nie sonder skade aan die hulpbron teruggetrek kan word vir almal anders wat daarvan afhanklik is nie. Om dit te stuur <em>is</em> die toestemming.</p>
+      <p data-en>You can stop contributing any time. Saying "delete my data" wipes your conversation history and the things Ongiini remembered about you — but it does <strong>not</strong> wipe contributions you've already submitted, because that would damage the dataset for every Namibian who comes after.</p>
+      <p data-af>Jy kan enige tyd ophou bydra. "Delete my data" vee jou gespreksgeskiedenis en die dinge wat Ongiini van jou onthou het, uit — maar dit vee <strong>nie</strong> bydraes uit wat jy reeds gestuur het nie, want dit sou die datastel beskadig vir elke Namibiër wat na jou kom.</p>
+    </div>
+
+    <p data-en><strong>What we store with your translation:</strong> the English source sentence, your translation, the dialect label (Oshindonga or Oshikwanyama), the timestamp, and a one-way scrambled ID derived from your WhatsApp number. The scrambled ID lets us count contributors without storing phone numbers next to translations.</p>
+    <p data-af><strong>Wat ons saam met jou vertaling stoor:</strong> die Engelse bronsin, jou vertaling, die dialekmerker (Oshindonga of Oshikwanyama), die tydstempel, en 'n een-rigting geskommelde ID afgelei van jou WhatsApp-nommer. Die geskommelde ID laat ons toe om bydraers te tel sonder om telefoonnommers langs vertalings te stoor.</p>
+
+    <p data-en><strong>What we don't store:</strong> your phone number alongside the translation, your name, your location, your other chats. Translations get automatic personal-data scrubbing before they're saved (so an accidentally typed email or ID number won't end up in the dataset).</p>
+    <p data-af><strong>Wat ons nie stoor nie:</strong> jou telefoonnommer langs die vertaling, jou naam, jou ligging, jou ander gesprekke. Vertalings kry outomatiese persoonlike-data skoonmaak voordat dit gestoor word (sodat 'n per ongeluk getikte e-pos of ID-nommer nie in die datastel beland nie).</p>
+
+    <p data-en><strong>Legal basis:</strong> Art. 6 (1) (a) GDPR (your explicit consent, given by sending a translation after you've read the permanence note) and Art. 89 GDPR / § 27 BDSG, which recognises research and public-interest community-infrastructure datasets like this one. The full privacy policy is at <a href="/privacy/">/privacy/</a>.</p>
+    <p data-af><strong>Regsgrondslag:</strong> Art. 6 (1) (a) AVO (jou uitdruklike toestemming, gegee deur 'n vertaling te stuur nadat jy die permanensie-nota gelees het) en Art. 89 AVO / § 27 BDSG, wat navorsings- en openbare-belang-gemeenskapsinfrastruktuur-datastelle soos hierdie erken. Die volle privaatheidsbeleid is by <a href="/privacy/">/privacy/</a>.</p>
+  </section>
+
+  <!-- WHAT HAPPENS TO IT -->
+  <section class="ct-section">
+    <p class="ct-section-eyebrow" data-en>What happens to your translation</p>
+    <p class="ct-section-eyebrow" data-af>Wat met jou vertaling gebeur</p>
+    <h2 class="ct-h2" data-en>Review, publish, fine-tune, share.</h2>
+    <h2 class="ct-h2" data-af>Hersien, publiseer, verfyn, deel.</h2>
+
+    <p data-en>A native Oshiwambo speaker on our team reviews submissions for quality before any data leaves the system. We hired a Namibian linguist specifically for this — paid work, twenty hours a week, sitting between the dataset and publication. Translations that look clean enter the public pool; those that need a second opinion get flagged for community review.</p>
+    <p data-af>'n Oshiwambo-moedertaalspreker in ons span hersien bydraes vir kwaliteit voordat enige data die stelsel verlaat. Ons het 'n Namibiese taalkundige spesifiek hiervoor aangestel — betaalde werk, twintig uur 'n week, tussen die datastel en publikasie. Vertalings wat skoon lyk, gaan in die openbare poel in; dié wat 'n tweede opinie nodig het, word gemerk vir gemeenskapshersiening.</p>
+
+    <p data-en>Once we're past roughly 5,000 reviewed pairs per dialect, we publish the dataset openly — likely on Hugging Face, under a permissive licence — so any Namibian project, university, NGO, or developer who wants to use it can. At 10,000 pairs per dialect, we use the data to fine-tune Gemma 4 specifically for Oshiwambo, and Ongiini starts replying to you in your language for real, not just code-switching short phrases.</p>
+    <p data-af>Wanneer ons by ongeveer 5 000 hersiende pare per dialek is, publiseer ons die datastel oop — waarskynlik op Hugging Face, onder 'n toelaatbare lisensie — sodat enige Namibiese projek, universiteit, NRO of ontwikkelaar wat dit wil gebruik, kan. By 10 000 pare per dialek gebruik ons die data om Gemma 4 spesifiek vir Oshiwambo te verfyn, en Ongiini begin in jou taal terugantwoord vir regtig, nie net kort frases nie.</p>
+
+    <p data-en><strong>Your translation isn't just helping Ongiini.</strong> It's becoming part of permanent linguistic infrastructure for Oshindonga and Oshikwanyama — the kind of resource that didn't exist before this project, and that future researchers and Namibian projects will build on for years.</p>
+    <p data-af><strong>Jou vertaling help nie net Ongiini nie.</strong> Dit word deel van permanente taalkundige infrastruktuur vir Oshindonga en Oshikwanyama — die soort hulpbron wat nie voor hierdie projek bestaan het nie, en waarop toekomstige navorsers en Namibiese projekte vir jare sal bou.</p>
+  </section>
+
+  <!-- ABOUT THE PROJECT -->
+  <section class="ct-section">
+    <p class="ct-section-eyebrow" data-en>Who's behind this</p>
+    <p class="ct-section-eyebrow" data-af>Wie hieragter staan</p>
+    <h2 class="ct-h2" data-en>Small, open, non-profit, accountable.</h2>
+    <h2 class="ct-h2" data-af>Klein, oop, niewinsgewend, aanspreeklik.</h2>
+
+    <p data-en>Ongiini is the first project of the <strong>Common Intelligence Foundation</strong>, in the process of being formally established as a non-profit in Estonia. Until that registration completes, the project is privately funded and operated by Sebastian Küpers on a non-profit basis — full details at our <a href="/imprint/">imprint</a>.</p>
+    <p data-af>Ongiini is die eerste projek van die <strong>Common Intelligence Foundation</strong>, wat tans amptelik as 'n niewinsgewende organisasie in Estland gevestig word. Tot daardie registrasie voltooi is, word die projek privaat befonds en bedryf deur Sebastian Küpers op 'n niewinsgewende grondslag — volle besonderhede by ons <a href="/imprint/">impressum</a>.</p>
+
+    <p data-en>The whole stack is open source on <a href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">GitHub</a> — the webhook, the prompts, the contribute flow, the deployment, this website. Nothing about how Ongiini works is hidden. The Oshiwambo dataset itself will be published openly under a permissive licence once it's reviewed.</p>
+    <p data-af>Die hele stapel is oopbron op <a href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">GitHub</a> — die webhook, die instruksies, die bydraevloei, die ontplooiing, hierdie webwerf. Niks oor hoe Ongiini werk is verborge nie. Die Oshiwambo-datastel self sal oop gepubliseer word onder 'n toelaatbare lisensie sodra dit hersien is.</p>
+
+    <p data-en>If you're at an academic institution, NGO, school, or church group that would like to coordinate a larger contribution drive — or if you'd like to support the foundation directly — please email <a href="mailto:sebastian.kuepers@gmail.com">sebastian.kuepers@gmail.com</a>. Drives by language departments, NSSCO-aligned classes, and community organisations are exactly what gets us to 10,000 pairs in months rather than years.</p>
+    <p data-af>As jy by 'n akademiese instansie, NRO, skool, of kerkgroep is wat 'n groter bydrae-veldtog wil koördineer — of as jy die stigting direk wil ondersteun — stuur asseblief 'n e-pos na <a href="mailto:sebastian.kuepers@gmail.com">sebastian.kuepers@gmail.com</a>. Veldtogte deur taaldepartemente, NSSCO-belynde klasse en gemeenskapsorganisasies is presies wat ons in maande in plaas van jare tot 10 000 pare bring.</p>
+  </section>
+
+  <!-- CLOSING CTA -->
+  <section class="ct-close">
+    <div class="ct-close-inner">
+      <h2 data-en>Let's do this ourselves.</h2>
+      <h2 data-af>Kom ons doen dit self.</h2>
+      <p data-en>One Oshiwambo sentence is enough to start. The dataset is open, the model is open, the bot is open — only your language is still missing. Help us add it.</p>
+      <p data-af>Een Oshiwambo-sin is genoeg om te begin. Die datastel is oop, die model is oop, die bot is oop — net jou taal ontbreek nog. Help ons om dit by te voeg.</p>
+      <div class="ct-close-cta">
+        <a class="ct-cta" href="https://wa.me/4915888635886?text=I%20want%20to%20help%20translate" target="_blank" rel="noopener noreferrer">
+          <span data-en="i">Help on WhatsApp</span><span data-af="i">Help op WhatsApp</span>
+          <span class="ct-cta-arrow">→</span>
+        </a>
+        <a class="ct-cta ct-cta--ghost" href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">
+          <span data-en="i">Open on GitHub</span><span data-af="i">Maak op GitHub oop</span>
+          <span class="ct-cta-arrow">→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+  </main>
+
+  <footer class="ct-footer">
+    <p>
+      <a href="/">Ongiini</a> &nbsp;·&nbsp;
+      <a href="/privacy/">Privacy</a> &nbsp;·&nbsp;
+      <a href="/terms/">Terms</a> &nbsp;·&nbsp;
+      <a href="/imprint/">Imprint</a> &nbsp;·&nbsp;
+      <a href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </p>
+  </footer>
+
+  <script>
+    // Tiny language toggle. Stored in localStorage so the user's choice
+    // persists across page loads (matches the homepage behaviour).
+    (function () {
+      var html = document.documentElement;
+      var stored = null;
+      try { stored = localStorage.getItem("ongiini.locale"); } catch (e) {}
+      if (stored === "af" || stored === "en") {
+        html.setAttribute("data-locale", stored);
+      }
+      function syncButtons() {
+        var loc = html.getAttribute("data-locale") || "en";
+        document.querySelectorAll("[data-set-locale]").forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-set-locale") === loc ? "true" : "false");
+        });
+      }
+      syncButtons();
+      document.querySelectorAll("[data-set-locale]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var loc = b.getAttribute("data-set-locale");
+          html.setAttribute("data-locale", loc);
+          try { localStorage.setItem("ongiini.locale", loc); } catch (e) {}
+          syncButtons();
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

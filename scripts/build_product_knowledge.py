@@ -5,11 +5,13 @@ Pure stdlib — no external deps. Runs anywhere with Python 3.10+.
 
 Source pages walked:
 
-  website/index.html          — hero, modes, privacy cards, free-tier,
-                                contribute section, FAQ (JS array).
-  website/privacy/index.html  — full GDPR Privacy Policy.
-  website/terms/index.html    — full Terms of Service.
-  website/imprint/index.html  — German imprint (§5 DDG, §18 (2) MStV).
+  website/index.html            — hero, modes, privacy cards, free-tier,
+                                  contribute teaser section, FAQ (JS array).
+  website/contribute/index.html — full Oshiwambo dataset / contributor
+                                  effort explainer.
+  website/privacy/index.html    — full GDPR Privacy Policy.
+  website/terms/index.html      — full Terms of Service.
+  website/imprint/index.html    — German imprint (§5 DDG, §18 (2) MStV).
 
 Outputs:
 
@@ -399,6 +401,7 @@ def build_markdown(
     privacy_html: str,
     terms_html: str,
     imprint_html: str,
+    contribute_html: str,
 ) -> str:
     parser = DataEnHarvester()
     parser.feed(index_html)
@@ -439,8 +442,13 @@ def build_markdown(
             lines.append(a)
             lines.append("")
 
-    # ── Legal pages (each as its own H2 with the inside H1 demoted) ──
+    # ── Long-form pages (each as its own H2 with the inside H1 demoted) ──
+    # The contribute page is here too — it's marketing copy not legal,
+    # but lookup_ongiini_docs needs to be able to answer questions about
+    # the Oshiwambo dataset effort and the contributor flow, and the
+    # canonical copy lives on that page.
     for label, html in (
+        ("Contribute (full plan — Oshiwambo dataset)", contribute_html),
         ("Privacy policy (full text)",  privacy_html),
         ("Terms of service (full text)", terms_html),
         ("Imprint (German § 5 DDG)",     imprint_html),
@@ -479,8 +487,11 @@ def main(argv: list[str] | None = None) -> int:
     privacy_html = (WEBSITE / "privacy" / "index.html").read_text(encoding="utf-8")
     terms_html = (WEBSITE / "terms" / "index.html").read_text(encoding="utf-8")
     imprint_html = (WEBSITE / "imprint" / "index.html").read_text(encoding="utf-8")
+    contribute_html = (WEBSITE / "contribute" / "index.html").read_text(encoding="utf-8")
 
-    new_md = build_markdown(index_html, privacy_html, terms_html, imprint_html)
+    new_md = build_markdown(
+        index_html, privacy_html, terms_html, imprint_html, contribute_html,
+    )
 
     if args.check:
         ok = True
