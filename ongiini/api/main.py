@@ -14,7 +14,7 @@ from PIL import Image
 
 from owela import InboundMessage
 
-from .. import audio, instrument, pii, ratelimit
+from .. import audio, contributions, instrument, pii, ratelimit
 from ..config import settings
 from ..filters import InvalidMsisdn, is_allowed, normalize
 from ..memory import long_term as mem, short_term as memory
@@ -51,6 +51,19 @@ async def lifespan(app: FastAPI):
     log.info("warming faster-whisper…")
     await asyncio.to_thread(audio.warmup)
     log.info("faster-whisper ready")
+    # Create the contributions sqlite if it doesn't exist yet. Idempotent
+    # — no-op when tables are already in place. Soft-warn (don't crash
+    # startup) if CONTRIBUTIONS_HASH_SALT is missing; the tool itself
+    # will surface a clean error when first invoked.
+    try:
+        contributions.warmup()
+        if not settings.contributions_hash_salt:
+            log.warning(
+                "CONTRIBUTIONS_HASH_SALT is not set — contribute_translation "
+                "tool will refuse to write until it's configured."
+            )
+    except Exception:
+        log.exception("contributions warmup failed; tool will be unavailable")
     # Build the Owela Runtime + Agent once. The Runtime captures every
     # Ongiini-specific choice (model, transport, tools, policies, hooks)
     # and is reused for every inbound message — no per-request rebuild.
