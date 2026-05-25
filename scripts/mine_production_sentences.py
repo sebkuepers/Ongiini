@@ -86,8 +86,13 @@ def is_mostly_non_english(text: str) -> bool:
         return True
     if AFRIKAANS_BIGRAMS.search(text):
         return True
-    # ≥2 unambiguous Afrikaans markers — tighter than v1's threshold of 3.
     if len(AFRIKAANS_MARKERS.findall(text)) >= 2:
+        return True
+    # Diacritics that aren't natural in English: à â ä ë î ï ô ö ù û ü ç
+    # ñ ã õ ø æ. Any text containing two or more of these in a single
+    # sentence is almost certainly Afrikaans, German, French, or
+    # another European-imported orthography — drop it.
+    if len(re.findall(r"[àâäëîïôöùûüçñãõøæ]", text, re.IGNORECASE)) >= 2:
         return True
     return False
 
@@ -168,11 +173,15 @@ _BOT_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 # Also catch the meta-line patterns even when they're not at the very
-# start of the sentence (Gemma sometimes prefixes them after a clause).
+# start of the sentence (Gemma sometimes prefixes them after a clause:
+# 'Because I am an AI, I cannot...').
 _BOT_PATTERN_ANY = re.compile(
     r"\b(large language model|developed by Google|Google DeepMind|"
     r"my knowledge cutoff|my training data|cannot browse|"
-    r"I don't have real-time)\b",
+    r"I don't have real-time|I am an AI|I'm an AI|as an AI|"
+    r"because I am an AI|since I am an AI|"
+    r"I cannot provide a medical diagnosis|"
+    r"I am not a doctor|I am not a lawyer|I am not a financial)\b",
     re.IGNORECASE,
 )
 
