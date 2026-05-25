@@ -208,6 +208,73 @@ def test_save_contribution_increments_contributor_counter_on_repeat():
     assert contrib["total_contributions"] == 3
 
 
+# ── pending-save state ────────────────────────────────────────────
+
+
+def test_get_pending_save_returns_none_for_new_contributor():
+    assert contributions.get_pending_save(_h()) is None
+
+
+def test_set_pending_save_then_get_returns_state():
+    _seed(1)
+    h = _h()
+    # Need a real task_id (FK is loose but realistic test path)
+    task = contributions.next_task(h)
+    contributions.set_pending_save(h, task["id"], "Oshindonga")
+    pending = contributions.get_pending_save(h)
+    assert pending is not None
+    assert pending["task_id"] == task["id"]
+    assert pending["dialect"] == "Oshindonga"
+    assert pending["set_at"]  # timestamp present
+
+
+def test_set_pending_save_rejects_invalid_dialect():
+    with pytest.raises(ValueError):
+        contributions.set_pending_save(_h(), 1, "Spanish")
+
+
+def test_set_pending_save_overwrites_previous():
+    _seed(2)
+    h = _h()
+    contributions.set_pending_save(h, 1, "Oshindonga")
+    contributions.set_pending_save(h, 2, "Oshikwanyama")
+    pending = contributions.get_pending_save(h)
+    assert pending["task_id"] == 2
+    assert pending["dialect"] == "Oshikwanyama"
+
+
+def test_clear_pending_save_zeroes_state():
+    _seed(1)
+    h = _h()
+    contributions.set_pending_save(h, 1, "Oshindonga")
+    contributions.clear_pending_save(h)
+    assert contributions.get_pending_save(h) is None
+
+
+def test_next_task_sets_pending_indirectly_via_tool_path():
+    """The tool side calls set_pending after next; verify the helper
+    alone doesn't set pending (we don't want next_task to imply
+    pending state — that's the tool's job)."""
+    _seed(1)
+    h = _h()
+    task = contributions.next_task(h)
+    assert task is not None
+    # contributions.next_task itself does NOT set pending — only the
+    # tool's 'next' branch does, because pending requires a dialect.
+    assert contributions.get_pending_save(h) is None
+
+
+def test_save_contribution_clears_pending_save_atomically():
+    _seed(1)
+    h = _h()
+    contributions.set_dialect(h, "Oshindonga")
+    task = contributions.next_task(h)
+    contributions.set_pending_save(h, task["id"], "Oshindonga")
+    assert contributions.get_pending_save(h) is not None
+    contributions.save_contribution(h, task["id"], "Oshindonga", "ondi ya nawa")
+    assert contributions.get_pending_save(h) is None
+
+
 # ── set_dialect / whoami ───────────────────────────────────────────
 
 

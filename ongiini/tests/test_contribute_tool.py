@@ -159,6 +159,45 @@ async def test_next_returns_null_when_pool_empty():
     assert "message" in out
 
 
+@pytest.mark.asyncio
+async def test_next_sets_pending_save_when_dialect_known():
+    """When 'next' fires AND we already know the contributor's dialect,
+    mark pending so api/main.py can force-save on the next user msg."""
+    _seed(1)
+    ctx = _ctx()
+    await contribute_translation(ctx, action="set_dialect", target_dialect="Oshindonga")
+    out = json.loads(await contribute_translation(ctx, action="next"))
+    task_id = out["task"]["id"]
+    h = contributions.hash_msisdn(ctx.user_id)
+    pending = contributions.get_pending_save(h)
+    assert pending is not None
+    assert pending["task_id"] == task_id
+    assert pending["dialect"] == "Oshindonga"
+
+
+@pytest.mark.asyncio
+async def test_next_does_not_set_pending_save_when_dialect_unknown():
+    """Defensive: 'next' without a known dialect leaves pending null."""
+    _seed(1)
+    ctx = _ctx()
+    out = json.loads(await contribute_translation(ctx, action="next"))
+    assert out["task"] is not None
+    h = contributions.hash_msisdn(ctx.user_id)
+    assert contributions.get_pending_save(h) is None
+
+
+@pytest.mark.asyncio
+async def test_decline_clears_pending_save():
+    _seed(1)
+    ctx = _ctx()
+    await contribute_translation(ctx, action="set_dialect", target_dialect="Oshindonga")
+    await contribute_translation(ctx, action="next")
+    h = contributions.hash_msisdn(ctx.user_id)
+    assert contributions.get_pending_save(h) is not None
+    await contribute_translation(ctx, action="decline")
+    assert contributions.get_pending_save(h) is None
+
+
 # ── save ──────────────────────────────────────────────────────────
 
 
