@@ -135,7 +135,22 @@ async def contribute_set_dialect(ctx: ToolContext) -> str:
                      "'Oshindonga' or 'Oshikwanyama'",
         })
     contributions.set_dialect(h, dialect)
-    return json.dumps({"ok": True, "dialect": dialect})
+    # Chain into the first-task fetch so the user sees a real corpus
+    # sentence in the same turn the dialect is stored. Without this
+    # chain the user would need to say "yes I'm ready" on the NEXT
+    # turn, which the classifier can't route to CONTRIBUTE_NEXT
+    # (awaiting_followup is false until after a save). The chain
+    # avoids an entire confused-state round-trip.
+    task = contributions.next_task(h)
+    if task is None:
+        return json.dumps({"ok": True, "dialect": dialect, "task": None,
+                           "message": "no more tasks in the pool"})
+    contributions.set_pending_save(h, task["id"], dialect)
+    return json.dumps({
+        "ok": True,
+        "dialect": dialect,
+        "task": task,
+    })
 
 
 @tool(
@@ -165,6 +180,9 @@ async def contribute_next(ctx: ToolContext) -> str:
         })
     dialect = status.split(":", 1)[1]
     task = contributions.next_task(h)
+    # Clear the awaiting_followup flag — we're now mid-task again,
+    # not awaiting a yes/no. (No-op if it was already false.)
+    contributions.clear_awaiting_followup(h)
     if task is None:
         return json.dumps({
             "task": None,
@@ -212,6 +230,10 @@ async def contribute_save(ctx: ToolContext) -> str:
         log.warning("contribute_save rejected: %s", e)
         contributions.clear_pending_save(h)
         return json.dumps({"error": str(e)})
+    # Mark awaiting_followup so the classifier routes the user's NEXT
+    # reply ("yes, another" / "no, done") to CONTRIBUTE_NEXT or
+    # CONTRIBUTE_DECLINE instead of falling back to free-form NONE.
+    contributions.set_awaiting_followup(h)
     return json.dumps({
         "ok": True,
         "contribution_id": result["contribution_id"],
@@ -243,6 +265,7 @@ async def contribute_skip(ctx: ToolContext) -> str:
     pending = contributions.get_pending_save(h)
     skipped_id = pending["task_id"] if pending else None
     contributions.clear_pending_save(h)
+    contributions.clear_awaiting_followup(h)
     status = contributions.whoami(h)
     if not status.startswith("known:"):
         return json.dumps({"error": "contributor has no dialect set"})
@@ -274,6 +297,7 @@ async def contribute_decline(ctx: ToolContext) -> str:
         return json.dumps({"error": "contributions temporarily unavailable"})
     contributions.record_decline(h)
     contributions.clear_pending_save(h)
+    contributions.clear_awaiting_followup(h)
     return json.dumps({
         "ok": True,
         "cooldown_days": contributions.DECLINE_COOLDOWN_DAYS,

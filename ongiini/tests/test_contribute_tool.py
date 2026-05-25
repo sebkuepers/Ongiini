@@ -102,11 +102,32 @@ async def test_invite_check_returns_known_dialect_after_set():
 ])
 @pytest.mark.asyncio
 async def test_set_dialect_parses_user_text(user_text: str, expected: str):
+    _seed(1)
     out = json.loads(await contribute_set_dialect(_ctx(text=user_text)))
     assert out["ok"] is True
     assert out["dialect"] == expected
     h = contributions.hash_msisdn("264811234567")
     assert contributions.whoami(h) == f"known:{expected}"
+
+
+@pytest.mark.asyncio
+async def test_set_dialect_chains_into_first_task():
+    """After dialect-saving, the same call also fetches the first task
+    so the user sees a real corpus sentence in a single turn."""
+    _seed(1)
+    out = json.loads(await contribute_set_dialect(_ctx(text="Oshindonga")))
+    assert out["ok"] is True
+    assert out["task"] is not None
+    h = contributions.hash_msisdn("264811234567")
+    assert contributions.get_pending_save(h)["task_id"] == out["task"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_set_dialect_with_empty_pool_returns_no_task():
+    out = json.loads(await contribute_set_dialect(_ctx(text="Oshindonga")))
+    assert out["ok"] is True
+    assert out["task"] is None
+    assert "message" in out
 
 
 @pytest.mark.asyncio
@@ -168,6 +189,9 @@ async def test_save_writes_contribution_using_ctx_msg_text():
     assert out["dialect"] == "Oshindonga"
     h = contributions.hash_msisdn("264811234567")
     assert contributions.get_pending_save(h) is None  # cleared
+    # Save also sets awaiting_followup so the classifier routes the
+    # user's next yes/no into CONTRIBUTE_NEXT or CONTRIBUTE_DECLINE.
+    assert contributions.is_awaiting_followup(h) is True
 
 
 @pytest.mark.asyncio
@@ -230,11 +254,15 @@ async def test_skip_returns_no_more_tasks_message_when_pool_exhausted():
 async def test_decline_records_cooldown_and_clears_pending():
     _seed(1)
     _setup_pending()
+    h = contributions.hash_msisdn("264811234567")
+    # Also ensure awaiting_followup gets cleared (decline can happen
+    # from either the pending state or the awaiting_followup state)
+    contributions.set_awaiting_followup(h)
     out = json.loads(await contribute_decline(_ctx(text="no thanks")))
     assert out["ok"] is True
     assert out["cooldown_days"] == contributions.DECLINE_COOLDOWN_DAYS
-    h = contributions.hash_msisdn("264811234567")
     assert contributions.get_pending_save(h) is None
+    assert contributions.is_awaiting_followup(h) is False
     assert contributions.recently_declined(h) is True
 
 
