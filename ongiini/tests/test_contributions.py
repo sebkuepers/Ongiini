@@ -275,6 +275,40 @@ def test_save_contribution_clears_pending_save_atomically():
     assert contributions.get_pending_save(h) is None
 
 
+# ── awaiting-followup state ───────────────────────────────────────
+
+
+def test_is_awaiting_followup_false_for_new_contributor():
+    assert contributions.is_awaiting_followup(_h()) is False
+
+
+def test_set_then_is_awaiting_followup_true():
+    h = _h()
+    contributions.set_awaiting_followup(h)
+    assert contributions.is_awaiting_followup(h) is True
+
+
+def test_clear_awaiting_followup_false_again():
+    h = _h()
+    contributions.set_awaiting_followup(h)
+    contributions.clear_awaiting_followup(h)
+    assert contributions.is_awaiting_followup(h) is False
+
+
+def test_is_awaiting_followup_expires_after_window():
+    h = _h()
+    contributions.set_awaiting_followup(h)
+    # Manually backdate the marker by an hour
+    with contributions._conn() as c:
+        c.execute(
+            "UPDATE contributors SET awaiting_followup_at = ? "
+            "WHERE contributor_hash = ?",
+            ("2025-01-01T00:00:00+00:00", h),
+        )
+    # 30-min default window — old enough to be ignored
+    assert contributions.is_awaiting_followup(h, window_minutes=30) is False
+
+
 # ── set_dialect / whoami ───────────────────────────────────────────
 
 
