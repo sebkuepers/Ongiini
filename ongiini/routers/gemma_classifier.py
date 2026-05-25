@@ -42,6 +42,20 @@ from owela import (
 log = logging.getLogger("ongiini.routers.gemma")
 
 
+# Application-side verdict extensions for the community-contribution
+# loop. These live in ongiini/ (not owela/) per the framework anti-trap
+# rule: Owela's verdict set stays small and product-agnostic. The
+# policy table accepts any string as a verdict key, so wiring these
+# through runtime.py needs nothing from the framework.
+VERDICT_CONTRIB_INVITE   = "CONTRIBUTE_INVITE"
+VERDICT_CONTRIB_DIALECT  = "CONTRIBUTE_DIALECT"
+VERDICT_CONTRIB_NEXT     = "CONTRIBUTE_NEXT"
+VERDICT_CONTRIB_SAVE     = "CONTRIBUTE_SAVE"
+VERDICT_CONTRIB_SKIP     = "CONTRIBUTE_SKIP"
+VERDICT_CONTRIB_DECLINE  = "CONTRIBUTE_DECLINE"
+VERDICT_CONTRIB_STATS    = "CONTRIBUTE_STATS"
+
+
 # Match common English and Afrikaans pronouns + reference words. When the
 # current message contains one, we include the previous user message in
 # the classifier prompt for pronoun resolution.
@@ -131,6 +145,52 @@ Examples that route to NONE:
   "remind me what the third option was" (already in history)
   "explain that more simply" (rephrase of an answer already given)
 
+CONTRIBUTE_INVITE — the user is volunteering to help translate Oshiwambo
+OR asking whether/when Ongiini supports Oshiwambo OR using Oshiwambo
+for a real phrase (more than a one-word greeting like "Tangi" or "Ongiini").
+Only emit this when contribute_state.recently_declined is FALSE — if
+they declined recently, route normally to NONE / etc and answer their
+real question.
+Examples:
+  "I want to help translate" → CONTRIBUTE_INVITE
+  "Can I contribute Oshindonga translations?" → CONTRIBUTE_INVITE
+  "Do you support Oshiwambo?" → CONTRIBUTE_INVITE (capability + offer)
+  "Ondi pumbwa ekwafelo" (real Oshiwambo phrase) → CONTRIBUTE_INVITE
+
+CONTRIBUTE_DIALECT — emit ONLY when contribute_state.pending_save is
+FALSE AND contribute_state.dialect is "unknown" AND the user's
+message names a dialect ("Oshindonga", "Oshikwanyama", "Ndonga",
+"Kwanyama", "either", "both"). The user is answering the
+dialect-question that was just asked.
+
+CONTRIBUTE_SAVE — emit ONLY when contribute_state.pending_save is
+TRUE (we just served an English sentence and are waiting for the
+translation) AND the user's message looks like a translation
+attempt — NOT an obvious skip / question / pivot. A short reply in
+the contributor's dialect, even if you can't verify the language,
+defaults to SAVE. Examples in pending_save state:
+  "Ondi hala oku ku mona nawa" → CONTRIBUTE_SAVE
+  "Tangi unene" → CONTRIBUTE_SAVE
+  "Onawa ondi li nawa" → CONTRIBUTE_SAVE
+
+CONTRIBUTE_SKIP — emit ONLY when contribute_state.pending_save is
+TRUE AND the user's message is a clear English rejection / "I don't
+know this one" / "send me a different sentence" / "skip" / "too
+hard" / "easier please". Distinct from SAVE because the user is
+explicitly NOT submitting a translation.
+
+CONTRIBUTE_NEXT — emit ONLY when contribute_state.awaiting_followup
+is TRUE (we just saved a translation and asked "want another?") AND
+the user said yes / sure / another / one more / Tangi / Eewa / etc.
+
+CONTRIBUTE_DECLINE — emit ONLY when contribute_state.awaiting_followup
+OR contribute_state.pending_save is TRUE AND the user said no / done /
+later / not now / enough / maybe later.
+
+CONTRIBUTE_STATS — emit when the user asks how many translations have
+been collected ("how many do you have?", "how much data?", "how's
+the dataset doing?"). Can fire regardless of contribute_state.
+
 The DOCS / ADMIN distinction: "what's your privacy policy" → DOCS
 (asking about the document); "delete my data" → ADMIN (action on user state).
 The NONE / DOCS distinction:
@@ -154,9 +214,11 @@ If previous conversation turns are shown for context, use them to:
 The current message is what you classify; the previous turns are
 ONLY there to disambiguate what the user is talking about.
 
-{context}Current message: {user_text}
+{context}{contribute_state}Current message: {user_text}
 
-Reply with EXACTLY one of: SEARCH_SHALLOW, SEARCH_DEEP, DOCS, ADMIN, NONE.
+Reply with EXACTLY one of: SEARCH_SHALLOW, SEARCH_DEEP, DOCS, ADMIN, NONE,
+CONTRIBUTE_INVITE, CONTRIBUTE_DIALECT, CONTRIBUTE_NEXT, CONTRIBUTE_SAVE,
+CONTRIBUTE_SKIP, CONTRIBUTE_DECLINE, CONTRIBUTE_STATS.
 """
 
 
@@ -167,8 +229,16 @@ _TIMEOUT_S = 2.0
 
 
 # Order matters: longer labels first so we don't match SEARCH inside
-# SEARCH_SHALLOW.
-_LABEL_TOKENS = ("SEARCH_SHALLOW", "SEARCH_DEEP", "SEARCH", "DOCS", "ADMIN", "NONE")
+# SEARCH_SHALLOW. CONTRIBUTE_* labels are all unambiguous prefixes of
+# each other (CONTRIBUTE_SAVE doesn't contain CONTRIBUTE_SET-style
+# collisions), so any order within that family works.
+_LABEL_TOKENS = (
+    "SEARCH_SHALLOW", "SEARCH_DEEP", "SEARCH",
+    "CONTRIBUTE_INVITE", "CONTRIBUTE_DIALECT", "CONTRIBUTE_NEXT",
+    "CONTRIBUTE_SAVE", "CONTRIBUTE_SKIP", "CONTRIBUTE_DECLINE",
+    "CONTRIBUTE_STATS",
+    "DOCS", "ADMIN", "NONE",
+)
 
 
 class GemmaClassifier:
@@ -216,6 +286,14 @@ class GemmaClassifier:
         else:
             context = ""
 
+        # Contribution-loop state: only injected when the contributor
+        # has any state worth knowing about (pending save, awaiting
+        # followup, known dialect, recent decline). For users who've
+        # never interacted with the contribute flow this stays empty,
+        # so the prompt prefix stays cacheable for the bulk of
+        # traffic.
+        contribute_state = self._format_contribute_state(msg.user_id)
+
         try:
             resp = await asyncio.wait_for(
                 self._client.chat.completions.create(
@@ -223,7 +301,9 @@ class GemmaClassifier:
                     messages=[{
                         "role": "user",
                         "content": CLASSIFIER_PROMPT.format(
-                            user_text=text, context=context,
+                            user_text=text,
+                            context=context,
+                            contribute_state=contribute_state,
                         ),
                     }],
                     temperature=0.0,
@@ -285,6 +365,41 @@ class GemmaClassifier:
                 break    # walk back from most-recent user; assistant came after
         return prev_user, prev_assistant
 
+    def _format_contribute_state(self, user_id: str) -> str:
+        """Render contribution-loop state for this contributor as a
+        prompt block, or '' if there's nothing notable. The output
+        feeds straight into CLASSIFIER_PROMPT.format(contribute_state=…).
+
+        Soft-fail: any sqlite hiccup or missing hash salt yields '',
+        which makes the prompt behave exactly as it did before the
+        contribute verdicts existed."""
+        try:
+            from .. import contributions as _contrib  # lazy: import sqlite only when classifying
+            h = _contrib.hash_msisdn(user_id)
+        except Exception:
+            return ""
+        try:
+            pending = bool(_contrib.get_pending_save(h))
+            awaiting_followup = _contrib.is_awaiting_followup(h)
+            dialect_status = _contrib.whoami(h)
+            recently_declined = _contrib.recently_declined(h)
+        except Exception:
+            return ""
+        if not (pending or awaiting_followup or dialect_status.startswith("known:") or recently_declined):
+            return ""
+        # known:Oshindonga → "Oshindonga"; unset → "unknown"; new → "unknown"
+        if dialect_status.startswith("known:"):
+            dialect = dialect_status.split(":", 1)[1]
+        else:
+            dialect = "unknown"
+        return (
+            "Contribute_state: "
+            f"pending_save={str(pending).lower()}, "
+            f"awaiting_followup={str(awaiting_followup).lower()}, "
+            f"dialect={dialect}, "
+            f"recently_declined={str(recently_declined).lower()}\n"
+        )
+
     @staticmethod
     def _parse(resp: Any) -> tuple[str, str]:
         """Return (verdict, depth). Accepts the new SEARCH_SHALLOW /
@@ -308,6 +423,20 @@ class GemmaClassifier:
                     return VERDICT_ADMIN, DEPTH_SHALLOW
                 if token == "NONE":
                     return VERDICT_NONE, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_INVITE":
+                    return VERDICT_CONTRIB_INVITE, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_DIALECT":
+                    return VERDICT_CONTRIB_DIALECT, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_NEXT":
+                    return VERDICT_CONTRIB_NEXT, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_SAVE":
+                    return VERDICT_CONTRIB_SAVE, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_SKIP":
+                    return VERDICT_CONTRIB_SKIP, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_DECLINE":
+                    return VERDICT_CONTRIB_DECLINE, DEPTH_SHALLOW
+                if token == "CONTRIBUTE_STATS":
+                    return VERDICT_CONTRIB_STATS, DEPTH_SHALLOW
         log.warning("classifier got un-parseable verdict %r — falling back to NONE", raw)
         return VERDICT_NONE, DEPTH_SHALLOW
 
