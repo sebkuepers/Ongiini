@@ -41,8 +41,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
-import re
 import runpy
 import sys
 import time
@@ -66,12 +66,13 @@ DEFAULT_ABORT_FILE = "/data/contributions_seed.abort"
 
 PARAPHRASE_PROMPT_TEMPLATE = (
     "Give me {n} different ways to express this English sentence, as a "
-    "Namibian person speaking on WhatsApp might phrase it. Vary length, "
-    "formality, and word choice but preserve the meaning EXACTLY. One "
-    "paraphrase per line. No numbering, no markdown, no explanation, no "
-    "introduction. Do not change the meaning. Do not add information not "
-    "in the source. Do not switch domain (a CV phrase must stay a CV "
-    "phrase, etc.). "
+    "Namibian person speaking on WhatsApp might phrase it. Vary length "
+    "(short / medium / long), formality (casual / friendly / formal), "
+    "and word choice — but preserve the meaning EXACTLY. Do not change "
+    "the meaning, do not add information not in the source, do not "
+    "drop information from the source, do not switch domain (a CV "
+    "phrase must stay a CV phrase). Each paraphrase must be a complete, "
+    "self-contained sentence. "
     "Source sentence: {sentence}"
 )
 
@@ -89,36 +90,21 @@ def _load_seeds(seeds_path: Path) -> list[dict[str, Any]]:
     return seeds
 
 
-# ── Paraphrase parsing ────────────────────────────────────────────
+# ── Paraphrase filtering ──────────────────────────────────────────
 
 
-_NUMBER_PREFIX = re.compile(r"^\s*(?:\d+[\.\)]|\*|\-)\s*")
-_BOLD_PAIR = re.compile(r"\*\*([^*]+)\*\*")
-_ITALIC_PAIR = re.compile(r"\*([^*]+)\*")
-
-
-def _clean_line(line: str) -> str:
-    """Strip common LLM-ish chrome (numbering, bullets, markdown) from
-    one candidate paraphrase line. Returns "" if empty after cleaning."""
-    line = line.strip()
-    if not line:
-        return ""
-    line = _NUMBER_PREFIX.sub("", line)
-    line = _BOLD_PAIR.sub(r"\1", line)
-    line = _ITALIC_PAIR.sub(r"\1", line)
-    line = line.strip().strip('"').strip("'")
-    return line
-
-
-def parse_paraphrases(raw_text: str, source_sentence: str) -> list[str]:
-    """Pull individual paraphrase candidates out of the model's
-    response. Drops empties, near-duplicates of the source, and lines
-    outside a sensible word-count range."""
+def filter_paraphrases(items: list[str], source_sentence: str) -> list[str]:
+    """Apply quality gates to the structured JSON list returned by
+    Gemma: drop empties, near-duplicates of the source, and items
+    outside a sensible word-count range. The structured-output mode
+    already guarantees we get a list of strings, so no regex parsing."""
     out: list[str] = []
     seen: set[str] = set()
     src_norm = source_sentence.strip().lower()
-    for raw_line in raw_text.splitlines():
-        cleaned = _clean_line(raw_line)
+    for item in items:
+        if not isinstance(item, str):
+            continue
+        cleaned = item.strip().strip('"').strip("'")
         if not cleaned:
             continue
         wc = len(cleaned.split())
@@ -164,28 +150,59 @@ async def _call_paraphrase(
     model: str,
     sentence: str,
     n: int,
-) -> str:
+) -> list[str]:
     """Single OpenAI-compatible /chat/completions call to vLLM asking
-    for N paraphrases of `sentence`. Returns the raw assistant
-    content string."""
+    for exactly N paraphrases of `sentence` via structured-output JSON
+    schema (minItems=maxItems=n). Returns the parsed list of strings.
+
+    Why structured output: with free-form output Gemma routinely under-
+    shoots the requested count (we saw counts of 5 / 7 / 9 against an
+    ask of 50). The json_schema response_format forces the model's
+    decoder to emit exactly the array shape we specified — no
+    undershoot, no markdown chrome, no parsing surface."""
     prompt = PARAPHRASE_PROMPT_TEMPLATE.format(n=n, sentence=sentence)
     payload = {
         "model": model,
         "messages": [
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": 2500,
+        # Each paraphrase averages ~25 tokens. N=50 × 25 + JSON
+        # overhead → ~1500 tokens. Headroom for longer ones.
+        "max_tokens": 3500,
         "temperature": 0.9,
         "top_p": 0.95,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "paraphrases",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "paraphrases": {
+                            "type": "array",
+                            "minItems": n,
+                            "maxItems": n,
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["paraphrases"],
+                },
+            },
+        },
     }
     r = await client.post(
         f"{base_url.rstrip('/')}/chat/completions",
         json=payload,
-        timeout=180.0,
+        timeout=300.0,
     )
     r.raise_for_status()
     data = r.json()
-    return data["choices"][0]["message"]["content"]
+    raw = data["choices"][0]["message"]["content"]
+    parsed = json.loads(raw)
+    items = parsed.get("paraphrases", [])
+    if not isinstance(items, list):
+        raise ValueError(f"expected a list, got {type(items).__name__}")
+    return items
 
 
 # ── Main loop ─────────────────────────────────────────────────────
@@ -267,16 +284,17 @@ async def run(args: argparse.Namespace) -> int:
                 i, seed_count, seed_id, category, source[:80],
             )
             try:
-                raw = await _call_paraphrase(
+                items = await _call_paraphrase(
                     client, base_url, model, source, args.paraphrases_per_seed,
                 )
-            except (httpx.HTTPError, KeyError) as e:
+            except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as e:
                 log.error("seed %s paraphrase call failed: %s", seed_id, e)
                 await asyncio.sleep(args.sleep)
                 continue
 
-            candidates = parse_paraphrases(raw, source)
-            log.info("  → %d clean paraphrases", len(candidates))
+            candidates = filter_paraphrases(items, source)
+            log.info("  → %d clean paraphrases (of %d returned)",
+                     len(candidates), len(items))
 
             # Always include the source itself so the original wording
             # is never lost.
