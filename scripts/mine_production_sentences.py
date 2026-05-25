@@ -63,30 +63,31 @@ OSHIWAMBO_MARKERS = re.compile(
     r"ombili|eewa|tu monene|owa lala|onawa|nawa)\b",
     re.IGNORECASE,
 )
-# Afrikaans markers — common short words that English doesn't have.
+# Afrikaans markers — common short words / function words English doesn't have.
+# "ons" (we), "die" (the), "wat" (what), "is" — but "is" is also English so
+# we skip it. Pick markers that are unambiguous Afrikaans.
 AFRIKAANS_MARKERS = re.compile(
-    r"\b(jy|jou|ek|sien|nie|hierdie|asseblief|baie|goed|dankie|moet|kan|jongste|"
-    r"vir|met|wat|hoe|wanneer|sou|wees|kry|gee|maak)\b",
+    r"\b(jy|jou|ek|sien|nie|hierdie|asseblief|baie|dankie|moet|kan|jongste|"
+    r"vir|wanneer|sou|wees|kry|gee|maak|ons|hulle|julle|met|hoe|"
+    r"die|sodat|omdat|dieselfde|nogal|natuurlik|natuurlike|"
+    r"hoeveel|hoekom|waarvan|waaroor)\b",
+    re.IGNORECASE,
+)
+# Unambiguous Afrikaans bigrams — single hit is enough to flag.
+AFRIKAANS_BIGRAMS = re.compile(
+    r"\b(ons kan|ek het|jy is|jy het|jou is|sou ek|kan ons|sal jy|moet jy|"
+    r"nie waar|dis 'n|is 'n |hierdie is)\b",
     re.IGNORECASE,
 )
 
 
-def language_score(text: str) -> tuple[int, int]:
-    """Return (oshi_hits, afr_hits) per ~3 words. Used to drop
-    non-English sentences."""
-    words = max(len(text.split()) // 3, 1)
-    return (
-        len(OSHIWAMBO_MARKERS.findall(text)) // max(1, words // 5 or 1),
-        len(AFRIKAANS_MARKERS.findall(text)),
-    )
-
-
 def is_mostly_non_english(text: str) -> bool:
-    osh, afr = language_score(text)
-    if osh > 0:
+    if OSHIWAMBO_MARKERS.search(text):
         return True
-    # Afrikaans: more than 3 markers in a short sentence
-    if afr >= 3:
+    if AFRIKAANS_BIGRAMS.search(text):
+        return True
+    # ≥2 unambiguous Afrikaans markers — tighter than v1's threshold of 3.
+    if len(AFRIKAANS_MARKERS.findall(text)) >= 2:
         return True
     return False
 
@@ -154,13 +155,24 @@ def split_sentences(text: str) -> list[str]:
 _BOT_PATTERNS = re.compile(
     r"^("
     r"I am an AI|I'm an AI|"
-    r"As an AI|"
+    r"As an AI|As a language model|"
+    r"I am a large language model|I am Gemma|I am called Gemma|"
     r"Let me search|Let me look up|Let me check|"
     r"I cannot|I can't|"
     r"Here are some|Here is a list|"
     r"I don't have access|"
-    r"Based on (?:the|my) search"
+    r"Based on (?:the|my) search|"
+    r"My (?:training data|knowledge) (?:cutoff|stops)|"
+    r"I was (?:created|developed|trained) by"
     r")",
+    re.IGNORECASE,
+)
+# Also catch the meta-line patterns even when they're not at the very
+# start of the sentence (Gemma sometimes prefixes them after a clause).
+_BOT_PATTERN_ANY = re.compile(
+    r"\b(large language model|developed by Google|Google DeepMind|"
+    r"my knowledge cutoff|my training data|cannot browse|"
+    r"I don't have real-time)\b",
     re.IGNORECASE,
 )
 
@@ -191,8 +203,15 @@ def acceptable(text: str, min_words: int = 5, max_words: int = 40) -> tuple[bool
         return False, "non_english"
     if "[REDACTED" in text:
         return False, "pii_scrubbed_changed_meaning"
-    if _BOT_PATTERNS.match(text):
+    if _BOT_PATTERNS.match(text) or _BOT_PATTERN_ANY.search(text):
         return False, "bot_meta_pattern"
+    # Sentences with leading "Step N:" or trailing "...: 1." are list-row
+    # fragments — useful as content but they translate awkwardly because
+    # they're structural, not semantic. Drop them.
+    if re.match(r"^Step\s+\d+\s*[:.]", text, re.IGNORECASE):
+        return False, "list_row_fragment"
+    if re.search(r":\s*\d+\.?\s*$", text):
+        return False, "list_row_fragment"
     if _ENDS_BAD.search(text):
         return False, "trailing_markdown_junk"
     if _CONTEXT_DEPENDENT.match(text):
@@ -235,15 +254,52 @@ _RE_CONVERSATIONAL = re.compile(
     r"of course|no problem|tangi|nawa)\b",
     re.IGNORECASE,
 )
+# Business / professional / marketing / customer-service language. Catches a
+# big slice of what the v1 categoriser misclassified as "niche". Note: we
+# deliberately exclude "business" keyword itself from cv_jobs so this
+# bucket captures pure-business-advice content (branding, sales,
+# pricing, services), not just cv-with-mention-of-business.
+_RE_BUSINESS = re.compile(
+    r"\b(brand|branding|marketing|customer|client|sales|revenue|pricing|"
+    r"product|service line|menu|profit|loss|invoice|quote|estimate|"
+    r"social media|whatsapp business|instagram|facebook|website copy|"
+    r"vendor|supplier|stockist|wholesale|retail margin|markup)\b",
+    re.IGNORECASE,
+)
+# Namibian daily-life: family, money management, transport, government
+# services, religion/culture, health/wellbeing, food, neighbourhood.
+_RE_DAILY_LIFE = re.compile(
+    r"\b(family|mother|father|grandmother|grandfather|aunt|uncle|sister|"
+    r"brother|child|son|daughter|home|household|"
+    r"bank|loan|account|fnb|nedbank|standard bank|debit|credit|insurance|"
+    r"rent|salary day|month-end|pension|grant|"
+    r"taxi|kombi|hike|road|town|village|farm|cattle|goat|sheep|"
+    r"clinic|hospital|doctor|nurse|medic|prescription|pharmacy|"
+    r"church|pastor|bible|sunday|prayer|"
+    r"recipe|cooking|maize|pap|kapana|braai|biltong|"
+    r"police|home affairs|nhc|nhi|municipality|councillor|swakopmund|windhoek|"
+    r"oshakati|ondangwa|katima|rundu|walvis bay|opuwo|tsumeb|rehoboth|"
+    r"caprivi|kavango|kunene|otjozondjupa|hardap|karas|omusati|oshana|oshikoto|"
+    r"erongo|khomas|zambezi)\b",
+    re.IGNORECASE,
+)
 
 
 def categorise(text: str) -> str:
+    # Order matters — first match wins. We check the most specific buckets
+    # first (cv_jobs / education / translation are domain-precise) and
+    # only fall through to broader buckets (business / daily_life) when
+    # the precise ones don't match.
     if _RE_CV_JOBS.search(text):
         return "cv_jobs"
     if _RE_EDUCATION.search(text):
         return "education"
     if _RE_TRANSLATION.search(text):
         return "translation"
+    if _RE_BUSINESS.search(text):
+        return "business"
+    if _RE_DAILY_LIFE.search(text):
+        return "daily_life"
     if _RE_CONVERSATIONAL.search(text):
         return "conversational"
     return "niche"
@@ -355,7 +411,8 @@ def mine(args: argparse.Namespace) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     next_id = 1
     with out_path.open("w") as f:
-        for cat in ("conversational", "cv_jobs", "education", "translation", "niche"):
+        for cat in ("conversational", "cv_jobs", "education", "translation",
+                    "business", "daily_life", "niche"):
             for item in accepted_by_category.get(cat, []):
                 item = {"id": next_id, **item}
                 next_id += 1
