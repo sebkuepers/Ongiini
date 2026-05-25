@@ -184,8 +184,10 @@ async def test_save_writes_contribution_using_ctx_msg_text():
     task_id = _setup_pending()
     out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
     assert out["ok"] is True
-    assert out["contribution_id"] == 1
-    assert out["task_id"] == task_id
+    # contribution_id is deliberately NOT in the response — the model
+    # used to confuse it with total_for_contributor in the spoken reply.
+    assert "contribution_id" not in out
+    assert out["total_for_contributor"] == 1
     assert out["dialect"] == "Oshindonga"
     h = contributions.hash_msisdn("264811234567")
     assert contributions.get_pending_save(h) is None  # cleared
