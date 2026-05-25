@@ -30,7 +30,11 @@ def test_all_tools_register_in_registry():
     assert names == {
         "web_search", "fetch_url", "fetch_urls", "delete_my_data",
         "whats_in_my_memory", "my_token_usage", "lookup_ongiini_docs",
-        "load_skill", "contribute_translation",
+        "load_skill",
+        # v2 contribute tools — classifier-forced, not model-chosen
+        "contribute_invite_check", "contribute_set_dialect",
+        "contribute_next", "contribute_save", "contribute_skip",
+        "contribute_decline", "contribute_stats",
     }
 
 

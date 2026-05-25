@@ -10,7 +10,15 @@ The application's runtime construction (``ongiini.runtime``) builds
 a ``ToolRegistry`` from the list exported here.
 """
 
-from .contribute import contribute_translation
+from .contribute import (
+    contribute_decline,
+    contribute_invite_check,
+    contribute_next,
+    contribute_save,
+    contribute_set_dialect,
+    contribute_skip,
+    contribute_stats,
+)
 from .ongiini_tools import (
     ALL_TOOLS as _PRODUCT_TOOLS,
     delete_my_data,
@@ -27,14 +35,30 @@ from .skill_tools import load_skill
 # load_skill is appended last because the model interacts with it less
 # than the product tools (it's only relevant when an on-demand skill
 # matches the user's message), so it gets the smallest prior.
-# contribute_translation sits ahead of load_skill but after the core
-# product tools — it's domain-specific, used only inside the
-# contribution flow guided by the contribute skill.
-ALL_TOOLS = (*_PRODUCT_TOOLS, contribute_translation, load_skill)
+# The contribute_* tools come AFTER the product tools — they're
+# domain-specific, force-called by the classifier-driven policy table
+# (no model selection), so their position in the list is essentially
+# cosmetic (force_tool targets by name).
+_CONTRIBUTE_TOOLS = (
+    contribute_invite_check,
+    contribute_set_dialect,
+    contribute_next,
+    contribute_save,
+    contribute_skip,
+    contribute_decline,
+    contribute_stats,
+)
+ALL_TOOLS = (*_PRODUCT_TOOLS, *_CONTRIBUTE_TOOLS, load_skill)
 
 __all__ = [
     "ALL_TOOLS",
-    "contribute_translation",
+    "contribute_decline",
+    "contribute_invite_check",
+    "contribute_next",
+    "contribute_save",
+    "contribute_set_dialect",
+    "contribute_skip",
+    "contribute_stats",
     "delete_my_data",
     "fetch_url",
     "fetch_urls",
