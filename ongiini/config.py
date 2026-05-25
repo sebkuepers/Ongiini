@@ -113,6 +113,13 @@ class Settings:
         os.getenv("ONGIINI_CAPTURE_REVISE_EVAL", "").lower() in ("1", "true", "yes")
     )
 
+    # Salt for hashing contributor msisdns in the community-contribution
+    # database (ongiini.contributions). Lives in .env on the host as
+    # CONTRIBUTIONS_HASH_SALT. Without it, hash_msisdn() raises — we
+    # never want to hash with an empty salt (would defeat the purpose
+    # of pseudonymisation). Generate once with `openssl rand -hex 32`.
+    contributions_hash_salt: str = os.getenv("CONTRIBUTIONS_HASH_SALT", "")
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)

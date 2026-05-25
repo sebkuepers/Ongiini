@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-05-24. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-05-25. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Privacy summary (homepage cards)
 
@@ -195,6 +195,16 @@ Across all your chats, the assistant extracts a small number of typed facts abou
 **Purpose:** to make the assistant useful over time — to remember that you farm maize, that you prefer Afrikaans replies, that you previously asked about a school topic, etc.
 
 **Legal basis:** Art. 6 (1) (b) GDPR — provision of the personalised service you requested. You can delete all of this at any time (see Section 6).
+
+#### Community translation contributions (optional)
+
+When you speak Oshiwambo (Oshindonga or Oshikwanyama) the assistant may invite you to translate one short English sentence into your dialect, to help build a free open dataset for future Oshiwambo AI tools. Each contribution you submit is stored as: the English source sentence, your translation, the dialect label, and a one-way salted hash of your phone number (not the number itself). Your translation is automatically scrubbed for personal-data patterns before being saved, the same way as any other message.
+
+**Purpose:** to collect parallel Oshiwambo–English translation pairs that are reviewed by a native-speaker on our team and then published as an open dataset that any Namibian, researcher, or organisation can use to make AI tools speak Oshiwambo properly.
+
+**Legal basis:** Art. 6 (1) (a) GDPR — your explicit and informed consent. The invitation message explains, before you submit anything, that the contribution becomes a permanent part of the public-good dataset and cannot be retracted afterwards (similar to a Wikipedia edit). Submitting a translation is the act of consent. Art. 89 GDPR and § 27 BDSG ("Forschungsprivileg") additionally apply because the dataset constitutes scientific / community-infrastructure research output.
+
+**Permanence — important.** Unlike the rest of your data described in this Section 2, contributions are **not** erased by the "delete my data" command. The reason is the same one Wikipedia gives for not unwinding individual edits: removing past contributions would compromise a public resource that other people now depend on. You can stop contributing at any time, and a request to "delete my data" will still wipe your conversation history, your long-term memory, and your usage log — it just doesn't wipe submissions you made into the open dataset.
 
 #### Usage log
 
