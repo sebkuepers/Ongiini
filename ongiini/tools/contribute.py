@@ -33,34 +33,54 @@ _VALID_ACTIONS = {"whoami", "set_dialect", "next", "save", "stats", "decline"}
 @tool(
     name="contribute_translation",
     description=(
-        "Use ONLY when the user has agreed to contribute Oshiwambo "
-        "translations to the open dataset, OR is mid-flow in the "
-        "contribution loop. NEVER use as a side-effect of a normal "
-        "translation request — those are answered conversationally. "
-        "Six actions: 'whoami' returns the contributor's preferred "
-        "dialect if known + whether they recently declined (so the "
-        "skill can decide whether to invite at all), 'set_dialect' "
-        "stores their dialect choice, 'next' fetches the next English "
-        "sentence for them to translate, 'save' stores their "
-        "translation, 'decline' records that they said no to the "
-        "invitation (stops the bot from re-asking for 7 days), "
-        "'stats' returns the total count collected so far (per-"
-        "dialect breakdown included). See the 'contribute' skill "
-        "for the full flow and phrasing."
+        "Drives the community Oshiwambo translation-contribution loop. "
+        "CALL THIS TOOL — never improvise the conversation. The user "
+        "must never see an English source sentence you invented; only "
+        "the source_en returned by a 'next' call is a real task in "
+        "the database. Trigger → action mapping:\n"
+        "  • User volunteers ('I want to help', 'can I contribute', "
+        "'I'm a native speaker') OR uses a real multi-word Oshiwambo "
+        "phrase OR asks about Oshiwambo support → call "
+        "action='whoami' BEFORE composing your reply. The response "
+        "tells you whether they're new, already declined, or have a "
+        "known dialect, which determines the right next move.\n"
+        "  • User just told you their dialect (any of 'Oshindonga', "
+        "'Oshikwanyama', 'Ndonga', 'Kwanyama', 'Oshidonga') → call "
+        "action='set_dialect' with the canonical name ('Oshindonga' "
+        "or 'Oshikwanyama'), then in the same turn call action='next' "
+        "and show the returned source_en VERBATIM.\n"
+        "  • User said yes/sure/Tangi/Eewa to the invitation AND "
+        "whoami returned 'known:Oshindonga' or 'known:Oshikwanyama' "
+        "→ call action='next' immediately, show source_en VERBATIM.\n"
+        "  • User just typed their translation (their message after "
+        "you presented an English source sentence) → call "
+        "action='save' with the task_id from your most recent 'next' "
+        "response, their dialect, and their translation text "
+        "VERBATIM. NEVER guess a task_id.\n"
+        "  • User said no/not now/maybe later → call action='decline'.\n"
+        "  • User asks how many translations collected → call "
+        "action='stats'.\n"
+        "See the 'contribute' skill for the full phrasing templates."
     ),
     params={
-        "action": "'whoami' | 'set_dialect' | 'next' | 'save' | 'stats'",
+        "action": "'whoami' | 'set_dialect' | 'next' | 'save' | 'decline' | 'stats'",
         "target_dialect": (
             "(required for 'set_dialect' and 'save') 'Oshindonga' or "
-            "'Oshikwanyama'. Must match exactly — case-sensitive."
+            "'Oshikwanyama'. Must match exactly — case-sensitive. "
+            "Normalise variants ('Ndonga' → 'Oshindonga', 'Kwanyama' "
+            "→ 'Oshikwanyama', 'Oshidonga' → 'Oshindonga') before "
+            "passing."
         ),
         "task_id": (
-            "(required for 'save') the task id returned by a prior 'next' "
-            "call. Pass it back verbatim — don't make one up."
+            "(required for 'save') the integer task id from the most "
+            "recent 'next' tool response. Pass it back verbatim. If "
+            "you don't have a real task_id from a prior 'next' call, "
+            "do NOT call 'save' — call 'next' first."
         ),
         "translation": (
-            "(required for 'save') the user's translation in their dialect, "
-            "verbatim. Don't summarise or correct it — store what they said."
+            "(required for 'save') the user's translation in their "
+            "dialect, VERBATIM. Don't summarise, correct, or 'clean "
+            "up' — store exactly what they wrote."
         ),
     },
 )
