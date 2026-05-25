@@ -181,8 +181,40 @@ _BOT_PATTERN_ANY = re.compile(
     r"I don't have real-time|I am an AI|I'm an AI|as an AI|"
     r"because I am an AI|since I am an AI|"
     r"I cannot provide a medical diagnosis|"
-    r"I am not a doctor|I am not a lawyer|I am not a financial)\b",
+    r"I am not a doctor|I am not a lawyer|I am not a financial|"
+    r"my (?:system )?prompt|my instructions (?:include|are|say)|"
+    r"verbatim text of (?:my|the) prompt|"
+    r"share (?:the )?verbatim|"
+    r"system prompt to maintain)\b",
     re.IGNORECASE,
+)
+
+# Self-introductions where the bot echoes the user's name back. "My
+# name is Francois Konjore..." style sentences carry an identity and
+# would teach the model to invent names. Match "My name is <Cap>" or
+# "I am <Cap> <Cap>" (full first+last name patterns).
+_SELF_INTRODUCTION = re.compile(
+    r"^(My name is|I am|I'?m)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?[\s,.!]",
+)
+
+# Mixed-language teaching content: an Afrikaans / Oshiwambo word
+# immediately followed by an English parenthetical translation, or
+# vice versa. Catches "Hallo (Hello)", "Totsiens (Goodbye)", etc.
+# Looks for "<word> (<word>)" where one side is a known-Afrikaans
+# or known-Oshiwambo cue.
+_LANG_TEACHING = re.compile(
+    r"\b("
+    r"hallo|totsiens|asseblief|dankie|jammer|moeg|mooi|lekker|baie|"
+    r"ongiini|tangi|kala po|eewa|nawa|kuume"
+    r")\s*\([A-Za-z][^)]+\)",
+    re.IGNORECASE,
+)
+
+# Letter-anchored list fragments: "Step A:", "Phase B:", "Part C:".
+# Same rationale as the numeric "Step 3:" filter — these are
+# structural list rows, not standalone sentences.
+_LETTER_LIST_ROW = re.compile(
+    r"^(Step|Phase|Section|Part|Option|Tip|Stage|Pattern)\s+[A-Z]\b\s*[:.]?",
 )
 
 # Sentences ending in markdown structural junk
@@ -304,6 +336,18 @@ def acceptable(text: str, min_words: int = 5, max_words: int = 40) -> tuple[bool
     # training corpus, (b) trains the model to invent names verbatim.
     if _has_vocative_name(text):
         return False, "user_name_leak"
+    # Self-introduction ('My name is Francois Konjore...'). Same risk
+    # as vocative names — identity in corpus, model learns to invent.
+    if _SELF_INTRODUCTION.match(text):
+        return False, "user_name_leak"
+    # Letter-list fragments ('Step A:', 'Phase B:', 'Option C:').
+    if _LETTER_LIST_ROW.match(text):
+        return False, "list_row_fragment"
+    # Mixed-language teaching content ('Hallo (Hello)', 'Tangi (Thank
+    # you)'). The bot was teaching the user; useful for the bot's
+    # actual purpose but bad as Oshindonga training source.
+    if _LANG_TEACHING.search(text):
+        return False, "lang_teaching"
     if _ENDS_BAD.search(text):
         return False, "trailing_markdown_junk"
     if _CONTEXT_DEPENDENT.match(text):
