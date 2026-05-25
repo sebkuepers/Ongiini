@@ -530,11 +530,120 @@ async def maybe_force_contribute_save(msisdn: str, text: str) -> bool:
         {"role": "assistant", "content": reply},
     ])
     memory.save(msisdn, history)
+    # Mark that the user's next short message is a yes/no to "Want
+    # another sentence, or done for now?" — handled by
+    # maybe_force_contribute_followup so the model can't fake another
+    # "Tangi, here's the next one" with a hallucinated source.
+    contributions.set_awaiting_followup(h)
     log.info(
         "force-save executed: msisdn=...%s task_id=%s contribution_id=%s total=%s",
         msisdn[-7:], pending["task_id"], result["contribution_id"], total,
     )
     return True
+
+
+# Cheap affirmative / negative classifiers for the "Want another sentence,
+# or done for now?" prompt. Keep them small + targeted — most yes/no
+# answers in WhatsApp Oshindonga chat are short. Anything that doesn't
+# match either falls through to the model so it can handle nuanced replies
+# like "later" or "give me a sec".
+_AFFIRM_RE = re.compile(
+    r"^\s*(yes|yeah|yep|sure|ok|okay|please|yes please|another|"
+    r"one more|next|next one|more|continue|let'?s do (one more|another|it)|"
+    r"go on|go ahead|tangi|eewa|ehee)[\s.!?]*$",
+    re.IGNORECASE,
+)
+_NEGATE_RE = re.compile(
+    r"^\s*(no|nope|nah|done|stop|enough|that'?s enough|later|not now|"
+    r"i'?m done|all done|finished|maybe later|another time)[\s.!?]*$",
+    re.IGNORECASE,
+)
+
+
+async def maybe_force_contribute_followup(msisdn: str, text: str) -> bool:
+    """Handles the turn right AFTER a force-save: the user's reply to
+    "Want another sentence, or done for now?".
+
+    - Affirmative ("yes", "one more", "another"): fetch the next task
+      via the contributions sqlite directly, present it deterministically,
+      mark new pending state. Bypasses the model so it can't hallucinate.
+    - Negative ("no", "done", "later"): send a deterministic
+      thank-you-for-the-session reply, clear the followup marker.
+    - Anything ambiguous: clear the followup marker (we got one shot)
+      and fall through to the normal model flow.
+
+    Returns True if the followup was handled here, False otherwise."""
+    try:
+        h = contributions.hash_msisdn(msisdn)
+    except RuntimeError:
+        return False
+    if not contributions.is_awaiting_followup(h):
+        return False
+
+    msg = (text or "").strip()
+    if not msg:
+        return False
+
+    # Decision: yes / no / ambiguous
+    if _AFFIRM_RE.match(msg):
+        contributions.clear_awaiting_followup(h)
+        # Read dialect; if missing, fall through so the model can ask
+        dialect_status = contributions.whoami(h)
+        if not dialect_status.startswith("known:"):
+            return False
+        dialect = dialect_status.split(":", 1)[1]
+        task = contributions.next_task(h)
+        if task is None:
+            reply = (
+                "Tangi unene! That's all the sentences I have for you "
+                "right now. Come back any time — we'll have more soon."
+            )
+            await send_text(msisdn, reply)
+            history = memory.load(msisdn)
+            history.extend([
+                {"role": "user", "content": text},
+                {"role": "assistant", "content": reply},
+            ])
+            memory.save(msisdn, history)
+            return True
+        contributions.set_pending_save(h, task["id"], dialect)
+        reply = (
+            f"Tangi! Here's another one — how would you say this in "
+            f"{dialect}?\n\n'{task['source_en']}'"
+        )
+        await send_text(msisdn, reply)
+        history = memory.load(msisdn)
+        history.extend([
+            {"role": "user", "content": text},
+            {"role": "assistant", "content": reply},
+        ])
+        memory.save(msisdn, history)
+        log.info(
+            "force-followup served: msisdn=...%s task_id=%s",
+            msisdn[-7:], task["id"],
+        )
+        return True
+
+    if _NEGATE_RE.match(msg):
+        contributions.clear_awaiting_followup(h)
+        reply = (
+            "Tangi unene for your help! Your contributions are saved "
+            "and will help future Oshiwambo AI. Come back any time."
+        )
+        await send_text(msisdn, reply)
+        history = memory.load(msisdn)
+        history.extend([
+            {"role": "user", "content": text},
+            {"role": "assistant", "content": reply},
+        ])
+        memory.save(msisdn, history)
+        log.info("force-followup decline: msisdn=...%s", msisdn[-7:])
+        return True
+
+    # Ambiguous reply — clear the marker so we don't keep intercepting,
+    # let the model handle it.
+    contributions.clear_awaiting_followup(h)
+    return False
 
 
 async def handle_image_message(
@@ -762,8 +871,14 @@ async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> 
         # Voice-note transcripts shouldn't be treated as translations
         # (the user wouldn't speak Oshindonga into Whisper expecting
         # a structured save), so skip force-save for the audio path.
-        if not memory_prefix and await maybe_force_contribute_save(msisdn, text):
-            return
+        if not memory_prefix:
+            if await maybe_force_contribute_save(msisdn, text):
+                return
+            # The yes/no answer after a save ("Want another sentence,
+            # or done for now?") is also model-bypassed so the next
+            # 'Here is another one' presents a REAL corpus sentence.
+            if await maybe_force_contribute_followup(msisdn, text):
+                return
 
         history = memory.load(msisdn)
         history = await maybe_summarize(history, msisdn=msisdn)

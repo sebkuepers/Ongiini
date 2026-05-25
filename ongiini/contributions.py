@@ -119,6 +119,12 @@ def warmup() -> None:
             c.execute("ALTER TABLE contributors ADD COLUMN pending_dialect TEXT")
         if "pending_set_at" not in cols:
             c.execute("ALTER TABLE contributors ADD COLUMN pending_set_at TEXT")
+        # awaiting_followup_at marks "we just force-saved a contribution
+        # and asked 'want another?' — the user's NEXT short reply is a
+        # yes/no decision the force-followup path interprets directly
+        # instead of letting the model improvise another fake 'next'."
+        if "awaiting_followup_at" not in cols:
+            c.execute("ALTER TABLE contributors ADD COLUMN awaiting_followup_at TEXT")
     log.info("contributions sqlite warmed at %s", _db_path())
 
 
@@ -250,6 +256,55 @@ def clear_pending_save(contributor_hash: str) -> None:
             """,
             (contributor_hash,),
         )
+
+
+def set_awaiting_followup(contributor_hash: str) -> None:
+    """Mark this contributor as having JUST received a force-save
+    confirmation ('Want another sentence, or done for now?'). The
+    next inbound message is interpreted as a yes/no for that prompt.
+    Cleared as soon as we act on the next message."""
+    now = _now_iso()
+    with _conn() as c:
+        c.execute(
+            """
+            INSERT INTO contributors
+              (contributor_hash, first_contributed_at, last_contributed_at, awaiting_followup_at)
+              VALUES (?, ?, ?, ?)
+              ON CONFLICT(contributor_hash) DO UPDATE SET
+                awaiting_followup_at = excluded.awaiting_followup_at
+            """,
+            (contributor_hash, now, now, now),
+        )
+
+
+def clear_awaiting_followup(contributor_hash: str) -> None:
+    with _conn() as c:
+        c.execute(
+            "UPDATE contributors SET awaiting_followup_at = NULL "
+            "WHERE contributor_hash = ?",
+            (contributor_hash,),
+        )
+
+
+def is_awaiting_followup(contributor_hash: str, window_minutes: int = 30) -> bool:
+    """True if the contributor was force-saved within the last
+    ``window_minutes`` and hasn't yet responded. After the window
+    expires the flag is ignored so old state doesn't haunt a future
+    conversation."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT awaiting_followup_at FROM contributors "
+            "WHERE contributor_hash = ?",
+            (contributor_hash,),
+        ).fetchone()
+    if not row or not row["awaiting_followup_at"]:
+        return False
+    try:
+        marked = datetime.fromisoformat(row["awaiting_followup_at"])
+    except (ValueError, TypeError):
+        return False
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    return marked >= cutoff
 
 
 def get_pending_save(contributor_hash: str) -> dict | None:
