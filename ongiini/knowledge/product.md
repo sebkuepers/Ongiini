@@ -2,6 +2,44 @@
 
 _Auto-generated from `website/*.html` on 2026-05-25. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
+## Why Ongiini (vs ChatGPT)
+
+Why Ongiini · vs ChatGPT
+
+Built differently. On purpose.
+
+Just WhatsApp. No app, no account, no US cloud.
+
+Free, forever
+
+ChatGPT Plus is $20/month. Ongiini is free.
+
+Less mobile data*
+
+Vs the ChatGPT app, in our own benchmark.
+
+Works on any connection
+
+WhatsApp runs anywhere. ChatGPT's app barely does.
+
+Ads. Trackers. Data sales.
+
+Your messages don't train anyone else's AI.
+
+Not on US cloud
+
+Hosted under EU privacy law — GDPR + EU AI Act.
+
+Oshiwambo
+
+Active translation project
+
+Oshindonga and Oshikwanyama, side by side. ChatGPT doesn't. Help us add yours.
+
+Learn how to help
+
+* According to our own benchmark comparing ChatGPT app traffic to Ongiini WhatsApp traffic for an equivalent conversation.
+
 ## Privacy summary (homepage cards)
 
 Privacy
@@ -64,7 +102,7 @@ Contribute
 
 Let's make Ongiini speak Oshiwambo.
 
-Roughly half of all Namibians speak Oshiwambo — Oshindonga or Oshikwanyama. Today's AI models don't. No big tech company will fix that for us, so we're going to do it ourselves: 10,000 English↔Oshiwambo sentence pairs per dialect, collected one message at a time through Ongiini itself, reviewed by native speakers, then published as a free, open dataset that any future Namibian project can use. Help us via WhatsApp — one sentence is enough to start.
+Nearly half of all Namibians speak Oshiwambo at home. Today's AI models don't. No big tech company will fix that for us, so we're going to do it ourselves, starting with its two written standards — Oshindonga and Oshikwanyama. Target: 10,000 English↔Oshiwambo sentence pairs per dialect, collected one message at a time through Ongiini itself, reviewed by native speakers, then published as a free, open dataset that any future Namibian project can use. Help us via WhatsApp — one sentence is enough to start.
 
 Read the full plan
 
@@ -141,9 +179,9 @@ Because almost everyone in Namibia already has it. No download, no sign-up, no l
 ## Contribute (full plan — Oshiwambo dataset)
 
 Contribute · Oshiwambo dataset Bydra · Oshiwambo-datastel
-Roughly half of all Namibians speak Oshiwambo — Oshindonga or Oshikwanyama. No big AI company will ever build proper Oshiwambo support, because there's no commercial reason to. So we're going to do it ourselves. Free. Open. One sentence at a time.
+Nearly half of all Namibians speak Oshiwambo at home. No big AI company will ever build proper Oshiwambo support, because there's no commercial reason to. So we're going to do it ourselves, starting with its two written standards — Oshindonga and Oshikwanyama. Free. Open. One sentence at a time.
 
-Omtrent die helfte van alle Namibiërs praat Oshiwambo — Oshindonga of Oshikwanyama. Geen groot KI-maatskappy gaan ooit behoorlike Oshiwambo-ondersteuning bou nie, want daar is geen kommersiële rede daarvoor nie. So ons gaan dit self doen. Gratis. Oop. Een sin op 'n slag.
+Byna die helfte van alle Namibiërs praat Oshiwambo tuis. Geen groot KI-maatskappy gaan ooit behoorlike Oshiwambo-ondersteuning bou nie, want daar is geen kommersiële rede daarvoor nie. So ons gaan dit self doen, beginnend met sy twee skryfstandaarde — Oshindonga en Oshikwanyama. Gratis. Oop. Een sin op 'n slag.
 
 [ Help on WhatsAppHelp op WhatsApp → ](https://wa.me/4915888635886?text=I%20want%20to%20help%20translate) [ How it worksHoe dit werk ↓ ](#how) 10,000 Pairs per dialect — our target Pare per dialek — ons teiken 2 Dialects collected from day one Dialekte vanaf dag een versamel ~30s One sentence, one translation Een sin, een vertaling
 Why this matters
@@ -154,33 +192,29 @@ Hoekom dit saak maak
 
 ### As ons nie doen nie, doen niemand dit nie.
 
-Today's AI models — GPT, Gemini, Claude, Llama, Gemma — all know a lot of languages. Oshindonga and Oshikwanyama are not on that list. Not because the languages are hard, but because there's almost no English↔Oshiwambo training data anywhere. Wikipedia has 1,500 articles in Oshindonga and a handful in Oshikwanyama. The standard multilingual translation models cover 200+ languages and miss both.
+Today's AI models know dozens of languages. Oshiwambo isn't on the list — not because it's hard, but because almost no English↔Oshiwambo training data exists anywhere. So we're going to make it.
 
-Vandag se KI-modelle — GPT, Gemini, Claude, Llama, Gemma — ken baie tale. Oshindonga en Oshikwanyama is nie op daardie lys nie. Nie omdat die tale moeilik is nie, maar omdat daar amper geen Engels↔Oshiwambo opleidingsdata enige plek bestaan nie. Wikipedia het 1 500 artikels in Oshindonga en 'n handjievol in Oshikwanyama. Die standaard meertalige vertaalmodelle dek 200+ tale en mis beide.
+Vandag se KI-modelle ken dosyne tale. Oshiwambo is nie op die lys nie — nie omdat dit moeilik is nie, maar omdat amper geen Engels↔Oshiwambo opleidingsdata bestaan nie. Dus gaan ons dit maak.
 
-Other low-resource African languages got their first real datasets through research projects at Masakhane, Mozilla Common Voice, university partnerships. Oshiwambo missed those waves. Waiting for the next one means waiting forever.
+**Ongiini already chats with Namibians every day.** The people using it are the ones who can teach it to speak their language. We just need to ask.
 
-Ander lae-hulpbron Afrikaanse tale het hul eerste regte datastel deur navorsingsprojekte by Masakhane, Mozilla Common Voice en universiteitsvennootskappe gekry. Oshiwambo het daardie golwe gemis. Om vir die volgende te wag, beteken om vir altyd te wag.
+**Ongiini gesels reeds elke dag met Namibiërs.** Die mense wat dit gebruik, is dié wat hom kan leer om hul taal te praat. Ons hoef net te vra.
 
-**We have a working AI helper that already talks to thousands of Namibians.** The people who chat with it every day, in mixed English / Afrikaans / Oshiwambo, are exactly the people who can teach it to speak their language properly. So we're asking them. One sentence at a time.
+Starting with the two written standards
 
-**Ons het 'n werkende KI-hulpmiddel wat reeds met duisende Namibiërs gesels.** Die mense wat elke dag daarmee gesels, in gemengde Engels / Afrikaans / Oshiwambo, is presies die mense wat hom kan leer om hul taal behoorlik te praat. So ons vra hulle. Een sin op 'n slag.
-
-Both dialects, from day one
-
-Albei dialekte, vanaf dag een
+Beginnend by die twee skryfstandaarde
 
 ### Oshindonga and Oshikwanyama, side by side.
 
 ### Oshindonga en Oshikwanyama, langs mekaar.
 
-Oshindonga is the most widely spoken Oshiwambo variant, with around 470,000 first-language speakers. Oshikwanyama follows at around 250,000. The two are mutually intelligible but lexically and orthographically distinct, especially in formal writing.
+Oshiwambo has several spoken variants. Two of them — **Oshindonga** and **Oshikwanyama** — have standardised written forms used in schools, churches, and Bible translations across the wider Oshiwambo community. They're mutually intelligible, and together they're what the writing side of Oshiwambo actually looks like today. That's where we start.
 
-Oshindonga is die wydste gepraatste Oshiwambo-variant, met ongeveer 470 000 eerste-taalsprekers. Oshikwanyama volg met ongeveer 250 000. Die twee is wedersyds verstaanbaar maar leksikaal en ortografies onderskeibaar, veral in formele skryfwerk.
+Oshiwambo het verskeie gesproke variante. Twee daarvan — **Oshindonga** en **Oshikwanyama** — het gestandaardiseerde skryfvorms wat in skole, kerke en Bybelvertalings dwarsdeur die breër Oshiwambo-gemeenskap gebruik word. Hulle is wedersyds verstaanbaar, en saam is hulle hoe die skryfkant van Oshiwambo vandag werklik lyk. Daar begin ons.
 
-From the very first contribution, every translation in our dataset is labelled with its dialect. You tell Ongiini which one you speak, and that label travels with your translation through review, publication, and eventually into model fine-tuning. The result will be one open Oshiwambo dataset with two clearly-separated subsets, usable by anyone who wants to train models in either dialect or both.
+Every translation in the dataset is labelled with the dialect you speak. The result will be one open Oshiwambo dataset with two clean subsets — usable by anyone who wants to train models in either dialect, or both.
 
-Vanaf die heel eerste bydrae word elke vertaling in ons datastel met sy dialek gemerk. Jy sê vir Ongiini watter een jy praat, en daardie merker reis saam met jou vertaling deur die hersiening, publikasie, en uiteindelik in modelverfyning. Die resultaat sal een oop Oshiwambo-datastel wees met twee duidelik-geskeide subgroepe, bruikbaar deur enigeen wat modelle in een of albei dialekte wil oplei.
+Elke vertaling in die datastel word met die dialek wat jy praat, gemerk. Die resultaat sal een oop Oshiwambo-datastel wees met twee skoon subgroepe — bruikbaar deur enigeen wat modelle in een of albei dialekte wil oplei.
 
 How it works
 
@@ -221,78 +255,54 @@ After each translation we ask "want another?". Say yes for the next sentence; sa
 
 Na elke vertaling vra ons "nog een?". Sê ja vir die volgende sin; sê nee en ons hou op totdat jy ons weer boodskap. Geen kwota, geen reekse, geen kentekens nie. Net een sin op 'n slag, soveel of so min as wat jy tyd voor het.
 
-I want to help translate By the way — you speak Oshiwambo, and that's a rare and valuable thing for us. We're building a free, open Oshindonga / Oshikwanyama dataset that any Namibian or researcher can use to make AI tools like this one truly speak Oshiwambo. Would you help with one short sentence? Important: once you submit a translation, it becomes part of the public dataset and **cannot be taken back** — but you can stop contributing any time. Want to try one? yes Tangi! Quick first — which Oshiwambo dialect are you most fluent in? Reply **Oshindonga** or **Oshikwanyama**. Both are great — we're collecting both, and we just need to label your translations. Oshindonga Tangi! Stored. Here's the first one — how would you say this in Oshindonga? *'I am very happy to see you.'* Ondi hala oku ku mona nawa Tangi unene! Saved — that's contribution 1 for you. Want another sentence, or done for now?
-What you're agreeing to
+I want to help translate By the way — you speak Oshiwambo, and that's a rare and valuable thing for us. We're building a free, open Oshindonga / Oshikwanyama dataset that any Namibian or researcher can use to make AI tools like this one truly speak Oshiwambo. Would you help with one short sentence? Important: once you submit a translation, it becomes part of the public dataset and **cannot be taken back** — but you can stop contributing any time. Want to try one? yes Tangi! Quick first — which Oshiwambo dialect are you most fluent in? Reply **Oshindonga** or **Oshikwanyama**. Both are great — we're collecting both, and we just need to label your translations. Oshindonga Tangi! Stored. Here's the first one — how would you say this in Oshindonga? *'Thank you very much.'* Tangi unene. Saved — that's contribution 1 for you. Want another sentence, or done for now?
+One important thing
 
-Waarmee jy saamstem
+Een belangrike ding
 
-### One unusual rule. The rest is plain.
+### Contributions are permanent.
 
-### Een ongewone reël. Die res is eenvoudig.
+### Bydraes is permanent.
 
-#### Contributions are permanent.
+Once you send a translation, it becomes part of the public Oshiwambo dataset. It can't be taken back — the same way Wikipedia edits can't, because that would compromise the resource for everyone else.
 
-#### Bydraes is permanent.
+Wanneer jy 'n vertaling stuur, word dit deel van die openbare Oshiwambo-datastel. Dit kan nie teruggetrek word nie — op dieselfde manier as Wikipedia-wysigings, want dit sou die hulpbron vir almal anders beskadig.
 
-Once you send a translation, it becomes part of the public Oshiwambo dataset. It can't be taken back — the same way Wikipedia edits can't be retracted without compromising the resource for everyone else who depends on it. Submitting *is* the consent.
+You can stop contributing any time. Saying "delete my data" wipes your conversation history — but it does **not** wipe contributions you've already submitted.
 
-Wanneer jy 'n vertaling stuur, word dit deel van die openbare Oshiwambo-datastel. Dit kan nie teruggetrek word nie — op dieselfde manier as wat Wikipedia-wysigings nie sonder skade aan die hulpbron teruggetrek kan word vir almal anders wat daarvan afhanklik is nie. Om dit te stuur *is* die toestemming.
-
-You can stop contributing any time. Saying "delete my data" wipes your conversation history and the things Ongiini remembered about you — but it does **not** wipe contributions you've already submitted, because that would damage the dataset for every Namibian who comes after.
-
-Jy kan enige tyd ophou bydra. "Delete my data" vee jou gespreksgeskiedenis en die dinge wat Ongiini van jou onthou het, uit — maar dit vee **nie** bydraes uit wat jy reeds gestuur het nie, want dit sou die datastel beskadig vir elke Namibiër wat na jou kom.
-
-**What we store with your translation:** the English source sentence, your translation, the dialect label (Oshindonga or Oshikwanyama), the timestamp, and a one-way scrambled ID derived from your WhatsApp number. The scrambled ID lets us count contributors without storing phone numbers next to translations.
-
-**Wat ons saam met jou vertaling stoor:** die Engelse bronsin, jou vertaling, die dialekmerker (Oshindonga of Oshikwanyama), die tydstempel, en 'n een-rigting geskommelde ID afgelei van jou WhatsApp-nommer. Die geskommelde ID laat ons toe om bydraers te tel sonder om telefoonnommers langs vertalings te stoor.
-
-**What we don't store:** your phone number alongside the translation, your name, your location, your other chats. Translations get automatic personal-data scrubbing before they're saved (so an accidentally typed email or ID number won't end up in the dataset).
-
-**Wat ons nie stoor nie:** jou telefoonnommer langs die vertaling, jou naam, jou ligging, jou ander gesprekke. Vertalings kry outomatiese persoonlike-data skoonmaak voordat dit gestoor word (sodat 'n per ongeluk getikte e-pos of ID-nommer nie in die datastel beland nie).
-
-**Legal basis:** Art. 6 (1) (a) GDPR (your explicit consent, given by sending a translation after you've read the permanence note) and Art. 89 GDPR / § 27 BDSG, which recognises research and public-interest community-infrastructure datasets like this one. The full privacy policy is at [/privacy/](/privacy/).
-
-**Regsgrondslag:** Art. 6 (1) (a) AVO (jou uitdruklike toestemming, gegee deur 'n vertaling te stuur nadat jy die permanensie-nota gelees het) en Art. 89 AVO / § 27 BDSG, wat navorsings- en openbare-belang-gemeenskapsinfrastruktuur-datastelle soos hierdie erken. Die volle privaatheidsbeleid is by [/privacy/](/privacy/).
+Jy kan enige tyd ophou bydra. "Delete my data" vee jou gespreksgeskiedenis uit — maar dit vee **nie** bydraes uit wat jy reeds gestuur het nie.
 
 What happens to your translation
 
 Wat met jou vertaling gebeur
 
-### Review, publish, fine-tune, share.
+### Review, publish, fine-tune.
 
-### Hersien, publiseer, verfyn, deel.
+### Hersien, publiseer, verfyn.
 
-A native Oshiwambo speaker on our team reviews submissions for quality before any data leaves the system. We hired a Namibian linguist specifically for this — paid work, twenty hours a week, sitting between the dataset and publication. Translations that look clean enter the public pool; those that need a second opinion get flagged for community review.
+A native Oshiwambo speaker on our team reviews submissions before any data leaves the system. Once we have enough reviewed pairs, we publish the dataset openly so any Namibian project, university or developer can use it. At 10,000 pairs per dialect we fine-tune Gemma 4 on it — and Ongiini starts replying to you in your language for real.
 
-'n Oshiwambo-moedertaalspreker in ons span hersien bydraes vir kwaliteit voordat enige data die stelsel verlaat. Ons het 'n Namibiese taalkundige spesifiek hiervoor aangestel — betaalde werk, twintig uur 'n week, tussen die datastel en publikasie. Vertalings wat skoon lyk, gaan in die openbare poel in; dié wat 'n tweede opinie nodig het, word gemerk vir gemeenskapshersiening.
+'n Oshiwambo-moedertaalspreker in ons span hersien bydraes voordat enige data die stelsel verlaat. Sodra ons genoeg hersiende pare het, publiseer ons die datastel oop sodat enige Namibiese projek, universiteit of ontwikkelaar dit kan gebruik. By 10 000 pare per dialek verfyn ons Gemma 4 daarop — en Ongiini begin in jou taal terugantwoord vir regtig.
 
-Once we're past roughly 5,000 reviewed pairs per dialect, we publish the dataset openly — likely on Hugging Face, under a permissive licence — so any Namibian project, university, NGO, or developer who wants to use it can. At 10,000 pairs per dialect, we use the data to fine-tune Gemma 4 specifically for Oshiwambo, and Ongiini starts replying to you in your language for real, not just code-switching short phrases.
+**Your translation isn't just helping Ongiini.** It becomes part of the first proper open dataset for Oshindonga and Oshikwanyama — a resource future projects will build on for years.
 
-Wanneer ons by ongeveer 5 000 hersiende pare per dialek is, publiseer ons die datastel oop — waarskynlik op Hugging Face, onder 'n toelaatbare lisensie — sodat enige Namibiese projek, universiteit, NRO of ontwikkelaar wat dit wil gebruik, kan. By 10 000 pare per dialek gebruik ons die data om Gemma 4 spesifiek vir Oshiwambo te verfyn, en Ongiini begin in jou taal terugantwoord vir regtig, nie net kort frases nie.
-
-**Your translation isn't just helping Ongiini.** It's becoming part of permanent linguistic infrastructure for Oshindonga and Oshikwanyama — the kind of resource that didn't exist before this project, and that future researchers and Namibian projects will build on for years.
-
-**Jou vertaling help nie net Ongiini nie.** Dit word deel van permanente taalkundige infrastruktuur vir Oshindonga en Oshikwanyama — die soort hulpbron wat nie voor hierdie projek bestaan het nie, en waarop toekomstige navorsers en Namibiese projekte vir jare sal bou.
+**Jou vertaling help nie net Ongiini nie.** Dit word deel van die eerste behoorlike oop datastel vir Oshindonga en Oshikwanyama — 'n hulpbron waarop toekomstige projekte vir jare sal bou.
 
 Who's behind this
 
 Wie hieragter staan
 
-### Small, open, non-profit, accountable.
+### Small, open, non-profit.
 
-### Klein, oop, niewinsgewend, aanspreeklik.
+### Klein, oop, niewinsgewend.
 
-Ongiini is the first project of the **Common Intelligence Foundation**, in the process of being formally established as a non-profit in Estonia. Until that registration completes, the project is privately funded and operated by Sebastian Küpers on a non-profit basis — full details at our [imprint](/imprint/).
+Ongiini is the first project of the **Common Intelligence Foundation**. The whole stack is open on [GitHub](https://github.com/sebkuepers/Ongiini). The Oshiwambo dataset itself will be published openly once reviewed.
 
-Ongiini is die eerste projek van die **Common Intelligence Foundation**, wat tans amptelik as 'n niewinsgewende organisasie in Estland gevestig word. Tot daardie registrasie voltooi is, word die projek privaat befonds en bedryf deur Sebastian Küpers op 'n niewinsgewende grondslag — volle besonderhede by ons [impressum](/imprint/).
+Ongiini is die eerste projek van die **Common Intelligence Foundation**. Die hele stapel is oop op [GitHub](https://github.com/sebkuepers/Ongiini). Die Oshiwambo-datastel self sal oop gepubliseer word sodra dit hersien is.
 
-The whole stack is open source on [GitHub](https://github.com/sebkuepers/Ongiini) — the webhook, the prompts, the contribute flow, the deployment, this website. Nothing about how Ongiini works is hidden. The Oshiwambo dataset itself will be published openly under a permissive licence once it's reviewed.
+Schools, NGOs, language departments — if you want to coordinate a bigger contribution drive, email [hello@ongiini.ai](mailto:hello@ongiini.ai).
 
-Die hele stapel is oopbron op [GitHub](https://github.com/sebkuepers/Ongiini) — die webhook, die instruksies, die bydraevloei, die ontplooiing, hierdie webwerf. Niks oor hoe Ongiini werk is verborge nie. Die Oshiwambo-datastel self sal oop gepubliseer word onder 'n toelaatbare lisensie sodra dit hersien is.
-
-If you're at an academic institution, NGO, school, or church group that would like to coordinate a larger contribution drive — or if you'd like to support the foundation directly — please email [sebastian.kuepers@gmail.com](mailto:sebastian.kuepers@gmail.com). Drives by language departments, NSSCO-aligned classes, and community organisations are exactly what gets us to 10,000 pairs in months rather than years.
-
-As jy by 'n akademiese instansie, NRO, skool, of kerkgroep is wat 'n groter bydrae-veldtog wil koördineer — of as jy die stigting direk wil ondersteun — stuur asseblief 'n e-pos na [sebastian.kuepers@gmail.com](mailto:sebastian.kuepers@gmail.com). Veldtogte deur taaldepartemente, NSSCO-belynde klasse en gemeenskapsorganisasies is presies wat ons in maande in plaas van jare tot 10 000 pare bring.
+Skole, NRO's, taaldepartemente — as jy 'n groter bydrae-veldtog wil koördineer, stuur 'n e-pos na [hello@ongiini.ai](mailto:hello@ongiini.ai).
 
 ### Let's do this ourselves.
 
@@ -303,6 +313,13 @@ One Oshiwambo sentence is enough to start. The dataset is open, the model is ope
 Een Oshiwambo-sin is genoeg om te begin. Die datastel is oop, die model is oop, die bot is oop — net jou taal ontbreek nog. Help ons om dit by te voeg.
 
 [ Help on WhatsAppHelp op WhatsApp → ](https://wa.me/4915888635886?text=I%20want%20to%20help%20translate) [ Open on GitHubMaak op GitHub oop → ](https://github.com/sebkuepers/Ongiini)
+The fine print
+
+Die fynskrif
+
+We store your translation, the English source sentence, the dialect, and a one-way scrambled ID from your WhatsApp number. We don't store the number itself next to translations, and we automatically scrub personal-data patterns (emails, IDs, account numbers) before saving. Legal basis: Art. 6 (1) (a) GDPR (your consent, given by submitting after reading the permanence note) and Art. 89 GDPR / § 27 BDSG. Full details in our [privacy policy](/privacy/).
+
+Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting geskommelde ID van jou WhatsApp-nommer. Ons stoor nie die nommer self langs vertalings nie, en ons vee outomaties persoonlike data (e-posse, ID's, rekeningnommers) skoon voordat ons stoor. Regsgrondslag: Art. 6 (1) (a) AVO (jou toestemming, gegee deur in te dien nadat jy die permanensie-nota gelees het) en Art. 89 AVO / § 27 BDSG. Volle besonderhede in ons [privaatheidsbeleid](/privacy/).
 
 ## Privacy policy (full text)
 

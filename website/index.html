@@ -182,6 +182,141 @@
     .og-section-inner { display: flex; flex-direction: column; gap: 16px; }
     .og-section--dark { background: var(--ink); color: var(--bone); border-top: none; }
     .og-section--dark .og-h2 { color: var(--bone); }
+
+    /* ── "Why Ongiini · vs ChatGPT" section ─────────────────────
+       Sits between the Oshiwambo strip and the Mission section.
+       Big serif numbers on a dark background. Reuses the page's
+       Instrument Serif + Geist Mono pairing so the chrome stays
+       consistent. */
+    .og-vs-section { padding: 64px 0; }
+    .og-vs-head {
+      max-width: 56ch;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+    .og-vs-head .og-eyebrow {
+      color: var(--ink-faint);
+      margin-bottom: 14px;
+    }
+    .og-vs-head .og-h2 {
+      color: var(--bone);
+      font-size: clamp(30px, 4vw, 44px);
+      margin: 0 0 12px;
+      text-wrap: balance;
+    }
+    .og-vs-sub {
+      margin: 0;
+      color: var(--ink-faint);
+      font-size: 15px; line-height: 1.55;
+      max-width: 48ch;
+      margin-left: auto; margin-right: auto;
+    }
+    .og-vs-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 28px;
+    }
+    .og-vs-card {
+      position: relative;
+      padding: 22px 22px 20px;
+      background: color-mix(in oklab, var(--bone) 8%, var(--ink));
+      border: 1px solid color-mix(in oklab, var(--bone) 14%, transparent);
+      border-radius: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+      min-height: 168px;
+    }
+    .og-vs-card--accent {
+      border-left: 2px solid var(--terracotta);
+    }
+    .og-vs-num {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(42px, 5.5vw, 60px);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--bone);
+    }
+    .og-vs-num--accent {
+      font-style: italic;
+      color: var(--terracotta-light);
+      font-size: clamp(34px, 4.2vw, 46px);
+    }
+    .og-vs-head-line {
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      font-size: 17px;
+      color: var(--bone);
+      letter-spacing: -0.005em;
+      margin: 0;
+    }
+    .og-vs-body {
+      margin: 0;
+      color: var(--ink-faint);
+      font-size: 14px; line-height: 1.5;
+    }
+    .og-vs-card-link {
+      margin-top: 6px;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13.5px; font-weight: 500;
+      color: var(--terracotta-light);
+      text-decoration: none;
+      transition: color 160ms;
+    }
+    .og-vs-card-link:hover { color: var(--bone); }
+    .og-vs-card-link-arrow { display: inline-block; transition: transform 160ms; }
+    .og-vs-card-link:hover .og-vs-card-link-arrow { transform: translateX(2px); }
+    .og-vs-footnote {
+      margin: 24px auto 0;
+      max-width: 60ch;
+      color: var(--ink-faint);
+      font-size: 11.5px; line-height: 1.55;
+      text-align: center;
+      opacity: 0.7;
+    }
+    @media (min-width: 640px) {
+      .og-vs-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (min-width: 980px) {
+      .og-vs-grid { grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+      .og-vs-section { padding: 80px 0; }
+    }
+
+    /* Minimal dark interceptor strip — one tight row, doesn't compete
+       with the hero. Single column on mobile, horizontal pitch+CTA
+       on desktop. The bold-italic-Oshiwambo flourish lives only on
+       the /contribute/ page; here it's a quiet announcement. */
+    .og-oshi-strip { padding: 18px 0; }
+    .og-oshi-strip-inner {
+      display: flex; flex-direction: column;
+      align-items: flex-start; gap: 8px;
+    }
+    .og-oshi-eyebrow,
+    .og-oshi-h2 { display: none; }
+    .og-oshi-pitch {
+      margin: 0;
+      color: var(--bone);
+      font-size: 14.5px; line-height: 1.5;
+    }
+    .og-oshi-pitch strong { font-weight: 600; }
+    .og-oshi-pitch em { font-style: italic; color: var(--terracotta-light); }
+    .og-oshi-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 14px; font-weight: 500;
+      color: var(--terracotta-light);
+      text-decoration: none; white-space: nowrap;
+      transition: color 160ms;
+    }
+    .og-oshi-link:hover { color: var(--bone); }
+    .og-oshi-link-arrow { display: inline-block; transition: transform 160ms; }
+    .og-oshi-link:hover .og-oshi-link-arrow { transform: translateX(2px); }
+    @media (min-width: 720px) {
+      .og-oshi-strip-inner {
+        flex-direction: row; align-items: center;
+        justify-content: space-between;
+        gap: 28px; flex-wrap: wrap;
+      }
+      .og-oshi-pitch { flex: 1 1 auto; max-width: 72ch; }
+    }
     .og-section--sand { background: var(--sand); }
 
     .og-eyebrow {
@@ -1030,6 +1165,7 @@
           <span class="og-brand-icon"><img src="/assets/ongiini-icon-192-v2.png" alt="Ongiini" width="36" height="36" /></span>
         </a>
         <nav class="og-bar-nav">
+          <a href="#why"><span data-en="i">Why</span><span data-af="i">Hoekom</span></a>
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
           <a href="#open"><span data-en="i">Commitment</span><span data-af="i">Toewyding</span></a>
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
@@ -1087,6 +1223,92 @@
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="og-section og-section--dark og-oshi-strip" id="oshi-strip">
+      <div class="og-wrap og-oshi-strip-inner">
+        <p class="og-oshi-pitch" data-en>Help us make Ongiini speak <em>Oshiwambo</em> — Oshindonga and Oshikwanyama, one sentence at a time.</p>
+        <p class="og-oshi-pitch" data-af>Help ons om Ongiini <em>Oshiwambo</em> te laat praat — Oshindonga en Oshikwanyama, een sin op 'n slag.</p>
+        <a class="og-oshi-link" href="/contribute/">
+          <span data-en="i">Learn how to help</span><span data-af="i">Leer hoe om te help</span>
+          <span class="og-oshi-link-arrow">→</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="og-section og-section--dark og-vs-section" id="why">
+      <div class="og-wrap">
+        <div class="og-vs-head">
+          <div class="og-eyebrow">
+            <span data-en>Why Ongiini · vs ChatGPT</span>
+            <span data-af>Hoekom Ongiini · vs ChatGPT</span>
+          </div>
+          <h2 class="og-h2" data-en>Built differently. On purpose.</h2>
+          <h2 class="og-h2" data-af>Doelbewus anders gebou.</h2>
+          <p class="og-vs-sub" data-en>Just WhatsApp. No app, no account, no US cloud.</p>
+          <p class="og-vs-sub" data-af>Net WhatsApp. Geen toepassing, geen rekening, geen Amerikaanse wolk nie.</p>
+        </div>
+
+        <div class="og-vs-grid">
+
+          <div class="og-vs-card">
+            <div class="og-vs-num">$0</div>
+            <p class="og-vs-head-line" data-en>Free, forever</p>
+            <p class="og-vs-head-line" data-af>Gratis, vir altyd</p>
+            <p class="og-vs-body" data-en>ChatGPT Plus is $20/month. Ongiini is free.</p>
+            <p class="og-vs-body" data-af>ChatGPT Plus kos $20 per maand. Ongiini is gratis.</p>
+          </div>
+
+          <div class="og-vs-card">
+            <div class="og-vs-num">5×</div>
+            <p class="og-vs-head-line" data-en>Less mobile data*</p>
+            <p class="og-vs-head-line" data-af>Minder selfoondata*</p>
+            <p class="og-vs-body" data-en>Vs the ChatGPT app, in our own benchmark.</p>
+            <p class="og-vs-body" data-af>Vs die ChatGPT-app, in ons eie maatstaftoets.</p>
+          </div>
+
+          <div class="og-vs-card">
+            <div class="og-vs-num">2G</div>
+            <p class="og-vs-head-line" data-en>Works on any connection</p>
+            <p class="og-vs-head-line" data-af>Werk op enige verbinding</p>
+            <p class="og-vs-body" data-en>WhatsApp runs anywhere. ChatGPT's app barely does.</p>
+            <p class="og-vs-body" data-af>WhatsApp werk oral. ChatGPT se app skaars.</p>
+          </div>
+
+          <div class="og-vs-card">
+            <div class="og-vs-num">0</div>
+            <p class="og-vs-head-line" data-en>Ads. Trackers. Data sales.</p>
+            <p class="og-vs-head-line" data-af>Advertensies. Verklikkers. Dataverkope.</p>
+            <p class="og-vs-body" data-en>Your messages don't train anyone else's AI.</p>
+            <p class="og-vs-body" data-af>Jou boodskappe oefen niemand anders se KI op nie.</p>
+          </div>
+
+          <div class="og-vs-card">
+            <div class="og-vs-num">🇪🇺</div>
+            <p class="og-vs-head-line" data-en>Not on US cloud</p>
+            <p class="og-vs-head-line" data-af>Nie op Amerikaanse wolk nie</p>
+            <p class="og-vs-body" data-en>Hosted under EU privacy law — GDPR + EU AI Act.</p>
+            <p class="og-vs-body" data-af>Onder EU-privaatheidsreg gehuisves — AVO + EU KI-wet.</p>
+          </div>
+
+          <div class="og-vs-card og-vs-card--accent">
+            <div class="og-vs-num og-vs-num--accent" data-en>Oshiwambo</div>
+            <div class="og-vs-num og-vs-num--accent" data-af>Oshiwambo</div>
+            <p class="og-vs-head-line" data-en>Active translation project</p>
+            <p class="og-vs-head-line" data-af>Aktiewe vertaalprojek</p>
+            <p class="og-vs-body" data-en>Oshindonga and Oshikwanyama, side by side. ChatGPT doesn't. Help us add yours.</p>
+            <p class="og-vs-body" data-af>Oshindonga en Oshikwanyama, langs mekaar. ChatGPT nie. Help ons jou taal byvoeg.</p>
+            <a class="og-vs-card-link" href="/contribute/">
+              <span data-en="i">Learn how to help</span><span data-af="i">Leer hoe om te help</span>
+              <span class="og-vs-card-link-arrow">→</span>
+            </a>
+          </div>
+
+        </div>
+
+        <p class="og-vs-footnote" data-en>* According to our own benchmark comparing ChatGPT app traffic to Ongiini WhatsApp traffic for an equivalent conversation.</p>
+        <p class="og-vs-footnote" data-af>* Volgens ons eie maatstaftoets wat die ChatGPT-app se data met Ongiini se WhatsApp-data vir 'n soortgelyke gesprek vergelyk.</p>
       </div>
     </section>
 
@@ -1528,8 +1750,8 @@
         <h2 class="og-h2" data-en>Let's make Ongiini speak Oshiwambo.</h2>
         <h2 class="og-h2" data-af>Kom ons laat Ongiini Oshiwambo praat.</h2>
 
-        <p class="og-contribute-lead" data-en>Roughly half of all Namibians speak Oshiwambo — Oshindonga or Oshikwanyama. Today's AI models don't. No big tech company will fix that for us, so we're going to do it ourselves: <strong>10,000 English↔Oshiwambo sentence pairs per dialect</strong>, collected one message at a time through Ongiini itself, reviewed by native speakers, then published as a <em>free, open dataset</em> that any future Namibian project can use. Help us via WhatsApp — one sentence is enough to start.</p>
-        <p class="og-contribute-lead" data-af>Omtrent die helfte van alle Namibiërs praat Oshiwambo — Oshindonga of Oshikwanyama. Vandag se KI-modelle nie. Geen groot tegnologie-maatskappy gaan dit vir ons regmaak nie, dus gaan ons dit self doen: <strong>10 000 Engels↔Oshiwambo sinpare per dialek</strong>, een boodskap op 'n slag deur Ongiini self versamel, deur moedertaalsprekers hersien, dan as 'n <em>gratis, oop datastel</em> gepubliseer wat enige toekomstige Namibiese projek kan gebruik. Help ons via WhatsApp — een sin is genoeg om te begin.</p>
+        <p class="og-contribute-lead" data-en>Nearly half of all Namibians speak Oshiwambo at home. Today's AI models don't. No big tech company will fix that for us, so we're going to do it ourselves, starting with its two written standards — <strong>Oshindonga and Oshikwanyama</strong>. Target: 10,000 English↔Oshiwambo sentence pairs per dialect, collected one message at a time through Ongiini itself, reviewed by native speakers, then published as a <em>free, open dataset</em> that any future Namibian project can use. Help us via WhatsApp — one sentence is enough to start.</p>
+        <p class="og-contribute-lead" data-af>Byna die helfte van alle Namibiërs praat Oshiwambo tuis. Vandag se KI-modelle nie. Geen groot tegnologie-maatskappy gaan dit vir ons regmaak nie, dus gaan ons dit self doen — beginnend met sy twee skryfstandaarde, <strong>Oshindonga en Oshikwanyama</strong>. Teiken: 10 000 Engels↔Oshiwambo sinpare per dialek, een boodskap op 'n slag deur Ongiini self versamel, deur moedertaalsprekers hersien, dan as 'n <em>gratis, oop datastel</em> gepubliseer wat enige toekomstige Namibiese projek kan gebruik. Help ons via WhatsApp — een sin is genoeg om te begin.</p>
 
         <div class="og-contribute-actions">
           <a class="og-cta" href="/contribute/">
@@ -1620,6 +1842,7 @@
           <div class="og-footer-navtitle">
             <span data-en>On this page</span><span data-af>Op hierdie blad</span>
           </div>
+          <a href="#why"><span data-en="i">Why</span><span data-af="i">Hoekom</span></a>
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
           <a href="#try"><span data-en="i">Try asking</span><span data-af="i">Probeer vra</span></a>
           <a href="#open"><span data-en="i">Commitment</span><span data-af="i">Toewyding</span></a>
