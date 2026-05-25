@@ -367,31 +367,31 @@ class GemmaClassifier:
 
     def _format_contribute_state(self, user_id: str) -> str:
         """Render contribution-loop state for this contributor as a
-        prompt block, or '' if there's nothing notable. The output
-        feeds straight into CLASSIFIER_PROMPT.format(contribute_state=…).
+        prompt block. ALWAYS returns a block (with default-false /
+        unknown values for new contributors) so the classifier always
+        sees consistent input — the prompt guard conditions on
+        contribute_state.* read uniformly whether the user has an
+        existing row or not.
 
-        Soft-fail: any sqlite hiccup or missing hash salt yields '',
-        which makes the prompt behave exactly as it did before the
-        contribute verdicts existed."""
+        Soft-fail: any sqlite hiccup or missing hash salt yields a
+        defaults-only block (everything false / unknown), so the
+        prompt still has a well-formed state block but no contribute
+        verdict will pass the state guards."""
+        pending = False
+        awaiting_followup = False
+        dialect = "unknown"
+        recently_declined = False
         try:
             from .. import contributions as _contrib  # lazy: import sqlite only when classifying
             h = _contrib.hash_msisdn(user_id)
-        except Exception:
-            return ""
-        try:
             pending = bool(_contrib.get_pending_save(h))
             awaiting_followup = _contrib.is_awaiting_followup(h)
-            dialect_status = _contrib.whoami(h)
+            status = _contrib.whoami(h)
+            if status.startswith("known:"):
+                dialect = status.split(":", 1)[1]
             recently_declined = _contrib.recently_declined(h)
         except Exception:
-            return ""
-        if not (pending or awaiting_followup or dialect_status.startswith("known:") or recently_declined):
-            return ""
-        # known:Oshindonga → "Oshindonga"; unset → "unknown"; new → "unknown"
-        if dialect_status.startswith("known:"):
-            dialect = dialect_status.split(":", 1)[1]
-        else:
-            dialect = "unknown"
+            pass
         return (
             "Contribute_state: "
             f"pending_save={str(pending).lower()}, "
