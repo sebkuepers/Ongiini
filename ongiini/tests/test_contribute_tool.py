@@ -1,4 +1,9 @@
-"""Tests for ``ongiini.tools.contribute.contribute_translation``."""
+"""Tests for the per-action contribute_* tools.
+
+Replaces the v1 single-tool tests. The v2 design splits each action
+into its own tool (no model-fillable args), force-called by the
+classifier-driven policy table. Each tool reads its inputs from
+ctx.msg.text + contributor state in sqlite."""
 from __future__ import annotations
 
 import json
@@ -7,15 +12,21 @@ from pathlib import Path
 
 import pytest
 
-from owela import ToolContext
+from owela import InboundMessage, ToolContext
 from ongiini import contributions
-from ongiini.tools.contribute import contribute_translation
+from ongiini.tools.contribute import (
+    contribute_decline,
+    contribute_invite_check,
+    contribute_next,
+    contribute_save,
+    contribute_set_dialect,
+    contribute_skip,
+    contribute_stats,
+)
 
 
 @dataclass
 class _FakeRuntime:
-    """The tool only needs ctx.user_id — runtime isn't touched. Kept
-    as a stub so ToolContext stays well-typed."""
     pass
 
 
@@ -28,11 +39,17 @@ def _isolated_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     yield
 
 
-def _ctx(msisdn: str = "264811234567") -> ToolContext:
+def _ctx(text: str = "", msisdn: str = "264811234567") -> ToolContext:
+    msg = InboundMessage(
+        user_id=msisdn,
+        msg_id="m",
+        text=text,
+        content_parts=[{"type": "text", "text": text}],
+    )
     return ToolContext(
         user_id=msisdn,
         runtime=_FakeRuntime(),  # type: ignore[arg-type]
-        msg=None,                # type: ignore[arg-type]
+        msg=msg,
     )
 
 
@@ -43,194 +60,128 @@ def _seed(n: int = 3) -> None:
     ])
 
 
-# ── action validation ─────────────────────────────────────────────
+# ── contribute_invite_check ───────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_unknown_action_returns_error():
-    out = json.loads(await contribute_translation(_ctx(), action="explode"))
-    assert "error" in out
-    assert "valid_actions" in out
-
-
-@pytest.mark.asyncio
-async def test_missing_hash_salt_returns_soft_error(monkeypatch):
-    monkeypatch.setattr(contributions.settings, "contributions_hash_salt", "")
-    out = json.loads(await contribute_translation(_ctx(), action="whoami"))
-    assert "error" in out
-    assert "temporarily" in out["error"]
-
-
-# ── whoami ────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_whoami_returns_new_for_unknown_contributor():
-    out = json.loads(await contribute_translation(_ctx(), action="whoami"))
+async def test_invite_check_returns_new_status_for_unknown_user():
+    out = json.loads(await contribute_invite_check(_ctx()))
     assert out["status"] == "new"
     assert out["recently_declined"] is False
     assert out["total_contributions"] == 0
 
 
 @pytest.mark.asyncio
-async def test_whoami_returns_known_after_set_dialect():
-    await contribute_translation(_ctx(), action="set_dialect", target_dialect="Oshindonga")
-    out = json.loads(await contribute_translation(_ctx(), action="whoami"))
-    assert out["status"] == "known:Oshindonga"
-    assert out["recently_declined"] is False
-
-
-@pytest.mark.asyncio
-async def test_whoami_isolates_users():
-    """Two different msisdns map to two different contributor states."""
-    await contribute_translation(_ctx("264811111111"), action="set_dialect", target_dialect="Oshindonga")
-    out = json.loads(await contribute_translation(_ctx("264822222222"), action="whoami"))
-    assert out["status"] == "new"
-
-
-@pytest.mark.asyncio
-async def test_whoami_reflects_recent_decline():
-    await contribute_translation(_ctx(), action="decline")
-    out = json.loads(await contribute_translation(_ctx(), action="whoami"))
+async def test_invite_check_returns_recently_declined_true_after_decline():
+    h = contributions.hash_msisdn("264811234567")
+    contributions.record_decline(h)
+    out = json.loads(await contribute_invite_check(_ctx()))
     assert out["recently_declined"] is True
 
 
-# ── decline ───────────────────────────────────────────────────────
-
-
 @pytest.mark.asyncio
-async def test_decline_records_cooldown():
-    out = json.loads(await contribute_translation(_ctx(), action="decline"))
+async def test_invite_check_returns_known_dialect_after_set():
+    h = contributions.hash_msisdn("264811234567")
+    contributions.set_dialect(h, "Oshindonga")
+    out = json.loads(await contribute_invite_check(_ctx()))
+    assert out["status"] == "known:Oshindonga"
+
+
+# ── contribute_set_dialect ────────────────────────────────────────
+
+
+@pytest.mark.parametrize("user_text,expected", [
+    ("Oshindonga", "Oshindonga"),
+    ("oshindonga please", "Oshindonga"),
+    ("Ndonga", "Oshindonga"),
+    ("Oshidonga", "Oshindonga"),     # common typo
+    ("Oshikwanyama", "Oshikwanyama"),
+    ("kwanyama", "Oshikwanyama"),
+    ("Either", "Oshindonga"),        # primary target
+    ("both", "Oshindonga"),
+])
+@pytest.mark.asyncio
+async def test_set_dialect_parses_user_text(user_text: str, expected: str):
+    out = json.loads(await contribute_set_dialect(_ctx(text=user_text)))
     assert out["ok"] is True
-    assert out["cooldown_days"] == 7
-
-
-# ── set_dialect ───────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_set_dialect_oshindonga():
-    out = json.loads(await contribute_translation(
-        _ctx(), action="set_dialect", target_dialect="Oshindonga",
-    ))
-    assert out == {"ok": True, "preferred_dialect": "Oshindonga"}
+    assert out["dialect"] == expected
+    h = contributions.hash_msisdn("264811234567")
+    assert contributions.whoami(h) == f"known:{expected}"
 
 
 @pytest.mark.asyncio
-async def test_set_dialect_oshikwanyama():
-    out = json.loads(await contribute_translation(
-        _ctx(), action="set_dialect", target_dialect="Oshikwanyama",
-    ))
-    assert out == {"ok": True, "preferred_dialect": "Oshikwanyama"}
-
-
-@pytest.mark.asyncio
-async def test_set_dialect_rejects_invalid():
-    out = json.loads(await contribute_translation(
-        _ctx(), action="set_dialect", target_dialect="Klingon",
-    ))
+async def test_set_dialect_rejects_unparseable_input():
+    out = json.loads(await contribute_set_dialect(_ctx(text="Spanish or French")))
     assert "error" in out
-    assert "invalid dialect" in out["error"]
+
+
+# ── contribute_next ───────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_set_dialect_requires_target_dialect_param():
-    out = json.loads(await contribute_translation(_ctx(), action="set_dialect"))
-    assert "error" in out
-    assert "target_dialect" in out["error"]
-
-
-# ── next ──────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_next_returns_task_when_pool_has_rows():
-    _seed(2)
-    out = json.loads(await contribute_translation(_ctx(), action="next"))
+async def test_next_returns_task_and_sets_pending_when_dialect_known():
+    _seed(1)
+    h = contributions.hash_msisdn("264811234567")
+    contributions.set_dialect(h, "Oshindonga")
+    out = json.loads(await contribute_next(_ctx()))
     assert out["task"] is not None
-    assert "id" in out["task"]
-    assert "source_en" in out["task"]
+    assert out["dialect"] == "Oshindonga"
+    pending = contributions.get_pending_save(h)
+    assert pending["task_id"] == out["task"]["id"]
 
 
 @pytest.mark.asyncio
-async def test_next_returns_null_when_pool_empty():
-    out = json.loads(await contribute_translation(_ctx(), action="next"))
+async def test_next_errors_when_dialect_not_known():
+    _seed(1)
+    out = json.loads(await contribute_next(_ctx()))
+    assert "error" in out  # no dialect → can't serve
+
+
+@pytest.mark.asyncio
+async def test_next_returns_null_task_when_pool_empty():
+    h = contributions.hash_msisdn("264811234567")
+    contributions.set_dialect(h, "Oshindonga")
+    out = json.loads(await contribute_next(_ctx()))
     assert out["task"] is None
     assert "message" in out
 
 
-@pytest.mark.asyncio
-async def test_next_sets_pending_save_when_dialect_known():
-    """When 'next' fires AND we already know the contributor's dialect,
-    mark pending so api/main.py can force-save on the next user msg."""
-    _seed(1)
-    ctx = _ctx()
-    await contribute_translation(ctx, action="set_dialect", target_dialect="Oshindonga")
-    out = json.loads(await contribute_translation(ctx, action="next"))
-    task_id = out["task"]["id"]
-    h = contributions.hash_msisdn(ctx.user_id)
-    pending = contributions.get_pending_save(h)
-    assert pending is not None
-    assert pending["task_id"] == task_id
-    assert pending["dialect"] == "Oshindonga"
+# ── contribute_save ───────────────────────────────────────────────
+
+
+def _setup_pending() -> int:
+    h = contributions.hash_msisdn("264811234567")
+    contributions.set_dialect(h, "Oshindonga")
+    task = contributions.next_task(h)
+    contributions.set_pending_save(h, task["id"], "Oshindonga")
+    return task["id"]
 
 
 @pytest.mark.asyncio
-async def test_next_does_not_set_pending_save_when_dialect_unknown():
-    """Defensive: 'next' without a known dialect leaves pending null."""
+async def test_save_writes_contribution_using_ctx_msg_text():
     _seed(1)
-    ctx = _ctx()
-    out = json.loads(await contribute_translation(ctx, action="next"))
-    assert out["task"] is not None
-    h = contributions.hash_msisdn(ctx.user_id)
-    assert contributions.get_pending_save(h) is None
+    task_id = _setup_pending()
+    out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
+    assert out["ok"] is True
+    assert out["contribution_id"] == 1
+    assert out["task_id"] == task_id
+    assert out["dialect"] == "Oshindonga"
+    h = contributions.hash_msisdn("264811234567")
+    assert contributions.get_pending_save(h) is None  # cleared
 
 
 @pytest.mark.asyncio
-async def test_decline_clears_pending_save():
-    _seed(1)
-    ctx = _ctx()
-    await contribute_translation(ctx, action="set_dialect", target_dialect="Oshindonga")
-    await contribute_translation(ctx, action="next")
-    h = contributions.hash_msisdn(ctx.user_id)
-    assert contributions.get_pending_save(h) is not None
-    await contribute_translation(ctx, action="decline")
-    assert contributions.get_pending_save(h) is None
-
-
-# ── save ──────────────────────────────────────────────────────────
+async def test_save_errors_when_no_pending_state():
+    out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
+    assert "error" in out
+    assert "pending" in out["error"]
 
 
 @pytest.mark.asyncio
-async def test_save_writes_contribution():
+async def test_save_pii_sanitises_translation_text():
     _seed(1)
-    next_out = json.loads(await contribute_translation(_ctx(), action="next"))
-    task_id = next_out["task"]["id"]
-    save_out = json.loads(await contribute_translation(
-        _ctx(),
-        action="save",
-        target_dialect="Oshindonga",
-        task_id=task_id,
-        translation="ondi ya nawa",
-    ))
-    assert save_out["ok"] is True
-    assert save_out["total_for_contributor"] == 1
-    assert "contribution_id" in save_out
-
-
-@pytest.mark.asyncio
-async def test_save_pii_sanitises_translation():
-    _seed(1)
-    next_out = json.loads(await contribute_translation(_ctx(), action="next"))
-    task_id = next_out["task"]["id"]
-    await contribute_translation(
-        _ctx(),
-        action="save",
-        target_dialect="Oshindonga",
-        task_id=task_id,
-        translation="contact me at user@example.com",
-    )
-    # Verify the stored row is sanitised
+    _setup_pending()
+    await contribute_save(_ctx(text="email me at user@example.com please"))
     with contributions._conn() as c:
         row = c.execute(
             "SELECT target_translation FROM contributions ORDER BY id DESC LIMIT 1"
@@ -239,82 +190,82 @@ async def test_save_pii_sanitises_translation():
 
 
 @pytest.mark.asyncio
-async def test_save_rejects_invalid_dialect():
+async def test_save_rejects_empty_message():
     _seed(1)
-    next_out = json.loads(await contribute_translation(_ctx(), action="next"))
-    out = json.loads(await contribute_translation(
-        _ctx(),
-        action="save",
-        target_dialect="Spanish",
-        task_id=next_out["task"]["id"],
-        translation="hola",
-    ))
+    _setup_pending()
+    out = json.loads(await contribute_save(_ctx(text="   ")))
     assert "error" in out
 
 
-@pytest.mark.asyncio
-async def test_save_rejects_missing_task_id():
-    out = json.loads(await contribute_translation(
-        _ctx(), action="save", target_dialect="Oshindonga", translation="x",
-    ))
-    assert "error" in out
-    assert "task_id" in out["error"]
+# ── contribute_skip ───────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_save_rejects_missing_translation():
+async def test_skip_drops_pending_and_serves_new_task():
+    _seed(3)
+    original_task = _setup_pending()
+    out = json.loads(await contribute_skip(_ctx(text="skip")))
+    assert out["task"] is not None
+    assert out["task"]["id"] != original_task
+    h = contributions.hash_msisdn("264811234567")
+    new_pending = contributions.get_pending_save(h)
+    assert new_pending["task_id"] == out["task"]["id"]
+    # No contribution row was written
+    assert contributions.total_contributions() == 0
+
+
+@pytest.mark.asyncio
+async def test_skip_returns_no_more_tasks_message_when_pool_exhausted():
     _seed(1)
-    next_out = json.loads(await contribute_translation(_ctx(), action="next"))
-    out = json.loads(await contribute_translation(
-        _ctx(),
-        action="save",
-        target_dialect="Oshindonga",
-        task_id=next_out["task"]["id"],
-        translation="   ",
-    ))
-    assert "error" in out
-    assert "translation" in out["error"]
+    _setup_pending()
+    # That seeded task is the only one; skipping it leaves nothing
+    out = json.loads(await contribute_skip(_ctx(text="skip")))
+    assert out["task"] is None
+
+
+# ── contribute_decline ────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_save_rejects_nonexistent_task_id():
-    out = json.loads(await contribute_translation(
-        _ctx(),
-        action="save",
-        target_dialect="Oshindonga",
-        task_id=99999,
-        translation="something",
-    ))
-    assert "error" in out
-    assert "does not exist" in out["error"]
+async def test_decline_records_cooldown_and_clears_pending():
+    _seed(1)
+    _setup_pending()
+    out = json.loads(await contribute_decline(_ctx(text="no thanks")))
+    assert out["ok"] is True
+    assert out["cooldown_days"] == contributions.DECLINE_COOLDOWN_DAYS
+    h = contributions.hash_msisdn("264811234567")
+    assert contributions.get_pending_save(h) is None
+    assert contributions.recently_declined(h) is True
 
 
-# ── stats ─────────────────────────────────────────────────────────
+# ── contribute_stats ──────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_stats_returns_summary_shape():
+async def test_stats_returns_summary_dict():
     _seed(2)
-    next_out = json.loads(await contribute_translation(_ctx(), action="next"))
-    await contribute_translation(
-        _ctx(),
-        action="save",
-        target_dialect="Oshindonga",
-        task_id=next_out["task"]["id"],
-        translation="test",
-    )
-    out = json.loads(await contribute_translation(_ctx(), action="stats"))
+    h = contributions.hash_msisdn("264811234567")
+    contributions.set_dialect(h, "Oshindonga")
+    contributions.next_task(h)  # serves task 1
+    contributions.save_contribution(h, 1, "Oshindonga", "x")
+    out = json.loads(await contribute_stats(_ctx()))
     assert out["total_contributions"] == 1
     assert out["by_dialect"]["Oshindonga"] == 1
-    assert out["total_contributors"] == 1
     assert out["total_tasks"] == 2
 
 
-# ── registry ──────────────────────────────────────────────────────
+# ── tool registration ────────────────────────────────────────────
 
 
-def test_contribute_translation_is_registered_with_owela():
-    spec = contribute_translation.__owela_tool__  # type: ignore[attr-defined]
-    assert spec.name == "contribute_translation"
-    assert spec.needs_context is True
-    assert "action" in spec.parameters["properties"]
+def test_all_contribute_tools_have_empty_param_schemas():
+    """force_tool targets by name and the model never picks args —
+    the tools should expose zero parameters to the model."""
+    for fn in (
+        contribute_invite_check, contribute_set_dialect, contribute_next,
+        contribute_save, contribute_skip, contribute_decline, contribute_stats,
+    ):
+        spec = fn.__owela_tool__  # type: ignore[attr-defined]
+        assert spec.parameters["properties"] == {}, (
+            f"{spec.name} should expose zero parameters"
+        )
+        assert spec.needs_context is True

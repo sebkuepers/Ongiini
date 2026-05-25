@@ -43,6 +43,11 @@ from .models import VLLMGemmaModel
 from .planner import OngiiniPlanner
 from .reviewer import OngiiniReviewer
 from .routers import GemmaClassifier
+from .routers.gemma_classifier import (
+    VERDICT_CONTRIB_DECLINE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_INVITE,
+    VERDICT_CONTRIB_NEXT, VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP,
+    VERDICT_CONTRIB_STATS,
+)
 from .skills_loader import load_skills
 from .system_prompt import SYSTEM_PROMPT
 from .tools import ALL_TOOLS
@@ -192,6 +197,80 @@ def build_policy_table() -> PolicyTable:
                 "fetch_urls": 12000,
                 "fetch_url": 12000,
             },
+        ),
+    )
+
+    # ---------- Contribution-loop policies (v2 classifier-driven) ----------
+    #
+    # Each CONTRIBUTE_* verdict forces a specific contribute_* tool
+    # on turn 1. The tool reads pending state + ctx.msg.text and
+    # writes to the contributions sqlite directly — model can't skip
+    # the call (force_tool guarantees it) and can't fake args (tools
+    # take no model-fillable parameters). After turn 1 the model gets
+    # the tool result and composes the user-facing reply on turn 2.
+    #
+    # Critique is OFF for the contribute path — the tool's effect is
+    # binary (saved/not-saved, served/not-served), the user-facing
+    # reply is a templated thank-you / sentence presentation, and the
+    # critique loop would add ~3-7s latency to a turn that's already
+    # one model call + one tool execution. If we later see the model
+    # composing weirdly off-result replies we can flip critique on.
+    _CONTRIB_MAX_STEPS = 3   # turn 1: forced tool call. turn 2: compose reply. headroom: 1.
+
+    table.set(
+        VERDICT_CONTRIB_INVITE, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_invite",
+            first_tool=force_tool("contribute_invite_check"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+    table.set(
+        VERDICT_CONTRIB_DIALECT, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_dialect",
+            first_tool=force_tool("contribute_set_dialect"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+    table.set(
+        VERDICT_CONTRIB_NEXT, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_next",
+            first_tool=force_tool("contribute_next"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+    table.set(
+        VERDICT_CONTRIB_SAVE, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_save",
+            first_tool=force_tool("contribute_save"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+    table.set(
+        VERDICT_CONTRIB_SKIP, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_skip",
+            first_tool=force_tool("contribute_skip"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+    table.set(
+        VERDICT_CONTRIB_DECLINE, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_decline",
+            first_tool=force_tool("contribute_decline"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+    table.set(
+        VERDICT_CONTRIB_STATS, DEPTH_SHALLOW,
+        Policy(
+            name="contribute_stats",
+            first_tool=force_tool("contribute_stats"),
+            max_steps=_CONTRIB_MAX_STEPS,
         ),
     )
 

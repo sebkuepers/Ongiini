@@ -178,26 +178,36 @@ def task_count() -> int:
     return int(row["n"])
 
 
-def next_task(contributor_hash: str) -> dict | None:
+def next_task(contributor_hash: str, exclude_task_ids: list[int] | None = None) -> dict | None:
     """Pick a task to serve to this contributor.
 
-    Strategy: pick a random task they HAVEN'T already submitted for.
-    Tie-break by lowest times_submitted (spread submissions across the
-    pool so eventually every source sentence collects multiple
-    translations for quality comparison)."""
+    Strategy: random task they HAVEN'T already submitted for AND
+    isn't in ``exclude_task_ids`` (used by the skip path to avoid
+    immediately re-serving the just-rejected task). Tie-break order:
+    fewest submissions globally first, then fewest serves to spread
+    coverage across the pool, then random."""
+    excluded = tuple(exclude_task_ids or ())
+    # Dynamically build the NOT IN clause for exclusions; sqlite needs
+    # one ? per element.
+    excl_clause = ""
+    params: list = [contributor_hash]
+    if excluded:
+        placeholders = ",".join("?" * len(excluded))
+        excl_clause = f" AND t.id NOT IN ({placeholders})"
+        params.extend(excluded)
     with _conn() as c:
         row = c.execute(
-            """
+            f"""
             SELECT t.id, t.source_en, t.category
               FROM tasks t
              WHERE t.id NOT IN (
                 SELECT task_id FROM contributions
                  WHERE contributor_hash = ?
-             )
-             ORDER BY t.times_submitted ASC, RANDOM()
+             ){excl_clause}
+             ORDER BY t.times_submitted ASC, t.times_served ASC, RANDOM()
              LIMIT 1
             """,
-            (contributor_hash,),
+            params,
         ).fetchone()
         if not row:
             return None
