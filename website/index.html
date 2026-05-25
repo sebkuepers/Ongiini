@@ -551,6 +551,16 @@
     .og-contribute-lead em {
       font-style: normal; color: var(--terracotta-deep);
     }
+    .og-contribute-lead strong { font-style: normal; color: var(--ink); font-weight: 600; }
+    .og-contribute-lead--sub {
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-style: normal;
+      font-size: 14px; line-height: 1.55;
+      color: var(--ink-soft);
+      margin-top: 28px;
+      max-width: 60ch;
+    }
+    .og-contribute-lead--sub a { color: var(--terracotta-deep); }
     .og-contribute-actions {
       margin-top: 32px;
       display: flex; flex-direction: column; gap: 12px;
@@ -1515,55 +1525,37 @@
           <span data-en>Contribute</span>
           <span data-af>Bydra</span>
         </div>
-        <h2 class="og-h2" data-en>Help shape this.</h2>
-        <h2 class="og-h2" data-af>Help vorm dit.</h2>
+        <h2 class="og-h2" data-en>Let's make Ongiini speak Oshiwambo.</h2>
+        <h2 class="og-h2" data-af>Kom ons laat Ongiini Oshiwambo praat.</h2>
 
-        <p class="og-contribute-lead" data-en>Ongiini is the first project of the <strong>Common Intelligence Foundation</strong>. While the foundation is being formally established as a non-profit in Estonia, this project is <em>privately funded and operated</em> on a non-profit basis. That's part of the point: to show this can work without a giant company behind it. If Ongiini is useful to you, there are three good ways to help.</p>
-        <p class="og-contribute-lead" data-af>Ongiini is die eerste projek van die <strong>Common Intelligence Foundation</strong>. Terwyl die stigting amptelik as 'n niewinsgewende organisasie in Estland gevestig word, word hierdie projek <em>privaat befonds en bedryf</em> op 'n niewinsgewende grondslag. Dit is deel van die punt: om te wys dit kan werk sonder 'n reuse-maatskappy daaragter. As Ongiini vir jou nuttig is, is daar drie goeie maniere om te help.</p>
-
-        <div class="og-grid">
-          <div class="og-card">
-            <div class="og-card-num">01</div>
-            <div class="og-card-head" data-en>Use it. Push it. Tell us what broke.</div>
-            <div class="og-card-head" data-af>Gebruik dit. Stres dit. Sê ons wat gebreek het.</div>
-            <p class="og-card-body" data-en>Throw real questions at it. Find where it shines and where it falls over. Honest, specific feedback from people actually trying to use it is the best signal we get.</p>
-            <p class="og-card-body" data-af>Vra dit regte vrae. Vind waar dit skitter en waar dit val. Eerlike, spesifieke terugvoer van mense wat dit regtig probeer gebruik, is die beste sein wat ons kry.</p>
-          </div>
-          <div class="og-card">
-            <div class="og-card-num">02</div>
-            <div class="og-card-head" data-en>Tell someone</div>
-            <div class="og-card-head" data-af>Vertel iemand</div>
-            <p class="og-card-body" data-en>Most Namibians still don't know there's a free AI helper for everyday questions on WhatsApp. Sharing the number with one person who could use it is the biggest help anyone can give.</p>
-            <p class="og-card-body" data-af>Die meeste Namibiërs weet nog nie daar's 'n gratis KI-hulpmiddel vir alledaagse vrae op WhatsApp nie. Om die nommer met een persoon te deel wat dit kan gebruik, is die grootste hulp.</p>
-          </div>
-          <div class="og-card">
-            <div class="og-card-num">03</div>
-            <div class="og-card-head" data-en>Open the code</div>
-            <div class="og-card-head" data-af>Maak die kode oop</div>
-            <p class="og-card-body" data-en>The whole stack is on GitHub — webhook, prompts, deployment, everything. File an issue when something's wrong, send a pull request when you can fix it, or fork the project and run your own version for another country.</p>
-            <p class="og-card-body" data-af>Die hele stapel is op GitHub — webhook, prompts, ontplooiing, alles. Rapporteer 'n probleem as iets verkeerd is, stuur 'n pull request as jy dit kan regmaak, of fork die projek en hardloop jou eie weergawe vir 'n ander land.</p>
-          </div>
-        </div>
+        <p class="og-contribute-lead" data-en>Roughly half of all Namibians speak Oshiwambo — Oshindonga or Oshikwanyama. Today's AI models don't. No big tech company will fix that for us, so we're going to do it ourselves: <strong>10,000 English↔Oshiwambo sentence pairs per dialect</strong>, collected one message at a time through Ongiini itself, reviewed by native speakers, then published as a <em>free, open dataset</em> that any future Namibian project can use. Help us via WhatsApp — one sentence is enough to start.</p>
+        <p class="og-contribute-lead" data-af>Omtrent die helfte van alle Namibiërs praat Oshiwambo — Oshindonga of Oshikwanyama. Vandag se KI-modelle nie. Geen groot tegnologie-maatskappy gaan dit vir ons regmaak nie, dus gaan ons dit self doen: <strong>10 000 Engels↔Oshiwambo sinpare per dialek</strong>, een boodskap op 'n slag deur Ongiini self versamel, deur moedertaalsprekers hersien, dan as 'n <em>gratis, oop datastel</em> gepubliseer wat enige toekomstige Namibiese projek kan gebruik. Help ons via WhatsApp — een sin is genoeg om te begin.</p>
 
         <div class="og-contribute-actions">
-          <a class="og-cta" href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">
+          <a class="og-cta" href="/contribute/">
             <span class="og-cta-l">
-              <span class="og-cta-ic">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.69-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.45.11-3.02 0 0 .97-.31 3.18 1.18A11 11 0 0 1 12 6.8c.98.01 1.97.13 2.89.39 2.2-1.49 3.17-1.18 3.17-1.18.62 1.57.23 2.73.11 3.02.74.8 1.18 1.83 1.18 3.08 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.05.78 2.12v3.14c0 .31.21.66.79.55C20.71 21.38 24 17.08 24 12 24 5.65 18.85.5 12 .5z"/>
-                </svg>
-              </span>
-              <span data-en="i">Open Ongiini on GitHub</span><span data-af="i">Maak Ongiini op GitHub oop</span>
+              <span data-en="i">Read the full plan</span><span data-af="i">Lees die volle plan</span>
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
-          <a class="og-cta og-cta--ghost" href="https://github.com/sebkuepers/Ongiini/issues/new" target="_blank" rel="noopener noreferrer">
+          <a class="og-cta og-cta--ghost" href="https://wa.me/4915888635886?text=I%20want%20to%20help%20translate" target="_blank" rel="noopener noreferrer">
             <span class="og-cta-l">
-              <span data-en="i">File an issue</span><span data-af="i">Rapporteer 'n probleem</span>
+              <span class="og-cta-ic">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2.5c-5.247 0-9.5 4.142-9.5 9.25 0 1.63.43 3.16 1.19 4.49L2.5 21.5l5.4-1.16A9.6 9.6 0 0 0 12 21c5.247 0 9.5-4.142 9.5-9.25S17.247 2.5 12 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  <circle cx="8.5" cy="11.75" r="1.05" fill="currentColor"/>
+                  <circle cx="12" cy="11.75" r="1.05" fill="currentColor"/>
+                  <circle cx="15.5" cy="11.75" r="1.05" fill="currentColor"/>
+                </svg>
+              </span>
+              <span data-en="i">Help on WhatsApp</span><span data-af="i">Help op WhatsApp</span>
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
         </div>
+
+        <p class="og-contribute-lead og-contribute-lead--sub" data-en>Other ways to help: <a href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">open the code on GitHub</a>, <a href="https://github.com/sebkuepers/Ongiini/issues/new" target="_blank" rel="noopener noreferrer">file an issue</a>, or tell one person who could use a free AI helper on WhatsApp.</p>
+        <p class="og-contribute-lead og-contribute-lead--sub" data-af>Ander maniere om te help: <a href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">maak die kode op GitHub oop</a>, <a href="https://github.com/sebkuepers/Ongiini/issues/new" target="_blank" rel="noopener noreferrer">rapporteer 'n probleem</a>, of vertel een persoon wat 'n gratis KI-helper op WhatsApp kan gebruik.</p>
       </div>
     </section>
 
