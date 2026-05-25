@@ -106,6 +106,19 @@ def warmup() -> None:
             total_contributions    INTEGER NOT NULL DEFAULT 0
         );
         """)
+        # Schema migration: add pending-save columns if they don't exist.
+        # Used by the runtime save-forcing mechanism — when contribute_
+        # translation 'next' is called, we mark the contributor as
+        # pending the matching save. The next user message is then
+        # save-forced by api/main.py before the model loop runs, so the
+        # model can't skip the save by improvising.
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(contributors)").fetchall()}
+        if "pending_task_id" not in cols:
+            c.execute("ALTER TABLE contributors ADD COLUMN pending_task_id INTEGER")
+        if "pending_dialect" not in cols:
+            c.execute("ALTER TABLE contributors ADD COLUMN pending_dialect TEXT")
+        if "pending_set_at" not in cols:
+            c.execute("ALTER TABLE contributors ADD COLUMN pending_set_at TEXT")
     log.info("contributions sqlite warmed at %s", _db_path())
 
 
@@ -192,6 +205,72 @@ def next_task(contributor_hash: str) -> dict | None:
                 "category": row["category"]}
 
 
+# ── Pending-save state (runtime save-forcing) ─────────────────────────
+
+
+def set_pending_save(contributor_hash: str, task_id: int, dialect: str) -> None:
+    """Mark this contributor as 'expecting to submit a translation for
+    task_id in dialect'. Called when contribute_translation 'next'
+    succeeds; cleared when 'save' or 'decline' fires.
+
+    Used by api/main.py to force a save call on the user's next inbound
+    message instead of relying on the model to call save itself. Upserts
+    a contributor row if none exists yet so we never lose pending state
+    on a brand-new contributor."""
+    if dialect not in VALID_DIALECTS:
+        raise ValueError(f"invalid dialect {dialect!r}")
+    now = _now_iso()
+    with _conn() as c:
+        c.execute(
+            """
+            INSERT INTO contributors
+              (contributor_hash, first_contributed_at, last_contributed_at,
+               pending_task_id, pending_dialect, pending_set_at)
+              VALUES (?, ?, ?, ?, ?, ?)
+              ON CONFLICT(contributor_hash) DO UPDATE SET
+                pending_task_id = excluded.pending_task_id,
+                pending_dialect = excluded.pending_dialect,
+                pending_set_at  = excluded.pending_set_at
+            """,
+            (contributor_hash, now, now, int(task_id), dialect, now),
+        )
+
+
+def clear_pending_save(contributor_hash: str) -> None:
+    """Clear the pending-save markers for this contributor. Called by
+    save_contribution on success, and by the decline path."""
+    with _conn() as c:
+        c.execute(
+            """
+            UPDATE contributors
+               SET pending_task_id = NULL,
+                   pending_dialect = NULL,
+                   pending_set_at  = NULL
+             WHERE contributor_hash = ?
+            """,
+            (contributor_hash,),
+        )
+
+
+def get_pending_save(contributor_hash: str) -> dict | None:
+    """Return the pending-save state for this contributor, or None if
+    no pending save is queued. Used by api/main.py to detect when a
+    user's inbound message should be force-saved as a translation."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT pending_task_id, pending_dialect, pending_set_at "
+            "FROM contributors WHERE contributor_hash = ?",
+            (contributor_hash,),
+        ).fetchone()
+    if not row or row["pending_task_id"] is None:
+        return None
+    return {
+        "task_id": int(row["pending_task_id"]),
+        "dialect": row["pending_dialect"],
+        "set_at": row["pending_set_at"],
+    }
+
+
 def save_contribution(
     contributor_hash: str,
     task_id: int,
@@ -248,6 +327,14 @@ def save_contribution(
             "WHERE contributor_hash = ?",
             (contributor_hash,),
         ).fetchone()
+        # Clear the pending-save marker now that the save has landed.
+        # Done in the same connection so it's atomic with the insert.
+        c.execute(
+            "UPDATE contributors SET pending_task_id = NULL, "
+            "pending_dialect = NULL, pending_set_at = NULL "
+            "WHERE contributor_hash = ?",
+            (contributor_hash,),
+        )
     return {
         "contribution_id": contribution_id,
         "total_for_contributor": int(contrib["total_contributions"]),

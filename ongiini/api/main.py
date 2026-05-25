@@ -468,6 +468,75 @@ async def receive(
     return {"status": "ok"}
 
 
+async def maybe_force_contribute_save(msisdn: str, text: str) -> bool:
+    """Pre-execution check for the contribute_translation save loop.
+
+    The model cannot be trusted to call ``contribute_translation(action=
+    'save', …)`` reliably on the turn AFTER a 'next' was served — we
+    observed it improvising "Tangi unene! Saved …" replies WITHOUT
+    actually calling the tool, leaving the DB empty while the user
+    thought their translation was stored. This function bypasses the
+    model entirely on those turns: when the contributor has pending-
+    save state (set by 'next'), we save their literal text via the
+    sqlite module, send a deterministic thank-you reply via the
+    WhatsApp transport, write the synthetic turn into short-term
+    memory, and return True so the caller skips ``agent.handle``.
+
+    Returns False (caller proceeds normally) when:
+    - the hash salt isn't configured
+    - no pending save exists for this contributor
+    - the text is empty / whitespace-only
+    - the save raised ValueError (task vanished, dialect invalid)
+    """
+    try:
+        h = contributions.hash_msisdn(msisdn)
+    except RuntimeError:
+        return False
+    pending = contributions.get_pending_save(h)
+    if not pending:
+        return False
+    if not text or not text.strip():
+        return False
+    try:
+        result = contributions.save_contribution(
+            contributor_hash=h,
+            task_id=pending["task_id"],
+            target_dialect=pending["dialect"],
+            target_translation_raw=text,
+        )
+    except ValueError as e:
+        log.warning(
+            "force-save aborted for msisdn=...%s task_id=%s: %s",
+            msisdn[-7:], pending["task_id"], e,
+        )
+        # Clear pending so we don't loop forever on a broken state.
+        contributions.clear_pending_save(h)
+        return False
+
+    total = result["total_for_contributor"]
+    # Deterministic thank-you reply. Matches the phrasing the skill
+    # already documents so contributors who go through this path and
+    # ones who (rarely) go through the model path see the same UX.
+    reply = (
+        f"Tangi unene! Saved — that's contribution {total} for you. "
+        f"Want another sentence, or done for now?"
+    )
+    await send_text(msisdn, reply)
+    # Append the synthetic turn to short-term memory so the
+    # conversation context for the NEXT turn still makes sense.
+    history = memory.load(msisdn)
+    history.extend([
+        {"role": "user", "content": text},
+        {"role": "assistant", "content": reply},
+    ])
+    memory.save(msisdn, history)
+    log.info(
+        "force-save executed: msisdn=...%s task_id=%s contribution_id=%s total=%s",
+        msisdn[-7:], pending["task_id"], result["contribution_id"], total,
+    )
+    return True
+
+
 async def handle_image_message(
     sender: str, media_id: str, mime_type: str, caption: str
 ) -> None:
@@ -686,6 +755,16 @@ async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> 
     # messages from the same number can't race and clobber each other's
     # memory file. Different users run concurrently.
     async with memory.lock_for(msisdn):
+        # Short-circuit the contribute-translation save path. When the
+        # contributor has pending_save state (set by 'next' on the
+        # prior turn), the model is unreliable at calling 'save' on
+        # this turn — see ongiini.api.main.maybe_force_contribute_save.
+        # Voice-note transcripts shouldn't be treated as translations
+        # (the user wouldn't speak Oshindonga into Whisper expecting
+        # a structured save), so skip force-save for the audio path.
+        if not memory_prefix and await maybe_force_contribute_save(msisdn, text):
+            return
+
         history = memory.load(msisdn)
         history = await maybe_summarize(history, msisdn=msisdn)
 

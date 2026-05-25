@@ -127,6 +127,9 @@ async def contribute_translation(
 
         if action == "decline":
             contributions.record_decline(contributor_hash)
+            # Wipe any pending-save state so we don't force a save on
+            # their next message after they've explicitly opted out.
+            contributions.clear_pending_save(contributor_hash)
             return json.dumps({"ok": True, "cooldown_days": contributions.DECLINE_COOLDOWN_DAYS})
 
         if action == "stats":
@@ -148,6 +151,19 @@ async def contribute_translation(
                     "task": None,
                     "message": "no more tasks available for this contributor",
                 })
+            # Mark the contributor as pending a save for this task in
+            # their declared dialect. The runtime save-forcer in
+            # api/main.py reads this on the user's NEXT inbound
+            # message to bypass the model's tendency to fake save
+            # confirmations. We need a dialect to record the pending
+            # state — read it from the contributor row. If unset
+            # (shouldn't happen on the normal flow, but defensive),
+            # skip the pending mark and let the model handle save.
+            dialect = contributions.whoami(contributor_hash)
+            if dialect.startswith("known:"):
+                contributions.set_pending_save(
+                    contributor_hash, task["id"], dialect.split(":", 1)[1],
+                )
             return json.dumps({"task": task})
 
         if action == "save":
