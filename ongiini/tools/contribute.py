@@ -234,11 +234,15 @@ async def contribute_save(ctx: ToolContext) -> str:
     # reply ("yes, another" / "no, done") to CONTRIBUTE_NEXT or
     # CONTRIBUTE_DECLINE instead of falling back to free-form NONE.
     contributions.set_awaiting_followup(h)
+    # NOTE: deliberately omitting the sqlite primary key
+    # (result['contribution_id']) from the response. The model previously
+    # quoted it instead of total_for_contributor when composing the
+    # 'that's contribution N for you' reply — they're easy to confuse
+    # in a JSON blob, and the primary key drifts from the user's actual
+    # count whenever a row gets deleted (testing, errors, etc.).
     return json.dumps({
         "ok": True,
-        "contribution_id": result["contribution_id"],
         "total_for_contributor": result["total_for_contributor"],
-        "task_id": pending["task_id"],
         "dialect": pending["dialect"],
     })
 

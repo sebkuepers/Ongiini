@@ -217,6 +217,31 @@ _LETTER_LIST_ROW = re.compile(
     r"^(Step|Phase|Section|Part|Option|Tip|Stage|Pattern)\s+[A-Z]\b\s*[:.]?",
 )
 
+# Q&A / structural prefixes from mined educational replies. Sentences
+# like 'Answer: The term is X.' or 'Example: …' are mid-explanation
+# fragments — useful as full replies but bad as standalone source
+# sentences because they leak the bot's quiz-/study-help register.
+# Caught after the live test surfaced 'Answer: The term is
+# Departmentalisation. 🚀 …' being served to a contributor.
+_QA_PREFIX = re.compile(
+    r"^(Answer|Question|Example|Reason|Note|Hint|Tip|Reminder|Definition|Goal|Aim|Solution|Method)\s*:",
+    re.IGNORECASE,
+)
+
+# Emoji in any form. Real WhatsApp chat uses emoji, but they don't
+# translate cleanly into Oshindonga (no equivalent in a translation
+# pair) and force the native-speaker reviewer to decide rendering for
+# every one. Drop any sentence with any emoji.
+_EMOJI = re.compile(
+    "["
+    "\U0001F300-\U0001F6FF"  # symbols & pictographs + transport
+    "\U0001F900-\U0001F9FF"  # supplemental symbols & pictographs
+    "\U0001FA70-\U0001FAFF"  # extended pictographs (rocket, etc.)
+    "\U0001F600-\U0001F64F"  # emoticons
+    "☀-➿"            # misc symbols + dingbats (★, ✓, ❤)
+    "]",
+)
+
 # Sentences ending in markdown structural junk
 _ENDS_BAD = re.compile(r"[*_:`]\s*$|\bN\$\s*$")
 
