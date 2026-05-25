@@ -195,6 +195,69 @@ _CONTEXT_DEPENDENT = re.compile(
     re.IGNORECASE,
 )
 
+# Internal monologue / planning text — pure bot-inner-voice noise. We
+# don't want translators learning to mirror "I will write this in...".
+_MONOLOGUE_LEAK = re.compile(
+    r"\b(I will write (?:this|that) in|"
+    r"I'?m going to (?:format|write|structure)|"
+    r"I'?ll (?:format|write|structure) (?:this|that)|"
+    r"let me write (?:this|that) in|"
+    r"as the user is (?:writing|asking|saying)|"
+    r"the user (?:is|has|wants|asked|said)|"
+    r"since the user|"
+    r"I (?:should|will|need to) (?:respond|reply) in)\b",
+    re.IGNORECASE,
+)
+
+# Academic / essay register — formal multi-clause prose from the
+# user's research-paper drafts that the bot reflects back. Doesn't
+# translate well into conversational Oshiwambo.
+_ACADEMIC_REGISTER = re.compile(
+    r"\b(furthermore|moreover|albeit|notwithstanding|whereby|hereby|"
+    r"hitherto|aforementioned|insofar as|inasmuch as|"
+    r"this (?:chapter|essay|thesis|dissertation|paper|study|report) "
+    r"(?:aims|seeks|provides|presents|focuses|organi[sz]es|"
+    r"is organi[sz]ed|investigates|examines)|"
+    r"rendered (?:ineffective|null|moot)|"
+    r"facilitate a (?:transition|shift|movement|systemic)|"
+    r"in the context of (?:this|the) (?:research|investigation|study)|"
+    r"a (?:systemic|paradigmatic|holistic) (?:transition|shift)|"
+    r"(?:practical|theoretical) (?:application|foundation|implication)s? of "
+    r"(?:the|this) research|"
+    r"the (?:theoretical|conceptual|methodological) framework)\b",
+    re.IGNORECASE,
+)
+
+# Vocative name detection — flags sentences that probably address the
+# user by name. Two patterns: (1) sentence start "Hi/Hello/Hey/Dear
+# <Capital>", (2) trailing ", <Capital>." Common English words in
+# capital position are excluded so we don't drop legitimate sentences.
+_NAME_ALLOWLIST = {
+    "There", "Sir", "Madam", "Everyone", "All", "Friend", "God",
+    "Lord", "Jesus", "Father", "Mother", "Sister", "Brother",
+    "Africa", "Namibia", "Windhoek", "Oshakati", "Ondangwa", "Rundu",
+    "Walvis", "Caprivi", "January", "February", "March", "April", "May",
+    "June", "July", "August", "September", "October", "November", "December",
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sunday", "English", "Afrikaans", "Oshiwambo", "Oshindonga",
+    "Oshikwanyama", "Herero", "Damara", "Khoekhoegowab", "Nama",
+}
+_VOCATIVE_NAME = re.compile(
+    r"^(?:Hi|Hello|Hey|Dear|Good morning|Good afternoon)\s+([A-Z][a-z]{2,15})[\s,!.?]"
+    r"|"
+    r",\s+([A-Z][a-z]{2,15})\s*[.!?]\s*$",
+)
+
+
+def _has_vocative_name(text: str) -> bool:
+    m = _VOCATIVE_NAME.search(text)
+    if not m:
+        return False
+    name = m.group(1) or m.group(2)
+    if not name:
+        return False
+    return name not in _NAME_ALLOWLIST
+
 
 def acceptable(text: str, min_words: int = 5, max_words: int = 40) -> tuple[bool, str]:
     """Return (ok, reason) — if not ok, reason explains the rejection.
@@ -221,6 +284,26 @@ def acceptable(text: str, min_words: int = 5, max_words: int = 40) -> tuple[bool
         return False, "list_row_fragment"
     if re.search(r":\s*\d+\.?\s*$", text):
         return False, "list_row_fragment"
+    # Trailing standalone "2." / "3." — list-numbering that the
+    # splitter swept into the previous sentence.
+    if re.search(r"[.!?]\s+\d+\.\s*$", text):
+        return False, "list_row_fragment"
+    # Internal-monologue leaks: the bot describing what it's about to
+    # do, or referring to "the user" in the third person. Pure noise
+    # as training data — Oshindonga translators shouldn't be learning
+    # to mirror this register.
+    if _MONOLOGUE_LEAK.search(text):
+        return False, "internal_monologue"
+    # Academic / essay register: long words, multi-clause formal
+    # phrasing. The user's research-paper drafts get echoed back to
+    # them, but they're nothing like WhatsApp conversation.
+    if _ACADEMIC_REGISTER.search(text):
+        return False, "academic_register"
+    # First-name proper noun in vocative position ("Hi Petrus", "Hello
+    # Maria", ", Petrus."). Drop because (a) leaks identity into the
+    # training corpus, (b) trains the model to invent names verbatim.
+    if _has_vocative_name(text):
+        return False, "user_name_leak"
     if _ENDS_BAD.search(text):
         return False, "trailing_markdown_junk"
     if _CONTEXT_DEPENDENT.match(text):
