@@ -468,6 +468,72 @@ async def receive(
     return {"status": "ok"}
 
 
+# Skip / reject patterns — the user explicitly does NOT want to translate
+# the current sentence. We treat these as "fetch a different task" rather
+# than saving the message as a (fake) translation. Kept narrow: only
+# obvious English skip phrasings that would never legitimately appear as
+# Oshindonga / Oshikwanyama content. Match the WHOLE message (anchored)
+# so a sentence that happens to contain "skip" inside a longer Oshindonga
+# string doesn't false-positive.
+_SKIP_RE = re.compile(
+    r"^\s*("
+    r"skip( this( one)?)?|"
+    r"skip it|"
+    r"next( one)?( please)?|"
+    r"different( one)?( please)?|"
+    r"another( one)?( please)?|"
+    r"give me (?:another|a different|the next)(?: one)?(?: please)?|"
+    r"send (?:me )?(?:another|a different|the next)(?: one)?(?: please)?|"
+    r"easier( one| please| sentence)?|"
+    r"too (?:hard|difficult|long|complex)|"
+    r"this is too (?:hard|difficult|long|complex)|"
+    r"i don'?t know( this( one)?)?|"
+    r"i can'?t (?:translate|do) this|"
+    r"no idea|"
+    r"i'?m not sure( about this)?|"
+    r"change (?:this|the sentence)|"
+    r"can (?:i|we) (?:get|have|try) (?:another|a different)"
+    r")[\s.!?]*$",
+    re.IGNORECASE,
+)
+
+
+async def _serve_next_task_deterministic(
+    msisdn: str, contributor_hash: str, user_text: str, lead_in: str
+) -> bool:
+    """Fetch the next task for this contributor, set pending state,
+    send a deterministic prompt, and update short-term memory. Shared
+    by force-save's skip path AND force-followup's affirmative path.
+
+    Returns True if handled (always, unless dialect is unknown — in
+    that case False so the caller falls back to the model)."""
+    dialect_status = contributions.whoami(contributor_hash)
+    if not dialect_status.startswith("known:"):
+        return False
+    dialect = dialect_status.split(":", 1)[1]
+    task = contributions.next_task(contributor_hash)
+    if task is None:
+        # Pool exhausted for this contributor — friendly close.
+        reply = (
+            "Tangi unene! That's all the sentences I have for you right "
+            "now. Come back any time — we'll have more soon."
+        )
+    else:
+        contributions.set_pending_save(contributor_hash, task["id"], dialect)
+        reply = (
+            f"{lead_in} — how would you say this in {dialect}?\n\n"
+            f"'{task['source_en']}'"
+        )
+    await send_text(msisdn, reply)
+    history = memory.load(msisdn)
+    history.extend([
+        {"role": "user", "content": user_text},
+        {"role": "assistant", "content": reply},
+    ])
+    memory.save(msisdn, history)
+    return True
+
+
 async def maybe_force_contribute_save(msisdn: str, text: str) -> bool:
     """Pre-execution check for the contribute_translation save loop.
 
@@ -497,6 +563,21 @@ async def maybe_force_contribute_save(msisdn: str, text: str) -> bool:
         return False
     if not text or not text.strip():
         return False
+    # User wants a DIFFERENT sentence (skip, "too hard", "I don't know
+    # this one", etc.) — drop the pending mark and serve a new task
+    # deterministically. Without this branch, the literal English
+    # "skip" message would land in the dataset as the contributor's
+    # Oshindonga translation.
+    if _SKIP_RE.match(text.strip()):
+        log.info(
+            "force-save skipped (user rejected sentence): msisdn=...%s task_id=%s",
+            msisdn[-7:], pending["task_id"],
+        )
+        contributions.clear_pending_save(h)
+        return await _serve_next_task_deterministic(
+            msisdn, h, user_text=text,
+            lead_in="No problem! Here's a different one",
+        )
     try:
         result = contributions.save_contribution(
             contributor_hash=h,
@@ -587,41 +668,13 @@ async def maybe_force_contribute_followup(msisdn: str, text: str) -> bool:
     # Decision: yes / no / ambiguous
     if _AFFIRM_RE.match(msg):
         contributions.clear_awaiting_followup(h)
-        # Read dialect; if missing, fall through so the model can ask
-        dialect_status = contributions.whoami(h)
-        if not dialect_status.startswith("known:"):
-            return False
-        dialect = dialect_status.split(":", 1)[1]
-        task = contributions.next_task(h)
-        if task is None:
-            reply = (
-                "Tangi unene! That's all the sentences I have for you "
-                "right now. Come back any time — we'll have more soon."
-            )
-            await send_text(msisdn, reply)
-            history = memory.load(msisdn)
-            history.extend([
-                {"role": "user", "content": text},
-                {"role": "assistant", "content": reply},
-            ])
-            memory.save(msisdn, history)
-            return True
-        contributions.set_pending_save(h, task["id"], dialect)
-        reply = (
-            f"Tangi! Here's another one — how would you say this in "
-            f"{dialect}?\n\n'{task['source_en']}'"
+        handled = await _serve_next_task_deterministic(
+            msisdn, h, user_text=text,
+            lead_in="Tangi! Here's another one",
         )
-        await send_text(msisdn, reply)
-        history = memory.load(msisdn)
-        history.extend([
-            {"role": "user", "content": text},
-            {"role": "assistant", "content": reply},
-        ])
-        memory.save(msisdn, history)
-        log.info(
-            "force-followup served: msisdn=...%s task_id=%s",
-            msisdn[-7:], task["id"],
-        )
+        if not handled:
+            return False  # dialect unknown — let the model handle it
+        log.info("force-followup served: msisdn=...%s", msisdn[-7:])
         return True
 
     if _NEGATE_RE.match(msg):
