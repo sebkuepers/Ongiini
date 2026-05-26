@@ -34,11 +34,31 @@ def _db_path() -> Path:
     return settings.data_dir / "broadcast_opt_outs.sqlite"
 
 
+_SCHEMA_DDL = """
+CREATE TABLE IF NOT EXISTS opt_outs (
+    msisdn_hash    TEXT PRIMARY KEY,
+    opted_out_at   TEXT NOT NULL,
+    source         TEXT NOT NULL DEFAULT 'stop_keyword'
+);
+"""
+
+
 @contextmanager
 def _conn() -> Iterator[sqlite3.Connection]:
+    """Yield a sqlite connection with the schema guaranteed to exist.
+
+    Self-heals if startup warmup soft-failed: api/main.py wraps
+    warmup() in try/except per CLAUDE.md, which means we can be
+    invoked against a missing schema. Running CREATE TABLE IF NOT
+    EXISTS on every connection is cheap and removes a footgun where
+    `is_opted_out` raises "no such table" and the broad except in
+    the opt_out tool turns that into a generic apology.
+    """
+    _db_path().parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(_db_path(), isolation_level=None)
     conn.row_factory = sqlite3.Row
     try:
+        conn.executescript(_SCHEMA_DDL)
         yield conn
     finally:
         conn.close()
@@ -46,16 +66,12 @@ def _conn() -> Iterator[sqlite3.Connection]:
 
 def warmup() -> None:
     """Create the table if not present. Called from FastAPI lifespan.
-    Idempotent — safe to call repeatedly."""
-    _db_path().parent.mkdir(parents=True, exist_ok=True)
-    with _conn() as c:
-        c.executescript("""
-        CREATE TABLE IF NOT EXISTS opt_outs (
-            msisdn_hash    TEXT PRIMARY KEY,
-            opted_out_at   TEXT NOT NULL,
-            source         TEXT NOT NULL DEFAULT 'stop_keyword'
-        );
-        """)
+    Idempotent — safe to call repeatedly. `_conn()` also self-heals
+    the schema, so warmup is technically redundant; we keep it so
+    startup logs a clear "broadcast opt-outs sqlite warmed at X"
+    line operators can grep for."""
+    with _conn() as _:
+        pass
     log.info("broadcast opt-outs sqlite warmed at %s", _db_path())
 
 
@@ -104,42 +120,11 @@ def count() -> int:
         return int(c.execute("SELECT COUNT(*) AS n FROM opt_outs").fetchone()["n"])
 
 
-# ── STOP keyword detection ─────────────────────────────────────────
-
-
-# Case-insensitive whole-word match. Kept narrow on purpose: a
-# message like "stop sending me notifications" should match but
-# "stop the war" should not — the latter is too rare to worry about
-# now, and a false-positive opt-out is recoverable (user just
-# messages again to opt back in via STOP-handling product reversal
-# later if we add it).
-_STOP_KEYWORDS = frozenset({
-    "stop", "stop messages", "stop messaging me", "stop sending",
-    "unsubscribe", "opt out", "optout", "opt-out", "no more messages",
-    "stop notifications", "verwyder", "stop boodskappe",
-})
-
-
-def looks_like_stop(text: str) -> bool:
-    """Detect STOP/UNSUBSCRIBE intent in a short user message.
-
-    Conservative: only fires on (a) the literal keyword/phrase as the
-    ENTIRE message (after lowercasing + trimming), or (b) a very
-    short message (<32 chars) where the keyword is a whole token.
-    Longer messages with "stop" embedded don't fire — we let the
-    classifier handle them via the OPT_OUT_BROADCAST verdict.
-
-    This is a fast pre-filter for the obvious 'STOP' case to avoid
-    a classifier round-trip + tool call when intent is unambiguous.
-    """
-    if not text:
-        return False
-    s = text.strip().lower()
-    # Strip surrounding punctuation that users sometimes add ("STOP.", "stop!")
-    s = s.strip(".!?,;:'\"")
-    if s in _STOP_KEYWORDS:
-        return True
-    return False
+# Note: there is intentionally no `looks_like_stop` regex helper here.
+# All STOP / UNSUBSCRIBE handling MUST flow through the classifier
+# verdict OPT_OUT_BROADCAST → force_tool("opt_out_broadcast") path.
+# A regex pre-filter would re-introduce the api/main.py intercept
+# anti-pattern we removed in 2026-05-25 for the contribute flow.
 
 
 # ── CLI ────────────────────────────────────────────────────────────

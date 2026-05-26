@@ -72,36 +72,37 @@ def test_records_with_source_metadata(temp_data_dir: Path):
     assert row[0] == "cli"
 
 
-# ── STOP keyword detection ─────────────────────────────────────────
+# ── Architectural guard ────────────────────────────────────────────
 
 
-class TestLooksLikeStop:
-    def test_bare_stop(self):
-        from ongiini.broadcast.opt_outs import looks_like_stop
-        assert looks_like_stop("STOP") is True
-        assert looks_like_stop("stop") is True
-        assert looks_like_stop("Stop") is True
+def test_no_looks_like_stop_helper_exists():
+    """We intentionally do NOT expose a regex STOP pre-filter. All
+    opt-out handling MUST go through the classifier verdict +
+    force_tool path, mirroring the contribute flow. Re-introducing a
+    regex helper would re-create the api/main.py intercept anti-pattern
+    we explicitly removed in 2026-05-25."""
+    from ongiini.broadcast import opt_outs
+    assert not hasattr(opt_outs, "looks_like_stop")
+    assert not hasattr(opt_outs, "_STOP_KEYWORDS")
 
-    def test_stop_with_trailing_punctuation(self):
-        from ongiini.broadcast.opt_outs import looks_like_stop
-        assert looks_like_stop("STOP.") is True
-        assert looks_like_stop("stop!") is True
-        assert looks_like_stop("stop?") is True
 
-    def test_unsubscribe_variants(self):
-        from ongiini.broadcast.opt_outs import looks_like_stop
-        assert looks_like_stop("unsubscribe") is True
-        assert looks_like_stop("opt out") is True
-        assert looks_like_stop("optout") is True
-        assert looks_like_stop("opt-out") is True
+# ── Self-heal on missing schema ────────────────────────────────────
 
-    def test_does_not_fire_on_unrelated_use_of_stop(self):
-        from ongiini.broadcast.opt_outs import looks_like_stop
-        # Embedded in a longer message — let the classifier handle it
-        assert looks_like_stop("can you stop the war for me") is False
-        assert looks_like_stop("the stop sign was red") is False
 
-    def test_empty_or_none(self):
-        from ongiini.broadcast.opt_outs import looks_like_stop
-        assert looks_like_stop("") is False
-        assert looks_like_stop("   ") is False
+def test_record_self_heals_when_table_missing(temp_data_dir: Path):
+    """If startup warmup soft-failed, the first call must still work
+    rather than throwing 'no such table' into the broad except in the
+    tool layer."""
+    import sqlite3
+    from ongiini.broadcast import opt_outs
+
+    # Skip warmup; simulate the soft-failed-startup case by creating
+    # the file but not the table.
+    db_path = opt_outs._db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    sqlite3.connect(db_path).close()
+    # No CREATE TABLE here — schema absent.
+
+    # record() must still succeed by self-healing the schema
+    assert opt_outs.record("+264800999999") is True
+    assert opt_outs.is_opted_out("+264800999999") is True

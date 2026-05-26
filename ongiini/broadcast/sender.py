@@ -100,16 +100,27 @@ async def broadcast_to(
 
     # 1. Memory write — under the same per-user lock the agent uses,
     #    so an inbound message from this user mid-broadcast can't race.
+    #    If this fails we DO NOT send: the whole point of writing memory
+    #    first is so user replies have context. Skipping the send is
+    #    the lesser-evil failure mode — user simply doesn't get the
+    #    broadcast (we'll retry on the next run).
     rendered = render_template_body(body_text)
-    memory_written = False
     async with memory.lock_for(msisdn):
         try:
             memory.append_synthetic_assistant_turn(msisdn, rendered)
-            memory_written = True
-        except Exception:                       # noqa: BLE001
-            log.exception("memory write failed for %s — proceeding to send anyway", msisdn)
+        except Exception as exc:                # noqa: BLE001
+            log.exception("memory write failed for %s — skipping send", msisdn)
+            return BroadcastResult(
+                msisdn=msisdn,
+                ok=False,
+                skipped_reason=f"memory_write_failed: {type(exc).__name__}",
+                memory_written=False,
+            )
 
     # 2. Meta API send. Build the params from settings + caller args.
+    #    Narrow catch list — programmer errors (TypeError, NameError,
+    #    typos) MUST propagate so a broken broadcast fails loudly
+    #    instead of silently marking every recipient as failed.
     try:
         resp = await send_template(
             to=msisdn,
@@ -119,33 +130,49 @@ async def broadcast_to(
             button_url_param=url_suffix,
         )
     except httpx.HTTPStatusError as exc:
-        # 4xx: permanent failure. Log status + small text snippet so
-        # the operator can triage (template not approved, recipient
-        # blocked us, etc.). Don't log the body — we never log content.
+        # 4xx: permanent. Log status + small text snippet so the
+        # operator can triage (template not approved, recipient
+        # blocked us, etc.). Don't log body — never log content.
         return BroadcastResult(
             msisdn=msisdn,
             ok=False,
             error=f"http_{exc.response.status_code}: {exc.response.text[:200]}",
-            memory_written=memory_written,
+            memory_written=True,
         )
-    except Exception as exc:                    # noqa: BLE001
+    except httpx.RequestError as exc:
         return BroadcastResult(
             msisdn=msisdn,
             ok=False,
-            error=f"{type(exc).__name__}: {exc}",
-            memory_written=memory_written,
+            error=f"transport: {type(exc).__name__}: {exc}",
+            memory_written=True,
+        )
+    except RuntimeError as exc:
+        # Raised by send_template on misconfigured env or
+        # exhausted-retries-without-error. Both are operator-actionable.
+        return BroadcastResult(
+            msisdn=msisdn,
+            ok=False,
+            error=f"send_template: {exc}",
+            memory_written=True,
         )
 
     # 3. Meta returns {"messages": [{"id": "wamid..."}]} on success.
+    #    If the shape ever drifts, log a warning so we get an alarm
+    #    instead of silently marking every send as id-less.
     msg_id = None
     try:
         msg_id = resp.get("messages", [{}])[0].get("id")
     except (AttributeError, IndexError, TypeError):
         pass
+    if msg_id is None:
+        log.warning(
+            "Meta returned 2xx but no message id for %s — response shape may have drifted: %r",
+            msisdn, resp,
+        )
 
     return BroadcastResult(
         msisdn=msisdn,
         ok=True,
         meta_message_id=msg_id,
-        memory_written=memory_written,
+        memory_written=True,
     )

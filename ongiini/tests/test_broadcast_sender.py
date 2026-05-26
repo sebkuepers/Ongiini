@@ -186,15 +186,102 @@ async def test_broadcast_4xx_returns_error_but_keeps_memory(temp_data_dir: Path)
 
 
 @pytest.mark.asyncio
-async def test_broadcast_unexpected_exception_returns_error(temp_data_dir: Path):
+async def test_broadcast_runtime_error_recorded_not_raised(temp_data_dir: Path):
+    """send_template raises RuntimeError on misconfigured env or
+    exhausted-retries-without-error. Sender records it as a
+    per-recipient failure rather than letting it kill the whole run."""
     from ongiini.broadcast.sender import broadcast_to
 
-    async def boom(**kw):
-        raise RuntimeError("kaboom")
+    async def fake(**kw):
+        raise RuntimeError("WHATSAPP_TOKEN missing")
 
-    with patch("ongiini.broadcast.sender.send_template", side_effect=boom):
+    with patch("ongiini.broadcast.sender.send_template", side_effect=fake):
         result = await broadcast_to("+264811000006", "test", url_suffix="")
 
     assert result.ok is False
-    assert "RuntimeError" in result.error
-    assert "kaboom" in result.error
+    assert "send_template" in result.error
+    assert "WHATSAPP_TOKEN" in result.error
+
+
+@pytest.mark.asyncio
+async def test_broadcast_programmer_error_propagates(temp_data_dir: Path):
+    """Programmer errors (TypeError, NameError, etc) MUST propagate
+    so a broken broadcast fails loudly instead of silently marking
+    every recipient as a "failure" with a useless error message."""
+    from ongiini.broadcast.sender import broadcast_to
+
+    async def fake(**kw):
+        raise TypeError("missing 1 required positional argument")
+
+    with patch("ongiini.broadcast.sender.send_template", side_effect=fake):
+        with pytest.raises(TypeError):
+            await broadcast_to("+264811000007", "test", url_suffix="")
+
+
+@pytest.mark.asyncio
+async def test_memory_write_failure_skips_send(temp_data_dir: Path):
+    """The invariant: if memory write fails, DO NOT call Meta. The
+    whole point of writing memory first is so user replies have
+    context — sending without memory creates the exact failure mode
+    we're avoiding."""
+    from ongiini.broadcast.sender import broadcast_to
+
+    fake_send = AsyncMock()
+    with patch("ongiini.memory.short_term.append_synthetic_assistant_turn",
+               side_effect=OSError("disk full")):
+        with patch("ongiini.broadcast.sender.send_template", fake_send):
+            result = await broadcast_to(
+                "+264811000008", "test", url_suffix=""
+            )
+
+    assert result.ok is False
+    assert result.skipped_reason is not None
+    assert "memory_write_failed" in result.skipped_reason
+    fake_send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_meta_msg_id_parse_failure_logs_warning(temp_data_dir: Path, caplog):
+    """If Meta's response shape drifts (no 'messages' key, malformed
+    payload), we still record success — but we MUST log a warning so
+    the operator gets an alarm instead of silently shipping id-less
+    sends to every recipient."""
+    import logging
+    from ongiini.broadcast.sender import broadcast_to
+
+    async def fake(**kw):
+        return {"unexpected": "shape"}   # no 'messages' key
+
+    with caplog.at_level(logging.WARNING):
+        with patch("ongiini.broadcast.sender.send_template", side_effect=fake):
+            result = await broadcast_to("+264811000009", "test", url_suffix="")
+
+    assert result.ok is True
+    assert result.meta_message_id is None
+    assert any("response shape" in r.message for r in caplog.records)
+
+
+# ── PII contract ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_broadcast_body_is_pii_sanitised_on_disk(temp_data_dir: Path):
+    """Per ongiini/CLAUDE.md, every persistence path MUST run through
+    pii.sanitize. The broadcast body usually has no PII — but if an
+    operator ever drops one in ('reach me at s@example.com') we
+    don't want the raw email persisted to every recipient's history."""
+    from ongiini.broadcast.sender import broadcast_to
+
+    with patch("ongiini.broadcast.sender.send_template",
+               AsyncMock(return_value={"messages": [{"id": "x"}]})):
+        await broadcast_to(
+            "+264811000010",
+            "Reach Sebastian at hello@ongiini.ai for the launch",
+            url_suffix="",
+        )
+
+    mem = _read_memory("+264811000010")
+    assert len(mem) == 1
+    # Email got scrubbed to placeholder
+    assert "hello@ongiini.ai" not in mem[0]["content"]
+    assert "REDACTED" in mem[0]["content"]
