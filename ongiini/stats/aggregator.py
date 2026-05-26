@@ -405,6 +405,13 @@ def _iso_week_key(dt: datetime) -> tuple[int, int]:
 
 
 _RETENTION_DAY_OFFSETS = [1, 3, 7, 14, 30]
+# Retention chart needs sturdier samples than the global privacy floor
+# (5). Tiny early cohorts (e.g. 8 users) produce wild swings — 0/8 reads
+# as 0% but is statistically meaningless. Only publish a retention point
+# when at least one cohort of 20+ users has fully elapsed past the
+# offset. The page hides the card and shows a "coming soon" placeholder
+# until that threshold is met.
+_RETENTION_MIN_COHORT = 20
 
 
 def _compute_retention_curve(
@@ -436,7 +443,7 @@ def _compute_retention_curve(
         min_cohort_size: the privacy floor applied
         max_day_measurable: the largest offset we could publish today
     """
-    floor = settings.stats_minimum_bucket
+    floor = _RETENTION_MIN_COHORT
     if not chat_per_user_ts:
         return {
             "days": [0],
