@@ -61,8 +61,14 @@ def render_template_body(body_text: str) -> str:
         Update from Ongiini AI:
 
         {{1}}
+
+        Tap below to learn more.
+
+    Trailing line is required by Meta (they reject templates that end
+    on a variable) — also doubles as a pointer to the Learn-more URL
+    button beneath the body.
     """
-    return f"Update from Ongiini AI:\n\n{body_text}"
+    return f"Update from Ongiini AI:\n\n{body_text}\n\nTap below to learn more."
 
 
 async def broadcast_to(

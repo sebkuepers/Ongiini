@@ -114,7 +114,10 @@ def _template_payload() -> dict:
         "components": [
             {
                 "type": "BODY",
-                "text": "Update from Ongiini AI:\n\n{{1}}",
+                # Trailing line after {{1}} is required by Meta — they
+                # reject templates that end on a variable. The pointer
+                # to the Learn-more button doubles as a call-to-action.
+                "text": "Update from Ongiini AI:\n\n{{1}}\n\nTap below to learn more.",
                 "example": {"body_text": [[_SAMPLE_BODY]]},
             },
             {
