@@ -410,22 +410,28 @@ _RETENTION_DAY_OFFSETS = [1, 3, 7, 14, 30]
 def _compute_retention_curve(
     chat_per_user_ts: dict[str, list[datetime]],
 ) -> dict[str, Any]:
-    """Day-based cohort retention.
+    """Day-based cumulative cohort retention.
 
     Group users by the DAY of their first chat (Africa/Windhoek time).
     For each offset N in {1, 3, 7, 14, 30}, look at cohorts whose
     target day (cohort_date + N) has ALREADY fully elapsed — i.e.
-    target_date < today. Average the per-cohort return rate (% of
-    cohort users active on the target day) across those cohorts.
+    target_date < today. Average the per-cohort cumulative-return
+    rate: % of cohort users who came back AT LEAST ONCE on any day
+    in [cohort_date + 1, target_date].
+
+    Cumulative (window) rather than exact-day return — better matches
+    how an episodic WhatsApp helper is actually used (people return
+    when they need help, not every single day). The curve is
+    monotonically non-decreasing.
 
     Crucially: offsets whose target day is in the future or is today
     are SKIPPED — not averaged in as 0% — so a 5-day-old service
     doesn't look like everyone churned when really we just don't have
-    7 days of data yet.
+    enough days of data yet.
 
     Returns:
         days: [0, 1, 3, ...]   x-axis labels (always starts at 0)
-        retained_pct: [100, X, ...]   y-values
+        retained_pct: [100, X, ...]   y-values (non-decreasing)
         n_cohorts: max cohorts averaged at any displayed offset
         min_cohort_size: the privacy floor applied
         max_day_measurable: the largest offset we could publish today
@@ -468,7 +474,16 @@ def _compute_retention_curve(
             cohort_size = len(user_active_sets)
             if cohort_size < floor:
                 continue
-            retained = sum(1 for s in user_active_sets if target_date in s)
+            # Cumulative: user is "retained at day N" if they were
+            # active on ANY day strictly after cohort_date up to and
+            # including target_date.
+            retained = 0
+            for s in user_active_sets:
+                if any(
+                    (cohort_date + timedelta(days=k)) in s
+                    for k in range(1, offset + 1)
+                ):
+                    retained += 1
             rates.append(retained / cohort_size * 100)
         if not rates:
             # No cohort old enough at this offset. Stop here — we

@@ -566,7 +566,7 @@
       <div class="stat-engagement-grid">
         <div class="stat-chart">
           <p class="stat-chart-title">Retention curve</p>
-          <p class="stat-chart-sub" id="retention-sub">Of users who start, what % return days later</p>
+          <p class="stat-chart-sub" id="retention-sub">Of users who start, what % return within N days</p>
           <div id="chart-retention"></div>
         </div>
         <div class="stat-chart">
@@ -803,7 +803,7 @@
         return;
       }
       if (subEl) {
-        subEl.textContent = 'Day-N return · cohorts grouped by first-chat day · only days that have fully elapsed are shown';
+        subEl.textContent = '% of cohort that came back within N days · only days that have fully elapsed are shown';
       }
       // Sparkline: x = curve.days (0, 1, 3, 7, ...), y = retained_pct
       const W = 320, H = 160, padL = 36, padR = 16, padT = 14, padB = 28;
