@@ -106,6 +106,117 @@ async def send_text(to: str, body: str) -> None:
         raise last_error
 
 
+async def send_template(
+    to: str,
+    template_name: str,
+    language_code: str,
+    body_params: list[str],
+    button_url_param: str | None = None,
+) -> dict:
+    """Send a pre-approved WhatsApp template message via the Cloud API.
+
+    Distinct from send_text: outbound-only path used for proactive
+    broadcasts. The recipient may have no active 24h session — only
+    pre-approved MARKETING / UTILITY / AUTHENTICATION templates are
+    permitted in that case.
+
+    Args:
+        to: Recipient msisdn (with or without leading +).
+        template_name: Template name as registered in Meta Business Manager.
+        language_code: e.g. 'en', 'af'. Must match an approved variant
+            of `template_name`.
+        body_params: One string per {{N}} placeholder in the template
+            body, in order.
+        button_url_param: If the template's button is a URL button with
+            a dynamic suffix, pass the suffix value here. None means no
+            button params (static URL button, or no button).
+
+    Returns the Meta API response dict (contains `messages[0].id` for
+    delivery tracking). Raises on permanent failure after retries.
+    """
+    if not settings.whatsapp_token or not settings.whatsapp_phone_id:
+        log.warning(
+            "WhatsApp not configured — would send template %s to %s",
+            template_name, to,
+        )
+        return {"skipped": True}
+
+    components: list[dict] = []
+    if body_params:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": p} for p in body_params],
+        })
+    if button_url_param is not None:
+        # Dynamic URL suffix button. Meta expects sub_type='url',
+        # index='0' (only one button in our template), parameters=[text].
+        components.append({
+            "type": "button",
+            "sub_type": "url",
+            "index": "0",
+            "parameters": [{"type": "text", "text": button_url_param}],
+        })
+
+    url = f"{GRAPH_URL}/{settings.whatsapp_phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.whatsapp_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language_code},
+            "components": components,
+        },
+    }
+
+    last_error: Exception | None = None
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for attempt, delay in enumerate(_SEND_RETRY_DELAYS_S, start=1):
+            if delay > 0:
+                await asyncio.sleep(delay)
+            try:
+                r = await client.post(url, headers=headers, json=payload)
+            except httpx.RequestError as exc:
+                last_error = exc
+                log.warning(
+                    "WhatsApp template send transport error (attempt %d/%d): %s",
+                    attempt, len(_SEND_RETRY_DELAYS_S), exc,
+                )
+                continue
+            if 400 <= r.status_code < 500:
+                # Permanent errors: bad token, recipient never opted in,
+                # template not approved, etc. Surface immediately so the
+                # broadcaster can log + skip rather than waste retries.
+                log.error(
+                    "WhatsApp template send 4xx (%s): %s",
+                    r.status_code, r.text,
+                )
+                r.raise_for_status()
+            if r.status_code >= 500:
+                last_error = httpx.HTTPStatusError(
+                    f"server error {r.status_code}", request=r.request, response=r
+                )
+                log.warning(
+                    "WhatsApp template send 5xx (attempt %d/%d, %s): %s",
+                    attempt, len(_SEND_RETRY_DELAYS_S), r.status_code, r.text,
+                )
+                continue
+            return r.json()
+
+    log.error(
+        "WhatsApp template send failed after %d attempts: %s",
+        len(_SEND_RETRY_DELAYS_S), last_error,
+    )
+    if last_error is not None:
+        raise last_error
+    return {}
+
+
 async def mark_as_read(message_id: str, with_typing: bool = True) -> None:
     """Tell Meta the user's message has been read, optionally with a
     typing indicator to show the bot is composing a reply.

@@ -35,6 +35,8 @@ def test_all_tools_register_in_registry():
         "contribute_invite_check", "contribute_set_dialect",
         "contribute_next", "contribute_save", "contribute_skip",
         "contribute_decline", "contribute_stats",
+        # broadcast opt-out — classifier-forced, not model-chosen
+        "opt_out_broadcast",
     }
 
 
