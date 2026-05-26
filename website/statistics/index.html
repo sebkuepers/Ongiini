@@ -566,7 +566,7 @@
       <div class="stat-engagement-grid">
         <div class="stat-chart">
           <p class="stat-chart-title">Retention curve</p>
-          <p class="stat-chart-sub" id="retention-sub">Of users who start, what % return weeks later</p>
+          <p class="stat-chart-sub" id="retention-sub">Of users who start, what % return days later</p>
           <div id="chart-retention"></div>
         </div>
         <div class="stat-chart">
@@ -786,25 +786,29 @@
       const parent = document.getElementById('chart-retention');
       const subEl = document.getElementById('retention-sub');
       clear(parent);
+      // The aggregator emits `days` (day-based cohorts) — fall back to
+      // the legacy `weeks` field if a cached older payload is in flight.
+      const xs = (curve && (curve.days || curve.weeks)) || [];
+      const ys = (curve && curve.retained_pct) || [];
+      const isDayBased = !!(curve && curve.days);
       const hasCohorts = curve && curve.n_cohorts && curve.n_cohorts > 0;
-      if (!curve || !curve.retained_pct || curve.retained_pct.length === 0 || !hasCohorts) {
+      // Need at least one measured offset beyond the start point.
+      if (!curve || ys.length < 2 || !hasCohorts) {
         const floor = (curve && curve.min_cohort_size) || 5;
-        if (subEl) subEl.textContent = 'No cohort of ' + floor + '+ users has reached week 1 yet.';
+        if (subEl) subEl.textContent = 'No cohort of ' + floor + '+ users has had a full day after first chat yet.';
         const ph = el('div', { className: 'stat-placeholder' });
         ph.appendChild(el('strong', { text: 'Not enough data yet' }));
-        ph.appendChild(document.createTextNode('Retention needs at least one cohort of ' + floor + ' users with a week of follow-up data.'));
+        ph.appendChild(document.createTextNode('Retention appears once at least one cohort of ' + floor + ' users has had a full day elapse since their first chat.'));
         parent.appendChild(ph);
         return;
       }
       if (subEl) {
-        subEl.textContent = 'Averaged across ' + curve.n_cohorts + ' cohorts (min ' + curve.min_cohort_size + ' users each)';
+        subEl.textContent = 'Day-N return · cohorts grouped by first-chat day · only days that have fully elapsed are shown';
       }
-      // Sparkline: x = curve.weeks (0, 1, 2, 4), y = curve.retained_pct
+      // Sparkline: x = curve.days (0, 1, 3, 7, ...), y = retained_pct
       const W = 320, H = 160, padL = 36, padR = 16, padT = 14, padB = 28;
       const innerW = W - padL - padR;
       const innerH = H - padT - padB;
-      const xs = curve.weeks;
-      const ys = curve.retained_pct;
       const xMax = xs[xs.length - 1] || 1;
       const xFor = w => padL + (w / xMax) * innerW;
       const yFor = p => padT + innerH - (p / 100) * innerH;
@@ -820,11 +824,12 @@
         t.textContent = p + '%';
         svg.appendChild(t);
       });
-      // X-axis ticks
+      // X-axis ticks — "start" for 0, "Day N" otherwise (or legacy "wk N")
+      const tickLabel = (v) => v === 0 ? 'start' : (isDayBased ? 'Day ' + v : 'wk ' + v);
       xs.forEach((w, i) => {
         const x = xFor(w);
         const t = svgEl('text', { x: x, y: H - 8, 'text-anchor': 'middle', class: 'axis-tick' });
-        t.textContent = w === 0 ? 'start' : 'wk ' + w;
+        t.textContent = tickLabel(w);
         svg.appendChild(t);
       });
 

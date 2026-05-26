@@ -404,83 +404,86 @@ def _iso_week_key(dt: datetime) -> tuple[int, int]:
     return (iso.year, iso.week)
 
 
-_RETENTION_OFFSETS = [1, 2, 4]  # week offsets to compute retention for
+_RETENTION_DAY_OFFSETS = [1, 3, 7, 14, 30]
 
 
 def _compute_retention_curve(
     chat_per_user_ts: dict[str, list[datetime]],
 ) -> dict[str, Any]:
-    """Average week-over-week retention across all cohorts large
-    enough to publish.
+    """Day-based cohort retention.
 
-    For each user, find the ISO-week of their first chat (the cohort
-    week). For each later week, was the user active? Then for each
-    cohort that has >= min_cohort_size users, compute retention at
-    offsets 1, 2, 4 weeks. Average across qualifying cohorts.
+    Group users by the DAY of their first chat (Africa/Windhoek time).
+    For each offset N in {1, 3, 7, 14, 30}, look at cohorts whose
+    target day (cohort_date + N) has ALREADY fully elapsed — i.e.
+    target_date < today. Average the per-cohort return rate (% of
+    cohort users active on the target day) across those cohorts.
+
+    Crucially: offsets whose target day is in the future or is today
+    are SKIPPED — not averaged in as 0% — so a 5-day-old service
+    doesn't look like everyone churned when really we just don't have
+    7 days of data yet.
 
     Returns:
-        weeks: [0, 1, 2, 4]   x-axis labels
-        retained_pct: [100, X, Y, Z]   y-values (week 0 is always 100)
-        n_cohorts: number of cohorts averaged
-        min_cohort_size: the floor applied
-        n_eligible_cohorts: cohorts that had enough size for the >=4w window
+        days: [0, 1, 3, ...]   x-axis labels (always starts at 0)
+        retained_pct: [100, X, ...]   y-values
+        n_cohorts: max cohorts averaged at any displayed offset
+        min_cohort_size: the privacy floor applied
+        max_day_measurable: the largest offset we could publish today
     """
     floor = settings.stats_minimum_bucket
     if not chat_per_user_ts:
         return {
-            "weeks": [0] + _RETENTION_OFFSETS,
+            "days": [0],
             "retained_pct": [],
             "n_cohorts": 0,
             "min_cohort_size": floor,
+            "max_day_measurable": 0,
         }
 
-    # cohort_week → list of user "active weeks" sets (one set per user)
-    cohorts: dict[tuple[int, int], list[set[tuple[int, int]]]] = defaultdict(list)
+    today_local = datetime.now(NAMIBIA_TZ).date()
+
+    # first-chat date → list of user "active dates" sets (one set per user)
+    cohorts: dict[Any, list[set[Any]]] = defaultdict(list)
     for msisdn, ts_list in chat_per_user_ts.items():
         if not ts_list:
             continue
         sorted_ts = sorted(ts_list)
-        first_week = _iso_week_key(sorted_ts[0])
-        active_weeks = {_iso_week_key(t) for t in sorted_ts}
-        cohorts[first_week].append(active_weeks)
+        first_date = sorted_ts[0].astimezone(NAMIBIA_TZ).date()
+        active_dates = {t.astimezone(NAMIBIA_TZ).date() for t in sorted_ts}
+        cohorts[first_date].append(active_dates)
 
-    # Helper: convert a (year, week) cohort and an offset to a target
-    # (year, week). Uses ISO calendar arithmetic — go via Monday of the
-    # cohort week + offset_weeks days, then take its iso-week.
-    from datetime import date
+    days_out: list[int] = [0]
+    pct_out: list[float] = [100.0]
+    n_cohorts_used = 0
 
-    def _offset_week(cohort: tuple[int, int], offset: int) -> tuple[int, int]:
-        try:
-            mon = date.fromisocalendar(cohort[0], cohort[1], 1)
-        except ValueError:
-            return cohort
-        target = mon + timedelta(weeks=offset)
-        iso = target.isocalendar()
-        return (iso[0], iso[1])
-
-    # For each offset, average the retention rate across cohorts of
-    # size >= floor.
-    retention_at_offset: list[float] = [100.0]  # week 0 = 100% by definition
-    n_avg = 0
-    for offset in _RETENTION_OFFSETS:
+    for offset in _RETENTION_DAY_OFFSETS:
         rates: list[float] = []
-        for cohort, user_active_sets in cohorts.items():
+        for cohort_date, user_active_sets in cohorts.items():
+            target_date = cohort_date + timedelta(days=offset)
+            # Skip cohorts whose target day hasn't fully elapsed.
+            # target_date < today means yesterday or earlier — fully
+            # elapsed and safe to measure.
+            if target_date >= today_local:
+                continue
             cohort_size = len(user_active_sets)
             if cohort_size < floor:
                 continue
-            target = _offset_week(cohort, offset)
-            retained = sum(1 for s in user_active_sets if target in s)
+            retained = sum(1 for s in user_active_sets if target_date in s)
             rates.append(retained / cohort_size * 100)
-        if rates:
-            retention_at_offset.append(round(sum(rates) / len(rates), 1))
-            n_avg = max(n_avg, len(rates))
-        else:
-            retention_at_offset.append(0.0)
+        if not rates:
+            # No cohort old enough at this offset. Stop here — we
+            # don't show this offset OR any beyond it.
+            break
+        days_out.append(offset)
+        pct_out.append(round(sum(rates) / len(rates), 1))
+        n_cohorts_used = max(n_cohorts_used, len(rates))
+
     return {
-        "weeks": [0] + _RETENTION_OFFSETS,
-        "retained_pct": retention_at_offset,
-        "n_cohorts": n_avg,
+        "days": days_out,
+        "retained_pct": pct_out,
+        "n_cohorts": n_cohorts_used,
         "min_cohort_size": floor,
+        "max_day_measurable": days_out[-1] if len(days_out) > 1 else 0,
     }
 
 
