@@ -200,7 +200,6 @@
     }
     .og-vs-head .og-h2 {
       color: var(--bone);
-      font-size: clamp(30px, 4vw, 44px);
       margin: 0 0 12px;
       text-wrap: balance;
     }
@@ -281,42 +280,6 @@
       .og-vs-section { padding: 80px 0; }
     }
 
-    /* Minimal dark interceptor strip — one tight row, doesn't compete
-       with the hero. Single column on mobile, horizontal pitch+CTA
-       on desktop. The bold-italic-Oshiwambo flourish lives only on
-       the /contribute/ page; here it's a quiet announcement. */
-    .og-oshi-strip { padding: 18px 0; }
-    .og-oshi-strip-inner {
-      display: flex; flex-direction: column;
-      align-items: flex-start; gap: 8px;
-    }
-    .og-oshi-eyebrow,
-    .og-oshi-h2 { display: none; }
-    .og-oshi-pitch {
-      margin: 0;
-      color: var(--bone);
-      font-size: 14.5px; line-height: 1.5;
-    }
-    .og-oshi-pitch strong { font-weight: 600; }
-    .og-oshi-pitch em { font-style: italic; color: var(--terracotta-light); }
-    .og-oshi-link {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 14px; font-weight: 500;
-      color: var(--terracotta-light);
-      text-decoration: none; white-space: nowrap;
-      transition: color 160ms;
-    }
-    .og-oshi-link:hover { color: var(--bone); }
-    .og-oshi-link-arrow { display: inline-block; transition: transform 160ms; }
-    .og-oshi-link:hover .og-oshi-link-arrow { transform: translateX(2px); }
-    @media (min-width: 720px) {
-      .og-oshi-strip-inner {
-        flex-direction: row; align-items: center;
-        justify-content: space-between;
-        gap: 28px; flex-wrap: wrap;
-      }
-      .og-oshi-pitch { flex: 1 1 auto; max-width: 72ch; }
-    }
     .og-section--sand { background: var(--sand); }
 
     .og-eyebrow {
@@ -1226,17 +1189,6 @@
       </div>
     </section>
 
-    <section class="og-section og-section--dark og-oshi-strip" id="oshi-strip">
-      <div class="og-wrap og-oshi-strip-inner">
-        <p class="og-oshi-pitch" data-en>Help us make Ongiini speak <em>Oshiwambo</em> — Oshindonga and Oshikwanyama, one sentence at a time.</p>
-        <p class="og-oshi-pitch" data-af>Help ons om Ongiini <em>Oshiwambo</em> te laat praat — Oshindonga en Oshikwanyama, een sin op 'n slag.</p>
-        <a class="og-oshi-link" href="/contribute/">
-          <span data-en="i">Learn how to help</span><span data-af="i">Leer hoe om te help</span>
-          <span class="og-oshi-link-arrow">→</span>
-        </a>
-      </div>
-    </section>
-
     <section class="og-section og-section--dark og-vs-section" id="why">
       <div class="og-wrap">
         <div class="og-vs-head">
@@ -1246,26 +1198,26 @@
           </div>
           <h2 class="og-h2" data-en>Built differently. On purpose.</h2>
           <h2 class="og-h2" data-af>Doelbewus anders gebou.</h2>
-          <p class="og-vs-sub" data-en>Just WhatsApp. No app, no account, no US cloud.</p>
-          <p class="og-vs-sub" data-af>Net WhatsApp. Geen toepassing, geen rekening, geen Amerikaanse wolk nie.</p>
+          <p class="og-vs-sub" data-en>Just WhatsApp. No app, no account, no ads, no US cloud.</p>
+          <p class="og-vs-sub" data-af>Net WhatsApp. Geen toepassing, geen rekening, geen advertensies, geen Amerikaanse wolk nie.</p>
         </div>
 
         <div class="og-vs-grid">
 
           <div class="og-vs-card">
-            <div class="og-vs-num">$0</div>
-            <p class="og-vs-head-line" data-en>Free, forever</p>
-            <p class="og-vs-head-line" data-af>Gratis, vir altyd</p>
-            <p class="og-vs-body" data-en>ChatGPT Plus is $20/month. Ongiini is free.</p>
-            <p class="og-vs-body" data-af>ChatGPT Plus kos $20 per maand. Ongiini is gratis.</p>
+            <div class="og-vs-num">1 Million</div>
+            <p class="og-vs-head-line" data-en>Free tokens, every month</p>
+            <p class="og-vs-head-line" data-af>Gratis tokens, elke maand</p>
+            <p class="og-vs-body" data-en>You pay nothing for AI. ChatGPT Plus is $20/month.</p>
+            <p class="og-vs-body" data-af>Jy betaal niks vir KI nie. ChatGPT Plus kos $20 per maand.</p>
           </div>
 
           <div class="og-vs-card">
             <div class="og-vs-num">5×</div>
             <p class="og-vs-head-line" data-en>Less mobile data*</p>
             <p class="og-vs-head-line" data-af>Minder selfoondata*</p>
-            <p class="og-vs-body" data-en>Vs the ChatGPT app, in our own benchmark.</p>
-            <p class="og-vs-body" data-af>Vs die ChatGPT-app, in ons eie maatstaftoets.</p>
+            <p class="og-vs-body" data-en>Compared to using the ChatGPT app. You get more AI for your data.</p>
+            <p class="og-vs-body" data-af>Vergeleke met die ChatGPT-app. Jy kry meer KI vir jou data.</p>
           </div>
 
           <div class="og-vs-card">
@@ -1277,19 +1229,19 @@
           </div>
 
           <div class="og-vs-card">
-            <div class="og-vs-num">0</div>
+            <div class="og-vs-num">Zero</div>
             <p class="og-vs-head-line" data-en>Ads. Trackers. Data sales.</p>
             <p class="og-vs-head-line" data-af>Advertensies. Verklikkers. Dataverkope.</p>
-            <p class="og-vs-body" data-en>Your messages don't train anyone else's AI.</p>
-            <p class="og-vs-body" data-af>Jou boodskappe oefen niemand anders se KI op nie.</p>
+            <p class="og-vs-body" data-en>Your messages don't train anyone else's AI. Never shared. Delete anytime.</p>
+            <p class="og-vs-body" data-af>Jou boodskappe oefen niemand anders se KI op nie. Nooit gedeel. Vee enige tyd uit.</p>
           </div>
 
           <div class="og-vs-card">
-            <div class="og-vs-num">🇪🇺</div>
-            <p class="og-vs-head-line" data-en>Not on US cloud</p>
-            <p class="og-vs-head-line" data-af>Nie op Amerikaanse wolk nie</p>
-            <p class="og-vs-body" data-en>Hosted under EU privacy law — GDPR + EU AI Act.</p>
-            <p class="og-vs-body" data-af>Onder EU-privaatheidsreg gehuisves — AVO + EU KI-wet.</p>
+            <div class="og-vs-num">Open</div>
+            <p class="og-vs-head-line" data-en>Model, code, language</p>
+            <p class="og-vs-head-line" data-af>Model, kode, taal</p>
+            <p class="og-vs-body" data-en>Full transparency. See what's under the hood. Anyone can contribute.</p>
+            <p class="og-vs-body" data-af>Volle deursigtigheid. Kyk wat onder die enjinkap is. Enigeen kan bydra.</p>
           </div>
 
           <div class="og-vs-card og-vs-card--accent">

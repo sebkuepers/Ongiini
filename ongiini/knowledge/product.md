@@ -8,15 +8,15 @@ Why Ongiini · vs ChatGPT
 
 Built differently. On purpose.
 
-Just WhatsApp. No app, no account, no US cloud.
+Just WhatsApp. No app, no account, no ads, no US cloud.
 
-Free, forever
+Free tokens, every month
 
-ChatGPT Plus is $20/month. Ongiini is free.
+You pay nothing for AI. ChatGPT Plus is $20/month.
 
 Less mobile data*
 
-Vs the ChatGPT app, in our own benchmark.
+Compared to using the ChatGPT app. You get more AI for your data.
 
 Works on any connection
 
@@ -24,11 +24,11 @@ WhatsApp runs anywhere. ChatGPT's app barely does.
 
 Ads. Trackers. Data sales.
 
-Your messages don't train anyone else's AI.
+Your messages don't train anyone else's AI. Never shared. Delete anytime.
 
-Not on US cloud
+Model, code, language
 
-Hosted under EU privacy law — GDPR + EU AI Act.
+Full transparency. See what's under the hood. Anyone can contribute.
 
 Oshiwambo
 
