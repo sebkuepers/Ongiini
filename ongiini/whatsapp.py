@@ -135,11 +135,14 @@ async def send_template(
     delivery tracking). Raises on permanent failure after retries.
     """
     if not settings.whatsapp_token or not settings.whatsapp_phone_id:
-        log.warning(
-            "WhatsApp not configured — would send template %s to %s",
-            template_name, to,
+        # Distinct from send_text's behaviour: a misconfigured broadcaster
+        # must FAIL loudly, not silently no-op. A "succeeded" log line
+        # against every recipient with WHATSAPP_TOKEN unset would be the
+        # worst possible failure mode.
+        raise RuntimeError(
+            f"WhatsApp not configured (WHATSAPP_TOKEN or WHATSAPP_PHONE_ID missing) — "
+            f"refusing to send template {template_name!r}"
         )
-        return {"skipped": True}
 
     components: list[dict] = []
     if body_params:
@@ -214,7 +217,14 @@ async def send_template(
     )
     if last_error is not None:
         raise last_error
-    return {}
+    # Defence in depth: this path should be unreachable (the loop always
+    # records last_error on every non-2xx and non-return branch). If we
+    # ever DO land here, raise — silently returning {} would let the
+    # caller record a fake "success".
+    raise RuntimeError(
+        "send_template exhausted retries without a recorded error — "
+        "this indicates a logic bug in the retry loop"
+    )
 
 
 async def mark_as_read(message_id: str, with_typing: bool = True) -> None:

@@ -66,16 +66,26 @@ def append_synthetic_assistant_turn(msisdn: str, text: str) -> None:
     Distinct from the normal flow (BaseMemoryProvider.record_turn)
     because:
       - no user turn — we initiated
-      - no PII scrub — text is ours (template body)
       - no mem0 / long-term write — broadcasts aren't profile facts
       - no hooks fired — billing / tracing skipped (no inference)
+
+    The text IS PII-sanitised before disk write, mirroring the unconditional
+    "MUST go through pii.sanitize for any new persistence path" contract
+    in ongiini/CLAUDE.md. In practice operator broadcasts won't contain
+    email / phone — but if one ever did ("reach me at s@example.com")
+    we'd otherwise persist that to every recipient's history.
 
     Caller MUST hold ``lock_for(msisdn)`` while invoking this so a
     concurrent inbound from the same user can't race the broadcast
     write.
     """
+    # Lazy import — short_term is imported widely; avoid the always-on
+    # cost of loading pii (regex compilation) on every webhook process.
+    from ..pii import sanitize as pii_sanitize
+
+    cleaned = pii_sanitize(text or "")
     msgs = load(msisdn)
-    msgs.append({"role": "assistant", "content": text})
+    msgs.append({"role": "assistant", "content": cleaned})
     save(msisdn, msgs)
 
 
