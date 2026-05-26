@@ -15,6 +15,7 @@ from PIL import Image
 from owela import InboundMessage
 
 from .. import audio, contributions, instrument, pii, ratelimit
+from ..broadcast import opt_outs as broadcast_opt_outs
 from ..config import settings
 from ..filters import InvalidMsisdn, is_allowed, normalize
 from ..memory import long_term as mem, short_term as memory
@@ -64,6 +65,16 @@ async def lifespan(app: FastAPI):
             )
     except Exception:
         log.exception("contributions warmup failed; tool will be unavailable")
+    # Broadcast opt-outs sqlite. Same shape as contributions — soft-warn
+    # on warmup failure, don't crash startup. Shares the contributions
+    # hash salt so opting out is deterministic across restarts.
+    try:
+        broadcast_opt_outs.warmup()
+    except Exception:
+        log.exception(
+            "broadcast opt-outs warmup failed; STOP keyword + broadcast "
+            "exclusion will be unavailable"
+        )
     # Build the Owela Runtime + Agent once. The Runtime captures every
     # Ongiini-specific choice (model, transport, tools, policies, hooks)
     # and is reused for every inbound message — no per-request rebuild.

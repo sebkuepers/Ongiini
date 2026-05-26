@@ -56,6 +56,29 @@ def save(msisdn: str, messages: list[dict[str, Any]]) -> None:
     os.replace(tmp, p)
 
 
+def append_synthetic_assistant_turn(msisdn: str, text: str) -> None:
+    """Append an assistant-role entry to per-user history WITHOUT a
+    preceding user message. Used by the proactive-broadcast path: the
+    bot sent the user a template-driven announcement, and we want
+    the AI's memory to reflect "I said this to them" so the next
+    inbound reply lands with context.
+
+    Distinct from the normal flow (BaseMemoryProvider.record_turn)
+    because:
+      - no user turn — we initiated
+      - no PII scrub — text is ours (template body)
+      - no mem0 / long-term write — broadcasts aren't profile facts
+      - no hooks fired — billing / tracing skipped (no inference)
+
+    Caller MUST hold ``lock_for(msisdn)`` while invoking this so a
+    concurrent inbound from the same user can't race the broadcast
+    write.
+    """
+    msgs = load(msisdn)
+    msgs.append({"role": "assistant", "content": text})
+    save(msisdn, msgs)
+
+
 def delete(msisdn: str) -> bool:
     """Wipe a user's stored conversation history.
 

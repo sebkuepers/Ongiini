@@ -54,6 +54,7 @@ VERDICT_CONTRIB_SAVE     = "CONTRIBUTE_SAVE"
 VERDICT_CONTRIB_SKIP     = "CONTRIBUTE_SKIP"
 VERDICT_CONTRIB_DECLINE  = "CONTRIBUTE_DECLINE"
 VERDICT_CONTRIB_STATS    = "CONTRIBUTE_STATS"
+VERDICT_OPT_OUT_BROADCAST = "OPT_OUT_BROADCAST"
 
 
 # Match common English and Afrikaans pronouns + reference words. When the
@@ -191,6 +192,13 @@ CONTRIBUTE_STATS — emit when the user asks how many translations have
 been collected ("how many do you have?", "how much data?", "how's
 the dataset doing?"). Can fire regardless of contribute_state.
 
+OPT_OUT_BROADCAST — emit when the user is asking to stop receiving
+proactive update / announcement messages from us. Examples:
+  "stop messages" / "stop sending me updates" / "unsubscribe" /
+  "opt out" / "no more notifications" / "stop boodskappe".
+NOT for "delete my data" (that's ADMIN) or "stop talking to me right
+now" (that's NONE — they can just stop replying).
+
 The DOCS / ADMIN distinction: "what's your privacy policy" → DOCS
 (asking about the document); "delete my data" → ADMIN (action on user state).
 The NONE / DOCS distinction:
@@ -218,7 +226,7 @@ ONLY there to disambiguate what the user is talking about.
 
 Reply with EXACTLY one of: SEARCH_SHALLOW, SEARCH_DEEP, DOCS, ADMIN, NONE,
 CONTRIBUTE_INVITE, CONTRIBUTE_DIALECT, CONTRIBUTE_NEXT, CONTRIBUTE_SAVE,
-CONTRIBUTE_SKIP, CONTRIBUTE_DECLINE, CONTRIBUTE_STATS.
+CONTRIBUTE_SKIP, CONTRIBUTE_DECLINE, CONTRIBUTE_STATS, OPT_OUT_BROADCAST.
 """
 
 
@@ -237,6 +245,7 @@ _LABEL_TOKENS = (
     "CONTRIBUTE_INVITE", "CONTRIBUTE_DIALECT", "CONTRIBUTE_NEXT",
     "CONTRIBUTE_SAVE", "CONTRIBUTE_SKIP", "CONTRIBUTE_DECLINE",
     "CONTRIBUTE_STATS",
+    "OPT_OUT_BROADCAST",
     "DOCS", "ADMIN", "NONE",
 )
 
@@ -437,6 +446,8 @@ class GemmaClassifier:
                     return VERDICT_CONTRIB_DECLINE, DEPTH_SHALLOW
                 if token == "CONTRIBUTE_STATS":
                     return VERDICT_CONTRIB_STATS, DEPTH_SHALLOW
+                if token == "OPT_OUT_BROADCAST":
+                    return VERDICT_OPT_OUT_BROADCAST, DEPTH_SHALLOW
         log.warning("classifier got un-parseable verdict %r — falling back to NONE", raw)
         return VERDICT_NONE, DEPTH_SHALLOW
 

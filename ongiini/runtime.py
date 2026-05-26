@@ -46,7 +46,7 @@ from .routers import GemmaClassifier
 from .routers.gemma_classifier import (
     VERDICT_CONTRIB_DECLINE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_INVITE,
     VERDICT_CONTRIB_NEXT, VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP,
-    VERDICT_CONTRIB_STATS,
+    VERDICT_CONTRIB_STATS, VERDICT_OPT_OUT_BROADCAST,
 )
 from .skills_loader import load_skills
 from .system_prompt import SYSTEM_PROMPT
@@ -270,6 +270,18 @@ def build_policy_table() -> PolicyTable:
         Policy(
             name="contribute_stats",
             first_tool=force_tool("contribute_stats"),
+            max_steps=_CONTRIB_MAX_STEPS,
+        ),
+    )
+
+    # OPT_OUT_BROADCAST → force opt_out_broadcast tool, same shape as
+    # the contribute policies: turn 1 records the opt-out, turn 2
+    # composes a warm confirmation reply.
+    table.set(
+        VERDICT_OPT_OUT_BROADCAST, DEPTH_SHALLOW,
+        Policy(
+            name="opt_out_broadcast",
+            first_tool=force_tool("opt_out_broadcast"),
             max_steps=_CONTRIB_MAX_STEPS,
         ),
     )

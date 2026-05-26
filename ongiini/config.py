@@ -16,6 +16,17 @@ class Settings:
     # unsigned requests (dev mode).
     whatsapp_app_secret: str = os.getenv("WHATSAPP_APP_SECRET", "")
 
+    # Pre-approved MARKETING template used by scripts/broadcast.py
+    # for proactive announcements. Default values reflect the name +
+    # language Sebastian submits to Meta Business Manager — change
+    # only if the template is renamed or a new language variant ships.
+    whatsapp_template_announcement_name: str = os.getenv(
+        "WHATSAPP_TEMPLATE_ANNOUNCEMENT_NAME", "ongiini_announcement"
+    )
+    whatsapp_template_announcement_language: str = os.getenv(
+        "WHATSAPP_TEMPLATE_ANNOUNCEMENT_LANGUAGE", "en"
+    )
+
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
     vllm_base_url: str = os.getenv("VLLM_BASE_URL", "http://host.docker.internal:8000/v1")
