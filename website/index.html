@@ -280,6 +280,50 @@
       .og-vs-section { padding: 80px 0; }
     }
 
+    /* ── Live user counter strip ─────────────────────────────
+       Sand-backed mini-strip between the hero (bone) and the
+       #why section (ink). Number is fetched from /api/stats by
+       the small JS block at the bottom of the page; if the
+       fetch fails it stays as an em-dash and the link still
+       works. */
+    .og-live-strip { padding: 22px 0; }
+    .og-live-inner {
+      display: flex; flex-direction: column;
+      align-items: flex-start; gap: 8px;
+    }
+    .og-live-num {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(34px, 5vw, 48px);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--terracotta-deep);
+    }
+    .og-live-copy {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 14.5px; line-height: 1.5;
+      flex: 1 1 auto;
+    }
+    .og-live-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 14px; font-weight: 500;
+      color: var(--terracotta-deep);
+      text-decoration: none;
+      white-space: nowrap;
+      border-bottom: 1px solid color-mix(in oklab, var(--terracotta-deep) 35%, transparent);
+      padding-bottom: 2px;
+      transition: color 160ms, border-color 160ms;
+    }
+    .og-live-cta:hover { color: var(--terracotta); border-color: var(--terracotta); }
+    .og-live-cta-arrow { display: inline-block; transition: transform 160ms; }
+    .og-live-cta:hover .og-live-cta-arrow { transform: translateX(2px); }
+    @media (min-width: 720px) {
+      .og-live-inner {
+        flex-direction: row; align-items: baseline;
+        gap: 22px; flex-wrap: wrap;
+      }
+    }
+
     .og-section--sand { background: var(--sand); }
 
     .og-eyebrow {
@@ -1132,6 +1176,7 @@
           <a href="#mission"><span data-en="i">Mission</span><span data-af="i">Missie</span></a>
           <a href="#open"><span data-en="i">Commitment</span><span data-af="i">Toewyding</span></a>
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
+          <a href="/statistics/"><span data-en="i">Statistics</span><span data-af="i">Statistieke</span></a>
           <a href="#contribute"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
           <a href="#faq"><span data-en="i">FAQs</span><span data-af="i">FAQs</span></a>
         </nav>
@@ -1186,6 +1231,18 @@
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="og-section og-section--sand og-live-strip" id="live">
+      <div class="og-wrap og-live-inner">
+        <div class="og-live-num" id="live-user-count" aria-live="polite">—</div>
+        <p class="og-live-copy" data-en>Namibians chatting with Ongiini.</p>
+        <p class="og-live-copy" data-af>Namibiërs wat met Ongiini gesels.</p>
+        <a class="og-live-cta" href="/statistics/">
+          <span data-en="i">See live statistics</span><span data-af="i">Sien lewendige statistieke</span>
+          <span class="og-live-cta-arrow">→</span>
+        </a>
       </div>
     </section>
 
@@ -1799,6 +1856,7 @@
           <a href="#try"><span data-en="i">Try asking</span><span data-af="i">Probeer vra</span></a>
           <a href="#open"><span data-en="i">Commitment</span><span data-af="i">Toewyding</span></a>
           <a href="#privacy"><span data-en="i">Privacy</span><span data-af="i">Privaatheid</span></a>
+          <a href="/statistics/"><span data-en="i">Statistics</span><span data-af="i">Statistieke</span></a>
           <a href="#free"><span data-en="i">Free, with limits</span><span data-af="i">Gratis, met limiet</span></a>
           <a href="#faq"><span data-en="i">FAQs</span><span data-af="i">FAQs</span></a>
           <a href="#contribute"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
@@ -2048,6 +2106,25 @@
 
         faqRoot.appendChild(item);
       });
+    })();
+
+    // ── Live user counter (#live strip) ──────────────────────────────
+    // Fetches /api/stats (proxied + cached by the CF Pages Function)
+    // and populates the #live-user-count span. Loading state is the
+    // em-dash already in the markup. On any failure we leave the
+    // em-dash in place — the link still works, the strip degrades
+    // gracefully instead of breaking.
+    (function () {
+      var el = document.getElementById("live-user-count");
+      if (!el) return;
+      fetch("/api/stats", { credentials: "omit" })
+        .then(function (res) { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+        .then(function (data) {
+          var n = data && data.totals && data.totals.unique_users;
+          if (typeof n !== "number" || !isFinite(n)) return;
+          el.textContent = new Intl.NumberFormat("en").format(n);
+        })
+        .catch(function () { /* leave the em-dash */ });
     })();
   </script>
 </body>
