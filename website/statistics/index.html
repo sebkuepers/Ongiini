@@ -321,6 +321,8 @@
     #chart-cumulative .line { stroke: var(--teal-deep); }
     #chart-cumulative .area { fill: var(--teal-light); opacity: 0.55; }
     #chart-cumulative .point { fill: var(--teal-deep); }
+    #chart-cumulative .overlay-bar { fill: var(--terracotta); opacity: 0.55; }
+    #chart-cumulative .overlay-chip text { fill: var(--ink-faint); }
     #chart-dau .bar { fill: var(--teal-deep); }
     #chart-dau .bar-secondary { fill: var(--teal-deep); }
     #chart-dow .bar { fill: var(--teal-deep); }
@@ -542,18 +544,19 @@
 
     <div id="content" hidden>
       <h2>Volume</h2>
+      <p class="stat-section-note">All numbers below are <strong>all-time totals</strong> since launch. The small ↑/↓ row on each tile compares the last 7 days to the 7 days before that.</p>
       <div class="stat-kpis" id="kpis"></div>
 
       <h2>Growth over time</h2>
       <div class="stat-chart-row">
         <div class="stat-chart">
           <p class="stat-chart-title">Unique users</p>
-          <p class="stat-chart-sub">Cumulative · all time</p>
+          <p class="stat-chart-sub" id="cumulative-sub">Total users since launch · new users per day overlaid</p>
           <div id="chart-cumulative"></div>
         </div>
         <div class="stat-chart">
           <p class="stat-chart-title">Daily active users</p>
-          <p class="stat-chart-sub">Distinct users per day</p>
+          <p class="stat-chart-sub" id="dau-sub">Distinct users per day · any message counts</p>
           <div id="chart-dau"></div>
         </div>
       </div>
@@ -602,7 +605,7 @@
       </div>
 
       <h2>Who uses Ongiini.ai</h2>
-      <p class="stat-section-note">Built from the small set of facts the memory system extracts when users share them in chat — <strong>not a registration form</strong>. Most users don't volunteer most of these things; the percentages below describe only the slice of users who did.</p>
+      <p class="stat-section-note">Built from the small set of facts the memory system extracts when users share them in chat — <strong>not a registration form</strong>. Most users don't volunteer most of these things; <strong>the percentages on each panel are within the group that did mention it, not the whole user base</strong>.</p>
       <div class="stat-who" id="who-grid"></div>
 
       <h2>How it performs</h2>
@@ -697,7 +700,7 @@
       document.getElementById('content').hidden = false;
       renderRefreshed(d);
       renderKpis(d);
-      renderCumulative(d.timeseries.unique_users_cumulative);
+      renderCumulative(d.timeseries.unique_users_cumulative, d.timeseries.new_users_per_day);
       renderDau(d.timeseries.daily_active_users);
       renderRetention(d.engagement && d.engagement.retention_curve);
       renderPerUserDistribution(d.engagement && d.engagement.per_user_distribution, d.totals.unique_users);
@@ -714,12 +717,18 @@
       const refreshed = document.getElementById('refreshed');
       clear(refreshed);
       const ago = timeAgo(d.generated_at);
-      const period = d.period && d.period.from && d.period.to
-        ? d.period.from + ' → ' + d.period.to
-        : 'no activity yet';
+      const since = (d.period && d.period.from) ? longDate(d.period.from) : null;
       const strong = el('strong', { text: ago });
       refreshed.appendChild(strong);
-      refreshed.appendChild(document.createTextNode(' · Period: ' + period));
+      refreshed.appendChild(document.createTextNode(
+        since ? ' · All-time · since ' + since : ' · No activity yet'
+      ));
+    }
+
+    function longDate(iso) {
+      const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return iso;
+      return parseInt(m[3], 10) + ' ' + MONTHS[parseInt(m[2], 10) - 1] + ' ' + m[1];
     }
 
     function tile(label, value, sub, accent, delta) {
@@ -752,7 +761,11 @@
       // Delta sub-row appears when there's a prior-week comparison.
       wrap.appendChild(tile('Unique users', fmtInt.format(t.unique_users), null, 'people', dx.unique_users));
       wrap.appendChild(tile('Conversations', fmtInt.format(t.conversations), '≥30 min gap = new', 'people', dx.conversations));
-      wrap.appendChild(tile('Free tokens generated', fmtCompact.format(t.free_tokens_generated), 'Assistant replies, lifetime', 'compute', dx.free_tokens_generated));
+      // User messages = chat lines from usage.log. We do NOT double-count
+      // an assistant "reply" message — one reply per user message is
+      // assumed, but the displayed number stays honest to what we record.
+      wrap.appendChild(tile('User messages', fmtInt.format(t.messages_user || 0), '1 AI reply each', 'people', dx.messages_user));
+      wrap.appendChild(tile('Free tokens generated', fmtCompact.format(t.free_tokens_generated), 'In the AI replies', 'compute', dx.free_tokens_generated));
       wrap.appendChild(tile('Web searches', fmtInt.format(t.web_searches), 'Tavily API calls', 'activity', dx.web_searches));
       wrap.appendChild(tile('Voice notes', fmtInt.format(t.voice_notes), 'Transcribed locally', 'activity'));
       wrap.appendChild(tile('Photos', fmtInt.format(t.photos), 'Image messages', 'activity'));
@@ -1009,18 +1022,31 @@
       parent.appendChild(svg);
     }
 
-    function renderCumulative(series) {
+    function renderCumulative(series, newUsersSeries) {
       if (!series || series.length === 0) return emptyChart('chart-cumulative', 'No data yet.');
-      renderLineChart('chart-cumulative', series, { area: true });
+      // Align the overlay by date so a missing day in one series
+      // doesn't shift the bars under the wrong point on the line.
+      const byDate = {};
+      (newUsersSeries || []).forEach(p => { byDate[p[0]] = p[1]; });
+      const overlay = series.map(p => byDate[p[0]] || 0);
+      renderLineChart('chart-cumulative', series, { area: true, overlayBars: overlay, overlayLabel: 'new today' });
     }
 
     function renderDau(series) {
       // Daily-active-users is naturally per-day distinct — bar chart
       // reads more honestly than a line, especially when the series is
-      // only a handful of days long (a line collapses 3 points into a
-      // smooth curve and you lose the per-day signal entirely).
+      // only a handful of days long.
       if (!series || series.length === 0) return emptyChart('chart-dau', 'No data yet.');
-      renderBarTimeseries('chart-dau', series);
+      const subEl = document.getElementById('dau-sub');
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const lastIso = series[series.length - 1][0];
+      const lastIsToday = lastIso === todayIso;
+      if (subEl) {
+        subEl.textContent = lastIsToday
+          ? "Distinct users per day · any message counts · today's bar updates throughout the day"
+          : 'Distinct users per day · any message counts';
+      }
+      renderBarTimeseries('chart-dau', series, { dimLast: lastIsToday });
     }
 
     function renderLineChart(parentId, series, opts) {
@@ -1046,6 +1072,46 @@
       const zeroLabel = svgEl('text', { x: padL - 4, y: padT + innerH + 3, 'text-anchor': 'end', class: 'axis-tick' });
       zeroLabel.textContent = '0';
       svg.appendChild(zeroLabel);
+
+      // Optional secondary series rendered as faint bars under the
+      // line (e.g. new-users-per-day overlaid on cumulative-users).
+      // Own scale, capped at 35% of innerH so the line stays the
+      // primary read. Drawn FIRST so the line + dots sit on top.
+      if (opts.overlayBars && opts.overlayBars.length === series.length) {
+        const oMax = Math.max(1, ...opts.overlayBars);
+        const oH = innerH * 0.35;
+        const oBaseY = padT + innerH;
+        const slot = series.length > 1 ? (innerW / (series.length - 1)) : innerW;
+        const oBarW = Math.min(18, slot * 0.45);
+        opts.overlayBars.forEach((v, i) => {
+          if (!v) return;
+          const h = (v / oMax) * oH;
+          const cx = xFor(i);
+          svg.appendChild(svgEl('rect', {
+            x: (cx - oBarW / 2).toFixed(1),
+            y: (oBaseY - h).toFixed(1),
+            width: oBarW.toFixed(1),
+            height: Math.max(1, h).toFixed(1),
+            class: 'overlay-bar',
+            rx: 1.5,
+          }));
+        });
+        // Tiny legend chip in the top-right of the chart area so the
+        // overlay isn't a mystery shape under the line.
+        const chip = svgEl('g', { class: 'overlay-chip' });
+        const chipX = W - padR - 90;
+        const chipY = padT + 2;
+        chip.appendChild(svgEl('rect', {
+          x: chipX, y: chipY, width: 10, height: 6,
+          class: 'overlay-bar', rx: 1,
+        }));
+        const chipText = svgEl('text', {
+          x: chipX + 14, y: chipY + 6, class: 'axis-tick',
+        });
+        chipText.textContent = opts.overlayLabel || 'overlay';
+        chip.appendChild(chipText);
+        svg.appendChild(chip);
+      }
 
       // Path first, so dots/labels sit on top.
       const pathD = series.map((p, i) => (i === 0 ? 'M' : 'L') + xFor(i).toFixed(1) + ' ' + yFor(p[1]).toFixed(1)).join(' ');
@@ -1099,7 +1165,8 @@
       parent.appendChild(svg);
     }
 
-    function renderBarTimeseries(parentId, series) {
+    function renderBarTimeseries(parentId, series, opts) {
+      opts = opts || {};
       // Bar chart for daily-counted series (DAU). Each bar is one day;
       // value label sits above the bar when series is short, date label
       // sits below. For long series (>14 days) we drop the value labels
@@ -1141,14 +1208,17 @@
         const x = padL + groupOffset + i * groupW;
         const h = (p[1] / maxV) * innerH;
         const y = padT + innerH - h;
-        svg.appendChild(svgEl('rect', {
+        const isPartial = opts.dimLast && i === series.length - 1;
+        const barAttrs = {
           x: x.toFixed(1),
           y: y.toFixed(1),
           width: barW.toFixed(1),
           height: Math.max(1, h).toFixed(1),
           class: 'bar',
           rx: 2,
-        }));
+        };
+        if (isPartial) barAttrs['fill-opacity'] = '0.55';
+        svg.appendChild(svgEl('rect', barAttrs));
         if (showAllLabels) {
           const tx = svgEl('text', {
             x: (x + barW / 2).toFixed(1),
@@ -1164,7 +1234,7 @@
             'text-anchor': 'middle',
             class: 'axis-tick',
           });
-          dt.textContent = shortDate(p[0]);
+          dt.textContent = isPartial ? shortDate(p[0]) + ' · partial' : shortDate(p[0]);
           svg.appendChild(dt);
         }
       });
@@ -1269,8 +1339,10 @@
       const n = block.n_observations || 0;
       const cov = block.coverage || 0;
       if (subEl) {
-        const covText = totalMessages ? Math.round(cov * 100) + '% of ' + fmtInt.format(totalMessages) + ' messages' : '—';
-        subEl.textContent = 'Based on ' + fmtInt.format(n) + ' classified messages · ' + covText;
+        const covText = totalMessages
+          ? Math.round(cov * 100) + '% of ' + fmtInt.format(totalMessages) + ' user messages all-time'
+          : '—';
+        subEl.textContent = 'Donut shows ' + fmtInt.format(n) + ' messages we could categorise · ' + covText;
       }
       if (cats.length === 0) {
         parent.appendChild(emptyStatePlaceholder(n > 0, block.status));
@@ -1384,7 +1456,7 @@
         const panel = el('div', { className: 'stat-who-panel' });
         panel.appendChild(el('p', { className: 'stat-who-head', text: title }));
         const subText = block && block.n_observations
-          ? sub + ' · ' + fmtInt.format(block.n_observations) + ' of ' + fmtInt.format(totalUsers || 0) + ' users mentioned this'
+          ? sub + ' · ' + fmtInt.format(block.n_observations) + ' of ' + fmtInt.format(totalUsers || 0) + ' users · % below are within that group'
           : sub;
         panel.appendChild(el('p', { className: 'stat-who-sub', text: subText }));
         const inner = el('div');
