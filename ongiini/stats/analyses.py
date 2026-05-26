@@ -422,7 +422,29 @@ LANGUAGES_ANALYSIS = Analysis(
     ),
     synthesize_system=(
         "You are analysing preferred languages in the user base of a Namibian AI "
-        "helper. Below are language descriptors with counts.\n\n" + _WHO_SYNTH_RULES
+        "helper. Below are language descriptors with counts.\n\n"
+        "Rules:\n"
+        "- Produce EXACTLY these four clusters, in this order:\n"
+        "  1. \"English\"\n"
+        "  2. \"Afrikaans\"\n"
+        "  3. \"Oshiwambo\"\n"
+        "  4. \"Other\"\n"
+        "- Assign each input phrase to ONE cluster using this priority "
+        "(check from top to bottom, stop at the first match):\n"
+        "  a. If the phrase mentions Oshiwambo, Oshindonga, Oshikwanyama, "
+        "     Ndonga, Kwanyama, or Ovambo → \"Oshiwambo\".\n"
+        "  b. Else if the phrase mentions Afrikaans → \"Afrikaans\".\n"
+        "  c. Else if the phrase mentions English → \"English\".\n"
+        "  d. Else (other Namibian languages such as Khoekhoegowab, "
+        "     Damara, Nama, Otjiherero, Rukwangali, Silozi; foreign "
+        "     languages; or 'mixed' / 'unknown' / 'unspecified') → \"Other\".\n"
+        "- Each cluster summary is one sentence about who is in it.\n"
+        "- Include all four clusters even if some have zero items "
+        "  (use an empty items list).\n"
+        "- Assign EVERY input phrase to exactly one cluster.\n"
+        "- Output strict JSON in this shape, with no preamble or trailing text:\n"
+        '  {"clusters": [{"label": "...", "summary": "...", "items": ["phrase1", "phrase2"]}]}\n'
+        "- Items must be EXACT verbatim copies of the input phrases.\n"
     ),
     item_kind="user",
 )
