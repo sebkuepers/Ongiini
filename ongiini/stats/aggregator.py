@@ -693,6 +693,54 @@ def _format_synthesis_block(
     }
 
 
+def _collapse_languages(block: dict[str, Any]) -> dict[str, Any]:
+    """Collapse the WHO Languages panel to a fixed 4-bucket taxonomy
+    readers actually ask about: English / Afrikaans / Oshiwambo / Other.
+
+    The LLM-clustered output can return any number of labels
+    (Oshindonga, Oshikwanyama, Khoekhoegowab, German, …); we map each
+    cluster's label into one of the four canonical buckets, sum counts,
+    re-compute pct, and return a block with the same schema so the
+    frontend renderer stays unchanged.
+    """
+    cats = block.get("categories") or []
+    if not cats:
+        return block
+
+    BUCKETS = ("English", "Afrikaans", "Oshiwambo", "Other")
+    sums = {b: 0 for b in BUCKETS}
+
+    def _bucket_for(label: str) -> str:
+        s = (label or "").lower()
+        if "afrikaan" in s:
+            return "Afrikaans"
+        if "english" in s:
+            return "English"
+        if any(k in s for k in (
+            "oshiwambo", "oshindonga", "oshikwanyama",
+            "ndonga", "kwanyama", "ovambo",
+        )):
+            return "Oshiwambo"
+        return "Other"
+
+    for c in cats:
+        sums[_bucket_for(c.get("label", ""))] += int(c.get("count", 0) or 0)
+
+    total = sum(sums.values()) or 1
+    collapsed = [
+        {"label": b, "count": sums[b], "pct": round(sums[b] / total * 100, 1)}
+        for b in BUCKETS
+        if sums[b] > 0
+    ]
+    collapsed.sort(key=lambda r: r["count"], reverse=True)
+
+    return {
+        **block,
+        "categories": collapsed,
+        "distinct_labels": len(collapsed),
+    }
+
+
 def _top_topics_block(top_n: int = 20) -> dict[str, Any]:
     """Return the most-mentioned raw topic extractions — one level down
     from the use-case clusters.
@@ -1010,7 +1058,6 @@ def _compute_sync() -> dict[str, Any]:
             "unique_users": len(unique_users),
             "conversations": conversations,
             "messages_user": total_user_msgs,
-            "messages_assistant": total_user_msgs,  # 1-to-1 with chat lines
             "tokens_in_total": tokens_in_total,
             "tokens_out_total": tokens_out_total,
             "free_tokens_generated": free_tokens_generated,
@@ -1065,10 +1112,12 @@ def _compute_sync() -> dict[str, Any]:
                 denominator=len(unique_users),
                 empty_status="Computing — extracting regions from profile facts.",
             ),
-            "languages": _format_synthesis_block(
-                "languages",
-                denominator=len(unique_users),
-                empty_status="Computing — extracting preferred languages.",
+            "languages": _collapse_languages(
+                _format_synthesis_block(
+                    "languages",
+                    denominator=len(unique_users),
+                    empty_status="Computing — extracting preferred languages.",
+                )
             ),
             "family": _format_synthesis_block(
                 "family",

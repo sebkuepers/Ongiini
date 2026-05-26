@@ -280,36 +280,75 @@
       .og-vs-section { padding: 80px 0; }
     }
 
-    /* ── Live user counter strip ─────────────────────────────
-       Sand-backed mini-strip between the hero (bone) and the
-       #why section (ink). Number is fetched from /api/stats by
-       the small JS block at the bottom of the page; if the
-       fetch fails it stays as an em-dash and the link still
-       works. */
-    .og-live-strip { padding: 22px 0; }
+    /* ── Live stats strip ────────────────────────────────────
+       Light band that sits AFTER the dark #why section, before
+       the sand #mission section. The tonal flow becomes
+       bone (hero) → ink (why) → bone-deep (live) → sand (mission).
+       Three big numbers fetched from /api/stats: users / messages /
+       tokens. Pulsing green LIVE pip above the row. On fetch
+       failure the em-dashes + working link remain. */
+    .og-live-strip {
+      padding: 56px 0;
+      background: var(--bone-deep);
+      border-top: none;
+    }
     .og-live-inner {
       display: flex; flex-direction: column;
-      align-items: flex-start; gap: 8px;
+      align-items: center; text-align: center;
+      gap: 22px;
+    }
+    .og-live-pip {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .og-live-pip-dot {
+      width: 8px; height: 8px; border-radius: 999px;
+      background: #21c45d;
+      box-shadow: 0 0 0 0 rgba(33, 196, 93, 0.7);
+      animation: ogLivePulse 2s ease-out infinite;
+    }
+    @keyframes ogLivePulse {
+      0%   { box-shadow: 0 0 0 0 rgba(33, 196, 93, 0.6); }
+      70%  { box-shadow: 0 0 0 10px rgba(33, 196, 93, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(33, 196, 93, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .og-live-pip-dot { animation: none; }
+    }
+    .og-live-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 26px;
+      width: 100%;
+      max-width: 880px;
+    }
+    .og-live-stat {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px;
     }
     .og-live-num {
       font-family: 'Instrument Serif', serif;
-      font-size: clamp(34px, 5vw, 48px);
-      line-height: 1;
-      letter-spacing: -0.02em;
+      font-style: italic;
+      font-size: clamp(48px, 7vw, 80px);
+      line-height: 0.95;
+      letter-spacing: -0.025em;
       color: var(--terracotta-deep);
-    }
-    .og-live-copy {
       margin: 0;
+    }
+    .og-live-label {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
       color: var(--ink-soft);
-      font-size: 14.5px; line-height: 1.5;
-      flex: 1 1 auto;
+      margin: 0;
     }
     .og-live-cta {
+      margin-top: 4px;
       display: inline-flex; align-items: center; gap: 6px;
       font-size: 14px; font-weight: 500;
       color: var(--terracotta-deep);
       text-decoration: none;
-      white-space: nowrap;
       border-bottom: 1px solid color-mix(in oklab, var(--terracotta-deep) 35%, transparent);
       padding-bottom: 2px;
       transition: color 160ms, border-color 160ms;
@@ -318,10 +357,7 @@
     .og-live-cta-arrow { display: inline-block; transition: transform 160ms; }
     .og-live-cta:hover .og-live-cta-arrow { transform: translateX(2px); }
     @media (min-width: 720px) {
-      .og-live-inner {
-        flex-direction: row; align-items: baseline;
-        gap: 22px; flex-wrap: wrap;
-      }
+      .og-live-grid { grid-template-columns: 1fr 1fr 1fr; gap: 36px; }
     }
 
     .og-section--sand { background: var(--sand); }
@@ -1234,18 +1270,6 @@
       </div>
     </section>
 
-    <section class="og-section og-section--sand og-live-strip" id="live">
-      <div class="og-wrap og-live-inner">
-        <div class="og-live-num" id="live-user-count" aria-live="polite">—</div>
-        <p class="og-live-copy" data-en>Namibians chatting with Ongiini.</p>
-        <p class="og-live-copy" data-af>Namibiërs wat met Ongiini gesels.</p>
-        <a class="og-live-cta" href="/statistics/">
-          <span data-en="i">See live statistics</span><span data-af="i">Sien lewendige statistieke</span>
-          <span class="og-live-cta-arrow">→</span>
-        </a>
-      </div>
-    </section>
-
     <section class="og-section og-section--dark og-vs-section" id="why">
       <div class="og-wrap">
         <div class="og-vs-head">
@@ -1318,6 +1342,36 @@
 
         <p class="og-vs-footnote" data-en>* According to our own benchmark comparing ChatGPT app traffic to Ongiini WhatsApp traffic for an equivalent conversation.</p>
         <p class="og-vs-footnote" data-af>* Volgens ons eie maatstaftoets wat die ChatGPT-app se data met Ongiini se WhatsApp-data vir 'n soortgelyke gesprek vergelyk.</p>
+      </div>
+    </section>
+
+    <section class="og-section og-live-strip" id="live">
+      <div class="og-wrap og-live-inner">
+        <span class="og-live-pip">
+          <span class="og-live-pip-dot" aria-hidden="true"></span>
+          <span data-en>Live</span><span data-af>Lewendig</span>
+        </span>
+        <div class="og-live-grid">
+          <div class="og-live-stat">
+            <div class="og-live-num" id="live-users" aria-live="polite">—</div>
+            <p class="og-live-label" data-en>Unique users</p>
+            <p class="og-live-label" data-af>Unieke gebruikers</p>
+          </div>
+          <div class="og-live-stat">
+            <div class="og-live-num" id="live-messages" aria-live="polite">—</div>
+            <p class="og-live-label" data-en>User messages</p>
+            <p class="og-live-label" data-af>Gebruikerboodskappe</p>
+          </div>
+          <div class="og-live-stat">
+            <div class="og-live-num" id="live-tokens" aria-live="polite">—</div>
+            <p class="og-live-label" data-en>Free AI tokens generated</p>
+            <p class="og-live-label" data-af>Gratis KI-tokens gegenereer</p>
+          </div>
+        </div>
+        <a class="og-live-cta" href="/statistics/">
+          <span data-en="i">See the full transparency report</span><span data-af="i">Sien die volle deursigtigheidsverslag</span>
+          <span class="og-live-cta-arrow">→</span>
+        </a>
       </div>
     </section>
 
@@ -2108,23 +2162,40 @@
       });
     })();
 
-    // ── Live user counter (#live strip) ──────────────────────────────
-    // Fetches /api/stats (proxied + cached by the CF Pages Function)
-    // and populates the #live-user-count span. Loading state is the
-    // em-dash already in the markup. On any failure we leave the
-    // em-dash in place — the link still works, the strip degrades
-    // gracefully instead of breaking.
+    // ── Live stats (#live strip) ─────────────────────────────────────
+    // One fetch to /api/stats, populates three big numbers (users,
+    // messages, free tokens). Em-dash loading state already in
+    // markup; on any failure the strip degrades to em-dashes plus
+    // a working link rather than breaking layout.
     (function () {
-      var el = document.getElementById("live-user-count");
-      if (!el) return;
+      var els = {
+        users:    document.getElementById("live-users"),
+        messages: document.getElementById("live-messages"),
+        tokens:   document.getElementById("live-tokens"),
+      };
+      if (!els.users) return;
+      var fmtInt = new Intl.NumberFormat("en");
+      // Compact for the tokens number (e.g. 1.1M) — the raw count is
+      // usually 6-7 digits and won't read at a glance otherwise.
+      var fmtCompact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
       fetch("/api/stats", { credentials: "omit" })
         .then(function (res) { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
         .then(function (data) {
-          var n = data && data.totals && data.totals.unique_users;
-          if (typeof n !== "number" || !isFinite(n)) return;
-          el.textContent = new Intl.NumberFormat("en").format(n);
+          var t = (data && data.totals) || {};
+          if (typeof t.unique_users === "number") {
+            els.users.textContent = fmtInt.format(t.unique_users);
+          }
+          // User-side message count only. One AI reply per user
+          // message is assumed; we don't double-count to avoid a
+          // fake-doubled number that doesn't appear anywhere else.
+          if (typeof t.messages_user === "number" && els.messages) {
+            els.messages.textContent = fmtInt.format(t.messages_user);
+          }
+          if (typeof t.free_tokens_generated === "number" && els.tokens) {
+            els.tokens.textContent = fmtCompact.format(t.free_tokens_generated);
+          }
         })
-        .catch(function () { /* leave the em-dash */ });
+        .catch(function () { /* leave em-dashes */ });
     })();
   </script>
 </body>
