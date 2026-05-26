@@ -366,6 +366,7 @@ class LegalPageRenderer(HTMLParser):
 # section id.
 HOME_SECTIONS_OF_INTEREST = [
     ("hero",       "What Ongiini is"),
+    ("why",        "Why Ongiini (vs ChatGPT)"),
     ("modes",      "How to use it"),
     ("languages",  "Languages supported"),
     ("privacy",    "Privacy summary (homepage cards)"),
