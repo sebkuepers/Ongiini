@@ -43,7 +43,7 @@ from . import opt_outs
 from .sender import broadcast_to, BroadcastResult
 from ..config import settings
 from ..contributions import hash_msisdn
-from ..filters import is_allowed, normalize
+from ..filters import InvalidMsisdn, is_allowed, normalize
 
 
 logging.basicConfig(
@@ -70,7 +70,15 @@ def enumerate_recipients(only_msisdn: list[str] | None = None) -> list[str]:
         candidates = sorted(p.stem for p in settings.data_dir.glob("*.json"))
 
     # Apply the same allowlist the webhook uses (Namibian +264 etc).
-    candidates = [m for m in candidates if is_allowed(m)]
+    # Stems that aren't msisdn-shaped (eval fixtures, dev artifacts)
+    # raise InvalidMsisdn from is_allowed — skip them silently.
+    def _safe_allow(m: str) -> bool:
+        try:
+            return is_allowed(m)
+        except InvalidMsisdn:
+            return False
+
+    candidates = [m for m in candidates if _safe_allow(m)]
 
     excluded = opt_outs.all_opted_out_hashes()
     if not excluded:
