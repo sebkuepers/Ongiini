@@ -1,4 +1,4 @@
-"""scripts/broadcast.py — proactive WhatsApp broadcast CLI.
+"""ongiini.broadcast.cli — proactive WhatsApp broadcast CLI.
 
 Sends a pre-approved MARKETING template (`ongiini_announcement`) to
 every user who has a per-user memory file in ``/data/`` MINUS anyone
@@ -8,15 +8,15 @@ USAGE
 -----
 
     # Always do this first
-    python -m scripts.broadcast --dry-run --message "test announcement"
+    python -m ongiini.broadcast.cli --dry-run --message "test"
 
     # Smoke test to one msisdn (your own)
-    python -m scripts.broadcast \\
+    python -m ongiini.broadcast.cli \\
         --message "Voice notes are live — try sending one." \\
         --only-msisdn +264811000000
 
     # Full broadcast
-    python -m scripts.broadcast \\
+    python -m ongiini.broadcast.cli \\
         --message "Voice notes are live — try sending one." \\
         --url-suffix ""
 
@@ -25,10 +25,10 @@ user's short-term memory as an assistant turn, so the AI has context
 when the user replies. STOP keyword opt-outs are honoured before any
 send via the opt-out store.
 
-This script must be run from inside the webhook container (so
-``/data`` is bind-mounted + settings env vars are loaded):
+Designed to be run inside the webhook container so ``/data`` is
+bind-mounted + settings env vars are loaded:
 
-    docker exec -it ongiini-webhook python -m scripts.broadcast ...
+    docker exec -it ongiini-webhook python -m ongiini.broadcast.cli ...
 """
 from __future__ import annotations
 
@@ -38,19 +38,12 @@ import logging
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
-# Add repo root to sys.path so the script can be run via
-# `python scripts/broadcast.py` as well as `python -m scripts.broadcast`.
-_ROOT = Path(__file__).resolve().parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
-from ongiini.broadcast import opt_outs  # noqa: E402
-from ongiini.broadcast.sender import broadcast_to, BroadcastResult  # noqa: E402
-from ongiini.config import settings  # noqa: E402
-from ongiini.contributions import hash_msisdn  # noqa: E402
-from ongiini.filters import is_allowed, normalize  # noqa: E402
+from . import opt_outs
+from .sender import broadcast_to, BroadcastResult
+from ..config import settings
+from ..contributions import hash_msisdn
+from ..filters import is_allowed, normalize
 
 
 logging.basicConfig(

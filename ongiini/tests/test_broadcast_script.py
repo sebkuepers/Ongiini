@@ -1,20 +1,14 @@
-"""Tests for scripts/broadcast.py — recipient enumeration + filtering."""
+"""Tests for ongiini.broadcast.cli — recipient enumeration + filtering."""
 
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
 
 os.environ.setdefault("CONTRIBUTIONS_HASH_SALT", "test-salt")
-
-# Ensure repo root is on sys.path so we can import scripts.broadcast
-_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
 
 
 @pytest.fixture
@@ -32,7 +26,7 @@ def _seed_user_file(data_dir: Path, msisdn: str) -> None:
 
 def test_enumerate_includes_all_user_files(temp_data_dir: Path):
     from ongiini.broadcast import opt_outs
-    from scripts.broadcast import enumerate_recipients
+    from ongiini.broadcast.cli import enumerate_recipients
     opt_outs.warmup()
 
     _seed_user_file(temp_data_dir, "264811000001")
@@ -45,7 +39,7 @@ def test_enumerate_includes_all_user_files(temp_data_dir: Path):
 
 def test_enumerate_excludes_opted_out(temp_data_dir: Path):
     from ongiini.broadcast import opt_outs
-    from scripts.broadcast import enumerate_recipients
+    from ongiini.broadcast.cli import enumerate_recipients
     opt_outs.warmup()
 
     _seed_user_file(temp_data_dir, "264811000010")
@@ -62,7 +56,7 @@ def test_enumerate_filters_by_allowed_country(temp_data_dir: Path):
     """is_allowed enforces Namibian +264 prefix. Stray files for
     non-Namibian numbers (test artifacts, edge cases) must be skipped."""
     from ongiini.broadcast import opt_outs
-    from scripts.broadcast import enumerate_recipients
+    from ongiini.broadcast.cli import enumerate_recipients
     opt_outs.warmup()
 
     _seed_user_file(temp_data_dir, "264811000099")   # ok
@@ -76,7 +70,7 @@ def test_enumerate_filters_by_allowed_country(temp_data_dir: Path):
 def test_only_msisdn_overrides_enumeration(temp_data_dir: Path):
     """Smoke-test path: --only-msisdn skips the /data glob."""
     from ongiini.broadcast import opt_outs
-    from scripts.broadcast import enumerate_recipients
+    from ongiini.broadcast.cli import enumerate_recipients
     opt_outs.warmup()
 
     # No user files seeded — would normally return []
@@ -89,7 +83,7 @@ def test_only_msisdn_still_respects_opt_outs(temp_data_dir: Path):
     """If you accidentally include an opted-out msisdn in --only-msisdn,
     we still skip them. STOP is sacred."""
     from ongiini.broadcast import opt_outs
-    from scripts.broadcast import enumerate_recipients
+    from ongiini.broadcast.cli import enumerate_recipients
     opt_outs.warmup()
     opt_outs.record("264811000001")
 
