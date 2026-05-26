@@ -747,6 +747,20 @@ def _compute_sync() -> dict[str, Any]:
     """
     excluded = _load_objections()
 
+    # Community-contribution counts live in their own sqlite (see
+    # ongiini.contributions). Soft-fail if the module / file isn't
+    # available — the rest of the payload still computes.
+    try:
+        from .. import contributions as _contrib
+        contrib_stats = _contrib.stats_summary()
+    except Exception:
+        contrib_stats = {
+            "total_contributions": 0,
+            "by_dialect": {},
+            "total_contributors": 0,
+            "total_tasks": 0,
+        }
+
     # ---- Pass 1: usage.log ----
     chat_lines: list[dict[str, Any]] = []
     all_lines: list[dict[str, Any]] = []
@@ -1005,6 +1019,14 @@ def _compute_sync() -> dict[str, Any]:
             "voice_notes": voice_notes,
             "photos": photos,
             "deletions_invoked": deletions,
+            # Community-contribution loop (added 2026-05-25). Total
+            # translations submitted, per-dialect breakdown, and the
+            # number of unique native-speaker contributors. The
+            # dataset is post-collection-pre-review at this stage;
+            # numbers include unreviewed submissions.
+            "contributions_total": contrib_stats["total_contributions"],
+            "contributions_by_dialect": contrib_stats["by_dialect"],
+            "contributors_count": contrib_stats["total_contributors"],
         },
         "totals_deltas": deltas_block,
         "engagement": engagement_block,
