@@ -756,6 +756,15 @@
       wrap.appendChild(tile('Web searches', fmtInt.format(t.web_searches), 'Tavily API calls', 'activity', dx.web_searches));
       wrap.appendChild(tile('Voice notes', fmtInt.format(t.voice_notes), 'Transcribed locally', 'activity'));
       wrap.appendChild(tile('Photos', fmtInt.format(t.photos), 'Image messages', 'activity'));
+      // Community Oshiwambo contributions. Per-dialect breakdown is
+      // packed into the sub-line so we don't blow up the tile count.
+      const byDialect = t.contributions_by_dialect || {};
+      const dialectPairs = Object.entries(byDialect).sort((a, b) => b[1] - a[1]);
+      const dialectSub = dialectPairs.length
+        ? dialectPairs.map(([d, n]) => `${d}: ${fmtInt.format(n)}`).join(' · ')
+        : 'collected so far';
+      wrap.appendChild(tile('Oshiwambo translations', fmtInt.format(t.contributions_total || 0), dialectSub, 'people'));
+      wrap.appendChild(tile('Native contributors', fmtInt.format(t.contributors_count || 0), 'Submitting translations', 'people'));
     }
 
     // ----- Engagement renderers -------------------------------------------
