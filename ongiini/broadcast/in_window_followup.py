@@ -32,6 +32,7 @@ from pathlib import Path
 from openai import AsyncOpenAI
 
 from . import opt_outs
+from .sender import clear_contribute_state_for_proactive
 from ..config import settings
 from ..filters import InvalidMsisdn, is_allowed, normalize
 from ..memory import long_term as mem
@@ -464,6 +465,10 @@ async def send_batch(*, dry_run: bool, rate_per_sec: float = 5.0) -> dict:
                 with log_path.open("a") as f:
                     f.write(json.dumps(result, separators=(",", ":")) + "\n")
                 continue
+            # Clear stale contribute pending-state so the classifier
+            # doesn't misroute the user's reply through the contribute
+            # force-tool. Best-effort.
+            clear_contribute_state_for_proactive(msisdn)
             # 2. Send via free-form text (FREE in 24h window)
             try:
                 await send_text(msisdn, body)

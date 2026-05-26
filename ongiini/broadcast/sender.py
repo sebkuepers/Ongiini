@@ -40,6 +40,37 @@ from ..whatsapp import send_template
 log = logging.getLogger("ongiini.broadcast.sender")
 
 
+def clear_contribute_state_for_proactive(msisdn: str) -> None:
+    """Clear any lingering contribute pending-state for this user when
+    we inject a proactive assistant turn.
+
+    Why: the classifier reads `contribute_state` from SQLite (not from
+    memory) to decide whether to force-call a contribute_* tool. If a
+    user has stale `awaiting_followup_at` set (from a prior contribute
+    interaction) and replies "Yes" to our proactive nudge, the
+    classifier sees `awaiting_followup=true` + short reply →
+    `CONTRIBUTE_NEXT` → bot ignores the proactive context and tries
+    to serve them a translation task.
+
+    Clearing on every proactive send prevents the misroute. Best-effort
+    — failure here should NOT block the send.
+    """
+    try:
+        from ..contributions import (
+            clear_awaiting_followup,
+            clear_pending_save,
+            hash_msisdn,
+        )
+        h = hash_msisdn(msisdn)
+        clear_awaiting_followup(h)
+        clear_pending_save(h)
+    except Exception as exc:                       # noqa: BLE001
+        # Soft-fail. Worst case: classifier misroutes on the user's
+        # reply (the bug we're trying to prevent), but the send itself
+        # still works. The synthetic memory write is more important.
+        log.warning("clear_contribute_state failed for %s: %s", msisdn, exc)
+
+
 @dataclass(frozen=True)
 class BroadcastResult:
     """Outcome of broadcasting to one recipient."""
@@ -116,6 +147,10 @@ async def broadcast_to(
                 skipped_reason=f"memory_write_failed: {type(exc).__name__}",
                 memory_written=False,
             )
+        # Clear stale contribute pending-state so the classifier doesn't
+        # misroute the user's reply through the contribute force-tool.
+        # Best-effort: failures here don't block the send.
+        clear_contribute_state_for_proactive(msisdn)
 
     # 2. Meta API send. Build the params from settings + caller args.
     #    Narrow catch list — programmer errors (TypeError, NameError,
