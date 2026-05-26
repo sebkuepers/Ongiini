@@ -792,13 +792,23 @@
       const ys = (curve && curve.retained_pct) || [];
       const isDayBased = !!(curve && curve.days);
       const hasCohorts = curve && curve.n_cohorts && curve.n_cohorts > 0;
-      // Need at least one measured offset beyond the start point.
-      if (!curve || ys.length < 2 || !hasCohorts) {
-        const floor = (curve && curve.min_cohort_size) || 5;
-        if (subEl) subEl.textContent = 'No cohort of ' + floor + '+ users has had a full day after first chat yet.';
+      // Need at least 3 measured offsets beyond the start point for the
+      // curve to read as a curve (start + Day 1 alone is too sparse).
+      // Below that threshold, hide the chart and show a placeholder —
+      // the engagement story is already carried by the two panels next
+      // to this one (Users by activity + Conversation depth).
+      const floor = (curve && curve.min_cohort_size) || 20;
+      if (!curve || ys.length < 4 || !hasCohorts) {
+        if (subEl) subEl.textContent = 'Coming soon · needs more days of cohort data';
         const ph = el('div', { className: 'stat-placeholder' });
-        ph.appendChild(el('strong', { text: 'Not enough data yet' }));
-        ph.appendChild(document.createTextNode('Retention appears once at least one cohort of ' + floor + ' users has had a full day elapse since their first chat.'));
+        ph.appendChild(el('strong', { text: 'Coming soon' }));
+        ph.appendChild(document.createTextNode(
+          'Cohort retention appears once a cohort of ' + floor +
+          '+ users has had 7+ full days to mature. Smaller / younger ' +
+          'cohorts move the number around too much to read cleanly. ' +
+          'In the meantime see "Users by activity" and "Conversation ' +
+          'depth" next to this card.'
+        ));
         parent.appendChild(ph);
         return;
       }
