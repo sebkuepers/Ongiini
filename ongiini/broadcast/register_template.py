@@ -1,5 +1,9 @@
-"""ongiini.broadcast.register_template — submit / inspect / delete the
-proactive-broadcast WhatsApp template via Meta's Graph API.
+"""ongiini.broadcast.register_template — submit / inspect / delete
+WhatsApp message templates via Meta's Graph API.
+
+Manages a small registry of templates (`TEMPLATES` below). Each
+template has its own name, category (MARKETING vs UTILITY),
+language, components, and example values used during Meta's review.
 
 Endpoint reference:
   POST   /v21.0/{WABA_ID}/message_templates       — submit for approval
@@ -9,26 +13,29 @@ Endpoint reference:
 Requires:
   WHATSAPP_TOKEN                  — already in env
   WHATSAPP_BUSINESS_ACCOUNT_ID    — paste from Meta Business Manager
-                                    → WhatsApp Manager → API setup
-                                    (NOT the same as WHATSAPP_PHONE_ID)
 
-Templates land in PENDING and auto-flip to APPROVED (1–2h typically)
+Templates land in PENDING and auto-flip to APPROVED (typically 1-2h)
 or REJECTED. Use the `list` subcommand to poll.
 
 USAGE
 -----
 
-    # 1. One-time: paste WABA ID from Meta Business Manager into .env
-    #    WHATSAPP_BUSINESS_ACCOUNT_ID=10000xxxxxxxx
+    # Show available templates
+    python -m ongiini.broadcast.register_template templates
 
-    # 2. Submit
-    python -m ongiini.broadcast.register_template submit
+    # Show the payload for a specific template (read-only review)
+    python -m ongiini.broadcast.register_template show ongiini_announcement
+    python -m ongiini.broadcast.register_template show ongiini_smart_followup
+    python -m ongiini.broadcast.register_template show ongiini_token_status
 
-    # 3. Poll status
+    # Submit a template for Meta approval
+    python -m ongiini.broadcast.register_template submit ongiini_smart_followup
+
+    # Poll status across ALL templates on the WABA
     python -m ongiini.broadcast.register_template list
 
-    # 4. (Rarely) remove if you need to resubmit after a rejection
-    python -m ongiini.broadcast.register_template delete
+    # Remove (after REJECTED, before resubmitting a corrected version)
+    python -m ongiini.broadcast.register_template delete ongiini_smart_followup
 """
 from __future__ import annotations
 
@@ -51,22 +58,143 @@ logging.basicConfig(
 
 GRAPH_URL = "https://graph.facebook.com/v21.0"
 
-# Sample value Meta uses to validate the {{1}} body placeholder.
-# Mirrors the kind of text we'd actually send.
-_SAMPLE_BODY = (
-    "We just added voice notes - send me a voice message any time "
-    "and I will listen and reply in writing."
-)
-# Sample URL suffix for the dynamic {{1}} in the URL button.
-# Empty suffix would resolve to the homepage which Meta sometimes
-# flags during review; using 'contribute/' makes the full link more
-# obviously legitimate.
-_SAMPLE_URL_SUFFIX = "contribute/"
+
+# ── Template registry ─────────────────────────────────────────────
+#
+# Each entry IS the full payload Meta sees (minus `name`, which is the
+# dict key, and `language`, which we keep separate so we can submit
+# the same template content in multiple languages later).
+#
+# Conventions:
+#   - Body NEVER ends on a variable — Meta rejects those.
+#   - Two variables max per template (review complexity grows fast).
+#   - {{1}}, {{2}} are positional in the body; URL buttons get their
+#     OWN {{1}} namespace.
+#   - `examples` provide realistic sample values for Meta's review.
+# ─────────────────────────────────────────────────────────────────
+
+TEMPLATES: dict[str, dict] = {
+    # ── A: MARKETING — proactive announcements ────────────────────
+    "ongiini_announcement": {
+        "category": "MARKETING",
+        "language": "en",
+        "components": [
+            {
+                "type": "BODY",
+                "text": (
+                    "Update from Ongiini AI:\n\n"
+                    "{{1}}\n\n"
+                    "Tap below to learn more."
+                ),
+                "example": {
+                    "body_text": [[
+                        "We just added voice notes - send me a voice "
+                        "message any time and I will listen and reply "
+                        "in writing."
+                    ]],
+                },
+            },
+            {
+                "type": "BUTTONS",
+                "buttons": [
+                    {
+                        "type": "URL",
+                        "text": "Learn more",
+                        "url": "https://ongiini.ai/{{1}}",
+                        "example": ["https://ongiini.ai/contribute/"],
+                    }
+                ],
+            },
+        ],
+    },
+
+    # ── B: UTILITY — smart same-thread follow-up ──────────────────
+    # Anchored on a specific past user action (the topic they asked
+    # about). Sent 18-30h after the user's last activity, only once
+    # per session, only if they didn't already come back.
+    "ongiini_smart_followup": {
+        "category": "UTILITY",
+        "language": "en",
+        "components": [
+            {
+                "type": "HEADER",
+                "format": "TEXT",
+                "text": "Following up from Ongiini AI",
+            },
+            {
+                "type": "BODY",
+                "text": (
+                    "Yesterday you asked Ongiini AI about {{1}}.\n\n"
+                    "{{2}}\n\n"
+                    "Reply any time to keep going, or say \"stop\" "
+                    "to skip these check-ins."
+                ),
+                "example": {
+                    "body_text": [[
+                        "your CV for the cashier position at Shoprite",
+                        "Want to prep for the interview? I can run "
+                        "you through some questions a Namibian "
+                        "hiring manager would actually ask.",
+                    ]],
+                },
+            },
+            {
+                "type": "BUTTONS",
+                "buttons": [
+                    {"type": "QUICK_REPLY", "text": "Yes, let's continue"},
+                    {"type": "QUICK_REPLY", "text": "Not today"},
+                ],
+            },
+        ],
+    },
+
+    # ── C: UTILITY — weekly account-status + usage suggestion ─────
+    # Sent weekly. {{1}} is the remaining-token count; {{2}} is a
+    # short suggestion for what to use the tokens on (generated per
+    # user from their recent topic history).
+    "ongiini_token_status": {
+        "category": "UTILITY",
+        "language": "en",
+        "components": [
+            {
+                "type": "HEADER",
+                "format": "TEXT",
+                "text": "Your Ongiini AI usage this week",
+            },
+            {
+                "type": "BODY",
+                "text": (
+                    "You have {{1}} free tokens left this month. "
+                    "Your allowance refreshes on the 1st.\n\n"
+                    "Idea for what to do with them: {{2}}\n\n"
+                    "Reply any time, or just ignore this message — "
+                    "no pressure."
+                ),
+                "example": {
+                    "body_text": [[
+                        "752,000",
+                        "practise English conversation with me for 10 "
+                        "minutes — I can give you feedback on your "
+                        "phrasing",
+                    ]],
+                },
+            },
+            {
+                "type": "BUTTONS",
+                "buttons": [
+                    {"type": "QUICK_REPLY", "text": "Yes, let's do that"},
+                    {"type": "QUICK_REPLY", "text": "Show me my full usage"},
+                ],
+            },
+        ],
+    },
+}
+
+
+# ── Helpers ───────────────────────────────────────────────────────
 
 
 def _waba_id() -> str:
-    """The WhatsApp Business Account ID. Read from env, fail fast if
-    missing — without it the Graph API call has no valid endpoint."""
     waba = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "").strip()
     if not waba:
         raise SystemExit(
@@ -95,60 +223,50 @@ def _headers() -> dict:
     }
 
 
-# ── Template payload ───────────────────────────────────────────────
-
-
-def _template_payload() -> dict:
-    """The exact payload Meta gets for the `ongiini_announcement`
-    template. Mirrors what sender.broadcast_to fills in at send time.
-
-    NOTE: WhatsApp template variables in the BODY and BUTTON URL are
-    numbered INDEPENDENTLY. The body has {{1}} (the announcement
-    text); the URL button has its OWN {{1}} (the URL suffix). They
-    don't share a namespace.
-    """
+def _payload_for(name: str) -> dict:
+    """Build the exact submission payload Meta gets for `name`."""
+    if name not in TEMPLATES:
+        raise SystemExit(
+            f"Unknown template {name!r}.\n"
+            f"Available: {', '.join(sorted(TEMPLATES))}"
+        )
+    spec = TEMPLATES[name]
     return {
-        "name": settings.whatsapp_template_announcement_name,
-        "language": settings.whatsapp_template_announcement_language,
-        "category": "MARKETING",
-        "components": [
-            {
-                "type": "BODY",
-                # Trailing line after {{1}} is required by Meta — they
-                # reject templates that end on a variable. The pointer
-                # to the Learn-more button doubles as a call-to-action.
-                "text": "Update from Ongiini AI:\n\n{{1}}\n\nTap below to learn more.",
-                "example": {"body_text": [[_SAMPLE_BODY]]},
-            },
-            {
-                "type": "BUTTONS",
-                "buttons": [
-                    {
-                        "type": "URL",
-                        "text": "Learn more",
-                        "url": "https://ongiini.ai/{{1}}",
-                        "example": [f"https://ongiini.ai/{_SAMPLE_URL_SUFFIX}"],
-                    }
-                ],
-            },
-        ],
+        "name": name,
+        "language": spec["language"],
+        "category": spec["category"],
+        "components": spec["components"],
     }
+
+
+def _our_template_names() -> set[str]:
+    return set(TEMPLATES.keys())
 
 
 # ── Subcommands ────────────────────────────────────────────────────
 
 
-def cmd_show() -> int:
-    """Print the payload that would be submitted. Read-only, useful
-    for review before firing the actual submit."""
-    print(json.dumps(_template_payload(), indent=2, ensure_ascii=False))
+def cmd_templates() -> int:
+    """List the templates this registry knows about."""
+    print(f"{'name':<28}{'category':<12}{'language':<10}")
+    for name, spec in sorted(TEMPLATES.items()):
+        print(f"  {name:<26}{spec['category']:<12}{spec['language']:<10}")
     return 0
 
 
-def cmd_submit() -> int:
+def cmd_show(name: str) -> int:
+    payload = _payload_for(name)
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_submit(name: str) -> int:
     waba = _waba_id()
-    payload = _template_payload()
-    log.info("submitting template %r to WABA %s …", payload["name"], waba)
+    payload = _payload_for(name)
+    log.info(
+        "submitting template %r (%s) to WABA %s …",
+        name, payload["category"], waba,
+    )
     r = httpx.post(
         f"{GRAPH_URL}/{waba}/message_templates",
         headers=_headers(),
@@ -171,13 +289,14 @@ def cmd_submit() -> int:
 
 
 def cmd_list() -> int:
-    """List all templates on the WABA + their statuses."""
+    """List all templates on the WABA. Highlights the ones in our
+    registry so it's easy to see which are 'ours' vs. anything else."""
     waba = _waba_id()
-    name = settings.whatsapp_template_announcement_name
+    ours = _our_template_names()
     r = httpx.get(
         f"{GRAPH_URL}/{waba}/message_templates",
         headers=_headers(),
-        params={"limit": 50, "fields": "name,language,status,category,rejected_reason"},
+        params={"limit": 100, "fields": "name,language,status,category,rejected_reason"},
         timeout=15,
     )
     if r.status_code >= 400:
@@ -187,23 +306,20 @@ def cmd_list() -> int:
     if not data:
         print("(no templates on this WABA yet)")
         return 0
-    # Highlight ours
     for t in data:
-        marker = " <-- ours" if t.get("name") == name else ""
+        marker = " <-- ours" if t.get("name") in ours else ""
+        rejected = ""
+        if t.get("status") == "REJECTED":
+            rejected = f"  rejected: {t.get('rejected_reason', '')}"
         print(
             f"  {t.get('name'):<32} {t.get('language'):<6} "
-            f"{t.get('category'):<14} {t.get('status'):<10}"
-            f"{('  rejected: ' + t.get('rejected_reason', '')) if t.get('status') == 'REJECTED' else ''}"
-            f"{marker}"
+            f"{t.get('category'):<14} {t.get('status'):<10}{rejected}{marker}"
         )
     return 0
 
 
-def cmd_delete() -> int:
-    """Delete the template by name. Useful only after a REJECTED state
-    when you want to resubmit a corrected version."""
+def cmd_delete(name: str) -> int:
     waba = _waba_id()
-    name = settings.whatsapp_template_announcement_name
     log.info("DELETING template %r from WABA %s", name, waba)
     r = httpx.delete(
         f"{GRAPH_URL}/{waba}/message_templates",
@@ -220,22 +336,28 @@ def cmd_delete() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Register / inspect the proactive-broadcast WhatsApp template"
+        description="Register / inspect WhatsApp message templates",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("show", help="Print the payload (does nothing else)")
-    sub.add_parser("submit", help="POST the template to Meta for approval")
+    sub.add_parser("templates", help="List templates the registry knows about")
+    s_show = sub.add_parser("show", help="Print the submission payload (read-only)")
+    s_show.add_argument("name", help="Template name (see `templates`)")
+    s_sub = sub.add_parser("submit", help="POST the template to Meta for approval")
+    s_sub.add_argument("name", help="Template name (see `templates`)")
     sub.add_parser("list", help="List templates + statuses on the WABA")
-    sub.add_parser("delete", help="Delete the template (use after REJECTED)")
+    s_del = sub.add_parser("delete", help="Delete a template (use after REJECTED)")
+    s_del.add_argument("name", help="Template name to delete")
     args = p.parse_args(argv)
+    if args.cmd == "templates":
+        return cmd_templates()
     if args.cmd == "show":
-        return cmd_show()
+        return cmd_show(args.name)
     if args.cmd == "submit":
-        return cmd_submit()
+        return cmd_submit(args.name)
     if args.cmd == "list":
         return cmd_list()
     if args.cmd == "delete":
-        return cmd_delete()
+        return cmd_delete(args.name)
     p.print_help()
     return 1
 
