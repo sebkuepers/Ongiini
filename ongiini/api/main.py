@@ -365,6 +365,26 @@ async def receive(
         log.warning("rejected webhook POST with non-JSON body")
         return Response(status_code=400)
 
+    # One-shot WABA-ID logger. Meta puts the WhatsApp Business Account
+    # ID at entry[0].id of every webhook payload — the only place it's
+    # exposed via the Cloud API. We need it once to register message
+    # templates; after that the log line is dead weight. Logs at INFO
+    # then sets a flag so subsequent webhooks skip the work entirely.
+    # Safe to remove once WHATSAPP_BUSINESS_ACCOUNT_ID is in .env.
+    global _waba_logged_once
+    try:
+        _waba_logged_once
+    except NameError:
+        _waba_logged_once = False
+    if not _waba_logged_once:
+        try:
+            entry_ids = [e.get("id") for e in payload.get("entry", []) if e.get("id")]
+            if entry_ids:
+                log.info("WABA_DISCOVERY: entry ids in this webhook = %r", entry_ids)
+                _waba_logged_once = True
+        except Exception:
+            pass
+
     # Top-level safety net: if anything in the dispatch / scheduling
     # block below raises (bug, typo, library mismatch), we MUST still
     # return 200 to Meta so they don't retry the same broken payload
