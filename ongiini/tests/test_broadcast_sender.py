@@ -45,7 +45,8 @@ def test_render_template_body_matches_template():
     out = render_template_body("Voice notes are live — try sending one.")
     assert out == (
         "Update from Ongiini AI:\n\n"
-        "Voice notes are live — try sending one."
+        "Voice notes are live — try sending one.\n\n"
+        "Tap below to learn more."
     )
 
 
