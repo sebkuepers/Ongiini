@@ -769,6 +769,13 @@ async def _one_full_pass() -> None:
 
 
 async def run_forever() -> None:
+    import os
+    if os.environ.get("ONGIINI_STATS_LOOP_DISABLED", "").lower() in ("1", "true", "yes"):
+        log.warning(
+            "qualitative analysis loop DISABLED via ONGIINI_STATS_LOOP_DISABLED — "
+            "stats will be served from existing /data/synthesis-*.json snapshots"
+        )
+        return
     log.info(
         "qualitative analysis loop starting (interval %ds, analyses: %s)",
         settings.topic_classify_interval_seconds,

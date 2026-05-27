@@ -26,6 +26,12 @@ services:
       # cached.
       HF_HOME: /data/hf_cache
       SENTENCE_TRANSFORMERS_HOME: /data/hf_cache/sentence_transformers
+      # Disable the background qualitative-analysis loop. It hammered
+      # vLLM with multi-minute synthesis calls (regions / languages /
+      # family) which stalled the chat path. Stats are now served from
+      # existing /data/synthesis-*.json snapshots until we wire a
+      # nightly/off-peak pre-compute job. See ongiini/stats/analyses.py.
+      ONGIINI_STATS_LOOP_DISABLED: "1"
     # Match the Dockerfile's `ongiini` user (UID/GID 1000), which lines up
     # with the host's `nexus` user that owns ./data. Files written via the
     # bind mount stay owned by nexus instead of root.
