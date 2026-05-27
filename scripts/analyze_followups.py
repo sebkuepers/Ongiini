@@ -551,17 +551,41 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.classify_sentiment:
         log.info("classifying sentiment via Gemma (this hits vLLM, "
                  "expect ~1.5s per replied conv) …")
+        # Try import ongiini.config; if not on path (script copied to /data
+        # to bypass read-only rootfs), inject /app and retry; else fall
+        # back to env vars with sensible production defaults.
+        import os, sys as _sys
         try:
-            # Import here so the script still runs without openai installed
-            # for pure-aggregation mode.
             from openai import AsyncOpenAI
-            from ongiini.config import settings
-            client = AsyncOpenAI(
-                base_url=settings.vllm_base_url, api_key="not-needed",
-            )
-            model = settings.vllm_model
         except Exception as exc:                # noqa: BLE001
-            log.error("could not init Gemma client: %s — skipping sentiment", exc)
+            log.error("openai SDK not available: %s — skipping sentiment", exc)
+            client = None
+            model = None
+        else:
+            base_url = None
+            model = None
+            try:
+                from ongiini.config import settings as _settings
+                base_url = _settings.vllm_base_url
+                model = _settings.vllm_model
+            except ModuleNotFoundError:
+                if "/app" not in _sys.path and os.path.isdir("/app/ongiini"):
+                    _sys.path.insert(0, "/app")
+                    try:
+                        from ongiini.config import settings as _settings
+                        base_url = _settings.vllm_base_url
+                        model = _settings.vllm_model
+                    except Exception:           # noqa: BLE001
+                        pass
+            if not base_url:
+                base_url = os.environ.get(
+                    "VLLM_BASE_URL", "http://host.docker.internal:8124/v1",
+                )
+                model = os.environ.get("VLLM_MODEL", "gemma-4-26b")
+            log.info("Gemma client → %s (model=%s)", base_url, model)
+            client = AsyncOpenAI(base_url=base_url, api_key="not-needed")
+        if client is None:
+            pass
         else:
             per_outcome: dict[str, list[dict]] = collections.defaultdict(list)
             for i, s in enumerate(sends, start=1):

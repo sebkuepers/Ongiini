@@ -1,0 +1,192 @@
+v1_id	v1_category	english	domain	word_count
+1	greeting	Hello.	chat	1
+2	greeting	Good morning.	chat	2
+3	greeting	Good afternoon.	chat	2
+4	greeting	Good evening.	chat	2
+5	greeting	How are you today?	chat	4
+6	rapport	I'm doing well, thank you.	chat	5
+7	rapport	I hope you slept well.	chat	5
+9	rapport	It's nice to meet you.	chat	5
+10	rapport	How is your family?	chat	4
+11	rapport	How was your day?	chat	4
+13	closing	See you next time.	chat	4
+14	closing	Take care of yourself.	chat	4
+15	closing	Have a good night.	chat	4
+18	rapport	I hope you're doing well.	chat	5
+19	rapport	It's been a long time.	chat	5
+20	rapport	It's good to see you again.	chat	6
+22	rapport	Thank you for coming.	chat	4
+23	closing	Have a good day.	chat	4
+24	closing	Until next time, my friend.	chat	5
+25	rapport	You can talk to me anytime.	chat	6
+26	ack	Thank you.	chat	2
+27	ack	Thank you very much.	chat	4
+28	ack	You're welcome.	chat	2
+29	ack	I'm sorry.	chat	2
+30	ack	I'm very sorry.	chat	3
+31	ack	No problem.	chat	2
+32	ack	It's okay.	chat	2
+33	ack	I understand.	chat	2
+34	ack	I don't understand.	chat	3
+35	ack	Could you repeat that please?	chat	5
+36	ack	Please.	chat	1
+37	ack	Excuse me.	chat	2
+38	ack	Forgive me.	chat	2
+39	ack	I appreciate it.	chat	3
+40	ack	That's very kind of you.	chat	5
+41	ack	I agree.	chat	2
+42	ack	I disagree.	chat	2
+43	ack	Yes.	chat	1
+44	ack	No.	chat	1
+45	ack	Maybe.	chat	1
+46	cv_jobs	I am looking for a job.	formal	6
+47	cv_jobs	I have five years of experience.	formal	6
+48	cv_jobs	I worked as a teacher for three years.	formal	8
+49	cv_jobs	I am a hard worker.	formal	5
+50	cv_jobs	I am reliable and punctual.	formal	5
+51	cv_jobs	I can work under pressure.	formal	5
+52	cv_jobs	I have good communication skills.	formal	5
+53	cv_jobs	I work well in a team.	formal	6
+54	cv_jobs	I learn new things quickly.	formal	5
+55	cv_jobs	I can speak English and Afrikaans.	formal	6
+56	cv_jobs	Please consider my application.	formal	4
+57	cv_jobs	I would like to apply for this position.	formal	8
+58	cv_jobs	I am available to start immediately.	formal	6
+59	cv_jobs	My qualifications include a diploma in education.	formal	7
+60	cv_jobs	I have references available on request.	formal	6
+62	cv_jobs	Thank you for your consideration.	formal	5
+63	cv_jobs	I look forward to hearing from you.	formal	7
+64	cv_jobs	I am writing to inquire about the open position.	formal	9
+65	cv_jobs	Please find my CV attached.	formal	5
+66	cv_jobs	My responsibilities included managing inventory.	formal	5
+67	cv_jobs	I supervised a team of five people.	formal	7
+68	cv_jobs	I managed daily operations at the shop.	formal	7
+69	cv_jobs	I increased sales by 20% in one year.	formal	8
+70	cv_jobs	I am detail-oriented and accurate.	formal	5
+71	cv_jobs	I have strong customer service skills.	formal	6
+72	cv_jobs	I am proficient with computers.	formal	5
+73	cv_jobs	I am available for an interview at your convenience.	formal	9
+75	cv_jobs	I would be honored to join your team.	formal	8
+76	education	Let me explain this to you.	formal	6
+77	education	Do you understand the question?	formal	5
+78	education	Don't give up, you can do this.	formal	7
+79	education	Keep trying, you're getting closer.	formal	5
+81	education	Take your time, there's no rush.	formal	6
+82	education	Read it again carefully.	formal	4
+83	education	What is the question asking?	formal	5
+84	education	Let's start from the beginning.	formal	5
+85	education	Step by step, one piece at a time.	formal	8
+86	education	The answer is correct.	formal	4
+87	education	That's exactly right, well done!	formal	5
+88	education	Not quite, try again.	formal	4
+89	education	Think about it this way.	formal	5
+90	education	For example, look at this case.	formal	6
+91	education	In other words, the same idea.	formal	6
+92	education	The main idea is important.	formal	5
+93	education	Pay attention to this part.	formal	5
+94	education	Remember that the answer must be in your own words.	formal	10
+95	education	This is important for the exam.	formal	6
+96	education	Don't worry about that part now.	formal	6
+97	education	You are making great progress.	formal	5
+98	education	Well done, I'm proud of you!	formal	6
+99	education	Review this chapter one more time.	formal	6
+100	education	Let's work through this together.	formal	5
+101	education	Ask me any question you have.	formal	6
+102	education	There are no silly questions.	formal	5
+103	education	Take a break, then come back to it.	formal	8
+104	education	You are doing great so far.	formal	6
+105	education	Studying for an exam takes time.	formal	6
+106	vocab	How do you say 'water' in Oshindonga?	challenge	7
+107	vocab	What does 'ongiini' mean?	challenge	4
+108	vocab	Can you translate this for me?	challenge	6
+109	vocab	The word for 'school' is 'osikola'.	challenge	6
+110	vocab	In English, this means 'hello'.	challenge	5
+111	vocab	Let me write it in Oshindonga.	challenge	6
+112	vocab	The plural form of this word.	challenge	6
+113	vocab	Pronounce it like this.	challenge	4
+114	vocab	This is a common phrase used every day.	challenge	8
+115	vocab	It means the same as another word.	challenge	7
+116	vocab	Do you have a word for this in your language?	challenge	10
+117	vocab	What language is this written in?	challenge	6
+118	vocab	I am learning your language slowly.	challenge	6
+119	vocab	Please correct me if I make a mistake.	challenge	8
+120	vocab	How do you greet an elder respectfully?	challenge	7
+121	vocab	What is a polite way to ask for help?	challenge	9
+122	vocab	This expression is informal.	challenge	4
+123	vocab	This is the formal version.	challenge	5
+124	vocab	Can you spell that word for me?	challenge	7
+125	vocab	I am still learning, please be patient.	challenge	7
+126	money	How much does it cost?	formal	5
+127	money	I cannot afford that right now.	formal	6
+128	money	Can you give me a discount?	formal	6
+129	money	I need to save money for school.	formal	7
+130	money	I am applying for a scholarship.	formal	6
+131	money	How do I open a bank account?	formal	7
+132	money	The price is too high for me.	formal	7
+133	money	Do you accept mobile money payments?	formal	6
+134	money	I would like to make a payment now.	formal	8
+135	money	Please send me an invoice.	formal	5
+136	money	Does the cost include VAT?	formal	5
+137	money	Is there a payment plan available?	formal	6
+138	money	I need to budget for this expense.	formal	7
+139	money	What is the current exchange rate?	formal	6
+140	money	Save for the future and your family.	formal	7
+141	health	I have a headache.	formal	4
+142	health	I'm not feeling well today.	formal	5
+143	health	Please drink plenty of water.	formal	5
+144	health	You should see a doctor.	formal	5
+145	health	Take this medicine twice a day.	formal	6
+146	health	Wash your hands before eating.	formal	5
+147	health	Get enough sleep at night.	formal	5
+148	health	Eat healthy food every day.	formal	5
+149	health	Exercise regularly to stay strong.	formal	5
+150	health	Cover your mouth when you cough.	formal	6
+151	health	Stay hydrated, especially when it's hot.	formal	6
+152	health	I'm sorry to hear that you are sick.	formal	8
+153	health	Get well soon, friend.	formal	4
+154	health	Don't ignore your symptoms.	formal	4
+155	health	The hospital is open 24 hours a day.	formal	8
+156	gov_legal	Where do I apply for a national ID?	formal	8
+157	gov_legal	How long does the application take?	formal	6
+158	gov_legal	I need a certified copy of this document.	formal	8
+159	gov_legal	Please bring two passport photos.	formal	5
+160	gov_legal	The office is closed on weekends.	formal	6
+161	gov_legal	You need to fill out this form first.	formal	8
+162	gov_legal	Please show your identification.	formal	4
+163	gov_legal	The application fee is one hundred dollars.	formal	7
+164	gov_legal	Submit the documents by Friday.	formal	5
+165	gov_legal	I am writing to inquire about my application.	formal	8
+166	family	How is your mother doing?	community	5
+167	family	My father passed away last year.	community	6
+168	family	We have three children together.	community	5
+169	family	My sister is studying to be a nurse.	community	8
+170	family	I miss my family back home.	community	6
+171	family	Congratulations on your wedding!	community	4
+172	family	I am very proud of you.	community	6
+173	family	How is your wife and the children?	community	7
+174	family	We are expecting our first baby.	community	6
+175	family	My grandmother is very wise.	community	5
+176	refusal	I cannot do that for you.	chat	6
+177	refusal	I am not able to give medical advice.	chat	8
+178	refusal	I am an AI assistant, not a real doctor.	chat	9
+179	refusal	Please consult a professional for that.	chat	6
+180	refusal	I don't have that information.	chat	5
+181	refusal	Let me check on that for you.	chat	7
+182	refusal	I'm not sure about that.	chat	5
+183	refusal	That is outside my area of expertise.	chat	7
+184	refusal	I would need more details to answer that.	chat	8
+185	refusal	I'm still learning about this topic.	chat	6
+186	tech	First, open the app on your phone.	formal	7
+187	tech	Then click the green button.	formal	5
+188	tech	Type your password carefully.	formal	4
+189	tech	Wait a few seconds for it to load.	formal	8
+190	tech	Try again if it doesn't work the first time.	formal	9
+191	tech	Make sure your internet is on.	formal	6
+192	tech	Restart your phone and try again.	formal	6
+193	tech	Check your phone's battery level.	formal	5
+194	tech	Save your work before closing the app.	formal	7
+195	tech	The download is complete now.	formal	5
+196	religion	May God bless you and your family.	religious	7
+197	religion	We pray for your healing.	religious	5
+198	religion	Have faith and trust in God.	religious	6
+199	religion	God is with you in this difficult time.	religious	8
