@@ -1,0 +1,54 @@
+# Citation File Format — used by GitHub, Zenodo, and many academic
+# tools to render a "Cite this" button or BibTeX entry automatically.
+# https://citation-file-format.github.io/
+
+cff-version: 1.2.0
+title: >-
+  Ongiini AI Oshindonga + Oshikwanyama Machine Translation
+  Evaluation Set
+message: >-
+  If you use this dataset in your work, please cite it as below.
+type: dataset
+version: 1.0.0
+date-released: '2026-XX-XX'  # Update at publish time
+license: CC-BY-4.0
+url: 'https://huggingface.co/datasets/CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval'
+repository: 'https://github.com/sebkuepers/Ongiini'
+repository-code: >-
+  https://github.com/sebkuepers/Ongiini/tree/main/data/oshiwambo_eval
+keywords:
+  - machine translation
+  - low-resource languages
+  - African languages
+  - Oshindonga
+  - Oshikwanyama
+  - Oshiwambo
+  - Namibia
+  - evaluation benchmark
+  - LLM evaluation
+
+authors:
+  - given-names: '[Translator first name pending consent]'
+    family-names: '[Translator family name pending consent]'
+    affiliation: 'Independent translator, Namibia'
+    role: 'Translation reference (Oshindonga + Oshikwanyama)'
+  - given-names: 'Sebastian'
+    family-names: 'Küpers'
+    affiliation: 'Common Intelligence Foundation'
+    orcid: ''
+    role: 'Dataset design + curation lead'
+
+preferred-citation:
+  type: dataset
+  authors:
+    - given-names: '[Translator first name]'
+      family-names: '[Translator family name]'
+    - given-names: 'Sebastian'
+      family-names: 'Küpers'
+  title: >-
+    Ongiini AI Oshindonga + Oshikwanyama Machine Translation
+    Evaluation Set
+  year: 2026
+  version: 1.0.0
+  license: CC-BY-4.0
+  url: 'https://huggingface.co/datasets/CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval'

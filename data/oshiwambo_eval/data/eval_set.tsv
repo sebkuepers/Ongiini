@@ -1,0 +1,424 @@
+id	length_bucket	domain	phenomenon_tags	provenance	english	oshindonga_reference	oshikwanyama_reference	oshindonga_translator_notes	oshikwanyama_translator_notes	in_blind_split
+1	M	chat		v1_retained	Remember that the answer must be in your own words.					false
+2	M	challenge		v1_retained	Do you have a word for this in your language?					false
+3	M	chat		v1_retained	I am writing to inquire about the open position.					false
+4	M	chat		v1_retained	I am available for an interview at your convenience.					true
+5	M	challenge		v1_retained	What is a polite way to ask for help?					false
+6	M	chat		v1_retained	I am an AI assistant, not a real doctor.					false
+7	M	chat		v1_retained	Try again if it doesn't work the first time.					false
+8	M	chat		v1_retained	I worked as a teacher for three years.					false
+9	M	chat		v1_retained	I would like to apply for this position.					false
+10	M	chat		v1_retained	I increased sales by 20% in one year.					false
+11	M	chat		v1_retained	I would be honored to join your team.					false
+12	M	chat		v1_retained	Step by step, one piece at a time.					false
+13	M	chat		v1_retained	Take a break, then come back to it.					true
+14	M	challenge		v1_retained	This is a common phrase used every day.					true
+15	M	challenge		v1_retained	Please correct me if I make a mistake.					false
+16	M	chat		v1_retained	I would like to make a payment now.					true
+17	M	chat		v1_retained	I'm sorry to hear that you are sick.					true
+18	M	chat		v1_retained	The hospital is open 24 hours a day.					false
+19	M	formal		v1_retained	Where do I apply for a national ID?					false
+20	M	formal		v1_retained	I need a certified copy of this document.					false
+21	M	formal		v1_retained	You need to fill out this form first.					false
+22	M	formal		v1_retained	I am writing to inquire about my application.					false
+23	M	community		v1_retained	My sister is studying to be a nurse.					true
+24	M	chat		v1_retained	I am not able to give medical advice.					true
+25	M	chat		v1_retained	I would need more details to answer that.					false
+26	M	chat		v1_retained	Wait a few seconds for it to load.					false
+27	M	religious		v1_retained	God is with you in this difficult time.					false
+28	M	chat		v1_retained	My qualifications include a diploma in education.					false
+29	M	chat		v1_retained	I look forward to hearing from you.					false
+30	M	chat		v1_retained	I supervised a team of five people.					false
+31	M	chat		v1_retained	I managed daily operations at the shop.					false
+32	M	chat		v1_retained	Don't give up, you can do this.					false
+33	M	challenge		v1_retained	How do you say 'water' in Oshindonga?					false
+34	M	challenge		v1_retained	It means the same as another word.					false
+35	M	challenge		v1_retained	How do you greet an elder respectfully?					false
+36	M	challenge		v1_retained	Can you spell that word for me?					true
+37	M	challenge		v1_retained	I am still learning, please be patient.					false
+38	M	chat		v1_retained	I need to save money for school.					false
+39	M	chat		v1_retained	How do I open a bank account?					false
+40	M	chat		v1_retained	The price is too high for me.					false
+41	M	chat		v1_retained	I need to budget for this expense.					true
+42	M	chat		v1_retained	Save for the future and your family.					false
+43	M	formal		v1_retained	The application fee is one hundred dollars.					false
+44	M	community		v1_retained	How is your wife and the children?					false
+45	M	chat		v1_retained	Let me check on that for you.					true
+46	M	chat		v1_retained	That is outside my area of expertise.					false
+47	M	chat		v1_retained	First, open the app on your phone.					false
+48	M	chat		v1_retained	Save your work before closing the app.					true
+49	M	religious		v1_retained	May God bless you and your family.					false
+50	S	chat		v1_retained	It's good to see you again.					true
+51	S	chat		v1_retained	You can talk to me anytime.					false
+52	S	chat		v1_retained	I am looking for a job.					true
+53	S	chat		v1_retained	I have five years of experience.					true
+54	S	chat		v1_retained	I work well in a team.					false
+55	S	chat		v1_retained	I can speak English and Afrikaans.					false
+56	S	chat		v1_retained	I am available to start immediately.					false
+57	S	chat		v1_retained	I have references available on request.					false
+58	S	chat		v1_retained	I have strong customer service skills.					true
+59	S	chat		v1_retained	Let me explain this to you.					false
+60	S	chat		v1_retained	Take your time, there's no rush.					false
+61	S	chat		v1_retained	For example, look at this case.					false
+62	S	chat		v1_retained	In other words, the same idea.					false
+63	S	chat		v1_retained	This is important for the exam.					false
+64	S	chat		v1_retained	Don't worry about that part now.					true
+65	S	chat		v1_retained	Well done, I'm proud of you!					false
+66	S	chat		v1_retained	Review this chapter one more time.					false
+67	S	chat		v1_retained	Ask me any question you have.					false
+68	S	chat		v1_retained	You are doing great so far.					false
+69	S	chat		v1_retained	Studying for an exam takes time.					false
+70	S	challenge		v1_retained	Can you translate this for me?					false
+71	S	challenge		v1_retained	The word for 'school' is 'osikola'.					false
+72	S	challenge		v1_retained	Let me write it in Oshindonga.					true
+73	S	challenge		v1_retained	The plural form of this word.					false
+74	S	challenge		v1_retained	What language is this written in?					false
+75	S	challenge		v1_retained	I am learning your language slowly.					false
+76	S	chat		v1_retained	I cannot afford that right now.					false
+77	S	chat		v1_retained	Can you give me a discount?					false
+78	S	chat		v1_retained	I am applying for a scholarship.					false
+79	S	chat		v1_retained	Do you accept mobile money payments?					false
+80	S	chat		v1_retained	Is there a payment plan available?					true
+81	S	chat		v1_retained	What is the current exchange rate?					false
+82	S	chat		v1_retained	Take this medicine twice a day.					true
+83	S	chat		v1_retained	Cover your mouth when you cough.					false
+84	S	chat		v1_retained	Stay hydrated, especially when it's hot.					true
+85	S	formal		v1_retained	How long does the application take?					false
+86	S	formal		v1_retained	The office is closed on weekends.					false
+87	S	community		v1_retained	My father passed away last year.					false
+88	S	community		v1_retained	I miss my family back home.					false
+89	S	community		v1_retained	I am very proud of you.					false
+90	S	community		v1_retained	We are expecting our first baby.					false
+91	S	chat		v1_retained	I cannot do that for you.					false
+92	S	chat		v1_retained	Please consult a professional for that.					false
+93	S	chat		v1_retained	I'm still learning about this topic.					false
+94	S	chat		v1_retained	Make sure your internet is on.					false
+95	S	chat		v1_retained	Restart your phone and try again.					false
+96	S	religious		v1_retained	Have faith and trust in God.					false
+97	S	chat		v1_retained	I'm doing well, thank you.					false
+98	S	chat		v1_retained	I hope you slept well.					false
+99	S	chat		v1_retained	It's nice to meet you.					true
+100	S	chat		v1_retained	I hope you're doing well.					false
+101	S	chat		v1_retained	It's been a long time.					false
+102	S	chat		v1_retained	Until next time, my friend.					true
+103	S	chat		v1_retained	Could you repeat that please?					false
+104	S	chat		v1_retained	That's very kind of you.					false
+105	S	chat		v1_retained	I am a hard worker.					false
+106	S	chat		v1_retained	I am reliable and punctual.					false
+107	S	chat		v1_retained	I can work under pressure.					false
+108	S	chat		v1_retained	I have good communication skills.					true
+109	S	chat		v1_retained	I learn new things quickly.					false
+110	S	chat		v1_retained	Thank you for your consideration.					false
+111	S	chat		v1_retained	Please find my CV attached.					true
+112	S	chat		v1_retained	My responsibilities included managing inventory.					true
+113	S	chat		v1_retained	I am detail-oriented and accurate.					true
+114	S	chat		v1_retained	I am proficient with computers.					false
+115	S	chat		v1_retained	Do you understand the question?					true
+116	S	chat		v1_retained	Keep trying, you're getting closer.					false
+117	S	chat		v1_retained	What is the question asking?					true
+118	S	chat		v1_retained	Let's start from the beginning.					false
+119	S	chat		v1_retained	That's exactly right, well done!					false
+120	S	chat		v1_retained	Think about it this way.					true
+121	S	chat		v1_retained	The main idea is important.					false
+122	S	chat		v1_retained	Pay attention to this part.					false
+123	S	chat		v1_retained	You are making great progress.					false
+124	S	chat		v1_retained	Let's work through this together.					false
+125	S	chat		v1_retained	There are no silly questions.					false
+126	S	challenge		v1_retained	In English, this means 'hello'.					true
+127	S	challenge		v1_retained	This is the formal version.					false
+128	S	chat		v1_retained	How much does it cost?					false
+129	S	chat		v1_retained	Please send me an invoice.					false
+130	S	chat		v1_retained	Does the cost include VAT?					false
+131	S	chat		v1_retained	I'm not feeling well today.					false
+132	S	chat		v1_retained	Please drink plenty of water.					false
+133	S	chat		v1_retained	You should see a doctor.					false
+134	S	chat		v1_retained	Wash your hands before eating.					false
+135	S	chat		v1_retained	Get enough sleep at night.					false
+136	S	chat		v1_retained	Eat healthy food every day.					true
+137	S	chat		v1_retained	Exercise regularly to stay strong.					true
+138	S	formal		v1_retained	Please bring two passport photos.					false
+139	S	formal		v1_retained	Submit the documents by Friday.					false
+140	S	community		v1_retained	How is your mother doing?					false
+141	S	community		v1_retained	We have three children together.					true
+142	S	community		v1_retained	My grandmother is very wise.					false
+143	S	chat		v1_retained	I don't have that information.					true
+144	S	chat		v1_retained	I'm not sure about that.					false
+145	S	chat		v1_retained	Then click the green button.					false
+146	S	chat		v1_retained	Check your phone's battery level.					false
+147	S	chat		v1_retained	The download is complete now.					false
+148	S	religious		v1_retained	We pray for your healing.					false
+149	S	chat		v1_retained	How are you today?					true
+150	S	chat		v1_retained	How is your family?					false
+151	L	chat		real_mined	My day was rough. I was at work and it was a productive day, but now I'm a bit tired.					true
+152	L	chat		real_mined	I'm an HR student. I want to learn Afrikaans in case someone at my internship doesn't speak English well but speaks Afrikaans.					false
+153	L	chat		real_mined	Help me rewrite that CV. Add a small space in the corner for a photo and put page borders on it — it should be ATS-friendly.					false
+154	L	chat		real_mined	I want to cancel my funeral cover because the amount they'll pay out if someone passes won't even buy a coffin.					false
+155	L	chat		real_mined	I just want to understand the module so the exam will be easier — I want to see the whole picture of what it's about.					false
+156	L	chat		real_mined	Thanks. I'm a content creator and I want to sell my work, but I don't know where I can sell digital products.					false
+157	L	chat		real_mined	The thing is, I don't have a smartphone or a laptop, so what do I do? Right now I'm using a stranger's phone to ask for help.					false
+158	L	chat		real_mined	What careers are open to a NUST student doing a Bachelor of Science in general physics, biology, chemistry, and computer maths for natural sciences?					false
+159	L	chat		real_mined	The challenge is I don't know how to pronounce the word. It would be best if you sent me an audio recording of the vowels and consonants.					false
+160	L	chat		real_mined	Now can I send my CV or give you my details? I'm in Namibia — how would you submit it from here?					false
+161	L	chat		real_mined	I applied for NSFAF a few days ago and still haven't received a response. My exams are coming up and I'm behind on tuition fees.					false
+162	L	chat		real_mined	I have experience cleaning my aunt's house — I'm good at laundry, ironing and washing dishes. I'm looking for a full-time job.					false
+163	L	chat		real_mined	I want to improve my symbols for further studies, because some fields only accept students with certain points and symbols.					false
+164	L	chat		real_mined	If I give you a task to write a preliminary research report for me, can you do it without me getting expelled from NUST for plagiarism?					false
+165	L	chat		real_mined	I'm driving a truck but the cruise-control down-hill button isn't working and the retarder isn't working either — what should I use to go down the hill?					false
+166	L	chat		real_mined	Here's the situation: I'm doing research for my honours study, and the owner of the farm wants these chemicals to be registered.					false
+167	L	chat		real_mined	I came across the post on Facebook and decided to contact you, so I can learn Oshiwambo words straight from English.					false
+168	L	chat		real_mined	I just need a day-old chick feeder, and a veterinary supplier for the medicines. I'll take care of the chickens myself.					false
+169	L	chat		real_mined	I'd like to work as a remote WhatsApp agent in Namibia, helping with every new function update based on our local culture and environment.					false
+170	L	chat		real_mined	Yes, it changes, but I experience it more when I'm sleeping, standing for a long time, or sitting for more than an hour.					false
+171	L	chat		real_mined	My exams start with accounting on the 18th, quantitative methods on the 19th, economics on the 23rd, and business analytics on the 25th. Draw up an effective timetable for me.					false
+172	L	chat		real_mined	It's low down near my hips — a sharp stabbing pain, sometimes with diarrhoea, and it happens even when I'm resting. I've had this for a full year now.					false
+173	M	chat		real_mined	Help me rephrase this sentence: 'I won't be available tomorrow, so let's reschedule for when you're free too.'					true
+174	L	chat		real_mined	I follow some pages on Instagram and I want to ask if they offer HR internships — how do I start the message in English but professionally?					false
+175	L	chat		real_mined	What are UNAM's requirements if I want to further my study with a bachelor's degree in nursing science? I'm currently an enrolled nurse.					true
+176	L	chat		real_mined	It's not a dry mouth — actually a lot of saliva, and no headache. It's the same whether I eat or not.					false
+177	L	chat		real_mined	How long does it take for prepared baby formula to spoil? I'd like to leave it ready before I go to work.					true
+178	L	chat		real_mined	I'm a medical student. Let's go through a general exam starting from the feet before we move to the systemic exam, and then the respiratory examination.					false
+179	L	chat		real_mined	Should I refer to the case study as being 'in the Zambezi region' or 'in the Zambezi region, Namibia'?					false
+180	L	chat		real_mined	The first document is on how to write a report, and the second contains the idea that the report should be about.					false
+181	L	chat		real_mined	She has no manners — she talks to anyone however she wants and always insults people with bad words.					false
+182	L	chat		real_mined	I understand English well, but I can't speak fluently and my pronunciation is very bad. What do I need to do?					true
+183	M	chat		real_mined	Write me a letter in Afrikaans that apologises to my ex.					false
+184	L	chat		real_mined	Will you remind me if I haven't finished my assignment, or will you wait for me to come back here?					true
+185	L	chat		real_mined	I have chemistry mock exams coming up on the 1st of June for my grade 11. I need help studying the essentials.					false
+186	M	chat		real_mined	Are there any Namibian agencies, besides NSFAF, that offer assistance for online masters degrees abroad?					true
+187	L	chat		real_mined	Yes, let's start with the introduction. How do I write it properly with in-text citations and everything in good order?					true
+188	L	chat		real_mined	I don't have a computer with me right now — can you keep the information here so I can copy it when I get to a PC?					false
+189	L	chat		real_mined	What does a typical rental contract look like? I want to help someone draw one up for her house.					false
+190	L	chat		real_mined	I have a story already — I just need to know where to start so I can make it watchable.					true
+191	L	chat		real_mined	How do I counsel a learner who is very slow at studying and doing work, and who has low self-esteem?					false
+192	M	chat		real_mined	I want you to help me prepare lesson plans for Agricultural Science grade 8 to 11.					false
+193	L	chat		real_mined	Give me a homestead plan for Oshindonga people, with a modern main house that includes elugo, ojugo, olupale, and everything else.					false
+194	L	chat		real_mined	I was looking for an app with a green logo or something — I want to write my learner's licence.					true
+195	L	chat		real_mined	So do I need to send you a picture of my CV so you can add some experience, or how does it work?					true
+196	L	chat		real_mined	I want to know — for people who wrote the mature-age entry last year, did they have to take a test?					false
+197	L	chat		real_mined	I teach communication with parents and class management. I'm looking for a GRN teaching job — make me a quick printable for it.					false
+198	L	chat		real_mined	How does one get started? Is it like a class, or can I only ask for help when I need it?					false
+199	L	chat		real_mined	Yeah, I can contribute. Let's start with basic Afrikaans first. By the way, can you help with relationship tips and that kind of thing?					false
+200	L	chat		real_mined	Okay, I want to start a group for helping students with maths so I can create a daily income.					false
+201	L	chat		real_mined	How about the kind that burns near the belly button, and on the surface of the stomach it's warm?					false
+202	L	chat		real_mined	Good morning. Can you help me write a financial assistance request letter and tell me what to include in it?					false
+203	L	chat		real_mined	Could you please help me with a proper flyer for my hair business? I'll provide what should be written on it.					false
+204	M	chat		real_mined	I'm looking for recent fitter-and-turner job postings in Namibia, around the north and other towns.					false
+205	L	chat		real_mined	Remember, I'm a woman and I'm really interested in how technology works. But because I'm poor, I can't afford it.					false
+206	L	chat		real_mined	Thanks for your reply — how can I start a small business if I don't have any capital to start with?					false
+207	M	chat		real_mined	Help me come up with notes I can give learners, and help me explain set notation.					false
+208	M	chat		real_mined	Yes, thanks. While I'm busy with my research, please help me draft a suggestion for the research proposal.					false
+209	M	chat		real_mined	Please tell me more about how to put an email on a CV as a clickable link.					false
+210	L	chat		real_mined	I want to study my MSc abroad. What steps should I take, and where can I find a fully-funded scholarship?					false
+211	M	chat		real_mined	NSFAF rejected me — apparently the course and institution aren't accredited by the NQA. What should I do?					false
+212	M	chat		real_mined	Will you be able to show me how to write a cover letter for an internship?					false
+213	M	chat		real_mined	Write a brief research report on the effects of overcrowding in the maternity ward on intrapartum care.					false
+214	M	chat		real_mined	Help me make four lesson plans, including an assessor's evaluation, a self-evaluation, and evidence of teaching.					false
+215	M	chat		real_mined	Create a junior-primary story for me. It should have the basic elements of a story.					true
+216	L	chat		real_mined	In maths, give me the common questions and answers most likely to be asked on the topic of calculus.					false
+217	M	chat		real_mined	I want you to help our salon move up to the next level and attract more customers.					true
+218	L	chat		real_mined	Help me with weight-gain tablets — I've been trying to gain weight for 5 years now with no change.					false
+219	M	chat		real_mined	Thanks for this. If this opportunity to become a pharmacist falls through, can I have a second chance?					false
+220	M	chat		real_mined	How do I wish my friend a happy birthday — she's really smart and turned 19 before me.					false
+221	M	chat		real_mined	I have 10 years of experience as a security guard. Can you add this to my CV?					false
+222	L	chat		real_mined	Make a clear note for a grade 8 learner, easy to understand for a learner who struggles with English.					false
+223	M	chat		real_mined	I want you to help me design my CV in a way that will get me employed quickly.					false
+224	L	chat		real_mined	Hello — could you please make grade 9 mathematics lesson plans for me, strictly according to the Namibian mathematics syllabus?					false
+225	L	chat		real_mined	Let's start on my CV. I want to apply for electrical work — I'm a level 3 certificate holder.					false
+226	L	chat		real_mined	I'm a Chokwe speaker. Last question — how do you study for the English NSSCO? I'm writing the exam today at 2pm.					false
+227	L	chat		real_mined	I'm a grade 9 dropout, but I worked as a waitress and a cleaner. My languages are Afrikaans and Khoekhoegowab.					false
+228	L	chat		real_mined	I only have a topic so far — can I drop a PDF here so you can continue from there?					false
+229	L	chat		real_mined	What kind of job can you get with a level 4 vocational qualification in solar equipment installation and maintenance?					false
+230	M	chat		real_mined	Alright, thanks. I just wanted to know. I'll knock on your door when I'm in need.					true
+231	M	chat		real_mined	I wanted you to give me well-summarised notes from my lecturers so I can study for the exam.					false
+232	M	chat		real_mined	Okay, I have back pain — the moment I lift heavy things from the ground, it hurts.					false
+233	L	chat		real_mined	Can you give me the first chapter of the grade 10 accounting textbook on the new curriculum, along with its notes?					true
+234	M	chat		real_mined	Not a story — just any book you have in mind that an actuarial science student would recognise.					false
+235	L	chat		real_mined	About the things you guys posted on Facebook — I wish I had a laptop so I could join.					false
+236	M	chat		real_mined	What's the best way to attract middle-class customers to your bar with a more relaxed vibe?					true
+237	M	chat		real_mined	I'm interested in doing both, step by step. Let's start with the scenario practice.					false
+238	L	chat		real_mined	I have an old CV — can I attach it so you can modernise it into a one-page version?					false
+239	L	chat		real_mined	Yes, I need your help with an updated CV. Should I share my information so you can help me?					false
+240	L	formal		real_mined	Thank you. Under Namibian tax law, can property owners with rental properties claim depreciation as a deductible expense from their gross income, in addition to other related expenses?					false
+241	L	formal		real_mined	The subject is computerised accounting. I don't understand balance sheets, the cash book, or bank reconciliation — I don't know how to put them together.					false
+242	L	formal		real_mined	I need sample interview questions and answers for a Senior Hydrogeologist position at the Ministry of Agriculture, Water and Land Reform. Tell me everything I need to know.					false
+243	L	formal		real_mined	Yes, I need your assistance with my school finances. If you're willing to help, I can provide all my school information.					false
+244	L	formal		real_mined	I'll send you the one I have. Please upgrade it for me, and help me with possible written-interview questions for a teaching post from pre-primary up to grade 4.					false
+245	L	formal		real_mined	Thanks again — I think I'll first try NSFAF and the legal aid clinic to see how they can assist me. Thanks again for your information and suggestions.					false
+246	L	formal		real_mined	I'm a qualified but unemployed teacher who is struggling to find a job in Namibia. Please help me with oral and written interview questions.					false
+247	L	formal		real_mined	I have an interview for a Policy Analyst position at the Office of the Prime Minister. I just want to prepare properly and get it right.					false
+248	L	formal		real_mined	How do I write a letter to my governor asking for school financial assistance in a professional way? Please give me an example using simple English.					false
+249	L	formal		real_mined	Yes, my CV. I've been applying for a long time without success at the Ministry of Education and the health services. Please help me — I'm really struggling.					false
+250	L	formal		real_mined	You're right. Could you please provide me with a PDF of all the possible formulas we use in microeconomics?					false
+251	L	formal		real_mined	I want to create a budget to show the bank so I can get a loan for better equipment.					false
+252	L	formal		real_mined	Could you please give me the meaning of communication, how important it is, and what relationships have to do with it?					false
+253	M	formal		real_mined	Examine the influence of ICT integration on the academic performance of grade 10 learners at a selected school.					false
+254	M	formal		real_mined	Help me write a short, professional email to send when I attach these files to my application.					false
+255	L	formal		real_mined	How is your evening going? I'd like to chat during the daytime so you can help me with my school work.					false
+256	M	formal		real_mined	Help me with a research proposal on 'Exploring the Role of ICT in Leadership Practice in Remote Schools'.					false
+257	M	formal		real_mined	Please give me a full university-level summary on property, plant and equipment, and explain with examples.					false
+258	L	formal		real_mined	How do I describe myself for an interview for a Chief Administrative Officer position in the Government of Namibia?					false
+259	M	formal		real_mined	Alright, I understand you — I have a certificate in cleaning agents and 15 years of experience.					true
+260	M	formal		real_mined	I'm in secondary school doing AS-level — Maths, English, Physics, and Chemistry. I love the medical industry.					false
+261	L	formal		real_mined	Thank you. I have a grade 9 certificate and I want a job — which jobs can I apply for?					false
+262	M	formal		real_mined	I'm a language teacher, teaching English and Afrikaans, with more than 15 years of experience.					false
+263	M	formal		real_mined	My career goals: since I'm a teacher, I'd like to grow professionally through studying and getting promoted.					false
+264	M	formal		real_mined	What jobs can I quickly get in Namibia with a grade 12 certificate and 18 points?					false
+265	M	formal		real_mined	I want to rewrite my English grade 12 exam on the Namibian syllabus. I finished school in 2000.					false
+266	M	formal		real_mined	Do you know how to format a document so that AI is not detected?					false
+267	M	formal		real_mined	I'm working as a government nurse — I want to move to the private sector.					false
+268	M	formal		real_mined	Could you please rewrite the things in the document I sent you?					false
+269	M	formal		real_mined	I have proof of payment — I want to start with the August intake.					false
+270	M	formal		real_mined	Can you tell me more about the Minister of Urban and Rural Development?					false
+271	M	formal		real_mined	Could you send me a summary of the Kavango East biology grade 10 syllabus?					false
+272	M	formal		real_mined	Yes — please give me 18 business ideas that school learners can start.					false
+273	M	formal		real_mined	Someone who made me cry: my best friend from school.					false
+274	L	religious		real_mined	When she said 'God is peace in the storm and peace in the fire', it encouraged me — even in hard times, God's peace speaks louder in my life.					false
+275	L	religious		real_mined	Thanksgiving, asking for forgiveness, inviting the Holy Spirit, spiritual warfare prayers, thanking God for answering us, declarations, and worship.					true
+276	M	religious		real_mined	I want to understand the scripture in Matthew 11:12 — I want to understand it really well.					false
+277	M	religious		real_mined	Hi — please give me a Bible verse I can send to my big sister.					false
+278	M	religious		real_mined	What is the word for 'prayer' in Afrikaans?					false
+279	L	community		real_mined	That's life — never mind. As long as the sun rises and sets, and you eat your food surrounded by the love of your wife and kids, that's all that matters.					false
+280	L	community		real_mined	Clever — infiltrating a country using their dialect with a technology they'll never fully comprehend. Something tells me there's an element of German linguistics embedded in this, because there's a brother-sister correlation between Afrikaans and German.					true
+281	L	community		real_mined	It's a situation about my son — I willingly gave him to my grandmother to raise, and now I have to decide whether he should come back or stay.					false
+282	L	community		real_mined	Wow, that's great information. Please draft a proposal to the Ministry of Fisheries requesting approval for a community fish-farming project in our village.					false
+283	L	community		real_mined	How do I ease the stress caused by my younger sister, who is getting married? Do I really have to attend her wedding?					true
+284	M	community		real_mined	My wife wants to leave me, but I really love her and don't know what to do.					false
+285	M	community		real_mined	Wow, good to hear that. When school starts, will you help me with my daughter's homework?					false
+286	M	community		real_mined	It's a community engagement event with the Minister of Education — I'll raise those two topics there.					false
+287	L	community		real_mined	The story should take place in a village, and it should be a new one — something that's never happened before.					false
+288	M	community		real_mined	I'll be the director of the community engagement event tomorrow — help me with how to start.					true
+289	M	community		real_mined	Please redraft the proposal. The purpose of the project is women's empowerment in our village.					false
+290	M	community		real_mined	I want to produce a nice song about my late twin brother.					false
+291	M	community		real_mined	A young woman who is interested in poultry and goats at the village level.					false
+292	M	community		real_mined	How do I plan a great date with my wife in Swakopmund?					false
+293	M	community		real_mined	I want a village-style 2-bedroom house design without an indoor toilet.					false
+294	M	challenge	negation	crafted	I didn't apply for the scholarship this year.					false
+295	M	challenge	negation;pronoun_coreference	crafted	She said she wouldn't come to the meeting.					false
+296	M	challenge	negation	crafted	We don't have any forms left at this office.					true
+297	M	challenge	negation;tense_aspect	crafted	Nobody told me the deadline had moved.					false
+298	M	challenge	negation;code_switch	crafted	Don't forget to bring your ID, otherwise they won't help you.					false
+299	M	challenge	negation;tense_aspect	crafted	I never received the confirmation message you mentioned.					false
+300	M	challenge	negation	crafted	It's not that I don't want to help — I just can't right now.					false
+301	M	challenge	negation;numbers_dates	crafted	If you don't pay by Friday, the application will not be processed.					false
+302	M	challenge	negation;named_entities	crafted	Neither the principal nor the teacher could explain the new rules.					true
+303	M	challenge	negation	crafted	He didn't say no, but he didn't say yes either.					true
+304	M	challenge	noun_class_agreement	crafted	The teacher gave the children new books and pencils.					false
+305	M	community	noun_class_agreement	crafted	My mother carried the heavy bag from the market to our house.					false
+306	M	challenge	noun_class_agreement;tense_aspect	crafted	The water in those bottles tasted strange to me yesterday.					false
+307	M	challenge	noun_class_agreement;numbers_dates	crafted	Those two old men sat under the tree near the river.					false
+308	M	challenge	noun_class_agreement;numbers_dates;tense_aspect	crafted	The four young women learned how to repair the broken radio.					false
+309	M	challenge	noun_class_agreement;numbers_dates	crafted	Three goats and five chickens were stolen from our farm last night.					true
+310	M	formal	noun_class_agreement	crafted	I sent the documents with my brother to the lawyer's office.					true
+311	M	challenge	noun_class_agreement	crafted	These small children love the bright pictures in your storybook.					false
+312	M	challenge	noun_class_agreement;named_entities	crafted	The school principal called all the parents to the hall on Monday.					false
+313	M	community	noun_class_agreement	crafted	We need fresh vegetables, clean water, and warm clothes for the family.					false
+314	M	challenge	pronoun_coreference	crafted	When my sister visited her, she gave her a beautiful necklace.					false
+315	M	challenge	pronoun_coreference;tense_aspect	crafted	The teacher told the student that she had made an error.					false
+316	M	challenge	pronoun_coreference;code_switch	crafted	He picked up his phone and called his brother because he was worried.					false
+317	M	challenge	pronoun_coreference;negation	crafted	Mother said her colleague would come, but she didn't tell me when.					true
+318	M	challenge	pronoun_coreference	crafted	If the patient calls the nurse, ask her to wait by the door.					false
+319	M	challenge	pronoun_coreference	crafted	She took her daughter to the doctor because she had a fever.					false
+320	M	challenge	pronoun_coreference	crafted	The principal met the parent, and he agreed to the new schedule.					false
+321	M	challenge	pronoun_coreference;code_switch	crafted	We saw the cars before they left the parking lot.					false
+322	M	challenge	pronoun_coreference	crafted	After he saw the dog, the man called his friend to help him.					true
+323	M	challenge	pronoun_coreference;tense_aspect	crafted	My friend gave my brother her notebook because he had lost his.					false
+324	M	challenge	tense_aspect;numbers_dates	crafted	I have been waiting for this letter for two weeks.					false
+325	M	challenge	tense_aspect	crafted	She used to walk to school every day before the rains came.					false
+326	M	religious	tense_aspect	crafted	We always pray before eating dinner together.					true
+327	M	challenge	tense_aspect	crafted	By the time you arrive, I will have finished cleaning the kitchen.					false
+328	M	challenge	tense_aspect;pronoun_coreference	crafted	He had already left when the principal called for him.					true
+329	M	challenge	tense_aspect;code_switch	crafted	I was about to send the email when the power went out.					false
+330	M	challenge	tense_aspect;numbers_dates	crafted	She has been studying nursing for three years now.					false
+331	M	religious	tense_aspect	crafted	Every Sunday after church we visited our grandmother.					false
+332	M	challenge	tense_aspect	crafted	I just received your message — sorry for the late reply.					true
+333	M	challenge	tense_aspect;numbers_dates;named_entities	crafted	By next month I will have lived in Windhoek for five years.					true
+334	M	formal	numbers_dates	crafted	The application closes on the 15th of October at 5pm.					false
+335	M	challenge	numbers_dates	crafted	I have saved N$2,750 for the deposit on my new apartment.					false
+336	M	formal	numbers_dates	crafted	The meeting is scheduled for Tuesday at 9:30 in the morning.					false
+337	M	formal	numbers_dates	crafted	We need to vaccinate 1,200 children before the end of the month.					false
+338	M	community	numbers_dates	crafted	My son was born on 23 April 2018, weighing 3.4 kilograms.					false
+339	M	challenge	numbers_dates;negation	crafted	The hospital bill came to N$487 and we cannot afford it.					true
+340	M	challenge	numbers_dates	crafted	She lost her ID number 78090604120 last week at the market.					false
+341	M	challenge	numbers_dates;named_entities	crafted	We have only 14 days left to submit the form to BIPA.					false
+342	M	challenge	numbers_dates	crafted	I waited two hours and forty-five minutes before being called.					false
+343	M	formal	numbers_dates	crafted	The first instalment of N$1,500 is due on the 1st of June.					false
+344	M	challenge	named_entities;numbers_dates	crafted	The clinic in Oshakati only opens from Monday to Friday.					true
+345	M	formal	named_entities	crafted	My brother works for the Ministry of Health and Social Services in Windhoek.					false
+346	M	community	named_entities	crafted	We took the bus from Ondangwa to Outapi for the wedding.					false
+347	M	challenge	named_entities;politeness_register	crafted	Tate Shikongo asked me to deliver this message to you.					true
+348	M	challenge	named_entities	crafted	The new bridge near Rundu is finally finished.					false
+349	M	formal	named_entities	crafted	She studies education at the University of Namibia main campus.					false
+350	M	formal	named_entities	crafted	BIPA refused my application because of a missing signature.					true
+351	M	challenge	named_entities;tense_aspect	crafted	I grew up in Eenhana but moved to Walvis Bay for work.					false
+352	M	community	named_entities;politeness_register	crafted	Meme Ndapewa is the best baker in our village.					false
+353	M	challenge	named_entities	crafted	The road from Katima Mulilo to Tsumkwe is still very bad.					false
+354	M	challenge	code_switch	crafted	Please send me the link via WhatsApp when you have a moment.					false
+355	M	challenge	code_switch;negation	crafted	I forgot my password and cannot access my email account.					false
+356	M	challenge	code_switch;numbers_dates	crafted	Can you upload the PDF to the school portal before midnight?					false
+357	M	formal	code_switch	crafted	The grant from the Ministry is paid into your bank account every month.					false
+358	M	challenge	code_switch	crafted	My boss approved my leave for the funeral next week.					true
+359	M	challenge	code_switch	crafted	The internet connection at the library is faster than at home.					false
+360	M	challenge	code_switch	crafted	Please save the document as a backup before you make changes.					true
+361	M	challenge	code_switch;named_entities	crafted	I need to renew my driver's licence at NaTIS this week.					true
+362	M	challenge	code_switch;named_entities	crafted	The principal sent the timetable in a Google Doc yesterday.					false
+363	M	formal	code_switch	crafted	Use the QR code on the receipt to access the warranty information.					false
+364	M	challenge	politeness_register	crafted	Tate, can you please explain how this medicine should be taken?					false
+365	M	community	politeness_register	crafted	Meme, I hope you are well; my mother sends her warmest greetings.					false
+366	M	challenge	politeness_register	crafted	Hey kid, come here quickly and show me what you've drawn!					false
+367	M	formal	politeness_register	crafted	Sir, I would like to request a meeting with you at your convenience.					true
+368	M	challenge	politeness_register;idiom_nonliteral	crafted	My friend, you really helped me out today — I owe you one.					false
+369	M	formal	politeness_register	crafted	Honourable Minister, please consider our village's request for clean water.					false
+370	M	challenge	politeness_register	crafted	Babe, what time should I pick you up tonight?					false
+371	M	formal	politeness_register;numbers_dates	crafted	Dear customer, your appointment has been rescheduled to next Tuesday.					false
+372	M	challenge	politeness_register;numbers_dates	crafted	Hi guys, just confirming we're still on for Saturday.					false
+373	M	community	politeness_register;tense_aspect	crafted	Kuku, please tell us another story about when you were young.					false
+374	M	challenge	idiom_nonliteral	crafted	Break a leg at your job interview tomorrow!					true
+375	M	challenge	idiom_nonliteral;named_entities	crafted	It costs an arm and a leg to live in Windhoek these days.					false
+376	M	formal	idiom_nonliteral;negation	crafted	Don't put all your eggs in one basket — apply to multiple universities.					false
+377	M	challenge	idiom_nonliteral	crafted	She has a green thumb; everything she plants grows.					false
+378	M	challenge	idiom_nonliteral;pronoun_coreference	crafted	He's barking up the wrong tree if he thinks I will help him.					true
+379	M	challenge	idiom_nonliteral;tense_aspect	crafted	Let's call it a day — we have worked long enough.					false
+380	M	challenge	idiom_nonliteral	crafted	Better late than never — at least you came to the meeting.					true
+381	M	challenge	idiom_nonliteral;negation	crafted	Don't burn your bridges with that company; you may need them later.					false
+382	M	challenge	idiom_nonliteral	crafted	She let the cat out of the bag about the surprise party.					false
+383	M	challenge	idiom_nonliteral	crafted	Time flies when you are having fun with friends.					false
+384	M	challenge	polysemy;numbers_dates	crafted	Please book a room for two nights at the hotel near the beach.					false
+385	M	community	polysemy;numbers_dates	crafted	I need to book a doctor's appointment for my mother next week.					false
+386	M	formal	polysemy	crafted	The bank is closed today because of the public holiday.					false
+387	M	community	polysemy	crafted	We sat on the river bank watching the sunset together.					false
+388	M	challenge	polysemy;numbers_dates	crafted	She turned right at the school and continued for two kilometres.					false
+389	M	formal	polysemy	crafted	It is your right to receive proper medical care at the clinic.					true
+390	M	challenge	polysemy	crafted	I work at a school as a teacher of the lower grades.					false
+391	M	challenge	polysemy;tense_aspect	crafted	I think the old school of teaching was actually quite effective.					true
+392	M	formal	polysemy;numbers_dates	crafted	Please change the date on the application form to next Monday.					false
+393	M	challenge	polysemy;numbers_dates	crafted	Can you give me change for fifty dollars?					false
+394	L	challenge	multi_sentence;tense_aspect;negation	crafted	I went to the hospital yesterday. They told me to come back today. I really hope I won't have to wait as long this time.					false
+395	L	community	multi_sentence;pronoun_coreference	crafted	The school called my husband while he was at work. They said our daughter was not feeling well. He went to fetch her immediately.					false
+396	L	formal	multi_sentence;negation	crafted	I sent in my application last month. Since then I have heard nothing back. Should I follow up with them or just wait?					true
+397	L	formal	multi_sentence;pronoun_coreference	crafted	Thank you for your message. I will check with my supervisor tomorrow morning. I will let you know what she says by the end of the day.					false
+398	L	community	multi_sentence;numbers_dates	crafted	We are organising a small celebration for my mother's 60th birthday. It will be at our home on Saturday at 2pm. Please come if you can — she would love to see you.					false
+399	L	challenge	multi_sentence;tense_aspect;numbers_dates	crafted	The bus broke down halfway. We had to walk for almost two hours in the heat. By the time we arrived, the meeting was already over.					false
+400	L	formal	multi_sentence;code_switch	crafted	My CV is attached to this message. I have included references from my previous two employers. Please let me know if you need anything else.					false
+401	M	challenge	multi_sentence;negation;idiom_nonliteral	crafted	Don't forget your raincoat. The weather forecast says it will rain heavily this afternoon. Better safe than sorry.					false
+402	L	challenge	multi_sentence;code_switch;numbers_dates	crafted	I tried calling you three times. Maybe your phone is off, or maybe you are in a meeting. Please call me back when you can.					false
+403	L	challenge	multi_sentence;negation;tense_aspect	crafted	She didn't come to school yesterday. Today she still isn't here. I am starting to get worried about her.					false
+404	L	formal	named_entities	formal_drafted	The Ministry of Home Affairs requires all applicants to submit two certified copies of their national identification document together with the completed application form.					false
+405	L	formal	numbers_dates	formal_drafted	Patients with appointments after 12 noon are kindly requested to register at the reception desk no later than fifteen minutes before their scheduled time.					false
+406	L	formal	numbers_dates	formal_drafted	The school will close on the 15th of December for the holiday break and resume formal classes on the 14th of January next year.					false
+407	L	formal	numbers_dates	formal_drafted	Your loan application has been approved subject to the submission of three months of recent bank statements and proof of permanent employment.					false
+408	L	formal	negation	formal_drafted	Please note that incomplete applications will not be processed and will be returned to the sender without further communication.					false
+409	L	formal	numbers_dates	formal_drafted	All parents and guardians are invited to attend the term-end meeting on Thursday at 14:00 in the school hall to discuss learner progress.					false
+410	L	formal	numbers_dates	formal_drafted	Vaccinations for children under five years of age are provided free of charge at all government clinics from Monday to Friday during normal operating hours.					false
+411	L	formal	named_entities	formal_drafted	The Ministry of Agriculture, Water and Land Reform regrets to inform farmers that the drought relief programme has been postponed until further notice due to budget constraints.					false
+412	L	formal		formal_drafted	By signing this consent form, you acknowledge that you have read and understood the information provided and that you agree to the terms outlined above.					false
+413	L	formal	numbers_dates	formal_drafted	Tenants are reminded that the monthly rental payment of N$3,200 is due on the first day of each month and that late payments will attract a 10 percent penalty.					true
+414	L	formal	negation	formal_drafted	We regret to inform you that your application for financial assistance has not been approved at this time; you are welcome to reapply during the next intake period.					true
+415	L	formal	named_entities;numbers_dates	formal_drafted	The Namibia Students Financial Assistance Fund will only consider applications submitted with all required supporting documents before the closing date of 30 September.					true
+416	L	formal		formal_drafted	Drivers must produce a valid driver's licence, proof of vehicle insurance, and the original vehicle registration document at every routine police checkpoint.					false
+417	L	formal	named_entities;numbers_dates	formal_drafted	This message is to confirm that your appointment with Dr. Shilongo has been rescheduled to Wednesday 18 June at 10:30 in the morning.					false
+418	L	formal	named_entities	formal_drafted	The Office of the Prime Minister hereby announces the recruitment of administrative officers for the constituency offices in Erongo, Khomas, and Hardap regions.					false
+419	L	formal		formal_drafted	If you wish to lodge a formal complaint, please send a written statement signed by yourself together with any supporting evidence to the address provided below.					false
+420	L	formal	negation;code_switch	formal_drafted	Learners are not permitted to bring mobile phones, tablets, or any other electronic devices into the examination venue under any circumstances whatsoever.					false
+421	L	formal	named_entities;numbers_dates	formal_drafted	Please be advised that the public consultation meeting scheduled for next Saturday has been moved to the community hall in Katutura at the same time of 9am.					false
+422	L	formal	named_entities;numbers_dates	formal_drafted	The City of Windhoek wishes to inform residents that water supply to certain areas will be temporarily interrupted on Tuesday between 8am and 4pm for essential maintenance work.					false
+423	L	formal	numbers_dates	formal_drafted	All civil servants are kindly reminded that the deadline for submitting the annual performance assessment form to their respective supervisors is the last working day of this month.					false
