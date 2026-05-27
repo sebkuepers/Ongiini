@@ -26,7 +26,7 @@ import logging
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -58,19 +58,88 @@ LINE_RE = re.compile(
 # ── 1. Candidate identification ──────────────────────────────────
 
 
+def _recent_followup_recipient_hashes(within_hours: float) -> set[str]:
+    """Read in_window_followup.log, return sha256[:12] hashes of msisdns
+    we successfully sent a follow-up to within the last `within_hours`.
+    Used to avoid double-tapping the same user across consecutive batches.
+    """
+    log_path = settings.data_dir / "in_window_followup.log"
+    if not log_path.exists() or within_hours <= 0:
+        return set()
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=within_hours)
+    hashes: set[str] = set()
+    with log_path.open() as f:
+        for ln in f:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                rec = json.loads(ln)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("status") != "sent":
+                continue
+            ts_raw = rec.get("ts")
+            h = rec.get("msisdn_hash6")
+            if not (ts_raw and h):
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts >= cutoff:
+                hashes.add(h)
+    return hashes
+
+
 def find_candidates(
     *,
-    cutoff_hour: int = 13,
+    cutoff_hour: int | None = 13,
+    after_hour: int | None = None,
+    target_date: date | None = None,
     min_lines: int = 5,
     min_tokens: int = 500,
+    exclude_active_today: bool = False,
+    exclude_recent_followup_hours: float = 0.0,
 ) -> list[dict]:
-    """All users whose LAST chat-line today was at or before cutoff_hour
-    (Africa/Windhoek local), with at least `min_lines` chat lines AND
-    `min_tokens` total tokens_out generated. Opt-outs are excluded.
+    """Users whose chat activity on `target_date` (Windhoek local) matches
+    the time filter.
+
+      - `cutoff_hour` (default 13): include users whose LAST message on
+        `target_date` was at-or-before this hour. Original behaviour.
+      - `after_hour` (overrides cutoff_hour when set): include users
+        whose LAST message on `target_date` was AFTER this hour. Used
+        for catching the evening cohort the morning-batch missed.
+      - `target_date` defaults to today (Windhoek local). Set to a past
+        date to backfill (e.g. running tomorrow morning for users active
+        yesterday afternoon).
+      - `exclude_active_today`: drop any candidate who has ANY chat
+        activity AFTER end-of-target_date. The point is to not nudge a
+        user who's already chatting with us today — they don't need a
+        proactive ping.
+      - `exclude_recent_followup_hours`: drop candidates we already sent
+        an in-window follow-up to within the last N hours (parsed from
+        in_window_followup.log). Prevents stacking nudges.
+
+    Threshold filters (`min_lines`, `min_tokens`) and the country / opt-out
+    filters apply as before.
     """
+    if after_hour is not None and cutoff_hour is not None:
+        # Caller passed both — interpret as "after_hour wins" (the newer
+        # arg). Keep cutoff_hour as the implicit fallback when neither.
+        pass
+
     now_local = datetime.now(NAMIBIA_TZ)
-    today = now_local.date()
-    cutoff = datetime.combine(today, datetime.min.time(), NAMIBIA_TZ).replace(hour=cutoff_hour)
+    target = target_date or now_local.date()
+
+    # Track per-user: chat events on target_date AND count of any chat
+    # events strictly AFTER end-of-target_date (used for the
+    # exclude_active_today filter).
+    end_of_target = datetime.combine(
+        target, datetime.min.time(), NAMIBIA_TZ
+    ) + timedelta(days=1)
 
     per_user: dict[str, dict] = {}
     with (settings.data_dir / "usage.log").open() as f:
@@ -83,26 +152,48 @@ def find_candidates(
                 .replace(tzinfo=timezone.utc)
                 .astimezone(NAMIBIA_TZ)
             )
-            if ts_local.date() != today:
-                continue
             msi = m.group("msi")
             u = per_user.setdefault(
-                msi, {"ts_list": [], "tokens_out": 0, "lines": 0}
+                msi,
+                {"ts_list": [], "tokens_out": 0, "lines": 0,
+                 "activity_after_target": 0},
             )
-            u["ts_list"].append(ts_local)
-            u["tokens_out"] += int(m.group("tout"))
-            u["lines"] += 1
+            if ts_local.date() == target:
+                u["ts_list"].append(ts_local)
+                u["tokens_out"] += int(m.group("tout"))
+                u["lines"] += 1
+            elif ts_local >= end_of_target:
+                u["activity_after_target"] += 1
 
     excluded_hashes = opt_outs.all_opted_out_hashes()
+    recent_followup_hashes = _recent_followup_recipient_hashes(
+        exclude_recent_followup_hours
+    )
     candidates: list[dict] = []
 
     for msi, u in per_user.items():
+        if not u["ts_list"]:
+            continue
         if u["lines"] < min_lines:
             continue
         if u["tokens_out"] < min_tokens:
             continue
         last_ts = max(u["ts_list"])
-        if last_ts > cutoff:
+        # Time filter
+        if after_hour is not None:
+            threshold = datetime.combine(
+                target, datetime.min.time(), NAMIBIA_TZ
+            ).replace(hour=after_hour)
+            if last_ts <= threshold:
+                continue
+        elif cutoff_hour is not None:
+            threshold = datetime.combine(
+                target, datetime.min.time(), NAMIBIA_TZ
+            ).replace(hour=cutoff_hour)
+            if last_ts > threshold:
+                continue
+        # Exclude users already chatting after target_date
+        if exclude_active_today and u["activity_after_target"] > 0:
             continue
         # Country allowlist
         try:
@@ -110,15 +201,20 @@ def find_candidates(
                 continue
         except InvalidMsisdn:
             continue
-        # Opt-out filter
+        # Opt-out + recent-followup filter (share hash function)
         try:
             from ..contributions import hash_msisdn
-            if hash_msisdn(msi) in excluded_hashes:
-                continue
+            h_full = hash_msisdn(msi)
         except RuntimeError:
-            # Hash salt missing; can't safely check opt-out. Refuse.
             log.warning("hash salt missing — refusing to enumerate candidates")
             return []
+        if h_full in excluded_hashes:
+            continue
+        # Recent-followup uses sha256[:12] of msisdn (matches in_window_followup.log)
+        if recent_followup_hashes:
+            h_short = hashlib.sha256(msi.encode()).hexdigest()[:12]
+            if h_short in recent_followup_hashes:
+                continue
         candidates.append({
             "msisdn": msi,
             "last_ts": last_ts.isoformat(),
@@ -133,122 +229,93 @@ def find_candidates(
 # ── 2. Generation via Gemma ──────────────────────────────────────
 
 
-# v4 prompt — tightens the two v3 failure modes:
-#   1. "Same task in disguise" — ~10 of 41 v3 generations proposed
-#      "list your work experience next" / "outline arguments next" etc.
-#      That's still the same document, just softer wording. v4 spells
-#      out what continuing-the-same-task actually looks like.
-#   2. Undeliverable slip — v3 proposed a poster once despite the
-#      explicit ban. v4 moves the undeliverables list to the TOP and
-#      tells the model to self-reject and try again if it catches
-#      itself proposing one.
-# Plus: explicit "stay in domain — don't jump topics" to fix the
-# Performing-Arts-to-translation drift we saw.
+# v3 prompt — adjacency framework + default-to-generate. The v4
+# attempt with bordered hard-rules was more restrictive (14/46 vs
+# 41/60) without a clear quality win, so we're back on v3 which is
+# the validated production version with the 40-44% reply rate.
 FOLLOWUP_SYSTEM_PROMPT = """\
 You write proactive follow-up messages for Ongiini AI, a WhatsApp
-helper for people in Namibia. You will be shown a user's
-conversation from earlier today.
+helper for people in Namibia. You will be shown a user's conversation
+from earlier today.
 
-═══════════════════════════════════════════════════════════════
-HARD RULES — these override everything else. If you catch
-yourself violating one, REJECT your own idea and try again.
-═══════════════════════════════════════════════════════════════
+YOUR GOAL: Be a thoughtful friend who noticed what they were working
+on and has a useful idea for what to do NEXT — something adjacent
+to what they did, that builds on it or takes them to a natural
+next step in their journey. Be CREATIVE.
 
-RULE 1 — UNDELIVERABLES. Never propose any of these, even if you
-think they'd be useful. We literally cannot do them:
-  • Images, photos, posters, flyers, logos, videos — we are
-    TEXT ONLY. We never edit, generate, or design visuals.
-  • Voice notes / audio — we can receive them, never send.
-  • Downloadable files (PDFs, Word docs, spreadsheets) — we
-    cannot generate files. The user must paste text.
-  • Generating sentences in Oshiwambo / Oshindonga / Oshikwanyama
-    — we will get the grammar wrong. Never compose in these.
-  • Acting on the user's behalf — booking, buying, sending
-    messages to other people, signing up for things.
-  • Real-time data we can't actually fetch — live scores, current
-    stock prices, today's weather without search.
+Adjacency can be many things. Think about:
+- The NEXT STAGE of their journey: CV drafted → interview prep →
+  first-day-at-work tips → asking for a raise after 6 months.
+- A PRACTICAL APPLICATION of what they were learning: Afrikaans
+  vocabulary → how to use it in a real situation (a shop, a
+  meeting, a date).
+- A DIFFERENT ANGLE on the same domain: specific exam topic →
+  broader study skills, or a related topic in the syllabus.
+- A COMPLEMENTARY skill or task: drafted a memo → tips for short
+  professional emails → handling a difficult reply.
+- An EXTENSION that deepens the work: lesson plan → assessment
+  rubric → ideas for student engagement.
+- A SIDE-BENEFIT they may not have considered: business idea
+  brainstorm → how to register at BIPA → opening a business bank
+  account.
 
-RULE 2 — DON'T CONTINUE THE SAME TASK.
-"Same task" = continuing through the next section/step/iteration
-of the same document, lesson, exercise, or batch. These are all
-banned:
-  ✗ "list your work experience next" (still drafting the same CV)
-  ✗ "outline your arguments next" (still writing the same essay)
-  ✗ "try a few more practice phrases" (still in same lesson)
-  ✗ "another translation sentence" (still in contribute flow)
-  ✗ "should we work on section 3 now?"
-  ✗ "let's finish the rest of the rubric"
-The next-step must be a DIFFERENT TASK in the SAME DOMAIN:
-  ✓ CV done → interview prep, cover letter, first-day tips
-  ✓ Lesson plan → assessment rubric, classroom activities,
-    parent communication tips
-  ✓ Exam study → mock quiz, study technique, related topic
-  ✓ Business plan → how to register at BIPA, opening a bank account
+THE ONE RULE: Don't propose to do the SAME task they just did.
+They got that done — or got enough that they stopped. Don't say
+"want to continue X" or "ready to finish Y". Propose something
+DIFFERENT but useful given what we now know they care about.
 
-RULE 3 — STAY IN DOMAIN. If the user was working on Performing
-Arts, the next-step is in teaching/arts. Don't jump to translation
-work or food vocabulary just because those came up briefly in
-context. Pick adjacency within the user's actual focus area.
+The fact that the user didn't reply to the bot's last message is
+NORMAL — people are busy, get pulled away, save the chat for later.
+It does NOT mean don't reach out. It means reach out about
+something new and adjacent, not the same question.
 
-═══════════════════════════════════════════════════════════════
-THE GOAL
-═══════════════════════════════════════════════════════════════
+NEVER propose things we cannot actually do:
+- Editing, generating, designing images, photos, posters, flyers,
+  logos, videos
+- Sending voice notes or audio
+- Sending downloadable files (PDFs, Word docs, spreadsheets)
+- Booking, buying, signing up, transacting on the user's behalf
+- Writing or translating INTO Oshiwambo / Oshindonga / Oshikwanyama
+  (we cannot generate these languages reliably)
+- Real-time data the bot can't actually access (live match scores,
+  current stock prices, today's weather without search)
+- Anything we don't already do in normal text chat
 
-Be a thoughtful friend who noticed what they were working on and
-has a useful idea for what to do NEXT in their journey — something
-adjacent that builds on it, but is a DIFFERENT TASK.
+SKIP ONLY when one of these clearly applies (output {"skip": true,
+"reason": "..."}):
+- Conversation involved suicide ideation, self-harm, severe distress
+- User was upset, angry, or explicitly said goodbye / "done for today"
+- Bot's last reply was an apology / "I can't help with that"
+  (a nudge would just remind them of the failure)
+- Conversation was clearly just a test or curiosity — no real task
+  or domain to build on
+- Truly no useful adjacent step exists — but try harder first,
+  most real conversations have one
 
-Useful adjacency patterns:
-  • NEXT STAGE of journey: drafted CV → prep for interview →
-    first-day-at-work tips → 6-month review prep.
-  • PRACTICAL APPLICATION: Afrikaans phrases learned → using
-    them in a real shop, meeting, or date.
-  • COMPLEMENTARY skill: drafted memo → tips for short
-    professional emails → handling difficult replies.
-  • SIDE-BENEFIT: business idea → how to register at BIPA →
-    opening a business bank account.
-  • EXTENSION that deepens the work: lesson plan → tailored
-    assessment rubric → engagement ideas.
+DEFAULT to generating. Skipping should be the exception.
 
-═══════════════════════════════════════════════════════════════
-WHEN TO SKIP
-═══════════════════════════════════════════════════════════════
-
-Output {"skip": true, "reason": "..."} only when:
-  • Conversation involved suicide ideation, self-harm, severe
-    distress.
-  • User was upset, angry, or explicitly said goodbye /
-    "done for today".
-  • Bot's last reply was an apology / "I can't help with that".
-  • Conversation was clearly a test or curiosity — no real task
-    or domain.
-  • You genuinely cannot find a different-task adjacent step
-    that's deliverable. Try at least two options before skipping.
-
-DEFAULT to generating. Skipping is the exception.
-
-═══════════════════════════════════════════════════════════════
-FORMAT
-═══════════════════════════════════════════════════════════════
-
-Length: 1-2 sentences, max 200 characters.
-Language: match the user's (English or Afrikaans). NEVER
+LENGTH: 1-2 sentences. Max 200 characters total.
+LANGUAGE: match the user's (English or Afrikaans). Brief warmth
+words like "tangi" or "kaume" are fine if they used them. NEVER
 generate sentences in Oshiwambo / Oshindonga / Oshikwanyama.
-Tone: a friend with an idea. Specific. Warm. Brief. Not a
-marketer asking "are you ready". More "here's a thought:" energy.
+TONE: a friend with an idea, not a marketer asking permission.
+"Here's a thought:..." energy, not "are you ready to...". Be
+specific, warm, brief.
 
-Self-check before outputting:
-  • Does my follow_up propose anything in RULE 1? → reject, retry.
-  • Does my follow_up continue the same task (RULE 2)? → reject, retry.
-  • Did I jump domains (RULE 3)? → reject, retry.
-
-Output JSON only — no surrounding text:
-
-If sending:
-  {"skip": false, "topic": "...", "follow_up": "..."}
+If safe to follow up, output:
+{
+  "skip": false,
+  "topic": "what they did this morning, 3-8 words",
+  "follow_up": "the message"
+}
 
 If skipping:
-  {"skip": true, "reason": "..."}
+{
+  "skip": true,
+  "reason": "short explanation"
+}
+
+Output JSON only — no surrounding text.
 """
 
 
@@ -341,9 +408,13 @@ async def generate_for_user(
 
 async def generate_batch(
     *,
-    cutoff_hour: int,
+    cutoff_hour: int | None,
+    after_hour: int | None,
+    target_date: date | None,
     min_lines: int,
     min_tokens: int,
+    exclude_active_today: bool,
+    exclude_recent_followup_hours: float,
     only_msisdn: list[str] | None,
     rate_per_sec: float = 5.0,
 ) -> dict:
@@ -355,8 +426,12 @@ async def generate_batch(
     else:
         candidates = find_candidates(
             cutoff_hour=cutoff_hour,
+            after_hour=after_hour,
+            target_date=target_date,
             min_lines=min_lines,
             min_tokens=min_tokens,
+            exclude_active_today=exclude_active_today,
+            exclude_recent_followup_hours=exclude_recent_followup_hours,
         )
     log.info("identified %d candidates", len(candidates))
 
@@ -530,12 +605,26 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     g = sub.add_parser("generate", help="Find candidates + generate follow-ups via Gemma")
-    g.add_argument("--cutoff-hour", type=int, default=13,
-                   help="Last-message hour (local). Default 13 (1pm).")
+    g.add_argument("--target-date", type=str, default=None,
+                   help="YYYY-MM-DD (Windhoek local) — date users were active. "
+                        "Default: today.")
+    grp = g.add_mutually_exclusive_group()
+    grp.add_argument("--cutoff-hour", type=int, default=None,
+                     help="Include users whose LAST msg on target-date was "
+                          "AT-OR-BEFORE this hour. Default 13 if --after-hour not set.")
+    grp.add_argument("--after-hour", type=int, default=None,
+                     help="Include users whose LAST msg on target-date was "
+                          "AFTER this hour. Use to catch the evening cohort.")
     g.add_argument("--min-lines", type=int, default=5,
-                   help="Min chat lines today. Default 5.")
+                   help="Min chat lines on target-date. Default 5.")
     g.add_argument("--min-tokens", type=int, default=500,
-                   help="Min total tokens_out. Default 500.")
+                   help="Min total tokens_out on target-date. Default 500.")
+    g.add_argument("--exclude-active-today", action="store_true",
+                   help="Drop candidates with chat activity AFTER end-of-target-date "
+                        "(don't ping users already in conversation today).")
+    g.add_argument("--exclude-recent-followup-hours", type=float, default=0.0,
+                   help="Drop candidates we already sent a follow-up to within the "
+                        "last N hours. 0 = no filter.")
     g.add_argument("--only-msisdn", action="append", default=None,
                    help="Restrict to one or more msisdns (smoke test). Repeatable.")
     g.add_argument("--rate-per-sec", type=float, default=5.0)
@@ -549,10 +638,27 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
     if args.cmd == "generate":
+        # Default to legacy behaviour (cutoff_hour=13) when neither flag set,
+        # so existing invocations keep working unchanged.
+        cutoff = args.cutoff_hour
+        after = args.after_hour
+        if cutoff is None and after is None:
+            cutoff = 13
+        target = None
+        if args.target_date:
+            try:
+                target = date.fromisoformat(args.target_date)
+            except ValueError:
+                log.error("--target-date must be YYYY-MM-DD, got %r", args.target_date)
+                return 2
         out = asyncio.run(generate_batch(
-            cutoff_hour=args.cutoff_hour,
+            cutoff_hour=cutoff,
+            after_hour=after,
+            target_date=target,
             min_lines=args.min_lines,
             min_tokens=args.min_tokens,
+            exclude_active_today=args.exclude_active_today,
+            exclude_recent_followup_hours=args.exclude_recent_followup_hours,
             only_msisdn=args.only_msisdn,
             rate_per_sec=args.rate_per_sec,
         ))
