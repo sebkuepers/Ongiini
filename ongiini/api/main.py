@@ -23,7 +23,15 @@ from ..runtime import build_agent
 from ..stats import analyses as stats_analyses
 from ..stats.api import router as stats_router
 from ..summary import maybe_summarize
-from ..whatsapp import download_media, extract_messages, mark_as_read, send_text, verify_signature
+from ..delivery_log import record_status as record_delivery_status
+from ..whatsapp import (
+    download_media,
+    extract_messages,
+    extract_statuses,
+    mark_as_read,
+    send_text,
+    verify_signature,
+)
 
 # Single per-process Owela agent. Built lazily in lifespan so the
 # embedded mem0/qdrant + whisper warmup logs land before this prints
@@ -372,6 +380,16 @@ async def receive(
     # to drop one user message than to lock Meta in a retry loop against
     # our broken webhook.
     try:
+        # Delivery status events ride the same `messages` field as inbound
+        # messages (sent/delivered/read/failed). Capture before we early-
+        # return on dedup, so failed-delivery diagnostics survive even
+        # when Meta retries with the same status block.
+        try:
+            for st in extract_statuses(payload):
+                record_delivery_status(st)
+        except Exception:
+            log.exception("extract_statuses failed; continuing with message dispatch")
+
         messages = extract_messages(payload)
 
         # Drop duplicates BEFORE doing anything. Meta may legitimately

@@ -273,6 +273,47 @@ async def mark_as_read(message_id: str, with_typing: bool = True) -> None:
         log.warning("mark_as_read failed for %s: %s", message_id, exc)
 
 
+def extract_statuses(payload: dict) -> list[dict]:
+    """Yield simplified delivery-status dicts from a WhatsApp webhook payload.
+
+    Meta posts these to the SAME `messages` field subscription as inbound
+    messages — the payload carries both `messages[]` (inbound) and
+    `statuses[]` (delivery confirmations for OUR outbound). Each status is
+    one of: sent | delivered | read | failed.
+
+    Each item:
+      {"msg_id": str,        # the wamid Meta returned when we sent
+       "status": str,        # sent|delivered|read|failed
+       "recipient": str,     # msisdn we sent to (digits only)
+       "ts": str,            # unix timestamp Meta assigned
+       "errors": list,       # only populated on `failed` — code+title+details
+       "conversation_origin": str,   # marketing|utility|service|authentication|...
+       "pricing_category": str}      # marketing|utility|service|...
+
+    Empty list if the payload has no statuses — never raises.
+    """
+    out: list[dict] = []
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            for st in value.get("statuses", []) or []:
+                conv = st.get("conversation") or {}
+                origin = (conv.get("origin") or {}).get("type", "") if isinstance(conv, dict) else ""
+                pricing = st.get("pricing") or {}
+                out.append(
+                    {
+                        "msg_id": st.get("id", ""),
+                        "status": st.get("status", ""),
+                        "recipient": st.get("recipient_id", ""),
+                        "ts": st.get("timestamp", ""),
+                        "errors": st.get("errors") or [],
+                        "conversation_origin": origin,
+                        "pricing_category": pricing.get("category", "") if isinstance(pricing, dict) else "",
+                    }
+                )
+    return out
+
+
 def extract_messages(payload: dict) -> list[dict]:
     """Yield simplified message dicts from a WhatsApp webhook payload.
 
