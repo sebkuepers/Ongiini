@@ -327,6 +327,16 @@
     #chart-dau .bar-secondary { fill: var(--teal-deep); }
     #chart-dow .bar { fill: var(--teal-deep); }
     #chart-dow .bar-secondary { fill: var(--teal-light); }
+    /* Daily-volume charts: terracotta (activity, not user-count).
+       Messages stays solid; conversations uses the lighter shade so
+       stacking them vertically reads as related-but-distinct. */
+    #chart-msgsperday .bar { fill: var(--terracotta); }
+    #chart-convsperday .bar { fill: var(--terracotta-light); }
+    /* Full-width chart variant: stretches the SVG to fill its parent
+       at a taller aspect ratio than the side-by-side row charts. The
+       heatmap was the only chart using full width before; daily-volume
+       follows the same layout decision. */
+    .stat-chart--full svg { max-height: 320px; }
 
     .stat-bars { margin: 4px 0 0; }
     .stat-bar-row {
@@ -561,6 +571,19 @@
         </div>
       </div>
 
+      <h2>Daily volume</h2>
+      <p class="stat-section-note">Two angles on the same trend. <strong>Messages</strong> is the raw count of user turns each day — captures peaks (someone asking a long question) but blurs <em>who</em> is asking. <strong>Conversations</strong> groups consecutive messages into sessions (≥30 min gap = new session) — closer to "how many distinct people-moments per day."</p>
+      <div class="stat-chart stat-chart--full">
+        <p class="stat-chart-title">Messages per day</p>
+        <p class="stat-chart-sub" id="msgsperday-sub">User messages per UTC day</p>
+        <div id="chart-msgsperday"></div>
+      </div>
+      <div class="stat-chart stat-chart--full">
+        <p class="stat-chart-title">Conversations per day</p>
+        <p class="stat-chart-sub" id="convsperday-sub">Sessions started per UTC day · ≥30min gap = new session</p>
+        <div id="chart-convsperday"></div>
+      </div>
+
       <h2>Engagement</h2>
       <p class="stat-section-note">How sticky the service is. Numbers count <strong>distinct returning users</strong>, not just messages — early signal of whether people get real value or try once and drop off.</p>
       <div class="stat-engagement-grid">
@@ -702,6 +725,8 @@
       renderKpis(d);
       renderCumulative(d.timeseries.unique_users_cumulative, d.timeseries.new_users_per_day);
       renderDau(d.timeseries.daily_active_users);
+      renderMsgsPerDay(d.timeseries.messages_per_day);
+      renderConvsPerDay(d.timeseries.conversations_per_day);
       renderRetention(d.engagement && d.engagement.retention_curve);
       renderPerUserDistribution(d.engagement && d.engagement.per_user_distribution, d.totals.unique_users);
       renderConversationDepth(d.engagement && d.engagement.conversation_depth);
@@ -1062,6 +1087,32 @@
           : 'Distinct users per day · any message counts';
       }
       renderBarTimeseries('chart-dau', series, { dimLast: lastIsToday });
+    }
+
+    // Daily-volume charts use the same per-day bar pattern as DAU.
+    // Two parallel charts (messages vs conversations) so growth can be
+    // read on both axes — see the "Daily volume" section copy.
+    function _renderDailyVolume(parentId, subId, series, label) {
+      if (!series || series.length === 0) return emptyChart(parentId, 'No data yet.');
+      const subEl = document.getElementById(subId);
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const lastIso = series[series.length - 1][0];
+      const lastIsToday = lastIso === todayIso;
+      if (subEl) {
+        subEl.textContent = lastIsToday
+          ? label + " · UTC day · today's bar updates throughout the day"
+          : label + ' · UTC day';
+      }
+      renderBarTimeseries(parentId, series, { dimLast: lastIsToday });
+    }
+
+    function renderMsgsPerDay(series) {
+      _renderDailyVolume('chart-msgsperday', 'msgsperday-sub', series, 'User messages per day');
+    }
+
+    function renderConvsPerDay(series) {
+      _renderDailyVolume('chart-convsperday', 'convsperday-sub', series,
+                         'Sessions started per day · ≥30min gap = new session');
     }
 
     function renderLineChart(parentId, series, opts) {
