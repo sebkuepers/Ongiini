@@ -261,6 +261,27 @@ def _count_conversations(per_user_timestamps: dict[str, list[datetime]]) -> int:
     return total
 
 
+def _count_conversations_per_day(
+    per_user_timestamps: dict[str, list[datetime]],
+) -> dict[str, int]:
+    """Bucket conversations by the UTC date of their FIRST message.
+
+    Same 30-minute gap rule as `_count_conversations`. A conversation
+    that spans midnight counts only on its start day — picks the "when
+    did the user engage" intuition over double-counting on both days.
+    """
+    by_day: dict[str, int] = defaultdict(int)
+    for ts_list in per_user_timestamps.values():
+        if not ts_list:
+            continue
+        ts_list.sort()
+        by_day[ts_list[0].date().isoformat()] += 1
+        for prev, cur in zip(ts_list, ts_list[1:]):
+            if cur - prev >= CONVERSATION_GAP:
+                by_day[cur.date().isoformat()] += 1
+    return by_day
+
+
 def _conversation_lengths(
     per_user_timestamps: dict[str, list[datetime]],
 ) -> list[int]:
@@ -973,11 +994,18 @@ def _compute_sync() -> dict[str, Any]:
             continue
         per_day_users[dt.date().isoformat()].add(row["msisdn"])
 
+    # Bucket conversations by start-day so the timeseries shows daily
+    # session volume, not just message volume — 100 messages from 50
+    # users in 2-turn pings is a very different signal from 100 messages
+    # from 5 users in one long thread each.
+    convs_per_day = _count_conversations_per_day(chat_per_user_ts)
+
     sorted_days = sorted(chat_per_day.keys())
     cumulative_unique: list[tuple[str, int]] = []
     running_set: set[str] = set()
     daily_active_users_series: list[tuple[str, int]] = []
     messages_per_day_series: list[tuple[str, int]] = []
+    conversations_per_day_series: list[tuple[str, int]] = []
     tokens_per_day_series: list[tuple[str, int]] = []
     new_users_per_day_series: list[tuple[str, int]] = []
     for day in sorted_days:
@@ -985,6 +1013,7 @@ def _compute_sync() -> dict[str, Any]:
         cumulative_unique.append((day, len(running_set)))
         daily_active_users_series.append((day, len(per_day_users.get(day, set()))))
         messages_per_day_series.append((day, chat_per_day[day]))
+        conversations_per_day_series.append((day, convs_per_day.get(day, 0)))
         tokens_per_day_series.append(
             (day, tokens_per_day_in[day] + tokens_per_day_out[day])
         )
@@ -1107,6 +1136,7 @@ def _compute_sync() -> dict[str, Any]:
             "new_users_per_day": [list(t) for t in new_users_per_day_series],
             "unique_users_cumulative": [list(t) for t in cumulative_unique],
             "messages_per_day": [list(t) for t in messages_per_day_series],
+            "conversations_per_day": [list(t) for t in conversations_per_day_series],
             "tokens_per_day": [list(t) for t in tokens_per_day_series],
         },
         "distributions": {
