@@ -587,7 +587,7 @@
       <div class="stat-chart-row">
         <div class="stat-chart">
           <p class="stat-chart-title">Unique users</p>
-          <p class="stat-chart-sub" id="cumulative-sub">Total users since launch · new users per day overlaid</p>
+          <p class="stat-chart-sub" id="cumulative-sub">Users who passed the ≥2-messages-in-a-day bar at least once · new users per day overlaid</p>
           <div id="chart-cumulative"></div>
         </div>
         <div class="stat-chart">
@@ -611,7 +611,7 @@
       </div>
 
       <h2>Per-user trends</h2>
-      <p class="stat-section-note">Compound effects only show up <strong>normalised per user</strong>. Raw volume grows with the user base; these ratios show whether each user is getting <em>more</em> out of the service over time. Trending up = the product is compounding, not just acquiring.</p>
+      <p class="stat-section-note">Compound effects only show up <strong>normalised per user</strong>. Raw volume grows with the user base; these ratios show whether each user is getting <em>more</em> out of the service over time. Trending up = the product is compounding, not just acquiring. <strong>DAU here = active users with ≥2 messages that day</strong> — excludes the one-and-done curious touch so the ratios reflect engaged-user behaviour.</p>
       <div class="stat-compound-grid">
         <div class="stat-chart">
           <p class="stat-chart-title">Messages per active user</p>
@@ -1135,8 +1135,8 @@
       const lastIsToday = lastIso === todayIso;
       if (subEl) {
         subEl.textContent = lastIsToday
-          ? "Distinct users per day · any message counts · today's bar updates throughout the day"
-          : 'Distinct users per day · any message counts';
+          ? "Distinct users per day · ≥2 messages that day · today's bar updates throughout the day"
+          : 'Distinct users per day · ≥2 messages that day';
       }
       renderBarTimeseries('chart-dau', series, { dimLast: lastIsToday });
     }
