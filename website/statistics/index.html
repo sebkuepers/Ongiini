@@ -337,6 +337,32 @@
        heatmap was the only chart using full width before; daily-volume
        follows the same layout decision. */
     .stat-chart--full svg { max-height: 320px; }
+    /* Compound-effect ratios: 2x2 at desktop, single column on mobile.
+       Same column behavior as the engagement-grid; just a different
+       semantic grouping. */
+    .stat-compound-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 720px) {
+      .stat-compound-grid { grid-template-columns: 1fr 1fr; }
+    }
+    /* Per-user ratio charts use the teal palette so they visually
+       group as "user-side" metrics, distinct from the terracotta
+       activity-volume charts above. */
+    #chart-msgs-per-dau .line,
+    #chart-msgs-per-conv .line,
+    #chart-pct-returning .line,
+    #chart-toolcall-rate .line { stroke: var(--teal-deep); }
+    #chart-msgs-per-dau .area,
+    #chart-msgs-per-conv .area,
+    #chart-pct-returning .area,
+    #chart-toolcall-rate .area { fill: var(--teal-light); opacity: 0.45; }
+    #chart-msgs-per-dau .point,
+    #chart-msgs-per-conv .point,
+    #chart-pct-returning .point,
+    #chart-toolcall-rate .point { fill: var(--teal-deep); }
 
     .stat-bars { margin: 4px 0 0; }
     .stat-bar-row {
@@ -584,6 +610,31 @@
         <div id="chart-convsperday"></div>
       </div>
 
+      <h2>Per-user trends</h2>
+      <p class="stat-section-note">Compound effects only show up <strong>normalised per user</strong>. Raw volume grows with the user base; these ratios show whether each user is getting <em>more</em> out of the service over time. Trending up = the product is compounding, not just acquiring.</p>
+      <div class="stat-compound-grid">
+        <div class="stat-chart">
+          <p class="stat-chart-title">Messages per active user</p>
+          <p class="stat-chart-sub">User messages ÷ DAU · per day</p>
+          <div id="chart-msgs-per-dau"></div>
+        </div>
+        <div class="stat-chart">
+          <p class="stat-chart-title">Messages per conversation</p>
+          <p class="stat-chart-sub">Depth proxy · messages ÷ sessions per day</p>
+          <div id="chart-msgs-per-conv"></div>
+        </div>
+        <div class="stat-chart">
+          <p class="stat-chart-title">% returning users</p>
+          <p class="stat-chart-sub">Share of today's actives who aren't new today</p>
+          <div id="chart-pct-returning"></div>
+        </div>
+        <div class="stat-chart">
+          <p class="stat-chart-title">Tool-call rate</p>
+          <p class="stat-chart-sub">Turns that invoked a tool · per day · proxy for intentionality</p>
+          <div id="chart-toolcall-rate"></div>
+        </div>
+      </div>
+
       <h2>Engagement</h2>
       <p class="stat-section-note">How sticky the service is. Numbers count <strong>distinct returning users</strong>, not just messages — early signal of whether people get real value or try once and drop off.</p>
       <div class="stat-engagement-grid">
@@ -727,6 +778,7 @@
       renderDau(d.timeseries.daily_active_users);
       renderMsgsPerDay(d.timeseries.messages_per_day);
       renderConvsPerDay(d.timeseries.conversations_per_day);
+      renderCompoundRatios(d.timeseries);
       renderRetention(d.engagement && d.engagement.retention_curve);
       renderPerUserDistribution(d.engagement && d.engagement.per_user_distribution, d.totals.unique_users);
       renderConversationDepth(d.engagement && d.engagement.conversation_depth);
@@ -1115,6 +1167,79 @@
                          'Sessions started per day · ≥30min gap = new session');
     }
 
+    // --- Per-user compound-effect ratios -------------------------------
+    //
+    // All four metrics are normalised — they show whether each user is
+    // getting more out of the service over time, independent of how
+    // many users we have. Computed in the browser by joining series
+    // from `d.timeseries` on date (so a missing/zero day in one series
+    // doesn't shift the ratio onto the wrong day).
+    function _joinByDay(/* arbitrary [day, val] series */) {
+      const byDay = {};
+      for (let i = 0; i < arguments.length; i++) {
+        (arguments[i] || []).forEach(([day, v]) => {
+          byDay[day] = byDay[day] || [];
+          byDay[day][i] = v;
+        });
+      }
+      return Object.keys(byDay).sort().map(day => [day, ...(byDay[day] || [])]);
+    }
+
+    function renderCompoundRatios(ts) {
+      const dau = ts.daily_active_users || [];
+      const msgs = ts.messages_per_day || [];
+      const convs = ts.conversations_per_day || [];
+      const newUsers = ts.new_users_per_day || [];
+      const toolCalls = ts.tool_call_turns_per_day || [];
+      const traceTotals = ts.total_trace_turns_per_day || [];
+
+      // (1) Messages per active user — msgs / DAU.
+      const msgsPerDau = _joinByDay(msgs, dau).map(([d, m, n]) =>
+        [d, (n && m) ? +(m / n).toFixed(2) : 0]);
+      _renderRatioLine('chart-msgs-per-dau', msgsPerDau,
+                       'msgs / DAU · per day', 1);
+
+      // (2) Messages per conversation — depth proxy.
+      // Conversation grouping is server-side (≥30min gap); ratio is
+      // average turns per session for the day.
+      const msgsPerConv = _joinByDay(msgs, convs).map(([d, m, c]) =>
+        [d, (c && m) ? +(m / c).toFixed(2) : 0]);
+      _renderRatioLine('chart-msgs-per-conv', msgsPerConv,
+                       'msgs / conv · per day', 1);
+
+      // (3) % returning — 1 - (new_users / DAU). A day where every
+      // active user is also a new user gives 0% returning, which is
+      // honest (early-stage signal).
+      const pctReturning = _joinByDay(dau, newUsers).map(([d, da, nu]) => {
+        if (!da) return [d, 0];
+        const pct = Math.max(0, Math.min(100, 100 * (1 - (nu || 0) / da)));
+        return [d, +pct.toFixed(1)];
+      });
+      _renderRatioLine('chart-pct-returning', pctReturning,
+                       '% of today\'s actives who are not first-timers',
+                       null, true /* isPercent */);
+
+      // (4) Tool-call rate — tool_call_turns / total_trace_turns per
+      // day. Both come from trace.jsonl. Low-denominator days look
+      // jittery (1/1=100%), so the chart will be naturally noisy at
+      // small n — that's a feature, not a bug.
+      const toolCallRate = _joinByDay(toolCalls, traceTotals).map(([d, tc, tt]) => {
+        if (!tt) return [d, 0];
+        return [d, +(100 * (tc || 0) / tt).toFixed(1)];
+      });
+      _renderRatioLine('chart-toolcall-rate', toolCallRate,
+                       '% of turns that called a tool',
+                       null, true /* isPercent */);
+    }
+
+    function _renderRatioLine(parentId, series, /* unused */ _sub, /* unused */ _maxHint, isPercent) {
+      if (!series || series.length === 0) return emptyChart(parentId, 'No data yet.');
+      // Reuse renderLineChart — dots + area + per-day value labels look
+      // right for these short series. isPercent toggles the value-label
+      // formatter via a one-off opts flag inside renderLineChart.
+      renderLineChart(parentId, series, { area: true, valueIsPercent: !!isPercent });
+    }
+
     function renderLineChart(parentId, series, opts) {
       const parent = document.getElementById(parentId);
       clear(parent);
@@ -1133,7 +1258,9 @@
         svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: 'grid-line' }));
       }
       const maxLabel = svgEl('text', { x: padL - 4, y: padT + 4, 'text-anchor': 'end', class: 'axis-tick' });
-      maxLabel.textContent = fmtCompact.format(maxV);
+      maxLabel.textContent = opts.valueIsPercent
+        ? maxV.toFixed(maxV >= 10 ? 0 : 1) + '%'
+        : fmtCompact.format(maxV);
       svg.appendChild(maxLabel);
       const zeroLabel = svgEl('text', { x: padL - 4, y: padT + innerH + 3, 'text-anchor': 'end', class: 'axis-tick' });
       zeroLabel.textContent = '0';
@@ -1204,7 +1331,9 @@
             'text-anchor': 'middle',
             class: 'value-label',
           });
-          tx.textContent = fmtCompact.format(p[1]);
+          tx.textContent = opts.valueIsPercent
+            ? p[1].toFixed(p[1] >= 10 ? 0 : 1) + '%'
+            : fmtCompact.format(p[1]);
           svg.appendChild(tx);
         }
       });
