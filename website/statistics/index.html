@@ -1294,14 +1294,29 @@
           });
           tx.textContent = fmtCompact.format(p[1]);
           svg.appendChild(tx);
+          // "partial" is on its own line below the date so the wider
+          // last-day label doesn't collide with the second-to-last
+          // label on dense per-day series (Sebastian flagged 2026-05-29).
           const dt = svgEl('text', {
             x: (x + barW / 2).toFixed(1),
-            y: H - 4,
+            y: isPartial ? H - 12 : H - 4,
             'text-anchor': 'middle',
             class: 'axis-tick',
           });
-          dt.textContent = isPartial ? shortDate(p[0]) + ' · partial' : shortDate(p[0]);
+          dt.textContent = shortDate(p[0]);
           svg.appendChild(dt);
+          if (isPartial) {
+            const pt = svgEl('text', {
+              x: (x + barW / 2).toFixed(1),
+              y: H - 2,
+              'text-anchor': 'middle',
+              class: 'axis-tick',
+              'font-size': '9',
+              'fill-opacity': '0.7',
+            });
+            pt.textContent = 'partial';
+            svg.appendChild(pt);
+          }
         }
       });
 
