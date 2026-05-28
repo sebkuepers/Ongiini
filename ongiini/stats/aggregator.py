@@ -917,8 +917,20 @@ def _compute_sync() -> dict[str, Any]:
 
     # Materialise trace rows so we can also use them for deltas.
     trace_rows: list[dict[str, Any]] = list(_parse_trace_lines(excluded))
+    # Per-day buckets for the compound-effect tool-call rate chart on
+    # /statistics: frontend divides tool_call_turns_per_day by
+    # total_trace_turns_per_day to get a per-day "of all turns, how many
+    # invoked a tool". Days with low total_trace_turns_per_day are noisy;
+    # the frontend can dim them or hide labels.
+    total_trace_turns_per_day: dict[str, int] = defaultdict(int)
+    tool_call_turns_per_day: dict[str, int] = defaultdict(int)
     for tr in trace_rows:
         total_trace_turns += 1
+        day = None
+        dt = _parse_ts(tr.get("ts", ""))
+        if dt is not None:
+            day = dt.date().isoformat()
+            total_trace_turns_per_day[day] += 1
         calls = tr.get("calls", []) or []
         any_tool_called = False
         for call in calls:
@@ -931,6 +943,8 @@ def _compute_sync() -> dict[str, Any]:
                     url_fetches += 1
         if any_tool_called:
             tool_call_turns += 1
+            if day:
+                tool_call_turns_per_day[day] += 1
         if tr.get("deleted_data"):
             deletions += 1
         if tr.get("truncated"):
@@ -1008,6 +1022,8 @@ def _compute_sync() -> dict[str, Any]:
     conversations_per_day_series: list[tuple[str, int]] = []
     tokens_per_day_series: list[tuple[str, int]] = []
     new_users_per_day_series: list[tuple[str, int]] = []
+    tool_call_turns_per_day_series: list[tuple[str, int]] = []
+    total_trace_turns_per_day_series: list[tuple[str, int]] = []
     for day in sorted_days:
         running_set |= per_day_users.get(day, set())
         cumulative_unique.append((day, len(running_set)))
@@ -1018,6 +1034,8 @@ def _compute_sync() -> dict[str, Any]:
             (day, tokens_per_day_in[day] + tokens_per_day_out[day])
         )
         new_users_per_day_series.append((day, new_users_per_day.get(day, 0)))
+        tool_call_turns_per_day_series.append((day, tool_call_turns_per_day.get(day, 0)))
+        total_trace_turns_per_day_series.append((day, total_trace_turns_per_day.get(day, 0)))
 
     # ---- Distributions ----
     by_hour_utc = [{"hour": h, "count": hour_utc_counts.get(h, 0)} for h in range(24)]
@@ -1137,6 +1155,8 @@ def _compute_sync() -> dict[str, Any]:
             "unique_users_cumulative": [list(t) for t in cumulative_unique],
             "messages_per_day": [list(t) for t in messages_per_day_series],
             "conversations_per_day": [list(t) for t in conversations_per_day_series],
+            "tool_call_turns_per_day": [list(t) for t in tool_call_turns_per_day_series],
+            "total_trace_turns_per_day": [list(t) for t in total_trace_turns_per_day_series],
             "tokens_per_day": [list(t) for t in tokens_per_day_series],
         },
         "distributions": {
