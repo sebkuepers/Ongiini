@@ -327,11 +327,16 @@
     #chart-dau .bar-secondary { fill: var(--teal-deep); }
     #chart-dow .bar { fill: var(--teal-deep); }
     #chart-dow .bar-secondary { fill: var(--teal-light); }
-    /* Daily-volume charts: terracotta (activity, not user-count).
-       Messages stays solid; conversations uses the lighter shade so
-       stacking them vertically reads as related-but-distinct. */
-    #chart-msgsperday .bar { fill: var(--terracotta); }
-    #chart-convsperday .bar { fill: var(--terracotta-light); }
+    /* Combined daily-volume chart: messages = solid terracotta bars,
+       conversations = lighter terracotta narrower bars (secondary),
+       trend = dashed ink line over both. Same chart, two metrics +
+       direction. */
+    #chart-volume .bar { fill: var(--terracotta); }
+    #chart-volume .bar-secondary { fill: var(--terracotta-light); }
+    #chart-volume .trend-line {
+      stroke: var(--ink); stroke-width: 1.5; fill: none;
+      stroke-dasharray: 5 3; opacity: 0.65;
+    }
     /* Full-width chart variant: stretches the SVG to fill its parent
        at a taller aspect ratio than the side-by-side row charts. The
        heatmap was the only chart using full width before; daily-volume
@@ -598,16 +603,11 @@
       </div>
 
       <h2>Daily volume</h2>
-      <p class="stat-section-note">Two angles on the same trend. <strong>Messages</strong> is the raw count of user turns each day — captures peaks (someone asking a long question) but blurs <em>who</em> is asking. <strong>Conversations</strong> groups consecutive messages into sessions (≥30 min gap = new session) — closer to "how many distinct people-moments per day."</p>
+      <p class="stat-section-note">Both angles on one chart. <strong>Bars</strong> are user messages per day. The thinner <strong>secondary bars</strong> are conversations (≥30 min gap = new session). The <strong>dashed line</strong> is the linear trend on messages — overall direction independent of day-to-day spikes.</p>
       <div class="stat-chart stat-chart--full">
-        <p class="stat-chart-title">Messages per day</p>
-        <p class="stat-chart-sub" id="msgsperday-sub">User messages per UTC day</p>
-        <div id="chart-msgsperday"></div>
-      </div>
-      <div class="stat-chart stat-chart--full">
-        <p class="stat-chart-title">Conversations per day</p>
-        <p class="stat-chart-sub" id="convsperday-sub">Sessions started per UTC day · ≥30min gap = new session</p>
-        <div id="chart-convsperday"></div>
+        <p class="stat-chart-title">Messages &amp; conversations per day</p>
+        <p class="stat-chart-sub" id="volume-sub">Bars: messages · light bars: conversations · dashed: linear trend</p>
+        <div id="chart-volume"></div>
       </div>
 
       <h2>Per-user trends</h2>
@@ -776,8 +776,7 @@
       renderKpis(d);
       renderCumulative(d.timeseries.unique_users_cumulative, d.timeseries.new_users_per_day);
       renderDau(d.timeseries.daily_active_users);
-      renderMsgsPerDay(d.timeseries.messages_per_day);
-      renderConvsPerDay(d.timeseries.conversations_per_day);
+      renderDailyVolume(d.timeseries.messages_per_day, d.timeseries.conversations_per_day);
       renderCompoundRatios(d.timeseries);
       renderRetention(d.engagement && d.engagement.retention_curve);
       renderPerUserDistribution(d.engagement && d.engagement.per_user_distribution, d.totals.unique_users);
@@ -1141,30 +1140,161 @@
       renderBarTimeseries('chart-dau', series, { dimLast: lastIsToday });
     }
 
-    // Daily-volume charts use the same per-day bar pattern as DAU.
-    // Two parallel charts (messages vs conversations) so growth can be
-    // read on both axes — see the "Daily volume" section copy.
-    function _renderDailyVolume(parentId, subId, series, label) {
-      if (!series || series.length === 0) return emptyChart(parentId, 'No data yet.');
-      const subEl = document.getElementById(subId);
+    // Combined daily-volume chart: messages as primary bars,
+    // conversations as thinner secondary bars overlaid (same Y scale —
+    // conv < msgs always, so they nest naturally), plus a dashed
+    // linear-regression trend line on messages. One chart instead of
+    // two: Sebastian 2026-05-29 — "geht das nicht kompakter".
+    function renderDailyVolume(msgs, convs) {
+      if (!msgs || msgs.length === 0) return emptyChart('chart-volume', 'No data yet.');
+      const subEl = document.getElementById('volume-sub');
       const todayIso = new Date().toISOString().slice(0, 10);
-      const lastIso = series[series.length - 1][0];
-      const lastIsToday = lastIso === todayIso;
+      const lastIsToday = msgs[msgs.length - 1][0] === todayIso;
       if (subEl) {
-        subEl.textContent = lastIsToday
-          ? label + " · UTC day · today's bar updates throughout the day"
-          : label + ' · UTC day';
+        subEl.textContent = 'Bars: messages · light bars: conversations · dashed: linear trend'
+          + (lastIsToday ? " · today's bars are partial" : '');
       }
-      renderBarTimeseries(parentId, series, { dimLast: lastIsToday });
+
+      // Join by day so a missing day in one series doesn't shift the
+      // overlay off-grid.
+      const byDay = {};
+      msgs.forEach(([d, v]) => { byDay[d] = { day: d, msgs: v, convs: 0 }; });
+      (convs || []).forEach(([d, v]) => { if (byDay[d]) byDay[d].convs = v; });
+      const series = Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day));
+
+      _renderCombinedVolumeChart('chart-volume', series, { dimLast: lastIsToday });
     }
 
-    function renderMsgsPerDay(series) {
-      _renderDailyVolume('chart-msgsperday', 'msgsperday-sub', series, 'User messages per day');
+    // Linear least-squares regression. Returns null for < 2 points.
+    // y_i = slope * i + intercept.
+    function _linearTrend(values) {
+      const n = values.length;
+      if (n < 2) return null;
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+      for (let i = 0; i < n; i++) {
+        sumX += i; sumY += values[i];
+        sumXY += i * values[i]; sumXX += i * i;
+      }
+      const denom = n * sumXX - sumX * sumX;
+      if (denom === 0) return null;
+      const slope = (n * sumXY - sumX * sumY) / denom;
+      const intercept = (sumY - slope * sumX) / n;
+      return { slope, intercept };
     }
 
-    function renderConvsPerDay(series) {
-      _renderDailyVolume('chart-convsperday', 'convsperday-sub', series,
-                         'Sessions started per day · ≥30min gap = new session');
+    function _renderCombinedVolumeChart(parentId, series, opts) {
+      const parent = document.getElementById(parentId);
+      clear(parent);
+      const W = 480, H = 200;
+      const padL = 32, padR = 8, padT = 18, padB = 28;
+      const innerW = W - padL - padR;
+      const innerH = H - padT - padB;
+      const maxV = Math.max(1, ...series.map(s => s.msgs));
+      const svg = svgNode(W, H);
+
+      // Grid lines + max/zero labels (matches renderBarTimeseries).
+      for (let i = 1; i <= 3; i++) {
+        const y = padT + (innerH * i) / 4;
+        svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: 'grid-line' }));
+      }
+      const maxLabel = svgEl('text', { x: padL - 4, y: padT + 4, 'text-anchor': 'end', class: 'axis-tick' });
+      maxLabel.textContent = fmtCompact.format(maxV);
+      svg.appendChild(maxLabel);
+      const zeroLabel = svgEl('text', { x: padL - 4, y: padT + innerH + 3, 'text-anchor': 'end', class: 'axis-tick' });
+      zeroLabel.textContent = '0';
+      svg.appendChild(zeroLabel);
+
+      // Per-day group layout — same math as renderBarTimeseries.
+      const barGap = 6;
+      const naturalW = (innerW - barGap * (series.length - 1)) / series.length;
+      const groupW = Math.min(56, naturalW);
+      const groupOffset = (innerW - (series.length * (groupW + barGap) - barGap)) / 2;
+      const msgsBarW = groupW * 0.62;       // wide primary bar
+      const convsBarW = groupW * 0.32;      // narrow secondary, nestled to the right
+
+      const xCenter = i => padL + groupOffset + i * (groupW + barGap) + groupW / 2;
+
+      series.forEach((p, i) => {
+        const isPartial = opts.dimLast && i === series.length - 1;
+        const groupLeft = padL + groupOffset + i * (groupW + barGap);
+
+        // Primary bar: messages
+        const mh = (p.msgs / maxV) * innerH;
+        const my = padT + innerH - mh;
+        const mAttrs = {
+          x: groupLeft.toFixed(1), y: my.toFixed(1),
+          width: msgsBarW.toFixed(1), height: Math.max(1, mh).toFixed(1),
+          class: 'bar', rx: 2,
+        };
+        if (isPartial) mAttrs['fill-opacity'] = '0.55';
+        svg.appendChild(svgEl('rect', mAttrs));
+
+        // Secondary bar: conversations (same Y scale — always smaller)
+        const ch = (p.convs / maxV) * innerH;
+        const cy = padT + innerH - ch;
+        const cAttrs = {
+          x: (groupLeft + msgsBarW + 2).toFixed(1), y: cy.toFixed(1),
+          width: convsBarW.toFixed(1), height: Math.max(1, ch).toFixed(1),
+          class: 'bar-secondary', rx: 2,
+        };
+        if (isPartial) cAttrs['fill-opacity'] = '0.55';
+        svg.appendChild(svgEl('rect', cAttrs));
+
+        // Message value label above primary bar
+        const tx = svgEl('text', {
+          x: (groupLeft + msgsBarW / 2).toFixed(1),
+          y: Math.max(padT + 4, my - 4).toFixed(1),
+          'text-anchor': 'middle', class: 'value-label',
+        });
+        tx.textContent = fmtCompact.format(p.msgs);
+        svg.appendChild(tx);
+
+        // Conversation value label — smaller, above secondary bar
+        const ctx = svgEl('text', {
+          x: (groupLeft + msgsBarW + 2 + convsBarW / 2).toFixed(1),
+          y: Math.max(padT + 4, cy - 4).toFixed(1),
+          'text-anchor': 'middle', class: 'axis-tick',
+        });
+        ctx.textContent = fmtCompact.format(p.convs);
+        svg.appendChild(ctx);
+
+        // Date label below, with "partial" on its own line for the
+        // current-day bar (same convention as renderBarTimeseries).
+        const dt = svgEl('text', {
+          x: xCenter(i).toFixed(1),
+          y: (isPartial ? H - 12 : H - 4),
+          'text-anchor': 'middle', class: 'axis-tick',
+        });
+        dt.textContent = shortDate(p.day);
+        svg.appendChild(dt);
+        if (isPartial) {
+          const pt = svgEl('text', {
+            x: xCenter(i).toFixed(1), y: H - 2,
+            'text-anchor': 'middle', class: 'axis-tick',
+            'font-size': '9', 'fill-opacity': '0.7',
+          });
+          pt.textContent = 'partial';
+          svg.appendChild(pt);
+        }
+      });
+
+      // Trend line — linear regression on messages. Drawn on top of
+      // bars so the direction is unambiguous. Dashed to distinguish
+      // from any solid data line in other charts.
+      const trend = _linearTrend(series.map(s => s.msgs));
+      if (trend) {
+        const x0 = xCenter(0);
+        const x1 = xCenter(series.length - 1);
+        const y0 = padT + innerH - (Math.max(0, trend.intercept) / maxV) * innerH;
+        const yEnd = padT + innerH - (Math.max(0, trend.slope * (series.length - 1) + trend.intercept) / maxV) * innerH;
+        svg.appendChild(svgEl('line', {
+          x1: x0.toFixed(1), y1: y0.toFixed(1),
+          x2: x1.toFixed(1), y2: yEnd.toFixed(1),
+          class: 'trend-line',
+        }));
+      }
+
+      parent.appendChild(svg);
     }
 
     // --- Per-user compound-effect ratios -------------------------------
