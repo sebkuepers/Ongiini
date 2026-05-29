@@ -441,7 +441,14 @@ async def receive(
                         sender, len(text),
                     )
                     continue
-                _spawn(handle_message(sender, text), sender, "text")
+                # `referral` is attached by extract_messages when the
+                # inbound carries a click-to-WhatsApp ad referral block.
+                # Threaded through to handle_message so the welcome
+                # experiment can detect FB-ad arrivals.
+                _spawn(
+                    handle_message(sender, text, referral=m.get("referral")),
+                    sender, "text",
+                )
 
             elif kind == "image":
                 media_id = m.get("media_id") or ""
@@ -682,7 +689,13 @@ async def handle_audio_message(
     await handle_message(sender, transcript, memory_prefix="[voice note]")
 
 
-async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> None:
+async def handle_message(
+    sender: str,
+    text: str,
+    *,
+    memory_prefix: str = "",
+    referral: dict | None = None,
+) -> None:
     """Inbound text-or-transcript handler.
 
     Loads history under a per-user lock, summarises if it crossed the
@@ -726,6 +739,9 @@ async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> 
             f"{memory_prefix} {text}".strip() if memory_prefix else ""
         )
 
+        # raw_payload carries the FB click-to-WhatsApp referral block
+        # when present — read by welcome_experiment downstream to decide
+        # whether to assign a welcome variant. None for organic arrivals.
         msg = InboundMessage(
             user_id=msisdn,
             msg_id="",   # main.py already mark_as_read'd on receipt
@@ -733,6 +749,7 @@ async def handle_message(sender: str, text: str, *, memory_prefix: str = "") -> 
             content_parts=[{"type": "text", "text": text}],
             history=history,
             storage_text=storage_text,
+            raw_payload={"referral": referral} if referral else None,
         )
         await agent.handle(msg)
         # Persistence + billing + tracing handled by Owela hooks.
