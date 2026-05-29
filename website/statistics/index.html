@@ -592,7 +592,7 @@
       <div class="stat-chart-row">
         <div class="stat-chart">
           <p class="stat-chart-title">Unique users</p>
-          <p class="stat-chart-sub" id="cumulative-sub">Users who passed the ≥2-messages-in-a-day bar at least once · new users per day overlaid</p>
+          <p class="stat-chart-sub" id="cumulative-sub">Total users since launch · new users per day overlaid</p>
           <div id="chart-cumulative"></div>
         </div>
         <div class="stat-chart">
@@ -1319,7 +1319,11 @@
       const dau = ts.daily_active_users || [];
       const msgs = ts.messages_per_day || [];
       const convs = ts.conversations_per_day || [];
-      const newUsers = ts.new_users_per_day || [];
+      // %returning uses the STRICT newcomer series (new_dau_users_per_day)
+      // so the denominator (strict DAU) and the numerator stay on the
+      // same definition. Falls back to lenient if the strict series isn't
+      // exposed yet (stale cache).
+      const newUsers = ts.new_dau_users_per_day || ts.new_users_per_day || [];
       const toolCalls = ts.tool_call_turns_per_day || [];
       const traceTotals = ts.total_trace_turns_per_day || [];
 

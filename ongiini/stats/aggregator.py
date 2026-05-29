@@ -595,18 +595,14 @@ def _compute_deltas(
         return start < dt <= end
 
     def _user_count_in(start: datetime, end: datetime) -> int:
-        # Count users by the strict-DAU rule (≥ DAU_MIN_MSGS messages in
-        # the window) so the unique_users delta matches the cumulative-
-        # users headline + chart line. Per-day, a single-touch user
-        # would inflate the count without representing engagement.
-        per_user_msgs: dict[str, int] = defaultdict(int)
+        users: set[str] = set()
         for r in chat_lines:
             dt = _parse_ts(r["ts"])
             if dt is None:
                 continue
             if _in_window(dt, start, end):
-                per_user_msgs[r["msisdn"]] += 1
-        return sum(1 for c in per_user_msgs.values() if c >= DAU_MIN_MSGS)
+                users.add(r["msisdn"])
+        return len(users)
 
     def _msg_count_in(start: datetime, end: datetime) -> int:
         return sum(
@@ -874,11 +870,11 @@ def _compute_sync() -> dict[str, Any]:
         if row["kind"] == "chat":
             chat_lines.append(row)
 
-    # Lenient unique_users (≥1 message ever) — kept for the per_user
-    # distribution + share denominators where the question is "of all
-    # users who ever wrote, what fraction did X". The headline KPI
-    # `totals.unique_users` is rebound below to strict_unique_users
-    # so it matches the strict-DAU standard everywhere user-facing.
+    # Lenient unique_users: any msisdn that has written ≥ 1 message
+    # ever. This is the funnel-top number — "how many people have we
+    # ever reached". DAU (defined below) uses the stricter ≥2-per-day
+    # rule, but unique_users + cumulative_unique stay lenient so the
+    # headline reflects total reach, not engagement.
     unique_users: set[str] = {row["msisdn"] for row in chat_lines}
     msisdn_first_seen: dict[str, datetime] = {}
     chat_per_user_ts: dict[str, list[datetime]] = defaultdict(list)
@@ -935,18 +931,25 @@ def _compute_sync() -> dict[str, Any]:
         for day, counts in msgs_per_user_per_day.items()
     }
 
-    # `new_users_per_day` should mirror the strict definition so the
-    # "% returning" compound ratio (1 − new/DAU) stays in [0, 100]:
-    # a user is "new today" only if they qualify as active today AND
-    # today is their first day with ≥ DAU_MIN_MSGS. Without this
-    # tightening, single-touch newcomers (who DON'T enter strict_dau)
-    # would still inflate new_users and drag % returning negative.
+    # new_users_per_day: lenient (first lifetime appearance, ≥ 1 msg).
+    # Drives the cumulative_unique chart overlay + matches the lenient
+    # headline. Computed from msisdn_first_seen below the main loop.
+    for msisdn, dt in msisdn_first_seen.items():
+        new_users_per_day[dt.date().isoformat()] += 1
+
+    # Separate STRICT version of "new users today" used only by the
+    # compound-ratio "% returning" computation. A user counts as a
+    # strict newcomer on the first day they pass the strict-DAU bar —
+    # this keeps `1 − new_dau/DAU` in [0, 100] regardless of the
+    # lenient-vs-strict gap (single-touch arrivals don't drag the
+    # ratio negative because they never enter strict_dau).
+    new_dau_users_per_day: dict[str, int] = defaultdict(int)
     strict_first_dau_day: dict[str, str] = {}
     for day in sorted(strict_dau.keys()):
         for msisdn in strict_dau[day]:
             strict_first_dau_day.setdefault(msisdn, day)
     for msisdn, day in strict_first_dau_day.items():
-        new_users_per_day[day] += 1
+        new_dau_users_per_day[day] += 1
 
     # ---- Pass 2: trace.jsonl (richer kind, performance, url_fetches) ----
     voice_notes = 0
@@ -1050,21 +1053,30 @@ def _compute_sync() -> dict[str, Any]:
     # from 5 users in one long thread each.
     convs_per_day = _count_conversations_per_day(chat_per_user_ts)
 
+    # Per-day → set(msisdn) for the lenient cumulative line.
+    per_day_users: dict[str, set[str]] = defaultdict(set)
+    for row in chat_lines:
+        dt = _parse_ts(row["ts"])
+        if dt is None:
+            continue
+        per_day_users[dt.date().isoformat()].add(row["msisdn"])
+
     sorted_days = sorted(chat_per_day.keys())
     cumulative_unique: list[tuple[str, int]] = []
-    # Cumulative tracks users who EVER passed the strict-DAU bar — same
-    # standard as DAU so the cumulative line doesn't include single-touch
-    # curious users who were never really engaged.
+    # Cumulative = lenient (matches the headline unique_users number).
+    # If we tied this to strict_dau the final value of the line would
+    # disagree with the unique_users KPI on the same page — confusing.
     running_set: set[str] = set()
     daily_active_users_series: list[tuple[str, int]] = []
     messages_per_day_series: list[tuple[str, int]] = []
     conversations_per_day_series: list[tuple[str, int]] = []
     tokens_per_day_series: list[tuple[str, int]] = []
     new_users_per_day_series: list[tuple[str, int]] = []
+    new_dau_users_per_day_series: list[tuple[str, int]] = []
     tool_call_turns_per_day_series: list[tuple[str, int]] = []
     total_trace_turns_per_day_series: list[tuple[str, int]] = []
     for day in sorted_days:
-        running_set |= strict_dau.get(day, set())
+        running_set |= per_day_users.get(day, set())
         cumulative_unique.append((day, len(running_set)))
         daily_active_users_series.append((day, len(strict_dau.get(day, set()))))
         messages_per_day_series.append((day, chat_per_day[day]))
@@ -1073,6 +1085,7 @@ def _compute_sync() -> dict[str, Any]:
             (day, tokens_per_day_in[day] + tokens_per_day_out[day])
         )
         new_users_per_day_series.append((day, new_users_per_day.get(day, 0)))
+        new_dau_users_per_day_series.append((day, new_dau_users_per_day.get(day, 0)))
         tool_call_turns_per_day_series.append((day, tool_call_turns_per_day.get(day, 0)))
         total_trace_turns_per_day_series.append((day, total_trace_turns_per_day.get(day, 0)))
 
@@ -1158,14 +1171,6 @@ def _compute_sync() -> dict[str, Any]:
     # per-message search=yes flag from usage.log.
     web_search_total = web_searches_trace if web_searches_trace else web_searches
 
-    # Headline "unique users" mirrors the cumulative_unique line on the
-    # chart (strict-DAU standard, ≥ DAU_MIN_MSGS on at least one day).
-    # Kept distinct from the lenient `unique_users` set above which is
-    # still used as the denominator for the per_user distribution shares.
-    strict_unique_users: set[str] = set()
-    for s in strict_dau.values():
-        strict_unique_users |= s
-
     return {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace(
             "+00:00", "Z"
@@ -1174,7 +1179,7 @@ def _compute_sync() -> dict[str, Any]:
         "taxonomy_version": TAXONOMY_VERSION,
         "period": {"from": period_from, "to": period_to},
         "totals": {
-            "unique_users": len(strict_unique_users),
+            "unique_users": len(unique_users),
             "conversations": conversations,
             "messages_user": total_user_msgs,
             "tokens_in_total": tokens_in_total,
@@ -1199,6 +1204,7 @@ def _compute_sync() -> dict[str, Any]:
         "timeseries": {
             "daily_active_users": [list(t) for t in daily_active_users_series],
             "new_users_per_day": [list(t) for t in new_users_per_day_series],
+            "new_dau_users_per_day": [list(t) for t in new_dau_users_per_day_series],
             "unique_users_cumulative": [list(t) for t in cumulative_unique],
             "messages_per_day": [list(t) for t in messages_per_day_series],
             "conversations_per_day": [list(t) for t in conversations_per_day_series],
