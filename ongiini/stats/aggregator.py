@@ -591,6 +591,15 @@ def _compute_deltas(
     current_start = anchor - timedelta(days=7)
     prior_start = anchor - timedelta(days=14)
 
+    # If our entire observed history starts AFTER prior_start, the
+    # prior 7-day window is only partially populated (or empty) and any
+    # pct_change off that tiny base is misleading — the frontend
+    # rendered +93450% on day 7 of launch (Sebastian flagged 2026-05-29).
+    # Mark the prior window as incomplete so the frontend can suppress
+    # the percentage row.
+    earliest_ts = min(timestamps)
+    prior_window_complete = earliest_ts <= prior_start
+
     def _in_window(dt: datetime, start: datetime, end: datetime) -> bool:
         return start < dt <= end
 
@@ -651,13 +660,18 @@ def _compute_deltas(
 
     def _delta(curr: int, prior: int) -> dict[str, Any]:
         out = {"current": curr, "prior": prior}
-        if prior > 0:
+        # Only emit pct_change when the prior 7-day window had real
+        # history backing it. Without this guard, day-7-of-launch
+        # divides current traffic by 1-or-2 leaked observations and
+        # surfaces +93450% deltas (rendered to the user as nonsense).
+        if prior > 0 and prior_window_complete:
             out["pct_change"] = round((curr - prior) / prior * 100, 1)
         return out
 
     return {
         "window_days": 7,
         "anchor": anchor.isoformat(),
+        "prior_window_complete": prior_window_complete,
         "unique_users": _delta(
             _user_count_in(current_start, anchor),
             _user_count_in(prior_start, current_start),

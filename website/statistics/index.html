@@ -585,7 +585,7 @@
 
     <div id="content" hidden>
       <h2>Volume</h2>
-      <p class="stat-section-note">All numbers below are <strong>all-time totals</strong> since launch. The small ↑/↓ row on each tile compares the last 7 days to the 7 days before that.</p>
+      <p class="stat-section-note">All numbers below are <strong>all-time totals</strong> since launch. The small ↑/↓ row on each tile compares the last 7 days to the 7 days before that — <span id="kpi-delta-status"></span></p>
       <div class="stat-kpis" id="kpis"></div>
 
       <h2>Growth over time</h2>
@@ -832,6 +832,25 @@
       const dx = d.totals_deltas || {};
       const wrap = document.getElementById('kpis');
       clear(wrap);
+      // During the first 14 days post-launch the "prior 7 days" window
+      // is incomplete (mostly empty) and any pct_change off that tiny
+      // base looks like "+93450%". The aggregator now flags this via
+      // prior_window_complete=false; strip pct_change so tiles don't
+      // render the delta sub-row. The headline "still loading first
+      // baseline" note in the section header explains why.
+      const statusEl = document.getElementById('kpi-delta-status');
+      if (dx.prior_window_complete === false) {
+        Object.keys(dx).forEach(k => {
+          if (dx[k] && typeof dx[k] === 'object' && 'pct_change' in dx[k]) {
+            delete dx[k].pct_change;
+          }
+        });
+        if (statusEl) {
+          statusEl.textContent = 'comparisons appear once we have 14 days of history.';
+        }
+      } else if (statusEl) {
+        statusEl.textContent = 'green = up vs the week before, red = down.';
+      }
       // Accent grouping: 'people' = teal, 'activity' = terracotta,
       // 'compute' = olive. Matches the page's three-colour rhythm.
       // Delta sub-row appears when there's a prior-week comparison.
