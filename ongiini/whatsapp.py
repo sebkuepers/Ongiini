@@ -324,6 +324,11 @@ def extract_messages(payload: dict) -> list[dict]:
 
     Non-text, non-image types are dropped silently — we'll add audio /
     document handling separately when the model is ready for them.
+
+    Click-to-WhatsApp ad arrivals carry a ``referral`` block on the
+    first inbound message — we attach it to the dict as ``referral``
+    when present, so the welcome-experiment + downstream attribution
+    work can read it without re-parsing the payload.
     """
     out: list[dict] = []
     for entry in payload.get("entry", []):
@@ -331,6 +336,11 @@ def extract_messages(payload: dict) -> list[dict]:
             value = change.get("value", {})
             for msg in value.get("messages", []) or []:
                 msg_type = msg.get("type")
+                # `referral` is the Meta ctwa (click-to-WhatsApp) block.
+                # Shape: source_url, source_id, source_type, headline,
+                # body, media_type, ctwa_clid, etc. Present only on the
+                # first message after a click. None for organic arrivals.
+                referral = msg.get("referral") or None
                 if msg_type == "text":
                     text = (msg.get("text") or {}).get("body", "")
                     out.append(
@@ -339,6 +349,7 @@ def extract_messages(payload: dict) -> list[dict]:
                             "type": "text",
                             "text": text,
                             "id": msg.get("id", ""),
+                            "referral": referral,
                         }
                     )
                 elif msg_type == "image":
@@ -351,6 +362,7 @@ def extract_messages(payload: dict) -> list[dict]:
                             "mime_type": image.get("mime_type", "image/jpeg"),
                             "caption": image.get("caption", "") or "",
                             "id": msg.get("id", ""),
+                            "referral": referral,
                         }
                     )
                 elif msg_type in ("audio", "voice"):
