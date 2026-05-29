@@ -158,11 +158,33 @@ Examples:
   "Do you support Oshiwambo?" → CONTRIBUTE_INVITE (capability + offer)
   "Ondi pumbwa ekwafelo" (real Oshiwambo phrase) → CONTRIBUTE_INVITE
 
-CONTRIBUTE_DIALECT — emit ONLY when contribute_state.pending_save is
-FALSE AND contribute_state.dialect is "unknown" AND the user's
-message names a dialect ("Oshindonga", "Oshikwanyama", "Ndonga",
-"Kwanyama", "either", "both"). The user is answering the
-dialect-question that was just asked.
+CONTRIBUTE_DIALECT — emit when contribute_state.pending_save is FALSE
+AND contribute_state.dialect is "unknown" AND the user's message
+indicates a dialect choice (answering the dialect-question we asked).
+This is THE critical verdict for the contribute flow — if you miss it,
+the user's translation later fails. Be GENEROUS in detecting dialect
+choice: any clear mention of Oshindonga/Oshikwanyama/Ndonga/Kwanyama
+counts, plus "either"/"both"/"any"/"both are fine" all count.
+
+Examples (all → CONTRIBUTE_DIALECT when pending_save=false + dialect=unknown):
+  "Oshindonga"
+  "Oshikwanyama"
+  "Ndonga"
+  "Kwanyama"
+  "I speak Oshindonga"
+  "Oshindonga please"
+  "kwanyama thanks"
+  "Either"
+  "Both"
+  "any of them"
+  "I speak both fluently"
+  "Mostly Oshindonga but I understand Kwanyama too"
+  "Eewa, Oshindonga"
+
+NOT CONTRIBUTE_DIALECT (these are NONE or other verdicts):
+  "What's Oshindonga?" — they're asking, not answering
+  "I learned Oshindonga in school years ago" — unrelated context
+  "I don't speak any" — that's a decline, → CONTRIBUTE_DECLINE
 
 CONTRIBUTE_SAVE — emit ONLY when contribute_state.pending_save is
 TRUE (we just served an English sentence and are waiting for the
