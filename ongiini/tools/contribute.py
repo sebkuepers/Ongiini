@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 
 from owela import ToolContext, tool
 
@@ -62,27 +61,18 @@ def _user_text(ctx: ToolContext) -> str:
     return (ctx.msg.text or "").strip()
 
 
-# Dialect-name normalisation. The user can write the dialect in many
-# ways; we map them all to the canonical 'Oshindonga' / 'Oshikwanyama'
-# values the database stores. "Either" / "both" defaults to Oshindonga
-# (our primary target dialect — see project memories).
-_OSHINDONGA_RE = re.compile(r"\b(oshindonga|ondonga|oshidonga|ndonga)\b", re.IGNORECASE)
-_OSHIKWANYAMA_RE = re.compile(r"\b(oshikwanyama|kwanyama)\b", re.IGNORECASE)
-_EITHER_RE = re.compile(r"\b(either|both|any|whatever)\b", re.IGNORECASE)
-
-
-def _parse_dialect(text: str) -> str | None:
-    """Return canonical dialect name from a user message, or None
-    if no dialect mention is detected. Order matters: Oshindonga
-    pattern includes 'ndonga' which could substring 'oshindonga',
-    so we check the more specific labels first."""
-    if _OSHIKWANYAMA_RE.search(text):
-        return contributions.DIALECT_OSHIKWANYAMA
-    if _OSHINDONGA_RE.search(text):
-        return contributions.DIALECT_OSHINDONGA
-    if _EITHER_RE.search(text):
-        return contributions.DIALECT_OSHINDONGA
-    return None
+# Canonical dialect strings the model passes as `dialect=`. Anything
+# else from the model is treated as a normalisation failure and the
+# tool asks the user to clarify. The model — not regex — is responsible
+# for interpreting free-text user input like "I speak Kwanyama mostly"
+# or "either is fine"; the tool just validates that the model picked
+# one of the four canonical values.
+_VALID_DIALECT_CHOICES = (
+    contributions.DIALECT_OSHINDONGA,
+    contributions.DIALECT_OSHIKWANYAMA,
+    "Either",
+    "Unclear",
+)
 
 
 # ── Tools ──────────────────────────────────────────────────────────
@@ -117,23 +107,37 @@ async def contribute_invite_check(ctx: ToolContext) -> str:
     name="contribute_set_dialect",
     description=(
         "FORCED by classifier verdict CONTRIBUTE_DIALECT — the user "
-        "just told us which Oshiwambo dialect they speak. Parses their "
-        "message ('Oshindonga' / 'Oshikwanyama' / 'Ndonga' / "
-        "'Kwanyama' / 'either') and stores the canonical name. Returns "
-        "JSON: ok (bool), dialect (the canonical name stored), or "
-        "error (couldn't parse)."
+        "just told us which Oshiwambo dialect they speak. YOU read "
+        "their message and pass `dialect` as one of: 'Oshindonga' (for "
+        "explicit Oshindonga / Ndonga / Oshidonga choices), "
+        "'Oshikwanyama' (for Oshikwanyama / Kwanyama), 'Either' (user "
+        "said either/both/any/no preference — defaults to Oshindonga "
+        "as our primary target), or 'Unclear' (you genuinely can't "
+        "tell what they meant — the tool will ask them to clarify). "
+        "Returns JSON: ok (bool), dialect (the canonical name stored), "
+        "or error."
     ),
+    params={"dialect": "One of: Oshindonga | Oshikwanyama | Either | Unclear"},
 )
-async def contribute_set_dialect(ctx: ToolContext) -> str:
+async def contribute_set_dialect(ctx: ToolContext, dialect: str) -> str:
     h = _hash_user(ctx)
     if h is None:
         return json.dumps({"error": "contributions temporarily unavailable"})
-    dialect = _parse_dialect(_user_text(ctx))
-    if dialect is None:
+    if dialect not in _VALID_DIALECT_CHOICES:
+        # Model passed something off-spec — log + treat as unclear
+        log.warning("contribute_set_dialect got unexpected dialect=%r", dialect)
         return json.dumps({
-            "error": "could not detect dialect — ask the user to reply "
+            "error": "invalid dialect value — ask the user to reply "
                      "'Oshindonga' or 'Oshikwanyama'",
         })
+    if dialect == "Unclear":
+        return json.dumps({
+            "error": "dialect unclear — ask the user to reply "
+                     "'Oshindonga' or 'Oshikwanyama'",
+        })
+    if dialect == "Either":
+        # User has no preference — default to our primary target dialect.
+        dialect = contributions.DIALECT_OSHINDONGA
     contributions.set_dialect(h, dialect)
     # Chain into the first-task fetch so the user sees a real corpus
     # sentence in the same turn the dialect is stored. Without this

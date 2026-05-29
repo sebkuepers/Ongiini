@@ -90,24 +90,21 @@ async def test_invite_check_returns_known_dialect_after_set():
 # ── contribute_set_dialect ────────────────────────────────────────
 
 
-@pytest.mark.parametrize("user_text,expected", [
+@pytest.mark.parametrize("dialect_arg,expected_stored", [
     ("Oshindonga", "Oshindonga"),
-    ("oshindonga please", "Oshindonga"),
-    ("Ndonga", "Oshindonga"),
-    ("Oshidonga", "Oshindonga"),     # common typo
     ("Oshikwanyama", "Oshikwanyama"),
-    ("kwanyama", "Oshikwanyama"),
-    ("Either", "Oshindonga"),        # primary target
-    ("both", "Oshindonga"),
+    ("Either", "Oshindonga"),     # primary-target default
 ])
 @pytest.mark.asyncio
-async def test_set_dialect_parses_user_text(user_text: str, expected: str):
+async def test_set_dialect_stores_what_the_model_passes(dialect_arg, expected_stored):
+    """The model — not the tool — interprets the user's free text. The
+    tool's job is just to validate the model's choice and store it."""
     _seed(1)
-    out = json.loads(await contribute_set_dialect(_ctx(text=user_text)))
+    out = json.loads(await contribute_set_dialect(_ctx(text="anything"), dialect=dialect_arg))
     assert out["ok"] is True
-    assert out["dialect"] == expected
+    assert out["dialect"] == expected_stored
     h = contributions.hash_msisdn("264811234567")
-    assert contributions.whoami(h) == f"known:{expected}"
+    assert contributions.whoami(h) == f"known:{expected_stored}"
 
 
 @pytest.mark.asyncio
@@ -115,7 +112,7 @@ async def test_set_dialect_chains_into_first_task():
     """After dialect-saving, the same call also fetches the first task
     so the user sees a real corpus sentence in a single turn."""
     _seed(1)
-    out = json.loads(await contribute_set_dialect(_ctx(text="Oshindonga")))
+    out = json.loads(await contribute_set_dialect(_ctx(), dialect="Oshindonga"))
     assert out["ok"] is True
     assert out["task"] is not None
     h = contributions.hash_msisdn("264811234567")
@@ -124,15 +121,26 @@ async def test_set_dialect_chains_into_first_task():
 
 @pytest.mark.asyncio
 async def test_set_dialect_with_empty_pool_returns_no_task():
-    out = json.loads(await contribute_set_dialect(_ctx(text="Oshindonga")))
+    out = json.loads(await contribute_set_dialect(_ctx(), dialect="Oshindonga"))
     assert out["ok"] is True
     assert out["task"] is None
     assert "message" in out
 
 
 @pytest.mark.asyncio
-async def test_set_dialect_rejects_unparseable_input():
-    out = json.loads(await contribute_set_dialect(_ctx(text="Spanish or French")))
+async def test_set_dialect_unclear_returns_error():
+    """When the model genuinely can't tell what dialect the user
+    picked, it passes 'Unclear' and the tool asks the user to
+    clarify rather than storing a guess."""
+    out = json.loads(await contribute_set_dialect(_ctx(), dialect="Unclear"))
+    assert "error" in out
+
+
+@pytest.mark.asyncio
+async def test_set_dialect_invalid_value_returns_error():
+    """Defensive: if the model passes something off-spec, treat as
+    invalid rather than crashing or storing garbage."""
+    out = json.loads(await contribute_set_dialect(_ctx(), dialect="Spanish"))
     assert "error" in out
 
 
@@ -287,11 +295,11 @@ async def test_stats_returns_summary_dict():
 # ── tool registration ────────────────────────────────────────────
 
 
-def test_all_contribute_tools_have_empty_param_schemas():
-    """force_tool targets by name and the model never picks args —
-    the tools should expose zero parameters to the model."""
+def test_zero_param_contribute_tools_have_empty_schemas():
+    """force_tool targets by name; for the no-arg tools the model
+    never picks args — they should expose zero parameters."""
     for fn in (
-        contribute_invite_check, contribute_set_dialect, contribute_next,
+        contribute_invite_check, contribute_next,
         contribute_save, contribute_skip, contribute_decline, contribute_stats,
     ):
         spec = fn.__owela_tool__  # type: ignore[attr-defined]
@@ -299,3 +307,12 @@ def test_all_contribute_tools_have_empty_param_schemas():
             f"{spec.name} should expose zero parameters"
         )
         assert spec.needs_context is True
+
+
+def test_set_dialect_exposes_dialect_param():
+    """contribute_set_dialect is the one contribute tool the model
+    passes an arg to — `dialect`, the canonical name picked from the
+    user's message. The model — not regex — interprets the message."""
+    spec = contribute_set_dialect.__owela_tool__  # type: ignore[attr-defined]
+    assert "dialect" in spec.parameters["properties"]
+    assert spec.needs_context is True

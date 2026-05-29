@@ -201,22 +201,16 @@ _GEMMA4_MAX_DIM = 896
 # my_token_usage even if the caption clearly asks for it. If the caption
 # matches, we IGNORE the image and route the caption text through the
 # normal text handler so the right tool fires.
-_ADMIN_INTENT_RE = re.compile(
-    r"\b("
-    r"delete\s+(?:my|all)\s+data|forget\s+(?:everything|all|me|my)|wipe\s+(?:my|all)|"
-    r"vergeet\s+(?:alles|my)|wis\s+(?:my|alle)|verwyder\s+(?:my|alle)|"
-    r"what\s+do\s+you\s+remember|what\s+have\s+you\s+stored|show\s+me\s+(?:my\s+)?data|"
-    r"wat\s+onthou\s+jy|wat\s+het\s+(?:julle|jy)\s+gestoor|"
-    r"how\s+many\s+tokens|hoeveel\s+tokens|my\s+(?:token|monthly)\s+(?:usage|limit|balance)"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def _caption_is_admin_intent(caption: str) -> bool:
-    """True iff the caption clearly asks for an admin operation that
-    requires tools (delete_my_data / whats_in_my_memory / my_token_usage)."""
-    return bool(caption and _ADMIN_INTENT_RE.search(caption))
+# Caption + image admin-intent detection used to live here as an
+# ``_ADMIN_INTENT_RE`` regex pre-router. Removed 2026-05-29 — Ongiini
+# is an LLM app, and routing an image+caption to a different handler
+# based on regex was a brittle bypass of the model's own judgement.
+# Vision-aware Gemma sees both the image and the caption; when the
+# caption is clearly an admin command ("delete my data") the model
+# fires the appropriate tool regardless of the image. The extra
+# image-tokens spent on the "admin-with-attached-image" edge case
+# (rare) are worth not maintaining a regex that drifts out of sync
+# with the actual admin-tool surface.
 
 
 def _resize_for_gemma4(image_bytes: bytes) -> bytes:
@@ -462,15 +456,6 @@ async def receive(
                         "dropping image with oversize caption from %s (%d chars)",
                         sender, len(caption),
                     )
-                    continue
-                # Admin-intent captions (delete / recall / usage) route
-                # through the text handler so the proper tool fires.
-                if _caption_is_admin_intent(caption):
-                    log.info(
-                        "image caption matched admin intent — handling as text from %s",
-                        sender,
-                    )
-                    _spawn(handle_message(sender, caption), sender, "admin-caption")
                     continue
                 _spawn(
                     handle_image_message(
