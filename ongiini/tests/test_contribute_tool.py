@@ -205,10 +205,42 @@ async def test_save_writes_contribution_using_ctx_msg_text():
 
 
 @pytest.mark.asyncio
-async def test_save_errors_when_no_pending_state():
+async def test_save_falls_back_to_orphan_when_no_pending_state():
+    """Translation work is never silently dropped. When the classifier
+    fires SAVE but no task was served, the text is saved as an orphan
+    instead of returning an error."""
     out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
+    assert out.get("ok") is True
+    assert out.get("orphan") is True
+    assert out.get("dialect") == "unknown"
+    # Confirm the text actually landed in the DB
+    with contributions._conn() as c:
+        row = c.execute(
+            "SELECT target_translation, target_dialect FROM contributions "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert row["target_translation"] == "ondi ya nawa"
+    assert row["target_dialect"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_save_still_errors_on_trivially_short_text_when_no_pending():
+    """Don't pollute the dataset with classifier false positives on
+    "yes" / "ok" / "thanks" — only save substantive text as orphans."""
+    out = json.loads(await contribute_save(_ctx(text="yes")))
     assert "error" in out
     assert "pending" in out["error"]
+
+
+@pytest.mark.asyncio
+async def test_orphan_save_uses_known_dialect_when_available():
+    """If the contributor has declared a dialect, the orphan save uses
+    it instead of 'unknown' so curation is easier."""
+    h = contributions.hash_msisdn("264811234567")
+    contributions.set_dialect(h, "Oshindonga")
+    out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
+    assert out.get("orphan") is True
+    assert out.get("dialect") == "Oshindonga"
 
 
 @pytest.mark.asyncio
