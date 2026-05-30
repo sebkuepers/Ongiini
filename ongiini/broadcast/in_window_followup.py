@@ -288,18 +288,44 @@ contributed, the follow-up should suggest a DIFFERENT type of help
 contribution is a separate ask we make via dedicated invitations — it
 is not what this nudge is for.
 
-SKIP ONLY when one of these clearly applies (output {"skip": true,
-"reason": "..."}):
+SKIP ONLY for safety reasons (output {"skip": true, "reason": "..."}):
 - Conversation involved suicide ideation, self-harm, severe distress
-- User was upset, angry, or explicitly said goodbye / "done for today"
-- Bot's last reply was an apology / "I can't help with that"
-  (a nudge would just remind them of the failure)
-- Conversation was clearly just a test or curiosity — no real task
-  or domain to build on
-- Truly no useful adjacent step exists — but try harder first,
-  most real conversations have one
+- User explicitly asked us to stop messaging them
 
-DEFAULT to generating. Skipping should be the exception.
+DO NOT skip for any of these reasons:
+- "I couldn't find a clear next step" — look DEEPER into the
+  conversation. Every user has been working on SOMETHING — go past
+  the last 5 turns. Earlier in the same conversation, or in the
+  long-term facts, there is ALWAYS a real domain to anchor to
+  (a CV they drafted, a school topic they wrestled with, a business
+  idea they brainstormed, a tax question, a relationship situation,
+  a health concern, a music project, …)
+- "Recent turns are just goodbye / 'thanks' / 'hello?'" — those
+  recent turns are noise. The signal is in the substantive work
+  earlier in the conversation and in the long-term facts.
+- "User said they were done with topic X" — fine, propose something
+  DIFFERENT from X. Don't go back to X, find another domain from
+  their history.
+- "Conversation was just curiosity / no real task" — look at the
+  long-term facts. There's usually a fact ([SITUATION], [PROFILE])
+  that anchors a useful nudge even when the chat itself was light.
+
+WORK ORDER:
+1. Read the LONG-TERM FACTS first. They name the real domains: roles,
+   goals, situations, struggles. That's where the signal lives.
+2. Read the conversation, skipping past recent goodbyes / silence.
+   Find the substantive turns — the CV review, the homework problem,
+   the business idea, the health worry, the legal question. ANY of
+   them is a valid anchor.
+3. Pick the most consequential or recent substantive domain.
+4. Propose a SPECIFIC next step in that domain — never generic
+   ("ask me your favourite topic"), always concrete and named
+   ("ready to draft the constitution section we discussed?",
+   "want me to help with the next chapter of your accounting study
+   guide?", "should we look at the cover letter to go with that
+   CV?").
+
+DEFAULT to generating. Skipping is reserved for safety only.
 
 LENGTH: 1-2 sentences. Max 200 characters total.
 LANGUAGE: match the user's (English or Afrikaans). Brief warmth
@@ -326,9 +352,18 @@ Output JSON only — no surrounding text.
 """
 
 
-def _build_user_context(msisdn: str, max_turns: int = 12) -> tuple[str, str]:
+def _build_user_context(msisdn: str, max_turns: int = 40) -> tuple[str, str]:
     """Return (short_term_conversation, long_term_facts) as plain text
-    blocks the model can read directly."""
+    blocks the model can read directly.
+
+    max_turns bumped from 12 → 40 on 2026-05-30 after a real test where
+    the user's last few turns were "stop translating" / "hello?" and
+    Gemma skipped, missing that EARLIER in the same conversation they'd
+    been working on non-profit / tax planning — exactly the kind of
+    domain we should build on. With only 12 turns of context Gemma was
+    making the call on stale recent noise; the older substantive work
+    is what the suggestion should anchor to.
+    """
     # Short-term: last N turns from per-user memory JSON
     mem_data = memory.load(msisdn)
     if not mem_data:
@@ -351,7 +386,7 @@ def _build_user_context(msisdn: str, max_turns: int = 12) -> tuple[str, str]:
         facts = mem.list_all(msisdn)
         if facts:
             fact_lines = []
-            for f in facts[:20]:
+            for f in facts[:40]:    # was 20 — surface more domain facts
                 text = (f.get("memory") or f.get("text") or "").strip()
                 if text:
                     fact_lines.append(f"- {text}")
