@@ -1,26 +1,36 @@
 """Owela ``Classifier`` adapter — Gemma 4 itself acts as the classifier.
 
-This is the depth-aware evolution of ``ongiini/router.py``. The
-prompt asks Gemma to emit one of five labels:
+The classifier asks Gemma to return a structured JSON object with a
+verdict, a confidence band, a short reasoning trace, and a small
+``extracted`` payload (named dialect, looks-like-translation, etc).
 
-  SEARCH_SHALLOW  — one tool call is enough (single fact, single business)
-  SEARCH_DEEP     — needs decomposition (comparisons, lists, multi-source)
-  DOCS            — meta-question about Ongiini itself
-  ADMIN           — action request (delete data, show usage)
-  NONE            — general knowledge / chat
+  verdict ∈ {
+    SEARCH_SHALLOW, SEARCH_DEEP,       # web tool, one-shot vs decomposition
+    DOCS,                              # docs lookup about Ongiini itself
+    ADMIN,                             # delete/recall data, usage queries
+    NONE,                              # general knowledge / chat
+    CONTRIBUTE_INVITE, CONTRIBUTE_DIALECT, CONTRIBUTE_NEXT,
+    CONTRIBUTE_SAVE,   CONTRIBUTE_SKIP,    CONTRIBUTE_DECLINE,
+    CONTRIBUTE_STATS,                  # community-contribution loop
+    OPT_OUT_BROADCAST,                 # stop receiving proactive nudges
+  }
 
-Parser accepts both new labels (SEARCH_SHALLOW / SEARCH_DEEP) and the
-old bare ``SEARCH`` (degrades to SHALLOW) for backwards compatibility
-during rollout.
+PolicyTable consumes ``verdict`` + ``depth`` (depth is derived: SEARCH_DEEP
+→ DEEP, everything else → SHALLOW). Everything else returned by Gemma —
+``confidence``, ``reasoning``, ``extracted``, ``state_relevance``,
+``secondary_verdict`` — lands in ``ClassifierResult.attrs`` for hooks /
+downstream consumers that want richer signal than a single label.
 
-Validation:
-  - Held-out 4-way (NONE/ADMIN/DOCS/SEARCH) accuracy: still measured
-    against ``ongiini/tests/router_eval_holdout.py`` after migration.
-  - Depth (SHALLOW vs DEEP) accuracy: measured against an extended
-    held-out set added in step 5b. Target ≥85% on depth, ≥96% on the
-    4-way category.
+Why JSON: the previous design emitted one bare token and threw away
+every signal Gemma had. It also leaned on state-as-gate rules in the
+prompt (e.g. "emit SAVE only when pending_save=true") which got
+brittle once state could be stale — a 23-hour-old pending_save would
+still gate a SAVE on a "Yes, let's do that" button click. JSON output
++ TTL-rendered state (data, not rules) lets the model judge freshness
+as part of its reasoning, and gives us per-call traces we can iterate
+on.
 
-Fail-safe: any timeout, parse failure, or network error yields
+Fail-safe: any timeout, JSON parse failure, or network error yields
 ``ClassifierResult(verdict="NONE", depth="SHALLOW")``, which the policy
 table maps to a sensible default — never breakage.
 """
@@ -28,8 +38,10 @@ table maps to a sensible default — never breakage.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -57,6 +69,18 @@ VERDICT_CONTRIB_STATS    = "CONTRIBUTE_STATS"
 VERDICT_OPT_OUT_BROADCAST = "OPT_OUT_BROADCAST"
 
 
+# All verdicts we accept back from Gemma. Anything else falls through
+# to NONE + SHALLOW. Kept as a set so membership is O(1).
+_VALID_VERDICTS: frozenset[str] = frozenset({
+    "SEARCH_SHALLOW", "SEARCH_DEEP", "SEARCH",  # legacy: bare SEARCH → SHALLOW
+    "DOCS", "ADMIN", "NONE",
+    VERDICT_CONTRIB_INVITE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_NEXT,
+    VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP, VERDICT_CONTRIB_DECLINE,
+    VERDICT_CONTRIB_STATS,
+    VERDICT_OPT_OUT_BROADCAST,
+})
+
+
 # Match common English and Afrikaans pronouns + reference words. When the
 # current message contains one, we include the previous user message in
 # the classifier prompt for pronoun resolution.
@@ -75,201 +99,202 @@ def _has_pronoun_or_reference(text: str) -> bool:
     return bool(_PRONOUN_RE.search(text))
 
 
-# Five-label depth-aware classifier prompt. Extends the 4-way prompt
-# from ongiini/router.py with the SEARCH_SHALLOW / SEARCH_DEEP
-# split. Keep prefix-stable so vLLM's prefix cache fires on every call.
+# Structured JSON classifier prompt. Definitions describe what each
+# verdict means (i.e. what user intent it represents); the state block
+# at the end carries data with timestamps (NOT gating rules). The model
+# reads context + state + facts and makes the call. Kept prefix-stable
+# so vLLM's prefix cache hits on every call.
 CLASSIFIER_PROMPT = """\
-You classify requests for Ongiini, an AI helper for people in Namibia on WhatsApp.
+You are the request classifier for Ongiini, a free WhatsApp AI helper for people
+in Namibia. You look at one inbound message in its conversation context and
+decide what kind of turn it is. The downstream policy table uses your verdict
+to choose which tools the model gets, what loop shape to run, and which reply
+style is appropriate.
 
-Decide which of FIVE buckets the request falls in:
+The 13 verdicts you can choose from are:
 
-SEARCH_SHALLOW — needs the web AND the answer is a single fact, single
-business name, single number, single price, single yes/no with brief
-context. ONE search/lookup is enough.
-Examples: "exchange rate today", "BIPA office hours", "is there a
-Standard Bank in Walvis Bay", "what's the current malaria risk in
-Oshakati", "who's the President of Namibia right now".
+SEARCH_SHALLOW — the question needs the web AND the answer is a single fact,
+single business name, number, price, opening time, yes/no with brief context.
+One search call is enough. Examples: "BoN exchange rate today", "BIPA office
+hours", "is there a Standard Bank in Walvis Bay", "current malaria risk in
+Oshakati".
 
-SEARCH_DEEP — needs the web AND the answer requires comparing options,
-giving a list of 3+ items, looking up multiple data points, or
-following up on initial results.
-Examples: "compare home loan rates at 3 Namibian banks", "best places
-to study computer science in Namibia", "what's happening with the
-medicine shortage and what's being done", "give me 3 ideas for a small
-business in Windhoek".
+SEARCH_DEEP — the question needs the web AND the answer requires comparing
+options, listing 3+ items, looking up multiple data points, or following up on
+initial results. Examples: "compare home loan rates at 3 banks", "best places
+to study computer science in Namibia", "what's happening with the medicine
+shortage and what's being done about it".
 
-DOCS — the user is asking a SUBSTANTIVE question about Ongiini's policies,
-hardware, or institutional context that genuinely needs a docs lookup:
-pricing structure, privacy policy, terms of use, EU AI Act compliance, who
-built it, the Common Intelligence Foundation, hardware specifics, monthly
-token limits as a policy concept, how the data flows internally.
+DOCS — the user is asking a substantive question about Ongiini itself — its
+pricing structure, privacy policy, terms of use, EU AI Act posture, hardware,
+who built it, the Common Intelligence Foundation, monthly token-allowance
+policy, internal data flow. Identity / provenance questions about the
+underlying model also belong here ("which AI are you?", "are you Gemini?",
+"are you ChatGPT?", "what LLM powers you?", "watter KI is jy?") because the
+honest answer involves Gemma 4, open weights, local hosting, and the absence
+of any Google API — facts the model doesn't reliably know without the lookup.
 
-QUESTIONS ABOUT THE UNDERLYING AI MODEL also belong here — these have a
-specific, factual answer in our docs (we run Gemma 4 26B locally, not a
-Google/OpenAI API), and getting it wrong looks like a trust violation.
-Route to DOCS:
-  "which AI model are you?" / "are you Gemini?" / "are you ChatGPT?" /
-  "are you GPT-4?" / "what LLM powers you?" / "are you powered by Google?" /
-  "is this an API product?" / "do you call OpenAI?" / "watter KI is jy?"
+DOCS is NOT for trivial capability checks like "do you speak Oshiwambo?" /
+"what can you do?" / "what languages do you understand?" — those are answered
+by the system prompt + skill content already in context, so they route to
+NONE. The litmus test: is the truthful answer a single sentence the model
+already knows ("yes, I can help with X"), or does it depend on a document
+about Ongiini ("we run Gemma 4 26B locally")?
 
-DOCS is NOT for trivial capability checks like "do you speak X?" / "what
-languages do you understand?" / "can you do Y?" / "what can you do?" —
-those are answered by the system prompt and skill content already in the
-model's context. They route to NONE. Sending them to DOCS triggers a
-costly docs-lookup + critique-and-revise pipeline for a question whose
-answer is a single sentence.
-
-The distinction: "what can you help me with?" is capability → NONE.
-"which AI model are you?" is identity / provenance → DOCS, because the
-honest answer involves Gemma 4, open weights, local hosting, and the
-absence of any Google API — facts the model doesn't reliably know about
-itself without the docs lookup.
-
-ADMIN — the user is requesting an ACTION on their own data or session:
-"delete my data" / "forget everything" / "wis my data" / "vergeet alles";
-"what do you remember about me?" / "wat onthou jy?" / "show me my data";
-"how many tokens have I used?" / "hoeveel tokens het ek gebruik?"
-These need actual tool execution (delete_my_data, whats_in_my_memory,
-my_token_usage), NOT a docs lookup.
+ADMIN — the user is requesting an action on their own data or session:
+"delete my data" / "forget everything" / "wis my data" / "vergeet alles" /
+"what do you remember about me?" / "wat onthou jy?" / "show me my data" /
+"how many tokens have I used?" / "hoeveel tokens het ek gebruik?" — these
+need a tool call (delete_my_data, whats_in_my_memory, my_token_usage), not a
+docs lookup.
 
 NONE — general knowledge (science, math, philosophy), generic how-to with no
-local angle, emotional support, casual conversation, AND meta-questions
-about THIS conversation whose answer is already in the conversation
-history (asking for citations / sources / links that were cited in your
-own earlier replies; asking you to recap or summarise what was just
-discussed; "what did you tell me about X earlier"). These don't need a
-tool call — the answer is in history.
-Examples that route to NONE:
-  "give me some links to your sources" (citations are in prior replies)
-  "what were your sources for that?" (already cited above)
-  "summarise what you just told me" (history has it)
-  "remind me what the third option was" (already in history)
-  "explain that more simply" (rephrase of an answer already given)
+local angle, emotional support, casual conversation, AND meta-questions about
+THIS conversation whose answer is already in the history (asking for the
+sources you cited earlier, asking for a summary of what was discussed,
+re-asking for an option you already presented). These don't need a tool call
+— the answer is in the history. NONE is also the default for anything that
+doesn't fit the other 12 buckets.
 
-CONTRIBUTE_INVITE — the user is volunteering to help translate Oshiwambo
-OR asking whether/when Ongiini supports Oshiwambo OR using Oshiwambo
-for a real phrase (more than a one-word greeting like "Tangi" or "Ongiini").
-Only emit this when contribute_state.recently_declined is FALSE — if
-they declined recently, route normally to NONE / etc and answer their
-real question.
-Examples:
-  "I want to help translate" → CONTRIBUTE_INVITE
-  "Can I contribute Oshindonga translations?" → CONTRIBUTE_INVITE
-  "Do you support Oshiwambo?" → CONTRIBUTE_INVITE (capability + offer)
-  "Ondi pumbwa ekwafelo" (real Oshiwambo phrase) → CONTRIBUTE_INVITE
+CONTRIBUTE_INVITE — the user is volunteering to help translate Oshiwambo OR
+asking whether/when Ongiini supports Oshiwambo OR using Oshiwambo for a real
+phrase (more than a one-word greeting like "Tangi" or "Ongiini"). If the
+state block shows recently_declined=true, lean toward NONE — they passed
+recently and a fresh invite would be nagging.
 
-CONTRIBUTE_DIALECT — emit when contribute_state.pending_save is FALSE
-AND contribute_state.dialect is "unknown" AND the user's message
-indicates a dialect choice (answering the dialect-question we asked).
-This is THE critical verdict for the contribute flow — if you miss it,
-the user's translation later fails. Be GENEROUS in detecting dialect
-choice: any clear mention of Oshindonga/Oshikwanyama/Ndonga/Kwanyama
-counts, plus "either"/"both"/"any"/"both are fine" all count.
+CONTRIBUTE_DIALECT — the user is naming which Oshiwambo dialect they speak,
+typically in response to the bot asking. Be generous in detecting dialect
+choice: any clear mention of Oshindonga / Oshikwanyama / Ndonga / Kwanyama
+counts, plus "either" / "both" / "any" / "I speak both" all count. The
+contribute-state block tells you whether we've already asked the dialect
+question (pending_save and dialect fields).
 
-Examples (all → CONTRIBUTE_DIALECT when pending_save=false + dialect=unknown):
-  "Oshindonga"
-  "Oshikwanyama"
-  "Ndonga"
-  "Kwanyama"
-  "I speak Oshindonga"
-  "Oshindonga please"
-  "kwanyama thanks"
-  "Either"
-  "Both"
-  "any of them"
-  "I speak both fluently"
-  "Mostly Oshindonga but I understand Kwanyama too"
-  "Eewa, Oshindonga"
+CONTRIBUTE_NEXT — the user wants the next translation sentence. The previous
+bot message should have offered another sentence ("want to try another?" /
+"say yes for the next one"), and the user's message agrees (yes / sure /
+another / one more / Tangi unene / Eewa). A "yes" only counts as CONTRIBUTE_
+NEXT when the previous bot turn was about more translations — if it had
+moved on to a different topic, "yes" is about THAT topic.
 
-NOT CONTRIBUTE_DIALECT (these are NONE or other verdicts):
-  "What's Oshindonga?" — they're asking, not answering
-  "I learned Oshindonga in school years ago" — unrelated context
-  "I don't speak any" — that's a decline, → CONTRIBUTE_DECLINE
+CONTRIBUTE_SAVE — the user just typed a translation we asked them for. Decide
+this by reading the conversation: did the previous assistant message end
+with a request like "How would you say this in Oshindonga?" or a quoted
+English sentence to translate? Does the current user message look like a
+plausible answer to that specific request — Oshiwambo phonology (ondi,
+ohandi, okwa, shoka, iikulya, uunona, noun-class prefixes), not a generic
+English yes/no/click? If the conversation has moved on since pending_save
+was set, the state is stale and this is NOT a SAVE — even if pending_save
+is technically still set on the contributor row.
 
-CONTRIBUTE_SAVE — emit ONLY when contribute_state.pending_save is
-TRUE (we just served an English sentence and are waiting for the
-translation) AND the user's message looks like a translation
-attempt — NOT an obvious skip / question / pivot. A short reply in
-the contributor's dialect, even if you can't verify the language,
-defaults to SAVE. Examples in pending_save state:
-  "Ondi hala oku ku mona nawa" → CONTRIBUTE_SAVE
-  "Tangi unene" → CONTRIBUTE_SAVE
-  "Onawa ondi li nawa" → CONTRIBUTE_SAVE
+CONTRIBUTE_SKIP — the user is clearly passing on the current English
+sentence we asked them to translate ("skip", "I don't know this one", "send
+me a different one", "too hard"). Context-first: the previous assistant
+message must actually have been a translation request.
 
-CONTRIBUTE_SKIP — emit ONLY when contribute_state.pending_save is
-TRUE AND the user's message is a clear English rejection / "I don't
-know this one" / "send me a different sentence" / "skip" / "too
-hard" / "easier please". Distinct from SAVE because the user is
-explicitly NOT submitting a translation.
+CONTRIBUTE_DECLINE — the user is ending the translation flow ("no thanks",
+"done for today", "later", "enough for now"). Only emit when the
+conversation makes it clear they're declining translations specifically —
+a bare "no" outside the translation context is something else.
 
-CONTRIBUTE_NEXT — emit ONLY when contribute_state.awaiting_followup
-is TRUE (we just saved a translation and asked "want another?") AND
-the user said yes / sure / another / one more / Tangi / Eewa / etc.
+CONTRIBUTE_STATS — the user is asking how many translations have been
+collected ("how many do you have?", "how's the dataset doing?", "how many
+contributors?"). Fires regardless of contribute state.
 
-CONTRIBUTE_DECLINE — emit ONLY when contribute_state.awaiting_followup
-OR contribute_state.pending_save is TRUE AND the user said no / done /
-later / not now / enough / maybe later.
+OPT_OUT_BROADCAST — the user is asking to stop receiving proactive update or
+announcement messages from us ("stop messages", "unsubscribe", "opt out",
+"no more notifications", "stop boodskappe"). NOT for "delete my data" (that
+is ADMIN) and NOT for "stop talking to me right now" (the user can just stop
+replying — that is NONE).
 
-CONTRIBUTE_STATS — emit when the user asks how many translations have
-been collected ("how many do you have?", "how much data?", "how's
-the dataset doing?"). Can fire regardless of contribute_state.
+Examples that have caused production mistakes — read carefully:
 
-OPT_OUT_BROADCAST — emit when the user is asking to stop receiving
-proactive update / announcement messages from us. Examples:
-  "stop messages" / "stop sending me updates" / "unsubscribe" /
-  "opt out" / "no more notifications" / "stop boodskappe".
-NOT for "delete my data" (that's ADMIN) or "stop talking to me right
-now" (that's NONE — they can just stop replying).
+  Previous bot: 'How would you say this in Oshindonga? "The weather is
+  beautiful today."'
+  User: "Onkalo yombepo ombwaanawa nena"
+  → CONTRIBUTE_SAVE. Looks like an answer to that specific request in
+  Oshiwambo phonology.
 
-The DOCS / ADMIN distinction: "what's your privacy policy" → DOCS
-(asking about the document); "delete my data" → ADMIN (action on user state).
-The NONE / DOCS distinction:
-  - "give me your sources" → NONE (sources are in this conversation's history)
-  - "do you speak Oshiwambo?" / "what languages do you support?" / "can you
-    help with X?" / "what can you do?" → NONE (capability check, answer is
-    in system prompt + skill content already)
-  - "what's your privacy policy?" / "who built Ongiini?" / "what hardware
-    do you run on?" → DOCS (substantive lookup needed)
+  Previous bot: (a different topic — bot answered a question about BIPA an
+  hour ago and moved on)
+  User: "Yes, let's do that"
+  → NONE. The state block may still show pending_save from earlier, but the
+  conversation has moved on; "Yes, let's do that" is a button-style click on
+  whatever the bot just said, not a translation. state_relevance: stale.
 
-Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu, Katima
-Mulilo) and institutions (BIPA, NamRA, Bank of Namibia, Ministry of Home
-Affairs) imply Namibian context even when "Namibia" isn't explicitly said.
+  Previous bot: asked for a translation.
+  User: "What does that even mean?"
+  → NONE. Clarification question, not an attempt.
 
-If previous conversation turns are shown for context, use them to:
-  (a) resolve pronouns ("her", "his", "it", "they") and references
-      like "this" or "that" in the current message;
-  (b) detect whether the user is asking ABOUT something already
-      established in the conversation (answer is in history → NONE)
-      vs asking for new external info (needs SEARCH).
-The current message is what you classify; the previous turns are
-ONLY there to disambiguate what the user is talking about.
+  Previous bot: "Want to try another one? Say yes for the next one."
+  User: "Yes"
+  → CONTRIBUTE_NEXT. The bot just offered another sentence; the user
+  accepts. state_relevance: fresh.
 
-{context}{contribute_state}Current message: {user_text}
+  Previous bot: asked for a translation OR offered the next sentence.
+  User: "Oshindonga"
+  → CONTRIBUTE_DIALECT only if we hadn't yet recorded the user's dialect.
+  Otherwise it's likely a sideways comment routing to NONE.
 
-Reply with EXACTLY one of: SEARCH_SHALLOW, SEARCH_DEEP, DOCS, ADMIN, NONE,
-CONTRIBUTE_INVITE, CONTRIBUTE_DIALECT, CONTRIBUTE_NEXT, CONTRIBUTE_SAVE,
-CONTRIBUTE_SKIP, CONTRIBUTE_DECLINE, CONTRIBUTE_STATS, OPT_OUT_BROADCAST.
+Tie-breakers when you're unsure:
+
+  - State-changing verdicts (CONTRIBUTE_SAVE, CONTRIBUTE_DECLINE,
+    OPT_OUT_BROADCAST) deserve high confidence before you commit. If you
+    are on the fence, prefer NONE and let the model handle the turn
+    conversationally — a missed SAVE is recoverable; a wrong SAVE pollutes
+    the dataset.
+  - The state block in the prompt is data, not a rule. Older timestamps
+    (1h+) are progressively staler; a 23-hour-old pending_save almost
+    certainly doesn't apply to a fresh button click.
+  - Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu,
+    Katima Mulilo) and institutions (BIPA, NamRA, Bank of Namibia,
+    Ministry of Home Affairs) imply Namibian context even when "Namibia"
+    isn't explicitly said.
+
+Output schema — return ONE JSON object, no surrounding prose:
+
+{{
+  "verdict":           one of the 13 labels above,
+  "confidence":        "high" | "medium" | "low",
+  "reasoning":         1-2 sentences explaining what in the message + context
+                       + state drove the verdict,
+  "extracted": {{
+    "named_dialect":              "Oshindonga" | "Oshikwanyama" | "Either" |
+                                  "Unclear" | null,
+    "looks_like_translation":     true | false,
+    "looks_like_button_confirmation": true | false,
+    "looks_like_decline":         true | false,
+    "active_topic_domain":        short label or null
+  }},
+  "state_relevance":   "fresh" | "stale" | "not_applicable",
+  "secondary_verdict": another label you considered, or null
+}}
+
+{contribute_state}{facts}{context}Current message:
+{user_text}
 """
 
+# Order rationale: state block is ALWAYS emitted with consistent
+# field set (defaults for new contributors), so it slots BEFORE the
+# context block which is conditionally injected. That keeps the
+# prefix-cacheable prefix as long as possible for stateful users
+# (most expensive callers — mem0 hop + state lookups). Context
+# breaks the cache only at the boundary where it appears, not
+# 200 tokens earlier.
 
-# Latency budget. Classifier should fail fast and degrade rather than
-# block the user's actual reply. 2s is generous for the typical 85ms
-# round-trip but tight enough that GPU contention doesn't bust p99.
-_TIMEOUT_S = 2.0
 
+# Latency budget. The new JSON output is longer (~150 tokens) than the
+# old single-token reply, so we give a bit more headroom — still well
+# under the 25s WhatsApp typing-window cap. The prefix cache keeps the
+# input side cheap on every call.
+_TIMEOUT_S = 3.0
 
-# Order matters: longer labels first so we don't match SEARCH inside
-# SEARCH_SHALLOW. CONTRIBUTE_* labels are all unambiguous prefixes of
-# each other (CONTRIBUTE_SAVE doesn't contain CONTRIBUTE_SET-style
-# collisions), so any order within that family works.
-_LABEL_TOKENS = (
-    "SEARCH_SHALLOW", "SEARCH_DEEP", "SEARCH",
-    "CONTRIBUTE_INVITE", "CONTRIBUTE_DIALECT", "CONTRIBUTE_NEXT",
-    "CONTRIBUTE_SAVE", "CONTRIBUTE_SKIP", "CONTRIBUTE_DECLINE",
-    "CONTRIBUTE_STATS",
-    "OPT_OUT_BROADCAST",
-    "DOCS", "ADMIN", "NONE",
-)
+# Max output tokens for the JSON reply. The schema scaffolding alone
+# is ~110 tokens (keys, quotes, braces, enum literals); a 1-2 sentence
+# reasoning field can take another 60-80 tokens. 500 gives comfortable
+# headroom — truncated output would corrupt the JSON and silently fall
+# through to NONE+SHALLOW. We surface finish_reason == "length" as a
+# distinct warning so truncation rate is monitorable from logs.
+_MAX_OUTPUT_TOKENS = 500
 
 
 class GemmaClassifier:
@@ -302,28 +327,50 @@ class GemmaClassifier:
         if msg.has_image:
             return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_SHALLOW)
 
-        prev_user, prev_assistant = self._extract_prev_pair(msg)
-        needs_context = bool(prev_user or prev_assistant) and (
-            _has_pronoun_or_reference(text)
-            or len(text) < self.short_msg_threshold_chars
+        # Read the contributor's state ONCE. It feeds two decisions:
+        #  - the state block we render into the prompt;
+        #  - whether to force-include prior turns even when the message
+        #    looks self-contained (any active contribute state means
+        #    prev_assistant is exactly the context needed to judge
+        #    freshness vs staleness).
+        state = self._read_contribute_state(msg.user_id)
+        has_active_state = (
+            state["pending_save"] is not None
+            or state["awaiting_followup"]
+            or state["dialect"] != "unknown"
         )
-        if needs_context:
+
+        prev_user, prev_assistant = self._extract_prev_pair(msg)
+        if has_active_state and (prev_user or prev_assistant):
+            include_context = True
+        else:
+            include_context = bool(prev_user or prev_assistant) and (
+                _has_pronoun_or_reference(text)
+                or len(text) < self.short_msg_threshold_chars
+            )
+
+        if include_context:
             parts = []
             if prev_user:
                 parts.append(f"Previous user message: {prev_user}")
             if prev_assistant:
                 parts.append(f"Previous assistant reply: {prev_assistant}")
-            context = "\n".join(parts) + "\n"
+            context = "\n".join(parts) + "\n\n"
         else:
             context = ""
 
-        # Contribution-loop state: only injected when the contributor
-        # has any state worth knowing about (pending save, awaiting
-        # followup, known dialect, recent decline). For users who've
-        # never interacted with the contribute flow this stays empty,
-        # so the prompt prefix stays cacheable for the bulk of
-        # traffic.
-        contribute_state = self._format_contribute_state(msg.user_id)
+        contribute_state = self._format_state_with_ttls(state)
+
+        # Mem0 facts only when state is non-empty. Stateless turns get
+        # routed without the mem0 round-trip — keeps the bulk of traffic
+        # fast and the prompt prefix small. format_relevant returns ""
+        # when there are no facts; we add the trailing blank line only
+        # when there's actually content.
+        facts = ""
+        if has_active_state:
+            facts = self._format_recent_facts(msg.user_id)
+            if facts:
+                facts = facts + "\n\n"
 
         try:
             resp = await asyncio.wait_for(
@@ -335,10 +382,12 @@ class GemmaClassifier:
                             user_text=text,
                             context=context,
                             contribute_state=contribute_state,
+                            facts=facts,
                         ),
                     }],
                     temperature=0.0,
-                    max_tokens=10,
+                    max_tokens=_MAX_OUTPUT_TOKENS,
+                    response_format={"type": "json_object"},
                 ),
                 timeout=self.timeout_s,
             )
@@ -349,8 +398,23 @@ class GemmaClassifier:
             log.warning("classifier failed (%s) — falling back to NONE", exc)
             return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_SHALLOW)
 
+        # Detect output truncation. When the model hits _MAX_OUTPUT_TOKENS
+        # mid-JSON, json.loads silently fails and we fall through to NONE.
+        # Surfacing it here as a warning makes the truncation rate
+        # monitorable from logs without changing user-facing behaviour.
+        try:
+            finish_reason = resp.choices[0].finish_reason if resp.choices else ""
+        except Exception:
+            finish_reason = ""
+        if finish_reason == "length":
+            log.warning(
+                "classifier output truncated at max_tokens=%d — JSON parse will fail "
+                "and route to NONE. Consider bumping _MAX_OUTPUT_TOKENS.",
+                _MAX_OUTPUT_TOKENS,
+            )
+
         billable_in, completion, cached = _billable(resp.usage)
-        verdict, depth = self._parse(resp)
+        verdict, depth, attrs = self._parse(resp)
 
         return ClassifierResult(
             verdict=verdict,
@@ -358,6 +422,7 @@ class GemmaClassifier:
             tokens_in=billable_in,
             tokens_out=completion,
             cached_tokens=cached,
+            attrs=attrs,
         )
 
     # ----- internal helpers -----
@@ -368,9 +433,7 @@ class GemmaClassifier:
         v1.6: classifier needs BOTH prior turns to route "give me sources"-
         style questions correctly. The cited URLs and discussed entities
         live in the previous ASSISTANT reply, not the previous user
-        question. Walking only the user side meant the classifier
-        couldn't tell whether a "sources" question referred to something
-        already discussed (→ NONE) vs a fresh external lookup (→ SEARCH).
+        question.
 
         Returns ("", "") if neither role yields text. Empty strings are
         safe — the caller checks ``bool(prev_user or prev_assistant)``.
@@ -396,26 +459,18 @@ class GemmaClassifier:
                 break    # walk back from most-recent user; assistant came after
         return prev_user, prev_assistant
 
-    def _format_contribute_state(self, user_id: str) -> str:
-        """Render contribution-loop state for this contributor as a
-        prompt block. ALWAYS returns a block (with default-false /
-        unknown values for new contributors) so the classifier always
-        sees consistent input — the prompt guard conditions on
-        contribute_state.* read uniformly whether the user has an
-        existing row or not.
-
-        Soft-fail: any sqlite hiccup or missing hash salt yields a
-        defaults-only block (everything false / unknown), so the
-        prompt still has a well-formed state block but no contribute
-        verdict will pass the state guards."""
-        pending = False
+    def _read_contribute_state(self, user_id: str) -> dict[str, Any]:
+        """Return a structured snapshot of the contributor's state, with
+        raw timestamps preserved so the renderer can decide how to age
+        them. Soft-fails to defaults on any sqlite hiccup."""
+        pending_save: dict[str, Any] | None = None
         awaiting_followup = False
         dialect = "unknown"
         recently_declined = False
         try:
-            from .. import contributions as _contrib  # lazy: import sqlite only when classifying
+            from .. import contributions as _contrib   # lazy import to avoid sqlite cost when unused
             h = _contrib.hash_msisdn(user_id)
-            pending = bool(_contrib.get_pending_save(h))
+            pending_save = _contrib.get_pending_save(h)
             awaiting_followup = _contrib.is_awaiting_followup(h)
             status = _contrib.whoami(h)
             if status.startswith("known:"):
@@ -423,55 +478,189 @@ class GemmaClassifier:
             recently_declined = _contrib.recently_declined(h)
         except Exception:
             pass
-        return (
-            "Contribute_state: "
-            f"pending_save={str(pending).lower()}, "
-            f"awaiting_followup={str(awaiting_followup).lower()}, "
-            f"dialect={dialect}, "
-            f"recently_declined={str(recently_declined).lower()}\n"
+        return {
+            "pending_save":      pending_save,        # None or {task_id, dialect, set_at}
+            "awaiting_followup": awaiting_followup,
+            "dialect":           dialect,             # "unknown" | "Oshindonga" | "Oshikwanyama"
+            "recently_declined": recently_declined,
+        }
+
+    def _format_state_with_ttls(self, state: dict[str, Any]) -> str:
+        """Render the contribute_state block. Each item carries an
+        explicit age ("set 23h ago" / "set 8m ago") when we have a
+        timestamp, so the model can judge staleness without us hard-
+        coding rules. Always emitted (with all-default values for new
+        contributors) so the prompt prefix stays cacheable."""
+        # pending_save
+        ps = state["pending_save"]
+        if ps:
+            age = _format_age(ps.get("set_at"))
+            age_suffix = f", {age}" if age else ""
+            pending_line = (
+                f"pending_save:       task_id={ps.get('task_id')}, "
+                f"dialect={ps.get('dialect')}{age_suffix}"
+            )
+        else:
+            pending_line = "pending_save:       none"
+
+        # awaiting_followup — the contributions module already enforces
+        # a 30-minute window before this returns true, so the boolean
+        # carries an implicit TTL of its own. We just print true/false.
+        awaiting_line = (
+            f"awaiting_followup:  {str(state['awaiting_followup']).lower()}"
         )
 
+        dialect_line = f"dialect:            {state['dialect']}"
+        decline_line = (
+            f"recently_declined:  {str(state['recently_declined']).lower()}"
+        )
+
+        return (
+            "Contribute state (data with timestamps — judge staleness yourself):\n"
+            f"  {pending_line}\n"
+            f"  {awaiting_line}\n"
+            f"  {dialect_line}\n"
+            f"  {decline_line}\n\n"
+        )
+
+    def _format_recent_facts(self, user_id: str, limit: int = 3) -> str:
+        """Up to ``limit`` short mem0 facts for the user, rendered as a
+        labelled block. Used only when the contributor has active state,
+        so we pay the mem0 hop only on the small fraction of traffic
+        where it might disambiguate. Soft-fails to empty string.
+
+        Mem0 failure is logged at INFO with a per-process once-only guard
+        so a silent mem0 outage in prod doesn't hide the loss of the
+        disambiguation signal on exactly the users that need it. After
+        the first warning, individual failures drop to DEBUG to avoid
+        noise."""
+        try:
+            from ..memory import long_term     # lazy: avoid loading mem0 at import
+            facts = long_term.list_all(user_id) or []
+        except Exception as exc:
+            if not getattr(self, "_mem0_read_warned", False):
+                log.warning(
+                    "classifier mem0 read failed for %s: %s — disambiguation "
+                    "facts will be skipped until mem0 recovers. (Subsequent "
+                    "failures logged at DEBUG.)", user_id, exc,
+                )
+                self._mem0_read_warned = True
+            else:
+                log.debug("classifier mem0 read failed for %s: %s", user_id, exc)
+            return ""
+        if not facts:
+            return ""
+        rendered: list[str] = []
+        for f in facts[:limit]:
+            if not isinstance(f, dict):
+                continue
+            text = (f.get("memory") or f.get("text") or "").strip()
+            if not text:
+                continue
+            # Cap each fact so a long [QUOTE] can't blow past the prompt
+            # budget for what's a disambiguation hint, not a full memory
+            # surface.
+            if len(text) > 160:
+                text = text[:160] + "…"
+            rendered.append(f"- {text}")
+        if not rendered:
+            return ""
+        return "Recent facts about this user (for disambiguation):\n" + "\n".join(rendered)
+
     @staticmethod
-    def _parse(resp: Any) -> tuple[str, str]:
-        """Return (verdict, depth). Accepts the new SEARCH_SHALLOW /
-        SEARCH_DEEP labels as well as the bare SEARCH (legacy → SHALLOW).
-        Unparsable / unrecognised → ('NONE', 'SHALLOW')."""
+    def _parse(resp: Any) -> tuple[str, str, dict[str, Any]]:
+        """Parse Gemma's JSON reply into (verdict, depth, attrs).
+
+        On any parse failure / unrecognised verdict, returns the
+        fail-safe ``(NONE, SHALLOW, {})`` — same posture as the old
+        token parser. Logs a warning so it's visible in traces."""
         if not resp.choices:
-            return VERDICT_NONE, DEPTH_SHALLOW
-        raw = (resp.choices[0].message.content or "").strip().upper()
-        for token in _LABEL_TOKENS:
-            if token in raw:
-                if token == "SEARCH_SHALLOW":
-                    return VERDICT_SEARCH, DEPTH_SHALLOW
-                if token == "SEARCH_DEEP":
-                    return VERDICT_SEARCH, DEPTH_DEEP
-                if token == "SEARCH":
-                    # Legacy 4-way output — default to SHALLOW.
-                    return VERDICT_SEARCH, DEPTH_SHALLOW
-                if token == "DOCS":
-                    return VERDICT_DOCS, DEPTH_SHALLOW
-                if token == "ADMIN":
-                    return VERDICT_ADMIN, DEPTH_SHALLOW
-                if token == "NONE":
-                    return VERDICT_NONE, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_INVITE":
-                    return VERDICT_CONTRIB_INVITE, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_DIALECT":
-                    return VERDICT_CONTRIB_DIALECT, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_NEXT":
-                    return VERDICT_CONTRIB_NEXT, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_SAVE":
-                    return VERDICT_CONTRIB_SAVE, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_SKIP":
-                    return VERDICT_CONTRIB_SKIP, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_DECLINE":
-                    return VERDICT_CONTRIB_DECLINE, DEPTH_SHALLOW
-                if token == "CONTRIBUTE_STATS":
-                    return VERDICT_CONTRIB_STATS, DEPTH_SHALLOW
-                if token == "OPT_OUT_BROADCAST":
-                    return VERDICT_OPT_OUT_BROADCAST, DEPTH_SHALLOW
-        log.warning("classifier got un-parseable verdict %r — falling back to NONE", raw)
-        return VERDICT_NONE, DEPTH_SHALLOW
+            return VERDICT_NONE, DEPTH_SHALLOW, {}
+
+        raw = (resp.choices[0].message.content or "").strip()
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            log.warning("classifier got unparseable JSON %r — falling back to NONE", raw[:200])
+            return VERDICT_NONE, DEPTH_SHALLOW, {}
+
+        if not isinstance(parsed, dict):
+            log.warning("classifier JSON was not an object: %r — falling back to NONE", raw[:200])
+            return VERDICT_NONE, DEPTH_SHALLOW, {}
+
+        # Gemma occasionally emits non-string verdict values (int, bool,
+        # null, list) — strip()/upper() would AttributeError. Coerce
+        # defensively: only treat as a valid verdict when it's an actual
+        # string in the allowed set.
+        raw_verdict_field = parsed.get("verdict")
+        if not isinstance(raw_verdict_field, str):
+            log.warning(
+                "classifier got non-string verdict %r — falling back to NONE",
+                raw_verdict_field,
+            )
+            return VERDICT_NONE, DEPTH_SHALLOW, {}
+        raw_verdict = raw_verdict_field.strip().upper()
+        if raw_verdict not in _VALID_VERDICTS:
+            log.warning(
+                "classifier got unrecognised verdict %r — falling back to NONE",
+                raw_verdict,
+            )
+            return VERDICT_NONE, DEPTH_SHALLOW, {}
+
+        # Verdict → (verdict_for_policy, depth) mapping.
+        if raw_verdict == "SEARCH_SHALLOW":
+            verdict, depth = VERDICT_SEARCH, DEPTH_SHALLOW
+        elif raw_verdict == "SEARCH_DEEP":
+            verdict, depth = VERDICT_SEARCH, DEPTH_DEEP
+        elif raw_verdict == "SEARCH":
+            verdict, depth = VERDICT_SEARCH, DEPTH_SHALLOW   # legacy degrade
+        elif raw_verdict == "DOCS":
+            verdict, depth = VERDICT_DOCS, DEPTH_SHALLOW
+        elif raw_verdict == "ADMIN":
+            verdict, depth = VERDICT_ADMIN, DEPTH_SHALLOW
+        elif raw_verdict == "NONE":
+            verdict, depth = VERDICT_NONE, DEPTH_SHALLOW
+        else:
+            # All CONTRIBUTE_* and OPT_OUT_BROADCAST pass through as-is.
+            verdict, depth = raw_verdict, DEPTH_SHALLOW
+
+        # Everything else flows into attrs for downstream consumers
+        # (hooks, future policies that gate on confidence, eval logs).
+        attrs: dict[str, Any] = {
+            "verdict_raw":       raw_verdict,
+            "confidence":        parsed.get("confidence"),
+            "reasoning":         parsed.get("reasoning"),
+            "extracted":         parsed.get("extracted") if isinstance(parsed.get("extracted"), dict) else {},
+            "state_relevance":   parsed.get("state_relevance"),
+            "secondary_verdict": parsed.get("secondary_verdict"),
+        }
+        return verdict, depth, attrs
+
+
+def _format_age(iso_ts: str | None) -> str:
+    """Render a stored ISO-8601 timestamp as a human age like 'set 8m
+    ago' / 'set 23h ago' / 'set 5d ago'. Returns '' if the timestamp is
+    missing or unparseable — caller decides whether to elide the
+    suffix entirely."""
+    if not iso_ts:
+        return ""
+    try:
+        ts = datetime.fromisoformat(iso_ts)
+    except (ValueError, TypeError):
+        return ""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - ts
+    seconds = delta.total_seconds()
+    if seconds < 0:
+        return "set just now"
+    if seconds < 60:
+        return "set just now"
+    if seconds < 3600:
+        return f"set {int(seconds // 60)}m ago"
+    if seconds < 86400:
+        return f"set {int(seconds // 3600)}h ago"
+    return f"set {int(seconds // 86400)}d ago"
 
 
 def _billable(usage_obj: Any) -> tuple[int, int, int]:
