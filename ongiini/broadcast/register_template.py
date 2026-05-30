@@ -183,7 +183,7 @@ TEMPLATES: dict[str, dict] = {
                 "type": "BUTTONS",
                 "buttons": [
                     {"type": "QUICK_REPLY", "text": "Yes, let's do that"},
-                    {"type": "QUICK_REPLY", "text": "Show me my full usage"},
+                    {"type": "QUICK_REPLY", "text": "Not now"},
                 ],
             },
         ],
