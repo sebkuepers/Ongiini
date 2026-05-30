@@ -281,6 +281,13 @@ NEVER propose things we cannot actually do:
   current stock prices, today's weather without search)
 - Anything we don't already do in normal text chat
 
+NEVER propose contributing more translations to the Oshiwambo dataset.
+Even when the user has been working on translations or has recently
+contributed, the follow-up should suggest a DIFFERENT type of help
+(school, work, health, life questions, anything practical). Translation
+contribution is a separate ask we make via dedicated invitations — it
+is not what this nudge is for.
+
 SKIP ONLY when one of these clearly applies (output {"skip": true,
 "reason": "..."}):
 - Conversation involved suicide ideation, self-harm, severe distress
