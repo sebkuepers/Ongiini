@@ -407,6 +407,70 @@ def save_contribution(
     }
 
 
+def save_orphan(
+    contributor_hash: str,
+    target_dialect: str,
+    target_translation_raw: str,
+) -> dict:
+    """Persist a translation when no pending task was active. Creates a
+    placeholder task row so the contribution still satisfies the NOT NULL
+    foreign key, then writes the contribution. Used by the contribute_save
+    tool as a safety net when the classifier fires SAVE but no task has
+    been served — the user's effort never gets dropped.
+
+    Returns the same shape as save_contribution plus orphan_task_id.
+    PII-sanitises the translation. Accepts dialect 'unknown' for cases
+    where the contributor hasn't declared one yet.
+    """
+    cleaned = pii_sanitize(target_translation_raw or "").strip()
+    if not cleaned:
+        raise ValueError("empty translation after sanitisation")
+    # Allow 'unknown' alongside the normal dialects — orphan saves often
+    # happen before dialect is confirmed.
+    if target_dialect not in VALID_DIALECTS and target_dialect != "unknown":
+        raise ValueError(f"invalid dialect {target_dialect!r}")
+    now = _now_iso()
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO tasks (source_en, category, created_at, "
+            "times_served, times_submitted) VALUES (?, ?, ?, 0, 1)",
+            (
+                "[orphan: classifier fired SAVE without a served task]",
+                "orphan_no_pending",
+                now,
+            ),
+        )
+        orphan_task_id = cur.lastrowid
+        cur = c.execute(
+            "INSERT INTO contributions "
+            "(task_id, contributor_hash, target_dialect, target_translation, submitted_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (orphan_task_id, contributor_hash, target_dialect, cleaned, now),
+        )
+        contribution_id = cur.lastrowid
+        c.execute(
+            """
+            INSERT INTO contributors
+              (contributor_hash, first_contributed_at, last_contributed_at, total_contributions)
+              VALUES (?, ?, ?, 1)
+              ON CONFLICT(contributor_hash) DO UPDATE SET
+                last_contributed_at = excluded.last_contributed_at,
+                total_contributions = total_contributions + 1
+            """,
+            (contributor_hash, now, now),
+        )
+        contrib = c.execute(
+            "SELECT total_contributions FROM contributors "
+            "WHERE contributor_hash = ?",
+            (contributor_hash,),
+        ).fetchone()
+    return {
+        "contribution_id": contribution_id,
+        "orphan_task_id": orphan_task_id,
+        "total_for_contributor": int(contrib["total_contributions"]),
+    }
+
+
 # ── Contributor management ──────────────────────────────────────────
 
 
