@@ -282,11 +282,13 @@ Output schema — return ONE JSON object, no surrounding prose:
 # 200 tokens earlier.
 
 
-# Latency budget. The new JSON output is longer (~150 tokens) than the
-# old single-token reply, so we give a bit more headroom — still well
-# under the 25s WhatsApp typing-window cap. The prefix cache keeps the
-# input side cheap on every call.
-_TIMEOUT_S = 3.0
+# Latency budget. The JSON output is up to 500 tokens vs. the old
+# single-token reply, so generation time scales linearly. Live test
+# on Spark (2026-05-30) saw consistent 3s-timeout under realistic
+# load. 8s gives comfortable headroom while staying well under the
+# 25s WhatsApp typing-window cap. The prefix cache keeps the input
+# side cheap on every call regardless of timeout.
+_TIMEOUT_S = 8.0
 
 # Max output tokens for the JSON reply. The schema scaffolding alone
 # is ~110 tokens (keys, quotes, braces, enum literals); a 1-2 sentence
