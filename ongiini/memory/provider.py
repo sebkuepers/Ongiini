@@ -158,30 +158,12 @@ class OngiiniMemoryProvider:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
         ]
-        # Welcome A/B/C experiment: on the FIRST turn (no prior assistant
-        # message in history) AND when this is a Facebook click-to-
-        # WhatsApp ad arrival (referral block present on raw_payload),
-        # override the default FIRST-MESSAGE-WELCOME copy with a sticky
-        # variant. Organic arrivers keep the default welcome unchanged.
-        # Sticky routing means a returning user always sees the same
-        # variant — no cross-variant contamination at the user level.
-        is_first_turn = not any(
-            isinstance(h, dict) and h.get("role") == "assistant"
-            for h in msg.history
-        )
-        if is_first_turn:
-            from .. import welcome_experiment as we
-            if we.is_fb_ad_arrival(msg.raw_payload):
-                variant = we.assign_variant(msg.user_id)
-                referral = (msg.raw_payload or {}).get("referral")
-                # Language guess for the variant copy: default to EN;
-                # AF detection from a one-token first message is too
-                # noisy. The system prompt's bilingual disclosure
-                # handles AF separately if the user wrote in AF.
-                we.log_assignment(msg.user_id, variant, referral, "en")
-                messages.append(
-                    {"role": "system", "content": we.variant_directive(variant, "en")}
-                )
+        # Welcome A/B/C experiment for FB-ad arrivers concluded
+        # 2026-05-30: variant B (concrete-suggestion copy) won at 66%
+        # engagement vs 53%/53% for the alternatives. Promoted to the
+        # static system-prompt default for ALL arrivals (FB + organic).
+        # Experiment injection removed; welcome_experiment.py module
+        # and the historical log file stay for future A/B rounds.
         # Skill manifest — lists registered skills (name + description)
         # and inlines the content of any ``load: always`` skills. Goes
         # after SYSTEM_PROMPT and before the date anchor so the static
