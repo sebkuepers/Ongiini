@@ -18,7 +18,11 @@ test harness can mock cleanly.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -254,43 +258,178 @@ async def whats_in_my_memory(ctx: ToolContext) -> str:
     return "\n".join(parts)
 
 
+# ── my_token_usage helpers ───────────────────────────────────────
+
+_USAGE_LINE_RE = re.compile(
+    r"^(?P<ts>\S+)\s\|\s(?P<msisdn>\S+)\s\|\stokens_in=\d+\s"
+    r"tokens_out=\d+\s\|\ssearch=(?:yes|no)"
+)
+_USAGE_KIND_RE = re.compile(r"\skind=(?P<kind>[a-zA-Z_]+)")
+_DOW_LABELS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _activity_patterns(msisdn: str) -> dict[str, Any]:
+    """Read usage.log for THIS user and surface time-shape signals
+    (active days this month, peak day-of-week, peak hour band). All
+    counted from `kind=chat` lines only — internal memory/router/summary
+    work isn't user-facing activity.
+
+    Soft-fail to zeros if usage.log is missing or unreadable."""
+    log_path = _usage.LOG_PATH
+    if not log_path.exists():
+        return {"active_days": 0, "peak_day_of_week": None, "peak_hour_band": None}
+
+    now_utc = datetime.now(timezone.utc)
+    month_prefix = now_utc.strftime("%Y-%m")
+    days: set[str] = set()
+    dow: Counter[int] = Counter()
+    hours: Counter[int] = Counter()
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                m = _USAGE_LINE_RE.match(line)
+                if not m or m.group("msisdn") != msisdn:
+                    continue
+                # Only chat turns — that's user-facing activity. Older
+                # log lines without a kind tag are implicitly chat.
+                km = _USAGE_KIND_RE.search(line)
+                kind = km.group("kind") if km else "chat"
+                if kind != "chat":
+                    continue
+                ts = m.group("ts")
+                if not ts.startswith(month_prefix):
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+                days.add(dt.date().isoformat())
+                dow[dt.weekday()] += 1
+                hours[dt.hour] += 1
+    except Exception:
+        log.exception("activity_patterns failed for %s — returning zeros", msisdn[-6:])
+        return {"active_days": 0, "peak_day_of_week": None, "peak_hour_band": None}
+
+    peak_dow = _DOW_LABELS[dow.most_common(1)[0][0]] if dow else None
+    # Hour band is more human-relevant than peak hour alone.
+    peak_hour_band = None
+    if hours:
+        peak_hour = hours.most_common(1)[0][0]
+        if 5 <= peak_hour < 12:
+            peak_hour_band = "mornings"
+        elif 12 <= peak_hour < 17:
+            peak_hour_band = "afternoons"
+        elif 17 <= peak_hour < 22:
+            peak_hour_band = "evenings"
+        else:
+            peak_hour_band = "late nights"
+    return {
+        "active_days": len(days),
+        "peak_day_of_week": peak_dow,
+        "peak_hour_band": peak_hour_band,
+    }
+
+
+def _media_counts(msisdn: str) -> dict[str, int]:
+    """Count [image attached] and [voice note] markers in this user's
+    short-term memory file. These are the only proxies we have for
+    'documents reviewed / voice notes sent' since the actual bytes
+    aren't persisted per the PII contract."""
+    try:
+        history = _memory.load(msisdn) or []
+    except Exception:
+        log.exception("media_counts failed loading memory for %s", msisdn[-6:])
+        return {"images": 0, "voice_notes": 0}
+    images = 0
+    voices = 0
+    for turn in history:
+        if not isinstance(turn, dict) or turn.get("role") != "user":
+            continue
+        content = turn.get("content") or ""
+        if "[image attached]" in content:
+            images += 1
+        if "[voice note]" in content:
+            voices += 1
+    return {"images": images, "voice_notes": voices}
+
+
+def _top_user_facts(msisdn: str, n: int = 8) -> list[str]:
+    """Return up to ``n`` short mem0 facts for this user — these name
+    the substantive domains we've worked on together ([SITUATION],
+    [PROFILE], [GOAL] tags). The bot uses these to compose a topic
+    narrative for the usage summary.
+
+    Soft-fail to empty list if mem0 is down."""
+    try:
+        from ..memory import long_term as _long_term
+        facts = _long_term.list_all(msisdn) or []
+    except Exception as exc:
+        log.warning("my_token_usage mem0 read failed for %s: %s", msisdn[-6:], exc)
+        return []
+    out: list[str] = []
+    for f in facts[:n * 2]:    # over-fetch — some entries are empty / [QUOTE] noise
+        if not isinstance(f, dict):
+            continue
+        text = (f.get("memory") or f.get("text") or "").strip()
+        if not text:
+            continue
+        # Skip [QUOTE] entries — those are verbatim utterance snapshots,
+        # not domain markers
+        if text.startswith("[QUOTE]"):
+            continue
+        # Cap each fact length so the tool payload stays bounded
+        if len(text) > 180:
+            text = text[:180] + "…"
+        out.append(text)
+        if len(out) >= n:
+            break
+    return out
+
+
 @tool(
     name="my_token_usage",
     description=(
-        "Look up THIS user's PERSONAL token usage for the current calendar "
-        "month — how many tokens THEY have spent so far, how close THEY are "
-        "to running out. Call this ONLY when the user asks about their own "
-        "current usage ('how many tokens have I used?', 'am I close to the "
-        "limit?', 'hoeveel tokens het ek gebruik?', 'hoe naby is ek aan die "
-        "limiet?'). For policy questions about the limit itself, what counts "
-        "against it, how the system is designed, or any general question "
-        "about Ongiini's pricing / quotas, use `lookup_ongiini_docs` instead "
-        "— that's the canonical product knowledge. After this tool returns, "
-        "summarise the numbers in plain language, don't dump them as a list "
-        "or JSON. Mention that the counter resets on the 1st of each month. "
-        "Takes no arguments."
+        "Look up THIS user's PERSONAL usage summary for the current calendar "
+        "month and return a structured snapshot the model uses to compose a "
+        "friendly month-summary reply. Call this when the user asks about "
+        "their own activity ('how many tokens have I used?', 'show me my "
+        "usage', 'what did we work on this month', 'hoeveel tokens het ek "
+        "gebruik?'). For policy questions about the limit itself, use "
+        "`lookup_ongiini_docs` instead. "
+        "\n\nReturns JSON with: month, messages, active_days, "
+        "peak_day_of_week, peak_hour_band, images_shared, voice_notes, "
+        "top_topics_from_memory (a list of short fact snippets about the "
+        "user's domains). "
+        "\n\nHOW TO COMPOSE THE REPLY after this tool returns: "
+        "lead with the human stuff — messages + active days, then narrate "
+        "what you worked on TOGETHER drawing from top_topics_from_memory "
+        "(synthesise into 2-4 broad themes with rough share/feel, NOT a "
+        "verbatim list of memory tags). Mention activity pattern and media "
+        "counts naturally. Close with the monthly-reset note. Skip raw "
+        "token numbers entirely — those are infrastructure plumbing, not "
+        "user-relevant. If top_topics_from_memory is empty, just give the "
+        "activity summary without the themes section. Keep the whole "
+        "reply under ~10 lines."
     ),
 )
 async def my_token_usage(ctx: ToolContext) -> str:
     stats = _usage.summary_for(ctx.user_id)
-    brk = stats.get("breakdown") or {}
-    chat = brk.get("chat") or {"tokens_in": 0, "tokens_out": 0}
-    mem_t = brk.get("memory") or {"tokens_in": 0, "tokens_out": 0}
-    sum_t = brk.get("summary") or {"tokens_in": 0, "tokens_out": 0}
-    chat_total = chat["tokens_in"] + chat["tokens_out"]
-    mem_total = mem_t["tokens_in"] + mem_t["tokens_out"]
-    sum_total = sum_t["tokens_in"] + sum_t["tokens_out"]
-    return (
-        f"Token usage for this user, month {stats['month']} (UTC):\n"
-        f"- {stats['messages']} messages so far this month\n"
-        f"- {stats['tokens_total']} tokens total of {stats['limit']} "
-        f"monthly allowance ({stats['percent_used']}% used)\n"
-        f"  · chat (replies, incl. any images you sent): {chat_total} tokens\n"
-        f"  · long-term memory updates: {mem_total} tokens\n"
-        f"  · rolling-summary compressions: {sum_total} tokens\n"
-        f"Everything counts toward the monthly allowance, including the "
-        f"behind-the-scenes memory work. Counter resets on the 1st of next month."
-    )
+    activity = _activity_patterns(ctx.user_id)
+    media = _media_counts(ctx.user_id)
+    facts = _top_user_facts(ctx.user_id, n=8)
+    payload = {
+        "month": stats.get("month", ""),
+        "messages": stats.get("messages", 0),
+        "active_days": activity["active_days"],
+        "peak_day_of_week": activity["peak_day_of_week"],
+        "peak_hour_band": activity["peak_hour_band"],
+        "images_shared": media["images"],
+        "voice_notes": media["voice_notes"],
+        "top_topics_from_memory": facts,
+    }
+    return json.dumps(payload, separators=(",", ":"))
 
 
 # ----------------------------- docs lookup -----------------------------

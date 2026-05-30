@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -279,7 +280,12 @@ async def test_fetch_url_delegates_to_impl():
 # ---------- my_token_usage ----------
 
 @pytest.mark.asyncio
-async def test_my_token_usage_summarises_stats():
+async def test_my_token_usage_returns_structured_payload():
+    """The tool now returns JSON the model uses to compose a friendly
+    month-summary. Lead fields are the user-relevant ones (messages,
+    active_days, themes); raw token numbers stay in the infrastructure
+    layer."""
+    import json as _json
     ctx = _ctx("+264u")
     fake_stats = {
         "month": "2026-05",
@@ -287,15 +293,135 @@ async def test_my_token_usage_summarises_stats():
         "tokens_total": 50000,
         "limit": 1_000_000,
         "percent_used": 5.0,
-        "breakdown": {
-            "chat": {"tokens_in": 30000, "tokens_out": 15000},
-            "memory": {"tokens_in": 3000, "tokens_out": 1500},
-            "summary": {"tokens_in": 400, "tokens_out": 100},
-        },
+        "breakdown": {},
     }
-    with patch("ongiini.tools.ongiini_tools._usage.summary_for", return_value=fake_stats):
+    with patch("ongiini.tools.ongiini_tools._usage.summary_for", return_value=fake_stats), \
+         patch("ongiini.tools.ongiini_tools._activity_patterns",
+               return_value={"active_days": 5, "peak_day_of_week": "Tuesday",
+                             "peak_hour_band": "evenings"}), \
+         patch("ongiini.tools.ongiini_tools._media_counts",
+               return_value={"images": 3, "voice_notes": 1}), \
+         patch("ongiini.tools.ongiini_tools._top_user_facts",
+               return_value=["[SITUATION] Working on non-profit setup",
+                             "[PROFILE] Software engineer in Namibia"]):
         result = await my_token_usage(ctx)
-    assert "2026-05" in result
-    assert "12 messages" in result
-    assert "50000 tokens total" in result
-    assert "45000 tokens" in result    # chat sum
+    payload = _json.loads(result)
+    assert payload["month"] == "2026-05"
+    assert payload["messages"] == 12
+    assert payload["active_days"] == 5
+    assert payload["peak_day_of_week"] == "Tuesday"
+    assert payload["peak_hour_band"] == "evenings"
+    assert payload["images_shared"] == 3
+    assert payload["voice_notes"] == 1
+    assert len(payload["top_topics_from_memory"]) == 2
+    # The model — not the tool — composes the natural-language reply;
+    # raw token numbers should NOT appear in the payload (they're not
+    # user-relevant).
+    assert "tokens_total" not in payload
+    assert "limit" not in payload
+
+
+@pytest.mark.asyncio
+async def test_my_token_usage_handles_empty_user_gracefully():
+    """A brand-new user with no usage.log lines, no memory file, no mem0
+    facts should still get a valid JSON payload with zero/null values."""
+    import json as _json
+    ctx = _ctx("+264u")
+    fake_stats = {"month": "2026-05", "messages": 0,
+                  "tokens_total": 0, "limit": 1_000_000,
+                  "percent_used": 0.0, "breakdown": {}}
+    with patch("ongiini.tools.ongiini_tools._usage.summary_for", return_value=fake_stats), \
+         patch("ongiini.tools.ongiini_tools._activity_patterns",
+               return_value={"active_days": 0, "peak_day_of_week": None,
+                             "peak_hour_band": None}), \
+         patch("ongiini.tools.ongiini_tools._media_counts",
+               return_value={"images": 0, "voice_notes": 0}), \
+         patch("ongiini.tools.ongiini_tools._top_user_facts", return_value=[]):
+        result = await my_token_usage(ctx)
+    payload = _json.loads(result)
+    assert payload["messages"] == 0
+    assert payload["active_days"] == 0
+    assert payload["peak_day_of_week"] is None
+    assert payload["top_topics_from_memory"] == []
+
+
+def test_activity_patterns_parses_usage_log(tmp_path, monkeypatch):
+    """Sanity-check the usage.log parser identifies the right user and
+    correctly tallies active days + day-of-week + hour band."""
+    from ongiini.tools.ongiini_tools import _activity_patterns
+    log_file = tmp_path / "usage.log"
+    # 3 chat turns on Tuesday + Wednesday in evenings, 1 on Monday afternoon
+    # Note: 2026-05-04 is Monday, 05 Tue, 06 Wed
+    log_file.write_text(
+        "2026-05-04T14:00:00 | 264811111111 | tokens_in=100 tokens_out=10 | search=no | kind=chat\n"
+        "2026-05-05T19:00:00 | 264811111111 | tokens_in=100 tokens_out=10 | search=no | kind=chat\n"
+        "2026-05-05T20:00:00 | 264811111111 | tokens_in=100 tokens_out=10 | search=no | kind=chat\n"
+        "2026-05-06T19:30:00 | 264811111111 | tokens_in=100 tokens_out=10 | search=no | kind=chat\n"
+        # Different user — should be ignored
+        "2026-05-06T19:30:00 | 264899999999 | tokens_in=100 tokens_out=10 | search=no | kind=chat\n"
+        # memory-kind line — not user-facing activity, ignored
+        "2026-05-06T19:30:00 | 264811111111 | tokens_in=100 tokens_out=10 | search=no | kind=memory\n"
+    )
+    monkeypatch.setattr("ongiini.tools.ongiini_tools._usage.LOG_PATH", log_file)
+    # Freeze "now" to a date in May 2026 so the month filter picks up our lines
+    monkeypatch.setattr(
+        "ongiini.tools.ongiini_tools.datetime",
+        type("D", (), {
+            "now": staticmethod(lambda tz=None: datetime(2026, 5, 30, tzinfo=tz)),
+            "fromisoformat": staticmethod(datetime.fromisoformat),
+        }),
+    )
+    result = _activity_patterns("264811111111")
+    assert result["active_days"] == 3   # Mon, Tue, Wed
+    # Tuesday has 2 entries — highest
+    assert result["peak_day_of_week"] == "Tuesday"
+    # 19/20 UTC = evening band
+    assert result["peak_hour_band"] == "evenings"
+
+
+def test_media_counts_walks_user_memory(monkeypatch):
+    """Image and voice markers in short-term memory are the only signal
+    we have for 'documents reviewed / voice notes' — verify the count
+    matches what's in the memory file."""
+    from ongiini.tools.ongiini_tools import _media_counts
+    fake_history = [
+        {"role": "user", "content": "[image attached] hello"},
+        {"role": "assistant", "content": "I see the photo…"},
+        {"role": "user", "content": "[image attached]"},
+        {"role": "user", "content": "[voice note] hey"},
+        {"role": "assistant", "content": "Got your message"},
+        # Assistant turns aren't counted even if they mention markers
+        {"role": "assistant", "content": "[image attached] ← shouldn't count"},
+    ]
+    with patch("ongiini.tools.ongiini_tools._memory.load", return_value=fake_history):
+        result = _media_counts("264811111111")
+    assert result["images"] == 2
+    assert result["voice_notes"] == 1
+
+
+def test_top_user_facts_skips_quote_entries(monkeypatch):
+    """[QUOTE] mem0 entries are verbatim utterance snapshots — they
+    repeat what the user said but don't name a domain. Skip them
+    so the bot's topic narrative anchors to [SITUATION] / [PROFILE]
+    / [GOAL] tags instead."""
+    from ongiini.tools.ongiini_tools import _top_user_facts
+    fake_facts = [
+        {"memory": "[QUOTE] 'I want to try something different'"},
+        {"memory": "[SITUATION] Studying nursing at Atlantic Institute"},
+        {"memory": "[PROFILE] Lives in Walvis Bay"},
+        {"memory": "[QUOTE] 'Help me with my CV'"},
+        {"memory": "[GOAL] Wants to apply for scholarship"},
+    ]
+    # Patch list_all on the already-imported module so the lazy import
+    # inside _top_user_facts picks up the fake.
+    import sys, types
+    if "ongiini.memory.long_term" not in sys.modules:
+        fake_module = types.ModuleType("ongiini.memory.long_term")
+        sys.modules["ongiini.memory.long_term"] = fake_module
+    monkeypatch.setattr(
+        sys.modules["ongiini.memory.long_term"],
+        "list_all", lambda _msi: fake_facts, raising=False,
+    )
+    result = _top_user_facts("264811111111", n=8)
+    assert len(result) == 3
+    assert all("[QUOTE]" not in t for t in result)
