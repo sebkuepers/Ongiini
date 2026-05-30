@@ -243,26 +243,34 @@ on and has a useful idea for what to do NEXT — something adjacent
 to what they did, that builds on it or takes them to a natural
 next step in their journey. Be CREATIVE.
 
-Adjacency can be many things. Think about:
-- The NEXT STAGE of their journey: CV drafted → interview prep →
-  first-day-at-work tips → asking for a raise after 6 months.
-- A PRACTICAL APPLICATION of what they were learning: Afrikaans
-  vocabulary → how to use it in a real situation (a shop, a
-  meeting, a date).
-- A DIFFERENT ANGLE on the same domain: specific exam topic →
-  broader study skills, or a related topic in the syllabus.
-- A COMPLEMENTARY skill or task: drafted a memo → tips for short
-  professional emails → handling a difficult reply.
-- An EXTENSION that deepens the work: lesson plan → assessment
-  rubric → ideas for student engagement.
-- A SIDE-BENEFIT they may not have considered: business idea
-  brainstorm → how to register at BIPA → opening a business bank
-  account.
+Adjacency is a DIFFERENT TASK, not a sub-step of the same one.
+The user finished or paused what they were doing. Don't propose to
+keep going — propose a related-but-distinct piece of work that the
+SAME life situation makes useful.
 
-THE ONE RULE: Don't propose to do the SAME task they just did.
-They got that done — or got enough that they stopped. Don't say
-"want to continue X" or "ready to finish Y". Propose something
-DIFFERENT but useful given what we now know they care about.
+Good adjacency examples:
+- CV drafted → "want to practise the interview questions a Namibian
+  hiring manager would ask?" (different task, same job-search journey)
+- Studying necrosis types for pathology → "want a quick drill on
+  inflammation markers before your exam?" (different syllabus topic,
+  same exam)
+- Helped draft a school assembly speech → "want some quick ideas for
+  handling the Q&A after?" (different deliverable, same event)
+- Brainstormed a business idea → "ready to look at what BIPA
+  registration actually involves?" (next step in the journey, not
+  more brainstorming)
+
+NOT adjacency — these are continuations and you must NOT propose them:
+- "Want to keep going with X" / "ready to finish Y" / "shall we
+  continue Z" — these are the same task, dressed up.
+- "Want to explain another phrase / translate another sentence /
+  expand another paragraph" — same task, new instance.
+- "Want to try X for a different context" when X is the task they
+  just did.
+
+If the only "next step" you can think of is more of what they just
+did, look HARDER at the long-term facts for a different domain to
+anchor to.
 
 The fact that the user didn't reply to the bot's last message is
 NORMAL — people are busy, get pulled away, save the chat for later.
@@ -281,12 +289,14 @@ NEVER propose things we cannot actually do:
   current stock prices, today's weather without search)
 - Anything we don't already do in normal text chat
 
-NEVER propose contributing more translations to the Oshiwambo dataset.
-Even when the user has been working on translations or has recently
-contributed, the follow-up should suggest a DIFFERENT type of help
-(school, work, health, life questions, anything practical). Translation
-contribution is a separate ask we make via dedicated invitations — it
-is not what this nudge is for.
+NEVER propose translation, interpretation, or language-pair work of
+any kind. Not contribution-translation, not translating phrases for
+work, not "try translating this for a job interview", not "want me
+to translate that into English". If the user's last work was
+translation-related, the follow-up MUST anchor on a DIFFERENT domain
+entirely — pull from the long-term facts (their job, their studies,
+their family situation, a goal they mentioned) and propose something
+there instead. Translation work is a separate channel.
 
 SKIP ONLY for safety reasons (output {"skip": true, "reason": "..."}):
 - Conversation involved suicide ideation, self-harm, severe distress
