@@ -365,6 +365,48 @@ def extract_messages(payload: dict) -> list[dict]:
                             "referral": referral,
                         }
                     )
+                elif msg_type == "button":
+                    # Quick-reply button on a template (e.g. "Yes, let's do
+                    # that" / "Stop messages"). Meta sends this as its own
+                    # type with the button text under msg.button.text — NOT
+                    # as a regular text message. We flatten it to text so
+                    # the rest of the pipeline (classifier, tools, memory)
+                    # treats the click identically to the user typing the
+                    # same words themselves.
+                    button = msg.get("button") or {}
+                    btn_text = (button.get("text") or button.get("payload") or "").strip()
+                    out.append(
+                        {
+                            "from": msg.get("from", ""),
+                            "type": "text",
+                            "text": btn_text,
+                            "id": msg.get("id", ""),
+                            "referral": referral,
+                        }
+                    )
+                elif msg_type == "interactive":
+                    # Interactive button / list replies (used by
+                    # non-template interactive messages). Same flattening
+                    # rationale as type="button" above.
+                    interactive = msg.get("interactive") or {}
+                    itype = interactive.get("type", "")
+                    if itype == "button_reply":
+                        title = (interactive.get("button_reply") or {}).get("title", "")
+                    elif itype == "list_reply":
+                        title = (interactive.get("list_reply") or {}).get("title", "")
+                    else:
+                        title = ""
+                    title = (title or "").strip()
+                    if title:
+                        out.append(
+                            {
+                                "from": msg.get("from", ""),
+                                "type": "text",
+                                "text": title,
+                                "id": msg.get("id", ""),
+                                "referral": referral,
+                            }
+                        )
                 elif msg_type in ("audio", "voice"):
                     # WhatsApp sends both `audio` (file upload) and `voice`
                     # (in-app voice note) — same payload shape with a
