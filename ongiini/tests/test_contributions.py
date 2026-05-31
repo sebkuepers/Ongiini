@@ -251,6 +251,70 @@ def test_clear_pending_save_zeroes_state():
     assert contributions.get_pending_save(h) is None
 
 
+def test_get_pending_save_returns_none_when_older_than_ttl():
+    """Stale pending = absent. The TTL is what blocks a 23-hour-old
+    pending from firing CONTRIBUTE_SAVE on an unrelated reply."""
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+    _seed(1)
+    h = _h()
+    contributions.set_pending_save(h, 1, "Oshindonga")
+    # Fresh — still readable.
+    assert contributions.get_pending_save(h) is not None
+    # Backdate past the TTL.
+    old = (datetime.now(timezone.utc)
+           - timedelta(minutes=contributions.PENDING_SAVE_TTL_MIN + 1)
+           ).isoformat(timespec="seconds")
+    conn = sqlite3.connect(contributions._db_path())
+    conn.execute(
+        "UPDATE contributors SET pending_set_at = ? WHERE contributor_hash = ?",
+        (old, h),
+    )
+    conn.commit()
+    conn.close()
+    assert contributions.get_pending_save(h) is None
+
+
+def test_get_pending_save_treats_malformed_timestamp_as_stale():
+    """Defensive: a corrupted pending_set_at value shouldn't allow a
+    stale pending to leak through."""
+    import sqlite3
+    _seed(1)
+    h = _h()
+    contributions.set_pending_save(h, 1, "Oshindonga")
+    conn = sqlite3.connect(contributions._db_path())
+    conn.execute(
+        "UPDATE contributors SET pending_set_at = ? WHERE contributor_hash = ?",
+        ("not-a-timestamp", h),
+    )
+    conn.commit()
+    conn.close()
+    assert contributions.get_pending_save(h) is None
+
+
+def test_create_hallucinated_recovery_task_returns_id():
+    task_id = contributions.create_hallucinated_recovery_task(
+        "I am very grateful for your support and your kindness."
+    )
+    assert isinstance(task_id, int) and task_id > 0
+    # Confirm category is set so we can find these for QA later.
+    import sqlite3
+    conn = sqlite3.connect(contributions._db_path())
+    row = conn.execute(
+        "SELECT category, source_en FROM tasks WHERE id = ?", (task_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "hallucinated_recovery"
+    assert "grateful" in row[1]
+
+
+def test_create_hallucinated_recovery_task_rejects_empty():
+    with pytest.raises(ValueError):
+        contributions.create_hallucinated_recovery_task("")
+    with pytest.raises(ValueError):
+        contributions.create_hallucinated_recovery_task("   ")
+
+
 def test_next_task_sets_pending_indirectly_via_tool_path():
     """The tool side calls set_pending after next; verify the helper
     alone doesn't set pending (we don't want next_task to imply

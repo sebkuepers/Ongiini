@@ -203,61 +203,31 @@ async def contribute_next(ctx: ToolContext) -> str:
         "typed their Oshiwambo translation for the English sentence "
         "you most recently presented. Stores their literal message "
         "VERBATIM against the pending task in their stored dialect. "
-        "Returns JSON: ok + total_for_contributor + dialect (normal "
-        "case), OR ok + orphan=true + note (when no pending task was "
-        "active — the text is still saved as an orphan, you should "
-        "thank them, ask which English sentence they were translating, "
-        "then offer a fresh task). After the tool returns, thank the "
-        "contributor warmly, mention their running total."
+        "Returns JSON: ok + total_for_contributor + dialect, OR error "
+        "if there's no pending task (which normally cannot happen — "
+        "the runtime state-gate prevents SAVE from firing without "
+        "fresh pending state). After the tool returns, thank the "
+        "contributor warmly, mention their running total, and offer "
+        "another sentence."
     ),
 )
 async def contribute_save(ctx: ToolContext) -> str:
     h = _hash_user(ctx)
     if h is None:
         return json.dumps({"error": "contributions temporarily unavailable"})
+    pending = contributions.get_pending_save(h)
+    if pending is None:
+        # Runtime state-gate should make this unreachable in normal
+        # operation — if it fires it's a race condition or bug. The
+        # safe response is to refuse the save; the classifier-level
+        # gate is the structural defence against silent loss.
+        return json.dumps({
+            "error": "no pending task — the user's message was not in "
+                     "reply to a served English sentence",
+        })
     text = _user_text(ctx)
     if not text:
         return json.dumps({"error": "empty message"})
-    pending = contributions.get_pending_save(h)
-    if pending is None:
-        # Safety net: classifier fired SAVE but no task was served. NEVER
-        # drop the user's text — community work is sacred. Save as orphan
-        # with whatever dialect we know, mark for manual review later.
-        # Filter trivially-short text that's almost certainly a
-        # classifier false positive ("yes", "ok", "thanks").
-        if len(text.strip()) < 8:
-            return json.dumps({
-                "error": "no pending task — the user's message was not in "
-                         "reply to a served English sentence",
-            })
-        status = contributions.whoami(h)
-        dialect = status.split(":", 1)[1] if status.startswith("known:") else "unknown"
-        try:
-            result = contributions.save_orphan(
-                contributor_hash=h,
-                target_dialect=dialect,
-                target_translation_raw=text,
-            )
-        except ValueError as e:
-            log.warning("orphan save rejected: %s", e)
-            return json.dumps({"error": str(e)})
-        log.warning(
-            "ORPHAN SAVE: classifier fired SAVE without pending task. "
-            "contributor=%s contribution_id=%d orphan_task_id=%d dialect=%s",
-            h[:8], result["contribution_id"], result["orphan_task_id"], dialect,
-        )
-        return json.dumps({
-            "ok": True,
-            "orphan": True,
-            "total_for_contributor": result["total_for_contributor"],
-            "dialect": dialect,
-            "note": (
-                "saved without a pending task. Thank the contributor "
-                "for their translation, then ask which English sentence "
-                "they were translating so we can pair it correctly. "
-                "Offer to serve a fresh sentence next."
-            ),
-        })
     try:
         result = contributions.save_contribution(
             contributor_hash=h,

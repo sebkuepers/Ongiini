@@ -30,8 +30,8 @@ from owela import (
 from . import pii, usage
 from .config import settings
 from .hooks import (
-    BillingHook, OngiiniMemoryRecordingHook, ReviseEvalCaptureHook,
-    SourceIndexHook, TracingHook,
+    BillingHook, ContributeHallucinationGuardHook, OngiiniMemoryRecordingHook,
+    ReviseEvalCaptureHook, SourceIndexHook, TracingHook,
 )
 from .memory import (
     OngiiniMemoryProvider,
@@ -43,6 +43,7 @@ from .models import VLLMGemmaModel
 from .planner import OngiiniPlanner
 from .reviewer import OngiiniReviewer
 from .routers import GemmaClassifier
+from .routers.state_gated_classifier import StateGatedClassifier
 from .routers.gemma_classifier import (
     VERDICT_CONTRIB_DECLINE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_INVITE,
     VERDICT_CONTRIB_NEXT, VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP,
@@ -338,9 +339,15 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         skills=skills,
     )
 
-    classifier = GemmaClassifier(
-        base_url=settings.vllm_base_url,
-        model_id=settings.vllm_model,
+    # State-gated wrapper around GemmaClassifier. The inner classifier
+    # emits its best opinion; the wrapper blocks CONTRIBUTE_* verdicts
+    # that contradict fresh state (no pending → SAVE redirected to NONE
+    # etc.). See ongiini/routers/state_gated_classifier.py.
+    classifier = StateGatedClassifier(
+        GemmaClassifier(
+            base_url=settings.vllm_base_url,
+            model_id=settings.vllm_model,
+        )
     )
 
     # v1.1 components — planner runs only when policy.enable_planner
@@ -390,6 +397,12 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         ),
         OngiiniMemoryRecordingHook(sanitiser=pii.sanitize),
         SourceIndexHook(),
+        # Recovers bot-hallucinated translation tasks. When the model
+        # serves an English sentence without calling contribute_next,
+        # this hook detects the pattern in the reply and retroactively
+        # sets pending_save so the user's next reply (their translation)
+        # lands normally. See ongiini/hooks/contribute_hallucination_hook.py.
+        ContributeHallucinationGuardHook(),
     ]
     if settings.capture_revise_eval:
         hooks_list.append(ReviseEvalCaptureHook())

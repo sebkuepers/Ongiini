@@ -47,6 +47,13 @@ VALID_DIALECTS = {DIALECT_OSHINDONGA, DIALECT_OSHIKWANYAMA}
 DECLINE_COOLDOWN_DAYS = 7
 
 
+# Pending-save TTL. After this many minutes a `pending_save` is treated
+# as absent — the contributor walked away, the conversation moved on,
+# whatever was queued is no longer the right answer. Same value as the
+# awaiting_followup window so the two timeouts move together.
+PENDING_SAVE_TTL_MIN = 30
+
+
 def _db_path() -> Path:
     """The sqlite path. Lives next to other /data files; bind-mounted
     from the host so it survives container restarts."""
@@ -224,6 +231,26 @@ def next_task(contributor_hash: str, exclude_task_ids: list[int] | None = None) 
 # ── Pending-save state (runtime save-forcing) ─────────────────────────
 
 
+def create_hallucinated_recovery_task(source_en: str) -> int:
+    """Create a task row used by the hallucination-guard hook when the
+    bot serves an English task without calling `contribute_next`. Marks
+    category='hallucinated_recovery' so these are easy to audit /
+    distinguish from curated tasks. Returns the new task id."""
+    cleaned = (source_en or "").strip()
+    if not cleaned:
+        raise ValueError("empty hallucinated source")
+    if len(cleaned) > 1000:
+        cleaned = cleaned[:1000]
+    now = _now_iso()
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO tasks (source_en, category, created_at, "
+            "times_served, times_submitted) VALUES (?, ?, ?, 1, 0)",
+            (cleaned, "hallucinated_recovery", now),
+        )
+        return int(cur.lastrowid)
+
+
 def set_pending_save(contributor_hash: str, task_id: int, dialect: str) -> None:
     """Mark this contributor as 'expecting to submit a translation for
     task_id in dialect'. Called when contribute_translation 'next'
@@ -319,8 +346,12 @@ def is_awaiting_followup(contributor_hash: str, window_minutes: int = 30) -> boo
 
 def get_pending_save(contributor_hash: str) -> dict | None:
     """Return the pending-save state for this contributor, or None if
-    no pending save is queued. Used by api/main.py to detect when a
-    user's inbound message should be force-saved as a translation."""
+    no pending save is queued OR the pending state is older than
+    `PENDING_SAVE_TTL_MIN` minutes. Stale pending is the silent
+    quality killer — a 23-hour-old pending caused the production
+    bug that saved a button click as translation #199. Treating
+    stale-as-absent is the structural fix.
+    """
     with _conn() as c:
         row = c.execute(
             "SELECT pending_task_id, pending_dialect, pending_set_at "
@@ -329,6 +360,19 @@ def get_pending_save(contributor_hash: str) -> dict | None:
         ).fetchone()
     if not row or row["pending_task_id"] is None:
         return None
+    # TTL check: if pending was set before the cutoff, treat as absent.
+    set_at_raw = row["pending_set_at"]
+    if set_at_raw:
+        try:
+            set_at = datetime.fromisoformat(set_at_raw)
+            if set_at.tzinfo is None:
+                set_at = set_at.replace(tzinfo=timezone.utc)
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=PENDING_SAVE_TTL_MIN)
+            if set_at < cutoff:
+                return None
+        except (ValueError, TypeError):
+            # Malformed timestamp — be conservative, treat as stale.
+            return None
     return {
         "task_id": int(row["pending_task_id"]),
         "dialect": row["pending_dialect"],
@@ -404,70 +448,6 @@ def save_contribution(
         "contribution_id": contribution_id,
         "total_for_contributor": int(contrib["total_contributions"]),
         "contributor_dialect": contrib["preferred_dialect"],
-    }
-
-
-def save_orphan(
-    contributor_hash: str,
-    target_dialect: str,
-    target_translation_raw: str,
-) -> dict:
-    """Persist a translation when no pending task was active. Creates a
-    placeholder task row so the contribution still satisfies the NOT NULL
-    foreign key, then writes the contribution. Used by the contribute_save
-    tool as a safety net when the classifier fires SAVE but no task has
-    been served — the user's effort never gets dropped.
-
-    Returns the same shape as save_contribution plus orphan_task_id.
-    PII-sanitises the translation. Accepts dialect 'unknown' for cases
-    where the contributor hasn't declared one yet.
-    """
-    cleaned = pii_sanitize(target_translation_raw or "").strip()
-    if not cleaned:
-        raise ValueError("empty translation after sanitisation")
-    # Allow 'unknown' alongside the normal dialects — orphan saves often
-    # happen before dialect is confirmed.
-    if target_dialect not in VALID_DIALECTS and target_dialect != "unknown":
-        raise ValueError(f"invalid dialect {target_dialect!r}")
-    now = _now_iso()
-    with _conn() as c:
-        cur = c.execute(
-            "INSERT INTO tasks (source_en, category, created_at, "
-            "times_served, times_submitted) VALUES (?, ?, ?, 0, 1)",
-            (
-                "[orphan: classifier fired SAVE without a served task]",
-                "orphan_no_pending",
-                now,
-            ),
-        )
-        orphan_task_id = cur.lastrowid
-        cur = c.execute(
-            "INSERT INTO contributions "
-            "(task_id, contributor_hash, target_dialect, target_translation, submitted_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (orphan_task_id, contributor_hash, target_dialect, cleaned, now),
-        )
-        contribution_id = cur.lastrowid
-        c.execute(
-            """
-            INSERT INTO contributors
-              (contributor_hash, first_contributed_at, last_contributed_at, total_contributions)
-              VALUES (?, ?, ?, 1)
-              ON CONFLICT(contributor_hash) DO UPDATE SET
-                last_contributed_at = excluded.last_contributed_at,
-                total_contributions = total_contributions + 1
-            """,
-            (contributor_hash, now, now),
-        )
-        contrib = c.execute(
-            "SELECT total_contributions FROM contributors "
-            "WHERE contributor_hash = ?",
-            (contributor_hash,),
-        ).fetchone()
-    return {
-        "contribution_id": contribution_id,
-        "orphan_task_id": orphan_task_id,
-        "total_for_contributor": int(contrib["total_contributions"]),
     }
 
 
