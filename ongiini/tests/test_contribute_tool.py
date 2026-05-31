@@ -205,42 +205,37 @@ async def test_save_writes_contribution_using_ctx_msg_text():
 
 
 @pytest.mark.asyncio
-async def test_save_falls_back_to_orphan_when_no_pending_state():
-    """Translation work is never silently dropped. When the classifier
-    fires SAVE but no task was served, the text is saved as an orphan
-    instead of returning an error."""
+async def test_save_errors_when_no_pending_state():
+    """The tool refuses when no pending task is set. In production this
+    path is unreachable because the StateGatedClassifier redirects
+    CONTRIBUTE_SAVE to NONE when state is missing — but the tool itself
+    must remain a safety net (race conditions, future verdict additions)."""
     out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
-    assert out.get("ok") is True
-    assert out.get("orphan") is True
-    assert out.get("dialect") == "unknown"
-    # Confirm the text actually landed in the DB
-    with contributions._conn() as c:
-        row = c.execute(
-            "SELECT target_translation, target_dialect FROM contributions "
-            "ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-    assert row["target_translation"] == "ondi ya nawa"
-    assert row["target_dialect"] == "unknown"
-
-
-@pytest.mark.asyncio
-async def test_save_still_errors_on_trivially_short_text_when_no_pending():
-    """Don't pollute the dataset with classifier false positives on
-    "yes" / "ok" / "thanks" — only save substantive text as orphans."""
-    out = json.loads(await contribute_save(_ctx(text="yes")))
     assert "error" in out
     assert "pending" in out["error"]
 
 
 @pytest.mark.asyncio
-async def test_orphan_save_uses_known_dialect_when_available():
-    """If the contributor has declared a dialect, the orphan save uses
-    it instead of 'unknown' so curation is easier."""
+async def test_save_errors_when_pending_is_stale():
+    """Pending older than PENDING_SAVE_TTL_MIN is treated as absent by
+    get_pending_save. The tool sees None → errors."""
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+    _seed(1)
+    task_id = _setup_pending()
     h = contributions.hash_msisdn("264811234567")
-    contributions.set_dialect(h, "Oshindonga")
+    # Backdate pending_set_at past the TTL
+    old = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat(timespec="seconds")
+    conn = sqlite3.connect(contributions._db_path())
+    conn.execute(
+        "UPDATE contributors SET pending_set_at = ? WHERE contributor_hash = ?",
+        (old, h),
+    )
+    conn.commit()
+    conn.close()
     out = json.loads(await contribute_save(_ctx(text="ondi ya nawa")))
-    assert out.get("orphan") is True
-    assert out.get("dialect") == "Oshindonga"
+    assert "error" in out
+    assert "pending" in out["error"]
 
 
 @pytest.mark.asyncio
