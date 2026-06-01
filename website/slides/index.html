@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en" data-locale="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Ongiini AI — Slides</title>
+  <meta name="description" content="A short volunteer-friendly slide deck explaining Ongiini AI — the free WhatsApp helper for Namibia. Optimised for screen and print-to-PDF." />
+  <meta name="robots" content="index, follow" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="apple-touch-icon" href="/assets/ongiini-icon-192-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --sand-deep:      oklch(0.87  0.030 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:       oklch(0.60 0.14 45);
+      --terracotta-deep:  oklch(0.48 0.13 40);
+      --terracotta-light: oklch(0.78 0.10 50);
+      --rule:        oklch(0.85 0.018 70);
+      --rule-faint:  oklch(0.90 0.014 70);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd; --sand-deep: #ddd1ba;
+        --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+        --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --terracotta-light: #d4a283;
+        --rule: #d1c8b9; --rule-faint: #ddd5c6;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;   /* deck owns the viewport in fullscreen-style mode */
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    img { display: block; max-width: 100%; }
+
+    /* ─── bilingual toggle ─── */
+    [data-en], [data-af] { display: none; }
+    html[data-locale="en"] [data-en] { display: revert; }
+    html[data-locale="af"] [data-af] { display: revert; }
+    html[data-locale="en"] [data-en="i"],
+    html[data-locale="af"] [data-af="i"] { display: inline; }
+
+    /* ─── deck container ─── */
+    .deck {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: clamp(24px, 4vw, 56px);
+      padding-bottom: 88px;  /* room for footer */
+      background: var(--bone);
+    }
+    .deck-stage {
+      width: min(100%, 1280px);
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 144px);
+      position: relative;
+      background: var(--bone);
+    }
+
+    /* ─── single slide ─── */
+    .slide {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      justify-content: center;
+      padding: clamp(28px, 4vw, 56px);
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms ease;
+      overflow: hidden;
+    }
+    .slide.is-current { opacity: 1; pointer-events: auto; }
+
+    /* slide variants */
+    .slide--dark {
+      background: var(--ink);
+      color: var(--bone);
+      border-color: var(--ink);
+    }
+    .slide--sand { background: var(--sand); }
+
+    /* ─── shared slide typography ─── */
+    .eyebrow {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: clamp(11px, 1vw, 13px);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--ink-soft);
+      margin: 0 0 18px;
+    }
+    .slide--dark .eyebrow { color: var(--terracotta-light); }
+    .slide-title {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+      font-size: clamp(36px, 5.8vw, 64px);
+      margin: 0;
+      color: var(--ink);
+      max-width: 22ch;
+    }
+    .slide--dark .slide-title { color: var(--bone); }
+    .slide-body {
+      font-size: clamp(17px, 1.6vw, 22px);
+      line-height: 1.5;
+      color: var(--ink-soft);
+      margin: 18px 0 0;
+      max-width: 56ch;
+    }
+    .slide--dark .slide-body { color: var(--bone-deep); }
+    .slide-body strong { color: var(--ink); font-weight: 500; }
+    .slide--dark .slide-body strong { color: var(--bone); }
+
+    /* ─── slide 1: title ─── */
+    .slide-title-card { text-align: center; align-items: center; }
+    .brand-mark {
+      display: inline-flex; align-items: center; gap: 14px;
+      margin-bottom: 22px;
+    }
+    .brand-mark img { width: 56px; height: 56px; border-radius: 12px; }
+    .brand-mark .brand-text {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(28px, 3.4vw, 40px);
+      letter-spacing: -0.01em;
+    }
+    .brand-tag {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: clamp(28px, 4vw, 48px);
+      color: var(--ink-soft);
+      margin: 24px 0 0;
+    }
+    .number-pill {
+      display: inline-block;
+      margin-top: 32px;
+      padding: 14px 22px;
+      background: var(--terracotta);
+      color: var(--bone);
+      border-radius: 999px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: clamp(15px, 1.6vw, 19px);
+      letter-spacing: 0.03em;
+    }
+    .number-pill::before {
+      content: "";
+      display: inline-block;
+      width: 1.1em; height: 1.1em;
+      vertical-align: -0.18em;
+      margin-right: 0.5em;
+      background: currentColor;
+      mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M20.52 3.49A12 12 0 0 0 3.49 20.52L2 22l1.55-1.5A12 12 0 0 0 20.52 3.49Zm-5.42 13.34c-.39 1.09-1.93 2-2.84 2.04-.76.05-1.7.07-2.74-.17-.63-.15-1.45-.42-2.49-.85-4.39-1.81-7.27-6.16-7.49-6.45-.22-.29-1.79-2.38-1.79-4.55 0-2.17 1.13-3.23 1.53-3.68.4-.44.87-.54 1.16-.54s.59 0 .85.02c.27.01.63-.1.99.75.39.93 1.31 3.22 1.43 3.46.12.24.2.51.04.81-.15.3-.23.49-.45.75-.22.27-.46.6-.66.81-.22.22-.44.45-.19.89.25.44 1.13 1.86 2.43 3.01 1.67 1.48 3.07 1.94 3.52 2.16.44.22.7.18.96-.11.27-.29 1.12-1.3 1.42-1.75.3-.44.6-.36 1.01-.21.4.15 2.54 1.2 2.97 1.41.44.22.73.33.84.51.11.18.11 1.05-.28 2.14Z'/></svg>") center/contain no-repeat;
+      -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M20.52 3.49A12 12 0 0 0 3.49 20.52L2 22l1.55-1.5A12 12 0 0 0 20.52 3.49Zm-5.42 13.34c-.39 1.09-1.93 2-2.84 2.04-.76.05-1.7.07-2.74-.17-.63-.15-1.45-.42-2.49-.85-4.39-1.81-7.27-6.16-7.49-6.45-.22-.29-1.79-2.38-1.79-4.55 0-2.17 1.13-3.23 1.53-3.68.4-.44.87-.54 1.16-.54s.59 0 .85.02c.27.01.63-.1.99.75.39.93 1.31 3.22 1.43 3.46.12.24.2.51.04.81-.15.3-.23.49-.45.75-.22.27-.46.6-.66.81-.22.22-.44.45-.19.89.25.44 1.13 1.86 2.43 3.01 1.67 1.48 3.07 1.94 3.52 2.16.44.22.7.18.96-.11.27-.29 1.12-1.3 1.42-1.75.3-.44.6-.36 1.01-.21.4.15 2.54 1.2 2.97 1.41.44.22.73.33.84.51.11.18.11 1.05-.28 2.14Z'/></svg>") center/contain no-repeat;
+    }
+
+    /* ─── slide 3: example bubbles ─── */
+    .example-list { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; max-width: 900px; }
+    .example {
+      display: inline-block;
+      padding: 12px 18px;
+      background: var(--sand);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(18px, 2vw, 24px);
+      color: var(--ink);
+    }
+
+    /* ─── slide 4 + 8: 3-column card grids ─── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      margin-top: 36px;
+    }
+    .card-grid--two { grid-template-columns: repeat(2, 1fr); }
+    .card {
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 22px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card-num {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      color: var(--terracotta);
+    }
+    .card-head {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(20px, 2vw, 26px);
+      line-height: 1.15;
+      color: var(--ink);
+      margin: 0;
+    }
+    .card-body {
+      font-size: clamp(14px, 1.2vw, 16px);
+      color: var(--ink-soft);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* ─── slide 5: personas ─── */
+    .personas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 32px; }
+    .persona {
+      display: flex; flex-direction: column; gap: 14px;
+      text-align: left;
+    }
+    .persona img {
+      width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+      border-radius: 12px; border: 1px solid var(--rule);
+    }
+    .persona-role {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      color: var(--terracotta);
+      text-transform: uppercase;
+    }
+    .persona-text {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(17px, 1.5vw, 21px);
+      line-height: 1.3;
+      color: var(--ink);
+    }
+
+    /* ─── slide 6, 12: BIG number ─── */
+    .hero-number {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: clamp(80px, 14vw, 200px);
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      margin: 0;
+    }
+    .hero-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px; margin-top: 18px; }
+    .hero-row .unit {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(28px, 4vw, 48px);
+      color: var(--ink-soft);
+    }
+    .hero-strap {
+      margin-top: 22px;
+      font-size: clamp(16px, 1.4vw, 20px);
+      color: var(--ink-soft);
+      max-width: 50ch;
+    }
+
+    /* ─── slide 7: spark image ─── */
+    .image-split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; }
+    .image-split img {
+      width: 100%; border-radius: 12px; border: 1px solid var(--rule);
+      max-height: 60vh; object-fit: cover;
+    }
+
+    /* ─── slide 8: data list (3 bullets) ─── */
+    .promise-list { list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 18px; max-width: 800px; }
+    .promise-list li {
+      display: grid; grid-template-columns: 24px 1fr; gap: 16px;
+      align-items: start;
+      padding: 18px 0;
+      border-top: 1px solid var(--rule);
+    }
+    .promise-list li:last-child { border-bottom: 1px solid var(--rule); }
+    .promise-list .tick {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--terracotta);
+      color: var(--bone);
+      text-align: center;
+      line-height: 22px;
+      font-size: 12px;
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .promise-list .text {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(20px, 2vw, 26px);
+      line-height: 1.3;
+      color: var(--ink);
+    }
+    .promise-list .sub {
+      font-family: 'Geist', sans-serif;
+      font-size: 14px;
+      color: var(--ink-soft);
+      display: block;
+      margin-top: 6px;
+    }
+
+    /* ─── slide 9: open & transparent ─── */
+    .pill-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }
+    .pill {
+      padding: 10px 18px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+
+    /* ─── slide 10: languages ─── */
+    .lang-list { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; margin-top: 36px; max-width: 800px; }
+    .lang {
+      padding: 22px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+    }
+    .lang-name {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(22px, 2.4vw, 30px);
+      color: var(--ink);
+      margin: 0 0 6px;
+    }
+    .lang-status {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--terracotta);
+    }
+    .lang.is-coming .lang-status { color: var(--ink-faint); }
+    .lang-note {
+      margin: 12px 0 0;
+      font-size: 14px;
+      color: var(--ink-soft);
+    }
+
+    /* ─── slide 11/13: CTA ─── */
+    .cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      margin-top: 32px;
+      padding: 16px 26px;
+      background: var(--terracotta);
+      color: var(--bone);
+      border-radius: 999px;
+      font-family: 'Geist', sans-serif;
+      font-weight: 500;
+      font-size: clamp(16px, 1.4vw, 20px);
+      letter-spacing: 0.01em;
+      box-shadow: 0 6px 20px rgba(196, 108, 63, 0.25);
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+    .cta:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(196, 108, 63, 0.30); }
+    .cta::before {
+      content: "";
+      width: 1.2em; height: 1.2em;
+      background: currentColor;
+      mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M20.52 3.49A12 12 0 0 0 3.49 20.52L2 22l1.55-1.5A12 12 0 0 0 20.52 3.49Zm-5.42 13.34c-.39 1.09-1.93 2-2.84 2.04-.76.05-1.7.07-2.74-.17-.63-.15-1.45-.42-2.49-.85-4.39-1.81-7.27-6.16-7.49-6.45-.22-.29-1.79-2.38-1.79-4.55 0-2.17 1.13-3.23 1.53-3.68.4-.44.87-.54 1.16-.54s.59 0 .85.02c.27.01.63-.1.99.75.39.93 1.31 3.22 1.43 3.46.12.24.2.51.04.81-.15.3-.23.49-.45.75-.22.27-.46.6-.66.81-.22.22-.44.45-.19.89.25.44 1.13 1.86 2.43 3.01 1.67 1.48 3.07 1.94 3.52 2.16.44.22.7.18.96-.11.27-.29 1.12-1.3 1.42-1.75.3-.44.6-.36 1.01-.21.4.15 2.54 1.2 2.97 1.41.44.22.73.33.84.51.11.18.11 1.05-.28 2.14Z'/></svg>") center/contain no-repeat;
+      -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M20.52 3.49A12 12 0 0 0 3.49 20.52L2 22l1.55-1.5A12 12 0 0 0 20.52 3.49Zm-5.42 13.34c-.39 1.09-1.93 2-2.84 2.04-.76.05-1.7.07-2.74-.17-.63-.15-1.45-.42-2.49-.85-4.39-1.81-7.27-6.16-7.49-6.45-.22-.29-1.79-2.38-1.79-4.55 0-2.17 1.13-3.23 1.53-3.68.4-.44.87-.54 1.16-.54s.59 0 .85.02c.27.01.63-.1.99.75.39.93 1.31 3.22 1.43 3.46.12.24.2.51.04.81-.15.3-.23.49-.45.75-.22.27-.46.6-.66.81-.22.22-.44.45-.19.89.25.44 1.13 1.86 2.43 3.01 1.67 1.48 3.07 1.94 3.52 2.16.44.22.7.18.96-.11.27-.29 1.12-1.3 1.42-1.75.3-.44.6-.36 1.01-.21.4.15 2.54 1.2 2.97 1.41.44.22.73.33.84.51.11.18.11 1.05-.28 2.14Z'/></svg>") center/contain no-repeat;
+    }
+
+    /* ─── slide 12: live numbers ─── */
+    .live-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; margin-top: 30px; }
+    .live-stat .live-label {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .live-stat .live-value {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: clamp(56px, 8vw, 110px);
+      line-height: 0.95;
+      color: var(--bone);
+      margin: 8px 0 0;
+    }
+    .live-pip {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--terracotta-light);
+      margin-bottom: 4px;
+    }
+    .live-pip::before {
+      content: ""; width: 8px; height: 8px; border-radius: 50%;
+      background: #21c45d; box-shadow: 0 0 0 4px rgba(33, 196, 93, 0.22);
+      animation: live-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes live-pulse { 0%,100% { box-shadow: 0 0 0 4px rgba(33, 196, 93, 0.22); } 50% { box-shadow: 0 0 0 8px rgba(33, 196, 93, 0); } }
+
+    /* ─── slide 13: QR + final CTA ─── */
+    .qr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; margin-top: 24px; }
+    .qr-row img.qr {
+      width: 100%; max-width: 320px;
+      background: var(--bone);
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--rule);
+    }
+    .final-aside {
+      text-align: left;
+    }
+    .final-aside .aside-greeting {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: clamp(36px, 4vw, 56px);
+      color: var(--terracotta);
+      margin: 18px 0 0;
+    }
+
+    /* ─── footer chrome ─── */
+    .deck-footer {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: var(--bone);
+      border-top: 1px solid var(--rule);
+      gap: 16px;
+      z-index: 10;
+    }
+    .deck-footer .counter {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--ink-soft);
+      letter-spacing: 0.08em;
+    }
+    .deck-footer .actions { display: flex; align-items: center; gap: 8px; }
+    .lang-segment {
+      display: inline-flex;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .lang-segment button {
+      padding: 6px 14px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .lang-segment button.is-active { background: var(--ink); color: var(--bone); }
+    .icon-btn {
+      width: 36px; height: 36px;
+      border-radius: 999px;
+      border: 1px solid var(--rule);
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ink-soft);
+    }
+    .icon-btn:hover { background: var(--bone-deep); color: var(--ink); }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .footer-brand {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Instrument Serif', serif;
+      font-size: 15px;
+      color: var(--ink-soft);
+    }
+    .footer-brand img { width: 22px; height: 22px; border-radius: 5px; }
+    .deck-footer a { color: inherit; }
+
+    /* ─── click zones for back/forward (touch + mouse) ─── */
+    .zone {
+      position: fixed;
+      top: 0; bottom: 64px;
+      width: 26%;
+      background: transparent;
+      cursor: pointer;
+      z-index: 4;
+    }
+    .zone.left { left: 0; }
+    .zone.right { right: 0; }
+
+    /* ─── overview / grid mode (Esc toggles) ─── */
+    body.is-overview .deck { padding: 24px; padding-bottom: 88px; }
+    body.is-overview .deck-stage {
+      width: 100%; max-width: 100%;
+      aspect-ratio: auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      max-height: none;
+    }
+    body.is-overview .slide {
+      position: relative; inset: auto;
+      opacity: 1; pointer-events: auto;
+      transform: none;
+      aspect-ratio: 16 / 9;
+      padding: 16px;
+      overflow: hidden;
+      cursor: zoom-in;
+    }
+    body.is-overview .slide.is-current { outline: 3px solid var(--terracotta); outline-offset: 4px; }
+    body.is-overview .zone { display: none; }
+    body.is-overview .slide-title { font-size: 20px; }
+    body.is-overview .slide-body, body.is-overview .card-body,
+    body.is-overview .promise-list .text, body.is-overview .live-stat .live-value,
+    body.is-overview .hero-number, body.is-overview .hero-row .unit,
+    body.is-overview .qr-row img.qr, body.is-overview .image-split img {
+      font-size: 11px; line-height: 1.2;
+    }
+
+    /* ─── mobile / narrow ─── */
+    @media (max-width: 760px) {
+      .deck { padding: 16px; padding-bottom: 88px; }
+      .deck-stage { aspect-ratio: auto; max-height: none; }
+      .slide {
+        position: relative; inset: auto;
+        opacity: 1; pointer-events: auto;
+        margin-bottom: 14px;
+        aspect-ratio: auto;
+        min-height: 70vh;
+      }
+      .zone { display: none; }
+      .card-grid, .personas, .live-grid, .lang-list, .image-split, .qr-row { grid-template-columns: 1fr !important; }
+      body { overflow: auto; }
+      .deck { position: static; }
+    }
+
+    /* ─── print → PDF ─── */
+    @media print {
+      @page { size: 1280px 720px; margin: 0; }
+      html, body { background: white; overflow: visible; }
+      .deck-footer, .zone { display: none !important; }
+      .deck { position: static; padding: 0; display: block; height: auto; }
+      .deck-stage { position: static; width: 100%; max-width: none; aspect-ratio: auto; max-height: none; height: auto; }
+      .slide {
+        position: relative; inset: auto;
+        opacity: 1 !important; pointer-events: auto;
+        page-break-after: always;
+        break-after: page;
+        margin: 0;
+        width: 1280px; height: 720px;
+        border: 0;
+        border-radius: 0;
+        transform: none;
+      }
+      .slide:last-child { page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="deck" id="deck">
+    <div class="deck-stage" id="stage">
+
+      <!-- ─── Slide 1 — Title ─── -->
+      <section class="slide slide-title-card" data-slide="1">
+        <div>
+          <div class="brand-mark">
+            <img src="/assets/ongiini-icon-192-v2.png" alt="" />
+            <span class="brand-text">Ongiini AI</span>
+          </div>
+          <h1 class="slide-title">
+            <span data-en>Help for life's questions, on&nbsp;WhatsApp.</span>
+            <span data-af>Hulp vir die lewe se vrae, op&nbsp;WhatsApp.</span>
+          </h1>
+          <p class="brand-tag">
+            <span data-en>Free. Built for Namibia.</span>
+            <span data-af>Gratis. Gebou vir Namibië.</span>
+          </p>
+          <a class="number-pill" href="https://wa.me/4915888635886" target="_blank" rel="noopener noreferrer">
+            <span data-en>Save this number · +49 1588 8635886</span>
+            <span data-af>Stoor hierdie nommer · +49 1588 8635886</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- ─── Slide 2 — What it is ─── -->
+      <section class="slide" data-slide="2">
+        <p class="eyebrow">
+          <span data-en>What it is</span>
+          <span data-af>Wat dit is</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Send any question on WhatsApp. Get a useful answer back.</span>
+          <span data-af>Stuur enige vraag op WhatsApp. Kry 'n nuttige antwoord terug.</span>
+        </h2>
+        <p class="slide-body">
+          <span data-en>
+            No app to install. No account to make. No ads.
+            <strong>One million free tokens every month</strong> — roughly 500 conversations.
+          </span>
+          <span data-af>
+            Geen app om te installeer nie. Geen rekening om te skep nie. Geen advertensies nie.
+            <strong>Een miljoen gratis tokens elke maand</strong> — sowat 500 gesprekke.
+          </span>
+        </p>
+      </section>
+
+      <!-- ─── Slide 3 — Examples ─── -->
+      <section class="slide slide--sand" data-slide="3">
+        <p class="eyebrow">
+          <span data-en>What you can ask</span>
+          <span data-af>Wat jy kan vra</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>School. Farming. Health. Contracts. Daily life.</span>
+          <span data-af>Skool. Boerdery. Gesondheid. Kontrakte. Daaglikse lewe.</span>
+        </h2>
+        <div class="example-list" aria-hidden="true">
+          <span class="example"><span data-en>"Explain photosynthesis"</span><span data-af>"Verduidelik fotosintese"</span></span>
+          <span class="example"><span data-en>"My maize leaves are yellow"</span><span data-af>"My mielieblare is geel"</span></span>
+          <span class="example"><span data-en>"What does this contract clause mean?"</span><span data-af>"Wat beteken hierdie klousule?"</span></span>
+          <span class="example"><span data-en>"Help me draft a CV"</span><span data-af>"Help my om 'n CV op te stel"</span></span>
+          <span class="example"><span data-en>"My child has a fever, what now?"</span><span data-af>"My kind het koors, wat nou?"</span></span>
+          <span class="example"><span data-en>"Translate this letter for me"</span><span data-af>"Vertaal hierdie brief vir my"</span></span>
+        </div>
+      </section>
+
+      <!-- ─── Slide 4 — Text / Photo / Voice ─── -->
+      <section class="slide" data-slide="4">
+        <p class="eyebrow">
+          <span data-en>Three ways to ask</span>
+          <span data-af>Drie maniere om te vra</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Type. Snap. Speak.</span>
+          <span data-af>Tik. Kiek. Praat.</span>
+        </h2>
+        <div class="card-grid">
+          <div class="card">
+            <span class="card-num">01</span>
+            <h3 class="card-head"><span data-en>Type a question</span><span data-af>Tik 'n vraag</span></h3>
+            <p class="card-body">
+              <span data-en>Same as messaging a friend. English or Afrikaans.</span>
+              <span data-af>Net soos om 'n vriend te tjat. Engels of Afrikaans.</span>
+            </p>
+          </div>
+          <div class="card">
+            <span class="card-num">02</span>
+            <h3 class="card-head"><span data-en>Send a photo</span><span data-af>Stuur 'n foto</span></h3>
+            <p class="card-body">
+              <span data-en>A school problem, a sick maize leaf, a label, a form — Ongiini reads the picture.</span>
+              <span data-af>'n Skoolprobleem, 'n siek mielieblaar, 'n etiket, 'n vorm — Ongiini lees die prent.</span>
+            </p>
+          </div>
+          <div class="card">
+            <span class="card-num">03</span>
+            <h3 class="card-head"><span data-en>Send a voice note</span><span data-af>Stuur 'n stemboodskap</span></h3>
+            <p class="card-body">
+              <span data-en>Press and hold the mic. Up to 90&nbsp;seconds. Replies come back as text.</span>
+              <span data-af>Druk en hou die mikrofoon. Tot 90&nbsp;sekondes. Antwoorde kom terug as teks.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Slide 5 — For everyone ─── -->
+      <section class="slide" data-slide="5">
+        <p class="eyebrow">
+          <span data-en>For everyone</span>
+          <span data-af>Vir almal</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Built for daily life in Namibia.</span>
+          <span data-af>Gebou vir die alledaagse lewe in Namibië.</span>
+        </h2>
+        <div class="personas">
+          <div class="persona">
+            <img src="/assets/mother.webp" alt="" />
+            <span class="persona-role"><span data-en>Mothers &amp; carers</span><span data-af>Moeders &amp; versorgers</span></span>
+            <p class="persona-text">
+              <span data-en>"My child has a fever. Should I be worried?"</span>
+              <span data-af>"My kind het koors. Moet ek bekommerd wees?"</span>
+            </p>
+          </div>
+          <div class="persona">
+            <img src="/assets/student.webp" alt="" />
+            <span class="persona-role"><span data-en>Students</span><span data-af>Studente</span></span>
+            <p class="persona-text">
+              <span data-en>"Explain Pythagoras like I'm in Grade 9."</span>
+              <span data-af>"Verduidelik Pythagoras asof ek in Graad 9 is."</span>
+            </p>
+          </div>
+          <div class="persona">
+            <img src="/assets/farmer.webp" alt="" />
+            <span class="persona-role"><span data-en>Farmers</span><span data-af>Boere</span></span>
+            <p class="persona-text">
+              <span data-en>"What's wrong with my maize?"</span>
+              <span data-af>"Wat is fout met my mielies?"</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Slide 6 — 1M tokens ─── -->
+      <section class="slide slide--dark" data-slide="6">
+        <p class="eyebrow">
+          <span data-en>The deal</span>
+          <span data-af>Die ooreenkoms</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>One million tokens, every month. Free.</span>
+          <span data-af>Een miljoen tokens, elke maand. Gratis.</span>
+        </h2>
+        <p class="hero-number">1<span style="font-style: normal; color: var(--terracotta-light); font-size: 0.5em; letter-spacing: 0.1em;">&nbsp;000&nbsp;000</span></p>
+        <p class="hero-strap">
+          <span data-en>
+            That's roughly <strong style="color: var(--bone)">500 normal conversations</strong> — more than most
+            people use in a month. Your cap resets on the 1st.
+            No subscription. No payment details. No ads.
+          </span>
+          <span data-af>
+            Dit is sowat <strong style="color: var(--bone)">500 normale gesprekke</strong> — meer as wat die meeste
+            mense in 'n maand gebruik. Jou perk word op die 1ste hervat.
+            Geen subskripsie nie. Geen betaalgegewens nie. Geen advertensies nie.
+          </span>
+        </p>
+      </section>
+
+      <!-- ─── Slide 7 — Runs in our office ─── -->
+      <section class="slide" data-slide="7">
+        <div class="image-split">
+          <div>
+            <p class="eyebrow">
+              <span data-en>Where it runs</span>
+              <span data-af>Waar dit loop</span>
+            </p>
+            <h2 class="slide-title">
+              <span data-en>On one small computer on a shelf — not a US data centre.</span>
+              <span data-af>Op een klein rekenaar op 'n rak — nie 'n VSA-datasentrum nie.</span>
+            </h2>
+            <p class="slide-body">
+              <span data-en>
+                Ongiini runs entirely on a single NVIDIA DGX Spark — about the size of a thick book.
+                Your messages don't travel to a Google or OpenAI server.
+              </span>
+              <span data-af>
+                Ongiini loop heeltemal op een enkele NVIDIA DGX Spark — sowat die grootte van 'n dik boek.
+                Jou boodskappe loop nie deur 'n Google- of OpenAI-bediener nie.
+              </span>
+            </p>
+          </div>
+          <img src="/assets/dgx-spark.webp" alt="The NVIDIA DGX Spark — a small desktop AI computer" />
+        </div>
+      </section>
+
+      <!-- ─── Slide 8 — Data is not a product ─── -->
+      <section class="slide slide--sand" data-slide="8">
+        <p class="eyebrow">
+          <span data-en>Privacy</span>
+          <span data-af>Privaatheid</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Your data isn't a product.</span>
+          <span data-af>Jou data is nie 'n produk nie.</span>
+        </h2>
+        <ul class="promise-list">
+          <li>
+            <span class="tick">✓</span>
+            <div class="text">
+              <span data-en>We never train AI on your conversations.</span>
+              <span data-af>Ons leer nooit KI met jou gesprekke nie.</span>
+              <span class="sub">
+                <span data-en>Ongiini does not sell, share, or learn from your chats.</span>
+                <span data-af>Ongiini verkoop, deel of leer nie uit jou tjats nie.</span>
+              </span>
+            </div>
+          </li>
+          <li>
+            <span class="tick">✓</span>
+            <div class="text">
+              <span data-en>Personal info (email, ID, bank card) is stripped before storage.</span>
+              <span data-af>Persoonlike inligting (e-pos, ID, bankkaart) word verwyder voor berging.</span>
+              <span class="sub">
+                <span data-en>The model sees it in the moment. The disk never does.</span>
+                <span data-af>Die model sien dit in die oomblik. Die skyf nooit nie.</span>
+              </span>
+            </div>
+          </li>
+          <li>
+            <span class="tick">✓</span>
+            <div class="text">
+              <span data-en>Say "delete my data" any time — and it's gone.</span>
+              <span data-af>Sê "vee my data uit" enige tyd — en dit is weg.</span>
+              <span class="sub">
+                <span data-en>Your control, your choice. No support ticket, no waiting.</span>
+                <span data-af>Jou beheer, jou keuse. Geen ondersteuningsversoek, geen wag nie.</span>
+              </span>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ─── Slide 9 — Open & transparent ─── -->
+      <section class="slide" data-slide="9">
+        <p class="eyebrow">
+          <span data-en>Openness</span>
+          <span data-af>Oopheid</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Open, and checkable.</span>
+          <span data-af>Oop, en kontroleerbaar.</span>
+        </h2>
+        <p class="slide-body">
+          <span data-en>
+            Anyone can see what's under the hood. The code is on GitHub. The live numbers
+            — users, messages, contributions — are public on our statistics page.
+          </span>
+          <span data-af>
+            Enigeen kan sien wat onder die enjinkap aangaan. Die kode is op GitHub. Die regstreekse syfers
+            — gebruikers, boodskappe, bydraes — is openbaar op ons statistiekblad.
+          </span>
+        </p>
+        <div class="pill-row">
+          <span class="pill">github.com/sebkuepers/Ongiini</span>
+          <span class="pill">ongiini.ai/statistics</span>
+          <span class="pill">
+            <span data-en>Powered by Gemma 4 26B</span>
+            <span data-af>Aangedryf deur Gemma 4 26B</span>
+          </span>
+        </div>
+      </section>
+
+      <!-- ─── Slide 10 — Languages ─── -->
+      <section class="slide" data-slide="10">
+        <p class="eyebrow">
+          <span data-en>Languages</span>
+          <span data-af>Tale</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>English &amp; Afrikaans today. Oshiwambo next.</span>
+          <span data-af>Engels en Afrikaans vandag. Oshiwambo volgende.</span>
+        </h2>
+        <div class="lang-list">
+          <div class="lang">
+            <span class="lang-status">
+              <span data-en>Today</span>
+              <span data-af>Vandag</span>
+            </span>
+            <h3 class="lang-name">English</h3>
+            <p class="lang-note">
+              <span data-en>Full support, including voice notes.</span>
+              <span data-af>Volle ondersteuning, ook stemboodskappe.</span>
+            </p>
+          </div>
+          <div class="lang">
+            <span class="lang-status">
+              <span data-en>Today</span>
+              <span data-af>Vandag</span>
+            </span>
+            <h3 class="lang-name">Afrikaans</h3>
+            <p class="lang-note">
+              <span data-en>Full support, including voice notes.</span>
+              <span data-af>Volle ondersteuning, ook stemboodskappe.</span>
+            </p>
+          </div>
+          <div class="lang is-coming">
+            <span class="lang-status">
+              <span data-en>In progress</span>
+              <span data-af>Aan die werk</span>
+            </span>
+            <h3 class="lang-name">Oshiwambo</h3>
+            <p class="lang-note">
+              <span data-en>Being built with native speakers. Volunteer translations welcome.</span>
+              <span data-af>Word saam met moedertaalsprekers gebou. Vrywillige vertalings is welkom.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Slide 11 — Volunteer ask ─── -->
+      <section class="slide slide--dark" data-slide="11">
+        <p class="eyebrow">
+          <span data-en>How you can help</span>
+          <span data-af>Hoe jy kan help</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Help us teach Ongiini Oshiwambo.</span>
+          <span data-af>Help ons om Ongiini Oshiwambo te leer.</span>
+        </h2>
+        <p class="slide-body">
+          <span data-en>
+            We send you an English sentence. You translate it into Oshindonga or Oshikwanyama.
+            Every contribution feeds the open dataset that will power Oshiwambo support — and any other
+            project that needs it later.
+          </span>
+          <span data-af>
+            Ons stuur jou 'n Engelse sin. Jy vertaal dit in Oshindonga of Oshikwanyama.
+            Elke bydrae voed die oop datastel wat Oshiwambo-ondersteuning sal aandryf — en enige
+            ander projek wat dit later nodig het.
+          </span>
+        </p>
+        <a class="cta" href="https://wa.me/4915888635886?text=I%20want%20to%20help%20translate" target="_blank" rel="noopener noreferrer">
+          <span data-en>Start translating on WhatsApp</span>
+          <span data-af>Begin vertaal op WhatsApp</span>
+        </a>
+      </section>
+
+      <!-- ─── Slide 12 — Live numbers ─── -->
+      <section class="slide slide--dark" data-slide="12">
+        <p class="eyebrow live-pip">
+          <span data-en>Right now in Namibia</span>
+          <span data-af>Op die oomblik in Namibië</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>The community is already here.</span>
+          <span data-af>Die gemeenskap is reeds hier.</span>
+        </h2>
+        <div class="live-grid">
+          <div class="live-stat">
+            <span class="live-label">
+              <span data-en>People reached</span>
+              <span data-af>Mense bereik</span>
+            </span>
+            <div class="live-value" id="live-users">—</div>
+          </div>
+          <div class="live-stat">
+            <span class="live-label">
+              <span data-en>Messages handled</span>
+              <span data-af>Boodskappe gehanteer</span>
+            </span>
+            <div class="live-value" id="live-messages">—</div>
+          </div>
+          <div class="live-stat">
+            <span class="live-label">
+              <span data-en>Translations contributed</span>
+              <span data-af>Vertalings bygedra</span>
+            </span>
+            <div class="live-value" id="live-contributions">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Slide 13 — Try it now ─── -->
+      <section class="slide" data-slide="13">
+        <div class="qr-row">
+          <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?data=https%3A%2F%2Fwa.me%2F4915888635886&size=600x600&margin=0&color=2a2522&bgcolor=f5efe4" alt="QR code that opens WhatsApp chat with Ongiini" />
+          <div class="final-aside">
+            <p class="eyebrow">
+              <span data-en>Try it now</span>
+              <span data-af>Probeer dit nou</span>
+            </p>
+            <h2 class="slide-title">
+              <span data-en>Scan, or save the number.</span>
+              <span data-af>Skandeer, of stoor die nommer.</span>
+            </h2>
+            <p class="slide-body">
+              <span data-en><strong>+49 1588 8635886</strong></span>
+              <span data-af><strong>+49 1588 8635886</strong></span>
+              <br />
+              <span data-en>Pilot phase, German WhatsApp number. The plan is to move to Namibia once sustainable.</span>
+              <span data-af>Loodsfase, Duitse WhatsApp-nommer. Die plan is om na Namibië te skuif sodra dit volhoubaar is.</span>
+            </p>
+            <p class="aside-greeting">Ongiini!</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- click zones for back/forward -->
+  <div class="zone left" id="zoneLeft" aria-hidden="true"></div>
+  <div class="zone right" id="zoneRight" aria-hidden="true"></div>
+
+  <!-- footer chrome -->
+  <footer class="deck-footer">
+    <a class="footer-brand" href="/">
+      <img src="/assets/ongiini-icon-192-v2.png" alt="" />
+      <span>Ongiini AI</span>
+    </a>
+    <span class="counter"><span id="ix">1</span> / <span id="total">13</span></span>
+    <div class="actions">
+      <div class="lang-segment" role="group" aria-label="Language">
+        <button data-set-locale="en" class="is-active">EN</button>
+        <button data-set-locale="af">AF</button>
+      </div>
+      <a class="icon-btn" href="/slides/guide/" title="Volunteer guide" aria-label="Volunteer guide">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h10l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+      </a>
+      <button class="icon-btn" id="btnPrint" title="Print or save as PDF" aria-label="Print">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="9" rx="2"/><path d="M6 14h12v7H6z"/></svg>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var slides = document.querySelectorAll('.slide');
+      var total = slides.length;
+      document.getElementById('total').textContent = total;
+      var ixEl = document.getElementById('ix');
+      var current = 0;
+
+      function show(n) {
+        current = Math.max(0, Math.min(total - 1, n));
+        for (var i = 0; i < slides.length; i++) {
+          slides[i].classList.toggle('is-current', i === current);
+        }
+        ixEl.textContent = current + 1;
+        try { history.replaceState(null, '', '#' + (current + 1)); } catch (e) {}
+      }
+      function next() { show(current + 1); }
+      function prev() { show(current - 1); }
+
+      // keyboard nav
+      document.addEventListener('keydown', function (e) {
+        if (e.target && e.target.tagName === 'BUTTON') return;
+        switch (e.key) {
+          case 'ArrowRight':
+          case 'PageDown':
+          case ' ':
+            e.preventDefault(); next(); break;
+          case 'ArrowLeft':
+          case 'PageUp':
+            e.preventDefault(); prev(); break;
+          case 'Home': show(0); break;
+          case 'End':  show(total - 1); break;
+          case 'Escape':
+            document.body.classList.toggle('is-overview');
+            break;
+          case 'p': case 'P':
+            window.print(); break;
+        }
+      });
+
+      // click zones (touch on phones, mouse on desktop)
+      document.getElementById('zoneLeft').addEventListener('click', prev);
+      document.getElementById('zoneRight').addEventListener('click', next);
+
+      // overview mode: click any slide to jump
+      slides.forEach(function (s, i) {
+        s.addEventListener('click', function () {
+          if (document.body.classList.contains('is-overview')) {
+            document.body.classList.remove('is-overview');
+            show(i);
+          }
+        });
+      });
+
+      // print button
+      document.getElementById('btnPrint').addEventListener('click', function () { window.print(); });
+
+      // hash deep-link (e.g. /slides/#5 opens slide 5)
+      var hash = parseInt((location.hash || '#1').slice(1), 10);
+      show(Number.isFinite(hash) && hash > 0 ? hash - 1 : 0);
+
+      // language toggle (mirror site pattern)
+      var segs = document.querySelectorAll('[data-set-locale]');
+      function setLocale(l) {
+        root.setAttribute('data-locale', l);
+        root.setAttribute('lang', l);
+        segs.forEach(function (s) { s.classList.toggle('is-active', s.getAttribute('data-set-locale') === l); });
+        try { localStorage.setItem('ongiini.locale', l); } catch (e) {}
+      }
+      segs.forEach(function (s) {
+        s.addEventListener('click', function () { setLocale(s.getAttribute('data-set-locale')); });
+      });
+      try {
+        var saved = localStorage.getItem('ongiini.locale');
+        if (saved === 'af' || saved === 'en') setLocale(saved);
+        else if (navigator.language && navigator.language.toLowerCase().indexOf('af') === 0) setLocale('af');
+      } catch (e) {}
+
+      // live numbers — single fetch, soft-fail
+      function fmt(n) {
+        if (n == null || !isFinite(n)) return '—';
+        if (n >= 1000) return (Math.round(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'k';
+        return String(n);
+      }
+      fetch('/api/stats', { credentials: 'omit' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          var users = data.unique_users || data.users || data.user_count;
+          var messages = data.messages_total || data.messages || data.total_messages;
+          var contribs = data.contributions_total || data.contributions || data.contribution_count;
+          if (users) document.getElementById('live-users').textContent = fmt(users);
+          if (messages) document.getElementById('live-messages').textContent = fmt(messages);
+          if (contribs) document.getElementById('live-contributions').textContent = fmt(contribs);
+        })
+        .catch(function () { /* soft-fail; placeholders stay */ });
+    })();
+  </script>
+</body>
+</html>

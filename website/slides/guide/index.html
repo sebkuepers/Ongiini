@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en" data-locale="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Volunteer Guide — Ongiini AI</title>
+  <meta name="description" content="How to present the Ongiini AI slide deck to your community — what each slide is about, what to say, and what people usually ask back." />
+  <meta name="robots" content="index, follow" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="apple-touch-icon" href="/assets/ongiini-icon-192-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:       oklch(0.60 0.14 45);
+      --terracotta-deep:  oklch(0.48 0.13 40);
+      --rule:        oklch(0.85 0.018 70);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd;
+        --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+        --terracotta: #c46c3f; --terracotta-deep: #9a4f2d;
+        --rule: #d1c8b9;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+    [data-en], [data-af] { display: none; }
+    html[data-locale="en"] [data-en] { display: revert; }
+    html[data-locale="af"] [data-af] { display: revert; }
+    html[data-locale="en"] [data-en="i"], html[data-locale="af"] [data-af="i"] { display: inline; }
+
+    .wrap { width: 100%; max-width: 980px; margin: 0 auto; padding: 0 22px; }
+    .topnav { padding: 22px 0; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-family: 'Instrument Serif', serif; font-size: 20px; }
+    .brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .topnav .links a { color: var(--ink-soft); margin-left: 16px; text-decoration: none; font-size: 14px; }
+    .topnav .links a:hover { color: var(--ink); }
+
+    .lang-segment { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; margin-left: 16px; }
+    .lang-segment button {
+      padding: 6px 14px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
+      background: none; border: 0; cursor: pointer;
+    }
+    .lang-segment button.is-active { background: var(--ink); color: var(--bone); }
+
+    .hero { padding: 40px 0 24px; border-top: 1px solid var(--rule); }
+    .eyebrow { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--terracotta-deep); margin: 0 0 16px; }
+    h1 { font-family: 'Instrument Serif', serif; font-weight: 400; line-height: 1.05; font-size: clamp(34px, 5vw, 52px); margin: 0; max-width: 22ch; }
+    .lede { color: var(--ink-soft); font-size: clamp(16px, 1.4vw, 18px); margin: 18px 0 0; max-width: 60ch; }
+
+    section { padding: 36px 0; border-top: 1px solid var(--rule); }
+    h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(24px, 3vw, 32px); margin: 0 0 18px; }
+    h3 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 20px; margin: 24px 0 8px; }
+    p { margin: 0 0 14px; }
+
+    ul, ol { margin: 0 0 14px; padding-left: 20px; }
+    li { margin-bottom: 8px; }
+
+    table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+    th, td { text-align: left; vertical-align: top; padding: 14px 14px; border-bottom: 1px solid var(--rule); }
+    th { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+    td.num { font-family: 'Geist Mono', ui-monospace, monospace; color: var(--terracotta-deep); width: 32px; }
+    td.what { font-family: 'Instrument Serif', serif; font-size: 16px; width: 22%; color: var(--ink); }
+    td.say  { color: var(--ink-soft); width: 38%; }
+    td.ask  { color: var(--ink-soft); width: 28%; }
+    @media (max-width: 720px) {
+      table, thead, tbody, th, td, tr { display: block; }
+      thead { display: none; }
+      tr { border-bottom: 1px solid var(--rule); padding: 18px 0; }
+      td { border-bottom: 0; padding: 6px 0; }
+      td.num { color: var(--terracotta-deep); font-weight: 500; }
+      td.what::before { content: 'On the slide '; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.14em; display: block; margin-bottom: 4px; }
+      td.say::before  { content: 'What to say '; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.14em; display: block; margin-bottom: 4px; }
+      td.ask::before  { content: 'Likely questions '; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.14em; display: block; margin-bottom: 4px; }
+    }
+
+    .panel { background: var(--bone-deep); border: 1px solid var(--rule); border-radius: 10px; padding: 22px; margin: 18px 0; }
+    .panel h3 { margin-top: 0; }
+
+    footer { padding: 40px 0 60px; color: var(--ink-faint); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <nav class="topnav">
+      <a class="brand" href="/">
+        <img src="/assets/ongiini-icon-192-v2.png" alt="" />
+        <span>Ongiini AI</span>
+      </a>
+      <div class="links">
+        <a href="/slides/">← <span data-en>Back to slides</span><span data-af>Terug na slides</span></a>
+        <span class="lang-segment" role="group" aria-label="Language">
+          <button data-set-locale="en" class="is-active">EN</button>
+          <button data-set-locale="af">AF</button>
+        </span>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <p class="eyebrow"><span data-en>Volunteer Guide</span><span data-af>Vrywilliger-gids</span></p>
+      <h1>
+        <span data-en>How to talk about Ongiini.</span>
+        <span data-af>Hoe om oor Ongiini te praat.</span>
+      </h1>
+      <p class="lede">
+        <span data-en>
+          This guide helps you walk a small group — friends, a class, a church meeting,
+          a market stall — through what Ongiini is in about five minutes. Open the slides
+          on a phone or laptop. Read this from a second device while you present.
+        </span>
+        <span data-af>
+          Hierdie gids help jou om 'n klein groep — vriende, 'n klas, 'n kerkbyeenkoms,
+          'n markstalletjie — in ongeveer vyf minute deur te lei wat Ongiini is. Maak die
+          slides op 'n foon of skootrekenaar oop. Lees dit op 'n tweede toestel terwyl jy aanbied.
+        </span>
+      </p>
+    </header>
+
+    <section>
+      <h2>
+        <span data-en>Before you present</span>
+        <span data-af>Voordat jy aanbied</span>
+      </h2>
+      <ol>
+        <li>
+          <span data-en>Open <a href="/slides/">ongiini.ai/slides</a> on the device you'll show.</span>
+          <span data-af>Maak <a href="/slides/">ongiini.ai/slides</a> oop op die toestel wat jy gaan wys.</span>
+        </li>
+        <li>
+          <span data-en>Use the EN/AF toggle at the bottom to set the language your audience prefers.</span>
+          <span data-af>Gebruik die EN/AF-skakelaar onder om die taal te kies wat jou gehoor verkies.</span>
+        </li>
+        <li>
+          <span data-en>Press <strong>F11</strong> (laptop) for full screen — or just hold the phone landscape.</span>
+          <span data-af>Druk <strong>F11</strong> (skootrekenaar) vir volskerm — of hou die foon net dwars.</span>
+        </li>
+        <li>
+          <span data-en>Use arrow keys, or tap the right half of the screen to advance, left half to go back.</span>
+          <span data-af>Gebruik pyltjietoetse, of tik die regterhelfte van die skerm om vorentoe te gaan, linkerhelfte om terug te gaan.</span>
+        </li>
+        <li>
+          <span data-en>
+            <strong>Test the number once before you start.</strong> Send a hello on WhatsApp.
+            Show the audience the real reply. That's the best proof.
+          </span>
+          <span data-af>
+            <strong>Toets die nommer een keer voor jy begin.</strong> Stuur 'n hallo op WhatsApp.
+            Wys die gehoor die werklike antwoord. Dis die beste bewys.
+          </span>
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>
+        <span data-en>Slide-by-slide tips</span>
+        <span data-af>Slide-vir-slide wenke</span>
+      </h2>
+      <p>
+        <span data-en>Aim for ~20-30 seconds per slide. The whole deck is 5 minutes if you don't take questions in between, ~10 minutes if you do.</span>
+        <span data-af>Mik vir sowat 20-30 sekondes per slide. Die hele dek is 5 minute as jy nie tussenin vrae vat nie, sowat 10 minute as jy wel.</span>
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th><span data-en>On the slide</span><span data-af>Op die slide</span></th>
+            <th><span data-en>What to say</span><span data-af>Wat om te sê</span></th>
+            <th><span data-en>Likely questions</span><span data-af>Waarskynlike vrae</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td class="what"><span data-en>Title + the WhatsApp number</span><span data-af>Titel + die WhatsApp-nommer</span></td>
+            <td class="say"><span data-en>"This is Ongiini AI — a free helper on WhatsApp, built for Namibia. Save this number on your phone right now if you want."</span><span data-af>"Dit is Ongiini AI — 'n gratis helper op WhatsApp, gebou vir Namibië. Stoor die nommer op jou foon nou as jy wil."</span></td>
+            <td class="ask"><span data-en>"Is it really free?" / "Why a German number?"</span><span data-af>"Is dit regtig gratis?" / "Hoekom 'n Duitse nommer?"</span></td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td class="what"><span data-en>The one-sentence pitch</span><span data-af>Die een-sin opsomming</span></td>
+            <td class="say"><span data-en>"Send any question. Get a useful answer back. One million free tokens — about 500 conversations a month."</span><span data-af>"Stuur enige vraag. Kry 'n nuttige antwoord. Een miljoen gratis tokens — sowat 500 gesprekke per maand."</span></td>
+            <td class="ask"><span data-en>"What's a token?" → answer: roughly three-quarters of a word.</span><span data-af>"Wat is 'n token?" → antwoord: ongeveer driekwart van 'n woord.</span></td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="what"><span data-en>Example questions</span><span data-af>Voorbeeldvrae</span></td>
+            <td class="say"><span data-en>"You can ask about school, farming, health, contracts — anything you'd ask a friend who knows a lot."</span><span data-af>"Jy kan vra oor skool, boerdery, gesondheid, kontrakte — enigiets wat jy vir 'n vriend sou vra wat baie weet."</span></td>
+            <td class="ask"><span data-en>"Can it answer me in Afrikaans?" → yes, today.</span><span data-af>"Kan dit my in Afrikaans antwoord?" → ja, vandag.</span></td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="what"><span data-en>Text, photo, voice</span><span data-af>Teks, foto, stem</span></td>
+            <td class="say"><span data-en>"You can type, send a photo of a problem, or hold the mic to send a voice note. All three work."</span><span data-af>"Jy kan tik, 'n foto van 'n probleem stuur, of die mikrofoon hou om 'n stemboodskap te stuur. Al drie werk."</span></td>
+            <td class="ask"><span data-en>"Voice notes in Afrikaans too?" → yes.</span><span data-af>"Ook stemboodskappe in Afrikaans?" → ja.</span></td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="what"><span data-en>Who it's for</span><span data-af>Vir wie dit is</span></td>
+            <td class="say"><span data-en>"For everyone: mothers, students, farmers, anyone with daily questions."</span><span data-af>"Vir almal: moeders, studente, boere, enigeen met daaglikse vrae."</span></td>
+            <td class="ask"><span data-en>"Will it tell me right answers about my health?" → say: it's a useful start, not a doctor.</span><span data-af>"Sal dit reg antwoord oor my gesondheid?" → sê: dit is 'n nuttige begin, nie 'n dokter nie.</span></td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="what"><span data-en>One million tokens free, every month</span><span data-af>Een miljoen tokens gratis, elke maand</span></td>
+            <td class="say"><span data-en>"You get one million free tokens every month. That's about 500 conversations — more than most people use. It resets on the 1st."</span><span data-af>"Jy kry een miljoen gratis tokens elke maand. Dis sowat 500 gesprekke — meer as wat die meeste mense gebruik. Dit hervat op die 1ste."</span></td>
+            <td class="ask"><span data-en>"What if I run out?" → it pauses until the 1st of next month.</span><span data-af>"Wat as ek opraak?" → dit hou op tot die 1ste van volgende maand.</span></td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td class="what"><span data-en>Runs on a small computer, not a US data centre</span><span data-af>Loop op 'n klein rekenaar, nie 'n VSA-datasentrum nie</span></td>
+            <td class="say"><span data-en>"Ongiini runs on one small computer — about the size of a book — sitting on a shelf. Not in a US cloud. Your messages don't travel to Google or OpenAI."</span><span data-af>"Ongiini loop op een klein rekenaar — sowat die grootte van 'n boek — op 'n rak. Nie in 'n VSA-wolk nie. Jou boodskappe loop nie deur Google of OpenAI nie."</span></td>
+            <td class="ask"><span data-en>"Where is the computer right now?" → currently in Germany; plan is to move it to Namibia once sustainable.</span><span data-af>"Waar is die rekenaar nou?" → tans in Duitsland; die plan is om dit na Namibië te skuif sodra dit volhoubaar is.</span></td>
+          </tr>
+          <tr>
+            <td class="num">8</td>
+            <td class="what"><span data-en>Your data isn't a product</span><span data-af>Jou data is nie 'n produk nie</span></td>
+            <td class="say"><span data-en>"We don't train any AI on your chats. Personal info gets stripped before storage. And you can say 'delete my data' at any time."</span><span data-af>"Ons leer geen KI met jou tjats nie. Persoonlike inligting word verwyder voor berging. En jy kan enige tyd 'vee my data uit' sê."</span></td>
+            <td class="ask"><span data-en>"How do I delete?" → just message the words "delete my data".</span><span data-af>"Hoe vee ek dit uit?" → stuur net die woorde "vee my data uit".</span></td>
+          </tr>
+          <tr>
+            <td class="num">9</td>
+            <td class="what"><span data-en>Open source &amp; live stats</span><span data-af>Oopbron en regstreekse syfers</span></td>
+            <td class="say"><span data-en>"Anyone can see the code on GitHub and the live numbers at ongiini.ai/statistics. Nothing is hidden."</span><span data-af>"Enigeen kan die kode op GitHub sien en die regstreekse syfers by ongiini.ai/statistics. Niks is versteek nie."</span></td>
+            <td class="ask"><span data-en>"What AI model is it?" → Google's Gemma 4, 26B parameters, open weights.</span><span data-af>"Watter KI-model is dit?" → Google se Gemma 4, 26B-parameters, oop gewigte.</span></td>
+          </tr>
+          <tr>
+            <td class="num">10</td>
+            <td class="what"><span data-en>Languages — English &amp; Afrikaans now, Oshiwambo next</span><span data-af>Tale — Engels en Afrikaans nou, Oshiwambo volgende</span></td>
+            <td class="say"><span data-en>"English and Afrikaans work today. Oshiwambo is what we're building next — and it's only possible with help from Namibians."</span><span data-af>"Engels en Afrikaans werk vandag. Oshiwambo is wat ons volgende bou — en dit is net moontlik met hulp van Namibiërs."</span></td>
+            <td class="ask"><span data-en>"When will Oshiwambo work?" → "When the dataset is good enough — we don't want to promise a date."</span><span data-af>"Wanneer sal Oshiwambo werk?" → "Wanneer die datastel goed genoeg is — ons wil nie 'n datum belowe nie."</span></td>
+          </tr>
+          <tr>
+            <td class="num">11</td>
+            <td class="what"><span data-en>How to help with Oshiwambo</span><span data-af>Hoe om met Oshiwambo te help</span></td>
+            <td class="say"><span data-en>"If you speak Oshindonga or Oshikwanyama, you can help. We send English sentences. You translate them. Every contribution feeds an open dataset."</span><span data-af>"As jy Oshindonga of Oshikwanyama praat, kan jy help. Ons stuur Engelse sinne. Jy vertaal hulle. Elke bydrae voed 'n oop datastel."</span></td>
+            <td class="ask"><span data-en>"How many sentences?" → as many as you want — you can stop any time.</span><span data-af>"Hoeveel sinne?" → soveel jy wil — jy kan enige tyd ophou.</span></td>
+          </tr>
+          <tr>
+            <td class="num">12</td>
+            <td class="what"><span data-en>Live numbers</span><span data-af>Regstreekse syfers</span></td>
+            <td class="say"><span data-en>"This is happening right now: real Namibians, real messages, real translations. The community is already here."</span><span data-af>"Dit gebeur nou: regte Namibiërs, regte boodskappe, regte vertalings. Die gemeenskap is reeds hier."</span></td>
+            <td class="ask"><span data-en>"How do I know it's real?" → point them at ongiini.ai/statistics.</span><span data-af>"Hoe weet ek dit is eg?" → wys hulle ongiini.ai/statistics.</span></td>
+          </tr>
+          <tr>
+            <td class="num">13</td>
+            <td class="what"><span data-en>QR code + the number, one last time</span><span data-af>QR-kode + die nommer, een laaste keer</span></td>
+            <td class="say"><span data-en>"Scan with your camera, or save +49 1588 8635886. Say hello. Ongiini will answer."</span><span data-af>"Skandeer met jou kamera, of stoor +49 1588 8635886. Sê hallo. Ongiini sal antwoord."</span></td>
+            <td class="ask"><span data-en>(End on a smile. People should leave with the number saved.)</span><span data-af>(Eindig met 'n glimlag. Mense moet vertrek met die nommer gestoor.)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>
+        <span data-en>If something doesn't work</span>
+        <span data-af>As iets nie werk nie</span>
+      </h2>
+      <div class="panel">
+        <h3><span data-en>The bot doesn't reply</span><span data-af>Die bot antwoord nie</span></h3>
+        <p>
+          <span data-en>
+            Ongiini is in pilot phase. If you message it and nothing comes back in a minute, give it a
+            moment and try again. Don't be alarmed — usually it's a wifi blip on our side. Show the
+            audience that the project is real and growing (slide 12, live numbers).
+          </span>
+          <span data-af>
+            Ongiini is in loodsfase. As jy 'n boodskap stuur en niks kom in 'n minuut terug nie, gee dit
+            'n oomblik en probeer weer. Moenie skrik nie — gewoonlik is dit 'n wifi-haakplek aan ons kant.
+            Wys die gehoor dat die projek eg is en groei (slide 12, regstreekse syfers).
+          </span>
+        </p>
+      </div>
+      <div class="panel">
+        <h3><span data-en>Someone asks about Oshiwambo and you don't speak it</span><span data-af>Iemand vra oor Oshiwambo en jy praat dit nie</span></h3>
+        <p>
+          <span data-en>
+            That's fine — you don't have to be a translator yourself. Point them to slide 11 and the
+            link at <a href="/contribute/">ongiini.ai/contribute</a>. The contribution flow is on
+            WhatsApp; they can do it from anywhere, any time.
+          </span>
+          <span data-af>
+            Dis okay — jy hoef nie self 'n vertaler te wees nie. Wys hulle slide 11 en die skakel by
+            <a href="/contribute/">ongiini.ai/contribute</a>. Die bydrae-vloei is op WhatsApp; hulle kan
+            dit van enige plek, enige tyd doen.
+          </span>
+        </p>
+      </div>
+      <div class="panel">
+        <h3><span data-en>Someone is worried about privacy</span><span data-af>Iemand is bekommerd oor privaatheid</span></h3>
+        <p>
+          <span data-en>
+            Don't argue. Take the question seriously. Three honest facts:
+            (1) the model runs on our own computer, not in a US cloud;
+            (2) personal information like emails, ID numbers and bank cards are stripped before storage;
+            (3) saying "delete my data" works — they can prove it themselves any time. Then send them to
+            <a href="/privacy/">ongiini.ai/privacy</a> for the full version.
+          </span>
+          <span data-af>
+            Moenie stry nie. Vat die vraag ernstig op. Drie eerlike feite:
+            (1) die model loop op ons eie rekenaar, nie in 'n VSA-wolk nie;
+            (2) persoonlike inligting soos e-posse, ID-nommers en bankkaarte word verwyder voor berging;
+            (3) "vee my data uit" werk — hulle kan dit enige tyd self bewys. Stuur hulle dan na
+            <a href="/privacy/">ongiini.ai/privacy</a> vir die volle weergawe.
+          </span>
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>
+        <span data-en>Sharing the deck after</span>
+        <span data-af>Die dek deel na die tyd</span>
+      </h2>
+      <p>
+        <span data-en>
+          From the slide deck footer, tap the printer icon. Choose <strong>"Save as PDF"</strong> in the
+          browser dialog. You get a clean PDF — one slide per page, landscape — that you can share over
+          WhatsApp. Or just send the link: <a href="https://ongiini.ai/slides">ongiini.ai/slides</a>.
+        </span>
+        <span data-af>
+          Tik die drukkerikoon onder in die slide-dek. Kies <strong>"Stoor as PDF"</strong> in die
+          blaaier-venster. Jy kry 'n skoon PDF — een slide per bladsy, landskap — wat jy oor WhatsApp
+          kan deel. Of stuur net die skakel: <a href="https://ongiini.ai/slides">ongiini.ai/slides</a>.
+        </span>
+      </p>
+    </section>
+
+    <footer>
+      <p>
+        <span data-en>Questions? Send them to the same WhatsApp number. We read everything.</span>
+        <span data-af>Vrae? Stuur dit na dieselfde WhatsApp-nommer. Ons lees alles.</span>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var segs = document.querySelectorAll('[data-set-locale]');
+      function setLocale(l) {
+        root.setAttribute('data-locale', l);
+        root.setAttribute('lang', l);
+        segs.forEach(function (s) { s.classList.toggle('is-active', s.getAttribute('data-set-locale') === l); });
+        try { localStorage.setItem('ongiini.locale', l); } catch (e) {}
+      }
+      segs.forEach(function (s) {
+        s.addEventListener('click', function () { setLocale(s.getAttribute('data-set-locale')); });
+      });
+      try {
+        var saved = localStorage.getItem('ongiini.locale');
+        if (saved === 'af' || saved === 'en') setLocale(saved);
+        else if (navigator.language && navigator.language.toLowerCase().indexOf('af') === 0) setLocale('af');
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>
