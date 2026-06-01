@@ -325,7 +325,7 @@ async def test_classifier_requests_json_response_format():
     await c.classify(_msg("a typical question"))
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs.get("response_format") == {"type": "json_object"}
-    assert kwargs.get("max_tokens") == 500
+    assert kwargs.get("max_tokens") == 200
 
 
 # ---------- Pronoun + short-message context ----------
