@@ -1077,19 +1077,18 @@
       // live numbers — single fetch, soft-fail
       function fmt(n) {
         if (n == null || !isFinite(n)) return '—';
-        if (n >= 1000) return (Math.round(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'k';
-        return String(n);
+        // Use locale thousands separator. On a slide, "14,559" reads
+        // better than "14.6k" — the proof is in the full number.
+        return Number(n).toLocaleString('en-US');
       }
       fetch('/api/stats', { credentials: 'omit' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (!data) return;
-          var users = data.unique_users || data.users || data.user_count;
-          var messages = data.messages_total || data.messages || data.total_messages;
-          var contribs = data.contributions_total || data.contributions || data.contribution_count;
-          if (users) document.getElementById('live-users').textContent = fmt(users);
-          if (messages) document.getElementById('live-messages').textContent = fmt(messages);
-          if (contribs) document.getElementById('live-contributions').textContent = fmt(contribs);
+          var t = data.totals || {};
+          if (t.unique_users)         document.getElementById('live-users').textContent = fmt(t.unique_users);
+          if (t.messages_user)        document.getElementById('live-messages').textContent = fmt(t.messages_user);
+          if (t.contributions_total)  document.getElementById('live-contributions').textContent = fmt(t.contributions_total);
         })
         .catch(function () { /* soft-fail; placeholders stay */ });
     })();
