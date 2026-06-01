@@ -132,6 +132,25 @@
     .slide-body strong { color: var(--ink); font-weight: 500; }
     .slide--dark .slide-body strong { color: var(--bone); }
 
+    /* ─── appendix marker ─── */
+    .eyebrow--appendix {
+      color: var(--terracotta);
+      font-weight: 500;
+    }
+    .eyebrow--appendix::before {
+      content: "— ";
+      color: var(--ink-faint);
+    }
+
+    /* ─── mission slide ─── */
+    .slide-mission { text-align: center; align-items: center; }
+    .slide-mission .slide-title {
+      font-style: italic;
+      max-width: 18ch;
+      font-size: clamp(40px, 6.4vw, 78px);
+    }
+    .slide-mission .slide-body { margin-top: 26px; }
+
     /* ─── slide 1: title ─── */
     .slide-title-card { text-align: center; align-items: center; }
     .brand-mark {
@@ -585,8 +604,37 @@
         </div>
       </section>
 
-      <!-- ─── Slide 2 — What it is ─── -->
-      <section class="slide" data-slide="2">
+      <!-- ─── Slide 2 — Mission ─── -->
+      <section class="slide slide-mission slide--sand" data-slide="2">
+        <div>
+          <p class="eyebrow">
+            <span data-en>Mission</span>
+            <span data-af>Missie</span>
+          </p>
+          <h2 class="slide-title">
+            <span data-en>Artificial Intelligence should help everyone.</span>
+            <span data-af>Kunsmatige intelligensie behoort almal te help.</span>
+          </h2>
+          <p class="slide-body">
+            <span data-en>
+              AI is one of the most useful tools any of us has — for school, work,
+              health, daily life. Until now, getting to it usually meant paying a
+              monthly subscription. <strong>Ongiini changes that for Namibia:</strong>
+              free, on the phone you already own, in the language you already speak.
+            </span>
+            <span data-af>
+              KI is een van die nuttigste hulpmiddels wat enige van ons het — vir
+              skool, werk, gesondheid, die alledaagse lewe. Tot nou moes jy
+              gewoonlik 'n maandelikse intekening betaal. <strong>Ongiini verander dit
+              vir Namibië:</strong> gratis, op die foon wat jy reeds besit, in die taal
+              wat jy reeds praat.
+            </span>
+          </p>
+        </div>
+      </section>
+
+      <!-- ─── Slide 3 — What it is ─── -->
+      <section class="slide" data-slide="3">
         <p class="eyebrow">
           <span data-en>What it is</span>
           <span data-af>Wat dit is</span>
@@ -942,8 +990,8 @@
         </div>
       </section>
 
-      <!-- ─── Slide 13 — Try it now ─── -->
-      <section class="slide" data-slide="13">
+      <!-- ─── Slide 14 — Try it now ─── -->
+      <section class="slide" data-slide="14">
         <div class="qr-row">
           <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?data=https%3A%2F%2Fwa.me%2F4915888635886&size=600x600&margin=0&color=2a2522&bgcolor=f5efe4" alt="QR code that opens WhatsApp chat with Ongiini" />
           <div class="final-aside">
@@ -964,6 +1012,147 @@
             </p>
             <p class="aside-greeting">Ongiini!</p>
           </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════ APPENDIX ═══════════════════ -->
+
+      <!-- ─── Slide 15 — Why "Ongiini"? ─── -->
+      <section class="slide slide--sand" data-slide="15">
+        <p class="eyebrow eyebrow--appendix">
+          <span data-en>Appendix · Why "Ongiini"?</span>
+          <span data-af>Bylae · Hoekom "Ongiini"?</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>It's the everyday Oshiwambo greeting.</span>
+          <span data-af>Dit is die alledaagse Oshiwambo-groet.</span>
+        </h2>
+        <p class="slide-body">
+          <span data-en>
+            Literally <em>"How are you?"</em> — used the way English speakers use
+            <em>"Hello"</em>. It's the first word many Namibians hear and say each day.
+            Naming the project after it felt right: the brand name is its own first
+            message to you, said in a language of the country it serves.
+          </span>
+          <span data-af>
+            Letterlik <em>"Hoe gaan dit?"</em> — gebruik soos Engelssprekendes
+            <em>"Hello"</em> gebruik. Dit is die eerste woord wat baie Namibiërs elke
+            dag hoor en sê. Om die projek daarna te noem het reg gevoel: die
+            handelsmerknaam is sy eie eerste boodskap aan jou, gesê in 'n taal van
+            die land wat dit bedien.
+          </span>
+        </p>
+      </section>
+
+      <!-- ─── Slide 16 — Why Namibia? ─── -->
+      <section class="slide" data-slide="16">
+        <p class="eyebrow eyebrow--appendix">
+          <span data-en>Appendix · Why Namibia?</span>
+          <span data-af>Bylae · Hoekom Namibië?</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>The right size to actually prove this can work.</span>
+          <span data-af>Die regte grootte om te bewys dat dit kan werk.</span>
+        </h2>
+        <div class="card-grid">
+          <div class="card">
+            <span class="card-num">01</span>
+            <h3 class="card-head"><span data-en>WhatsApp is everywhere</span><span data-af>WhatsApp is oral</span></h3>
+            <p class="card-body">
+              <span data-en>Almost everyone already has it. No app, no account.</span>
+              <span data-af>Byna almal het dit reeds. Geen app, geen rekening.</span>
+            </p>
+          </div>
+          <div class="card">
+            <span class="card-num">02</span>
+            <h3 class="card-head"><span data-en>~3 million people</span><span data-af>~3 miljoen mense</span></h3>
+            <p class="card-body">
+              <span data-en>Small enough that one DGX Spark can realistically serve a meaningful share.</span>
+              <span data-af>Klein genoeg dat een DGX Spark werklik 'n betekenisvolle deel kan bedien.</span>
+            </p>
+          </div>
+          <div class="card">
+            <span class="card-num">03</span>
+            <h3 class="card-head"><span data-en>English &amp; Afrikaans</span><span data-af>Engels en Afrikaans</span></h3>
+            <p class="card-body">
+              <span data-en>The two languages Gemma 4 handles well — so the answers are actually useful from day one.</span>
+              <span data-af>Die twee tale wat Gemma 4 goed hanteer — sodat die antwoorde van dag een af nuttig is.</span>
+            </p>
+          </div>
+        </div>
+        <p class="slide-body" style="margin-top: 24px;">
+          <span data-en>If free AI on WhatsApp can be a real game-changer for everyday life — schoolwork, farming, contracts, health — it'll prove itself here first.</span>
+          <span data-af>As gratis KI op WhatsApp 'n egte spelveranderaar vir die alledaagse lewe kan wees — skoolwerk, boerdery, kontrakte, gesondheid — sal dit homself eers hier bewys.</span>
+        </p>
+      </section>
+
+      <!-- ─── Slide 17 — Honest about accuracy ─── -->
+      <section class="slide" data-slide="17">
+        <p class="eyebrow eyebrow--appendix">
+          <span data-en>Appendix · Honest about accuracy</span>
+          <span data-af>Bylae · Eerlik oor akkuraatheid</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>Sometimes great. Sometimes confidently wrong.</span>
+          <span data-af>Soms uitstekend. Soms met selfvertroue verkeerd.</span>
+        </h2>
+        <p class="slide-body">
+          <span data-en>
+            That's the nature of AI today. Treat Ongiini's answers like advice from a
+            knowledgeable friend who can also make mistakes — useful as a starting point,
+            but not the final word.
+          </span>
+          <span data-af>
+            Dit is die aard van KI vandag. Behandel Ongiini se antwoorde soos raad van
+            'n kundige vriend wat ook foute kan maak — nuttig as 'n vertrekpunt, maar
+            nie die laaste woord nie.
+          </span>
+        </p>
+        <ul class="promise-list">
+          <li>
+            <span class="tick">!</span>
+            <div class="text">
+              <span data-en>Never decide on your health, money or legal status from one Ongiini answer alone.</span>
+              <span data-af>Moet nooit oor jou gesondheid, geld of regstatus besluit op grond van net een Ongiini-antwoord nie.</span>
+              <span class="sub">
+                <span data-en>Always verify with a doctor, lawyer, or other qualified person.</span>
+                <span data-af>Kontroleer altyd met 'n dokter, prokureur of ander gekwalifiseerde persoon.</span>
+              </span>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ─── Slide 18 — Common Intelligence Foundation ─── -->
+      <section class="slide slide--dark" data-slide="18">
+        <p class="eyebrow eyebrow--appendix">
+          <span data-en>Appendix · Who built this</span>
+          <span data-af>Bylae · Wie het dit gebou</span>
+        </p>
+        <h2 class="slide-title">
+          <span data-en>The Common Intelligence Foundation.</span>
+          <span data-af>Die Common Intelligence Foundation.</span>
+        </h2>
+        <p class="slide-body">
+          <span data-en>
+            A non-profit foundation — currently being formally established in Estonia —
+            that builds and operates free AI access infrastructure for communities currently
+            locked out of AI. <strong>Ongiini is its first project</strong>: a proof of concept
+            for what locally owned, free AI access can look like, country by country.
+          </span>
+          <span data-af>
+            'n Niewinsgewende stigting — wat tans amptelik in Estland gevestig word —
+            wat gratis KI-toegangsinfrastruktuur bou en bedryf vir gemeenskappe wat tans
+            van KI uitgesluit is. <strong>Ongiini is sy eerste projek</strong>: 'n bewys-van-konsep
+            van hoe plaaslik-besit, gratis KI-toegang kan lyk, land vir land.
+          </span>
+        </p>
+        <div class="pill-row">
+          <a class="pill" href="https://common-intelligence.org" target="_blank" rel="noopener noreferrer">common-intelligence.org</a>
+          <span class="pill">
+            <span data-en>Intelligence is a common good.</span>
+            <span data-af>Intelligensie is 'n gemeenskaplike goed.</span>
+          </span>
         </div>
       </section>
 
