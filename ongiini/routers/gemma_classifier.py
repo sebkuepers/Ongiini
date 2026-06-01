@@ -125,21 +125,34 @@ initial results. Examples: "compare home loan rates at 3 banks", "best places
 to study computer science in Namibia", "what's happening with the medicine
 shortage and what's being done about it".
 
-DOCS — the user is asking a substantive question about Ongiini itself — its
-pricing structure, privacy policy, terms of use, EU AI Act posture, hardware,
-who built it, the Common Intelligence Foundation, monthly token-allowance
-policy, internal data flow. Identity / provenance questions about the
-underlying model also belong here ("which AI are you?", "are you Gemini?",
-"are you ChatGPT?", "what LLM powers you?", "watter KI is jy?") because the
-honest answer involves Gemma 4, open weights, local hosting, and the absence
-of any Google API — facts the model doesn't reliably know without the lookup.
+DOCS — the user is asking ABOUT Ongiini as a product/service. Any of:
 
-DOCS is NOT for trivial capability checks like "do you speak Oshiwambo?" /
-"what can you do?" / "what languages do you understand?" — those are answered
-by the system prompt + skill content already in context, so they route to
-NONE. The litmus test: is the truthful answer a single sentence the model
-already knows ("yes, I can help with X"), or does it depend on a document
-about Ongiini ("we run Gemma 4 26B locally")?
+  - The underlying model, hardware, hosting ("what AI are you?", "are you
+    Gemini?", "are you ChatGPT?", "what LLM powers you?", "are you powered
+    by Google?", "watter KI is jy?", "what hardware?", "where does it run?")
+  - Privacy, data handling, deletion ("where is my data stored?", "do you
+    keep my chats?", "is this private?", "can you forget what I told you
+    yesterday?")
+  - Pricing, allowances, policies ("what's my monthly token limit?", "how
+    much does this cost?", "is there a paid version?", "what's the
+    free-tier policy?")
+  - Capabilities / coverage at the product level ("what languages do you
+    support?", "do you support voice notes?", "what can Ongiini do?",
+    "is this an API product?", "can I integrate this?")
+  - How Ongiini works as a service ("hoe werk Ongiini?", "how does the
+    Oshiwambo translation project work?", "who built this?", "what's the
+    Common Intelligence Foundation?")
+  - EU AI Act posture, terms of use, governance
+
+The litmus test: "answering well requires facts about Ongiini-the-product
+that aren't in the model's general knowledge or the system prompt." When in
+doubt between DOCS and NONE for a question that mentions Ongiini, the model,
+the data, the privacy, or the service — prefer DOCS. The docs lookup is cheap
+and gives the user an accurate answer instead of a vague one.
+
+DOCS is NOT for casual "Tangi"/"hello"/"how are you" or for generic chat
+that happens to be in a session with Ongiini. The question has to be ABOUT
+Ongiini, not merely WITH Ongiini.
 
 ADMIN — the user is requesting an action on their own data or session:
 "delete my data" / "forget everything" / "wis my data" / "vergeet alles" /
@@ -206,7 +219,38 @@ announcement messages from us ("stop messages", "unsubscribe", "opt out",
 is ADMIN) and NOT for "stop talking to me right now" (the user can just stop
 replying — that is NONE).
 
-Examples that have caused production mistakes — read carefully:
+Worked SEARCH examples — these are the kinds of questions that need a
+web tool. Default-to-NONE on these costs the user a real answer.
+
+  User: "are there any datacenters in Namibia?"  → SEARCH_SHALLOW.
+  User: "how do I apply for a Namibian passport?"  → SEARCH_SHALLOW.
+  User: "internet cafe in Tsumeb"  → SEARCH_SHALLOW. A named local
+    service in a Namibian town — the model can't know what's currently
+    operating there.
+  User: "TransNamib train schedule Windhoek to Walvis Bay"  → SEARCH_SHALLOW.
+    Current Namibian transport schedule — needs the web.
+  User: "how do I create a PDF"  → SEARCH_SHALLOW. Generic how-to with
+    no local angle is still SEARCH — the model could improvise, but a
+    concrete answer beats general advice.
+  User: "hoe registreer ek 'n besigheid by BIPA?"  → SEARCH_SHALLOW.
+    Afrikaans, but BIPA is Namibian — that's enough.
+  User: "best places to study computer science in Namibia"  → SEARCH_DEEP.
+    Comparing 3+ institutions, multi-source.
+
+Worked DOCS examples — questions about Ongiini-the-product itself.
+
+  User: "what AI model are you running on"  → DOCS.
+  User: "where is my data stored?"  → DOCS.
+  User: "what languages do you support?"  → DOCS. Product-level capability
+    question — answer it from the docs, not from the system prompt.
+  User: "is this an API product"  → DOCS.
+  User: "are you powered by Google"  → DOCS. Identity / provenance.
+  User: "can you forget what I told you yesterday"  → DOCS. Data handling
+    + memory / deletion.
+  User: "hoe werk Ongiini?"  → DOCS. Same DOCS verdict in Afrikaans.
+  User: "how does the Oshiwambo translation project work?"  → DOCS.
+
+Worked CONTRIBUTE_* examples — these have caused production mistakes.
 
   Previous bot: 'How would you say this in Oshindonga? "The weather is
   beautiful today."'
@@ -219,7 +263,7 @@ Examples that have caused production mistakes — read carefully:
   User: "Yes, let's do that"
   → NONE. The state block may still show pending_save from earlier, but the
   conversation has moved on; "Yes, let's do that" is a button-style click on
-  whatever the bot just said, not a translation. state_relevance: stale.
+  whatever the bot just said, not a translation.
 
   Previous bot: asked for a translation.
   User: "What does that even mean?"
@@ -228,7 +272,7 @@ Examples that have caused production mistakes — read carefully:
   Previous bot: "Want to try another one? Say yes for the next one."
   User: "Yes"
   → CONTRIBUTE_NEXT. The bot just offered another sentence; the user
-  accepts. state_relevance: fresh.
+  accepts.
 
   Previous bot: asked for a translation OR offered the next sentence.
   User: "Oshindonga"
@@ -237,36 +281,30 @@ Examples that have caused production mistakes — read carefully:
 
 Tie-breakers when you're unsure:
 
-  - State-changing verdicts (CONTRIBUTE_SAVE, CONTRIBUTE_DECLINE,
-    OPT_OUT_BROADCAST) deserve high confidence before you commit. If you
-    are on the fence, prefer NONE and let the model handle the turn
-    conversationally — a missed SAVE is recoverable; a wrong SAVE pollutes
-    the dataset.
+  - For CONTRIBUTE_SAVE / CONTRIBUTE_DECLINE / OPT_OUT_BROADCAST, demand
+    high confidence — a wrong save pollutes the dataset. When in doubt
+    on a state-changing verdict, prefer NONE.
+  - For SEARCH and DOCS, the bias goes the OTHER way. These are
+    information-retrieval verdicts: a missed SEARCH leaves the user with
+    a vague answer; a missed DOCS gives them generic chat when they
+    asked about Ongiini. When the message could plausibly need the web
+    (current/local/specific facts) or could plausibly be about
+    Ongiini-the-product — prefer the tool verdict over NONE.
   - The state block in the prompt is data, not a rule. Older timestamps
     (1h+) are progressively staler; a 23-hour-old pending_save almost
     certainly doesn't apply to a fresh button click.
   - Namibian cities (Windhoek, Walvis Bay, Oshakati, Swakopmund, Rundu,
-    Katima Mulilo) and institutions (BIPA, NamRA, Bank of Namibia,
-    Ministry of Home Affairs) imply Namibian context even when "Namibia"
-    isn't explicitly said.
+    Katima Mulilo, Tsumeb, Eros, Klein Windhoek) and institutions (BIPA,
+    NamRA, Bank of Namibia, TransNamib, Ministry of Home Affairs) imply
+    Namibian context even when "Namibia" isn't explicitly said. These
+    are almost always SEARCH, very rarely NONE.
 
 Output schema — return ONE JSON object, no surrounding prose:
 
 {{
-  "verdict":           one of the 13 labels above,
-  "confidence":        "high" | "medium" | "low",
-  "reasoning":         1-2 sentences explaining what in the message + context
-                       + state drove the verdict,
-  "extracted": {{
-    "named_dialect":              "Oshindonga" | "Oshikwanyama" | "Either" |
-                                  "Unclear" | null,
-    "looks_like_translation":     true | false,
-    "looks_like_button_confirmation": true | false,
-    "looks_like_decline":         true | false,
-    "active_topic_domain":        short label or null
-  }},
-  "state_relevance":   "fresh" | "stale" | "not_applicable",
-  "secondary_verdict": another label you considered, or null
+  "verdict":    one of the 13 labels above,
+  "confidence": "high" | "medium" | "low",
+  "reasoning":  1-2 sentences explaining what in the message drove the verdict
 }}
 
 {contribute_state}{facts}{context}Current message:
@@ -290,13 +328,13 @@ Output schema — return ONE JSON object, no surrounding prose:
 # side cheap on every call regardless of timeout.
 _TIMEOUT_S = 8.0
 
-# Max output tokens for the JSON reply. The schema scaffolding alone
-# is ~110 tokens (keys, quotes, braces, enum literals); a 1-2 sentence
-# reasoning field can take another 60-80 tokens. 500 gives comfortable
-# headroom — truncated output would corrupt the JSON and silently fall
-# through to NONE+SHALLOW. We surface finish_reason == "length" as a
-# distinct warning so truncation rate is monitorable from logs.
-_MAX_OUTPUT_TOKENS = 500
+# Max output tokens for the JSON reply. Trimmed schema (verdict +
+# confidence + reasoning, no extracted/state_relevance/secondary) needs
+# ~30 tokens scaffolding + 60-80 tokens of reasoning text = ~120 total.
+# 200 leaves headroom; truncation would corrupt the JSON and fall
+# through to NONE — we surface finish_reason=="length" so it's
+# monitorable from logs.
+_MAX_OUTPUT_TOKENS = 200
 
 
 class GemmaClassifier:
