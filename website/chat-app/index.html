@@ -7,8 +7,11 @@
   <meta name="description" content="Try Ongiini AI in your browser — no app, no login, no signup. Ask any question. Powered by Gemma 4 26B running on a single computer in our office." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#f5efe4" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
-  <link rel="apple-touch-icon" href="/assets/ongiini-icon-192-v2.png" />
+  <!-- Assets live on the main ongiini.ai Pages project; the chat
+       app is its own Pages project (ongiini-chat) so we reference the
+       icons cross-origin to avoid duplicating the assets dir. -->
+  <link rel="icon" type="image/png" sizes="32x32" href="https://ongiini.ai/assets/favicon-32-v2.png" />
+  <link rel="apple-touch-icon" href="https://ongiini.ai/assets/ongiini-icon-192-v2.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -299,7 +302,7 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/">
-      <img src="/assets/ongiini-icon-192-v2.png" alt="Ongiini" />
+      <img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini" />
       <span class="brand-text">Ongiini AI</span>
     </a>
     <div class="topbar-actions">
