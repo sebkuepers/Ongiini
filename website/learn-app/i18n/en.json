@@ -118,7 +118,9 @@
   },
   "intake": {
     "welcome_prefix": "Welcome — let's set you up. ",
-    "putting_plan": "Perfect. Putting your plan together now…"
+    "putting_plan": "Perfect. Putting your plan together now…",
+    "welcome_back_short": "Welcome back.",
+    "focus_prompt_template": "What do you want to focus on for {target} this time?"
   },
   "errors": {
     "could_not_start": "Couldn't start: {detail}",

@@ -118,7 +118,9 @@
   },
   "intake": {
     "welcome_prefix": "Welkom — kom ons stel jou op. ",
-    "putting_plan": "Wonderlik. Ek stel nou jou plan saam…"
+    "putting_plan": "Wonderlik. Ek stel nou jou plan saam…",
+    "welcome_back_short": "Welkom terug.",
+    "focus_prompt_template": "Waarop wil jy dié keer vir {target} fokus?"
   },
   "errors": {
     "could_not_start": "Kon nie begin nie: {detail}",
