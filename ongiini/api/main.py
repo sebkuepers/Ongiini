@@ -5,6 +5,7 @@ import logging
 import re
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Header, Request, Response
@@ -33,6 +34,8 @@ from ..whatsapp import (
     verify_signature,
 )
 from .chat import build_router as build_chat_router
+from .learn import build_router as build_learn_router
+from ..learning import db as learning_db
 
 # Single per-process Owela agent. Built lazily in lifespan so the
 # embedded mem0/qdrant + whisper warmup logs land before this prints
@@ -129,6 +132,42 @@ async def lifespan(app: FastAPI):
         log.info("chat endpoint enabled at /v1/chat")
     else:
         log.info("chat endpoint DISABLED via ONGIINI_CHAT_ENABLED=false")
+
+    # ── learn.ongiini.ai surface ─────────────────────────────────
+    # Persistent learner store + LLM-driven curriculum / cards /
+    # grading. Same shared model as the chat surface.
+    if settings.learn_enabled:
+        if not settings.learn_token_secret:
+            # Magic-link issuance (Phase 2) requires the secret, but the
+            # cold-visit flow doesn't — operate degraded rather than
+            # refusing to start. Log loudly so the deployer notices.
+            log.warning(
+                "ONGIINI_LEARN_TOKEN_SECRET is not set — magic-link "
+                "tokens will fail to verify. Cold-visit learn.ongiini.ai "
+                "still works."
+            )
+        try:
+            learning_db.warmup()
+            # Load the learning-afrikaans skill body once, hand it to
+            # every prompt. The SkillRegistry has the manifest already;
+            # we read the raw markdown for the prompt content.
+            learn_skill = (
+                Path(__file__).resolve().parents[1]
+                / "skills" / "learning-afrikaans" / "SKILL.md"
+            )
+            learn_skill_text = learn_skill.read_text(encoding="utf-8")
+            learn_router = build_learn_router(
+                model=shared.model,
+                skill_content=learn_skill_text,
+            )
+            learn_sub = FastAPI(title="Ongiini Learn", openapi_url=None)
+            learn_sub.include_router(learn_router, prefix="/learn")
+            app.mount("/v1", learn_sub)
+            log.info("learn endpoint enabled at /v1/learn")
+        except Exception as exc:                            # noqa: BLE001
+            # Don't bring the webhook down if the learn surface can't
+            # warm up — same soft-fail discipline contributions uses.
+            log.warning("learn endpoint warmup failed: %s", exc)
     # Kick off the LLM-driven qualitative-analysis loop (topics, roles).
     # Runs in the background; never blocks message handling. Pauses
     # between passes; one-shot failures are caught inside.
@@ -187,7 +226,7 @@ app.add_middleware(
     allow_origins=[
         "https://ongiini.ai",
         "https://www.ongiini.ai",
-    ] + settings.chat_allowed_origins,
+    ] + settings.chat_allowed_origins + settings.learn_allowed_origins,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=False,
