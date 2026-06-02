@@ -67,14 +67,8 @@
       border-bottom: 1px solid var(--rule);
       position: sticky; top: 0; z-index: 5;
     }
-    .brand { display: inline-flex; align-items: center; gap: 10px; }
-    .brand img { width: 28px; height: 28px; border-radius: 6px; }
-    .brand .brand-text {
-      font-family: 'Instrument Serif', serif;
-      font-size: 20px;
-      letter-spacing: -0.01em;
-      color: var(--ink);
-    }
+    .brand { display: inline-flex; align-items: center; }
+    .brand img { width: 32px; height: 32px; border-radius: 7px; }
     .topbar-actions { display: inline-flex; align-items: center; gap: 10px; }
     .lang-segment {
       display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden;
@@ -323,9 +317,8 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/">
-      <img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini" />
-      <span class="brand-text">Ongiini AI</span>
+    <a class="brand" href="/" aria-label="Ongiini AI">
+      <img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini AI" />
     </a>
     <div class="topbar-actions">
       <span class="lang-segment" role="group" aria-label="Language">
