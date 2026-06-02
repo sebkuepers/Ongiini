@@ -296,12 +296,17 @@ async def _handle_answer(
     new_messages.append(progress_msg)
 
     # And the next thing — lesson or exercise — so the learner has
-    # something to do without an extra click.
+    # something to do without an extra click. ``exclude_card_id`` is
+    # the card we just graded; the SRS replay path uses this so the
+    # learner doesn't see the exact card they just answered come back
+    # back-to-back (Anki-style "Again" lets it surface after one new
+    # card).
     new_messages.extend(await _produce_next_thing(
         learner_id=learner_id, goal_id=goal_id,
         ctx=ctx_mod.build_learner_context(learner_id, goal_id=goal_id),
         model=model, skill_content=skill_content,
         prefix_messages=[],
+        exclude_card_id=card["card_id"],
     ))
     return new_messages
 
@@ -537,6 +542,7 @@ async def _produce_next_thing(
     model: Model,
     skill_content: str,
     prefix_messages: list[dict[str, Any]],
+    exclude_card_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Author the next card and emit it as a message.
 
@@ -580,6 +586,44 @@ async def _produce_next_thing(
     )
     if advanced is not None:
         ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal_id)
+
+    # Step 1c: SRS replay. Before asking the model for a brand-new
+    # card, look for any past card that's due for re-review (a card
+    # the learner answered earlier and that SRS pushed back into the
+    # queue). Failed cards land in box 1 with next_due_at = now, so
+    # this is the path that actually surfaces them again — without it
+    # the Leitner box state was bookkeeping only.
+    #
+    # ``exclude_card_id`` is the card the learner JUST graded this
+    # turn (passed via ``prefix_messages`` carries no semantics here,
+    # so we read it from the kwarg ``exclude_card_id``). Skipping it
+    # avoids back-to-back re-emit; after one new card it'll surface
+    # next turn (Anki "Again" feel).
+    due_cards = store.next_due_cards(
+        learner_id,
+        goal_id=goal_id,
+        exclude_card_id=exclude_card_id,
+        limit=1,
+    )
+    if due_cards:
+        d = due_cards[0]
+        msg = messages.append(
+            learner_id=learner_id, goal_id=goal_id,
+            kind=MSG_EXERCISE,
+            payload={
+                "card_type": d["card_type"],
+                "prompt_text": d["prompt_text"],
+                "hint_text": d.get("hint_text"),
+                "difficulty": d.get("difficulty"),
+                # Marker for the frontend so it can render a "review"
+                # eyebrow + the current box, distinguishing a re-review
+                # from a freshly-authored card.
+                "review_box": int(d.get("box") or 1),
+            },
+            card_id=d["card_id"],
+        )
+        new_messages.append(msg)
+        return new_messages
 
     # Step 2: ask the model to author the next card. Could be a lesson
     # or one of the three exercise types — SKILL.md teaches the model

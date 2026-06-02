@@ -56,7 +56,8 @@
     "got_it": "Verstaan →",
     "show_hint": "Wys wenk",
     "awaiting": "wag vir jou antwoord",
-    "answered": "beantwoord"
+    "answered": "beantwoord",
+    "review_eyebrow": "hersiening · boks {box}"
   },
   "modal": {
     "source_pick_heading": "Jy het {target} gekies.",

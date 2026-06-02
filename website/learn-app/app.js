@@ -280,8 +280,17 @@
       var isActive = !msg.answered;
       var wrap = el('div', 'exercise-card');
       wrap.dataset.active = isActive ? 'true' : 'false';
-      var eyebrow = (p.card_type || 'card') + ' · ' +
-        (isActive ? t('card.awaiting') : t('card.answered'));
+      var eyebrow;
+      if (p.review_box) {
+        // Re-review surfaced by the SRS scheduler — distinct visual
+        // signal so the learner recognises "I've seen this one
+        // before" vs a brand-new card from the model.
+        eyebrow = t('card.review_eyebrow', { box: p.review_box }) + ' · ' +
+          (isActive ? t('card.awaiting') : t('card.answered'));
+      } else {
+        eyebrow = (p.card_type || 'card') + ' · ' +
+          (isActive ? t('card.awaiting') : t('card.answered'));
+      }
       wrap.appendChild(el('div', 'exercise-eyebrow', eyebrow));
       if (p.prompt_text) wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
       if (p.hint_text) {

@@ -56,7 +56,8 @@
     "got_it": "Verstanden →",
     "show_hint": "Hinweis zeigen",
     "awaiting": "wartet auf deine Antwort",
-    "answered": "beantwortet"
+    "answered": "beantwortet",
+    "review_eyebrow": "Wiederholung · Box {box}"
   },
   "modal": {
     "source_pick_heading": "Du hast {target} gewählt.",

@@ -703,23 +703,46 @@ def get_card(card_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def next_due_cards(learner_id: str, limit: int = 1) -> list[dict[str, Any]]:
+def next_due_cards(
+    learner_id: str,
+    *,
+    limit: int = 1,
+    goal_id: str | None = None,
+    exclude_card_id: str | None = None,
+) -> list[dict[str, Any]]:
     """Return cards due for review now, ordered by next_due_at (oldest
     first). Joins card metadata so the caller doesn't need a second
-    fetch. Empty list = no due cards (LLM should generate a new one)."""
+    fetch. Empty list = no due cards (LLM should generate a new one).
+
+    ``goal_id`` scopes to one curriculum — important now that learners
+    have multiple goals. ``exclude_card_id`` filters out one specific
+    card (the just-answered one) so the coach's SRS replay doesn't
+    immediately re-emit the card the learner just got wrong, which
+    would feel jarring (Anki-style "Again" surfaces after a couple
+    of new cards, not back-to-back)."""
     if not learner_id or limit < 1:
         return []
     now = _now_iso()
+    sql = (
+        "SELECT lc.*, crs.box, crs.next_due_at, crs.total_seen, "
+        "crs.total_correct "
+        "FROM card_review_state crs "
+        "JOIN learning_cards lc ON lc.card_id = crs.card_id "
+        "WHERE crs.learner_id = ? AND crs.next_due_at <= ?"
+    )
+    params: list[Any] = [learner_id, now]
+    if goal_id:
+        sql += " AND lc.goal_id = ?"
+        params.append(goal_id)
+    if exclude_card_id:
+        sql += " AND lc.card_id != ?"
+        params.append(exclude_card_id)
+    # Exercise cards only — lessons don't go through SRS.
+    sql += " AND lc.card_type IN ('vocab', 'translation', 'production')"
+    sql += " ORDER BY crs.next_due_at ASC LIMIT ?"
+    params.append(limit)
     with _conn() as c:
-        rows = c.execute(
-            "SELECT lc.*, crs.box, crs.next_due_at, crs.total_seen, "
-            "crs.total_correct "
-            "FROM card_review_state crs "
-            "JOIN learning_cards lc ON lc.card_id = crs.card_id "
-            "WHERE crs.learner_id = ? AND crs.next_due_at <= ? "
-            "ORDER BY crs.next_due_at ASC LIMIT ?",
-            (learner_id, now, limit),
-        ).fetchall()
+        rows = c.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 
 
