@@ -115,27 +115,11 @@ async def lifespan(app: FastAPI):
     # adding a second per-route CORS layer wouldn't change behaviour
     # for preflights and would only add an unneeded inner middleware
     # hop on the actual POST.
-    if settings.chat_enabled:
-        chat_sub = FastAPI(title="Ongiini Chat", openapi_url=None)
-        # build_chat_router returns an APIRouter with no prefix; the
-        # sub-app is mounted at "/v1" so chat routes resolve as
-        # /v1/chat and /v1/chat/clear at the parent app's path layer.
-        chat_sub.include_router(
-            build_chat_router(
-                store=chat_session_store,
-                shared=shared,
-                pii_sanitiser=pii.sanitize,
-                resize_image=_resize_for_gemma4,
-            )
-        )
-        app.mount("/v1", chat_sub)
-        log.info("chat endpoint enabled at /v1/chat")
-    else:
-        log.info("chat endpoint DISABLED via ONGIINI_CHAT_ENABLED=false")
-
-    # ── learn.ongiini.ai surface ─────────────────────────────────
-    # Persistent learner store + LLM-driven curriculum / cards /
-    # grading. Same shared model as the chat surface.
+    # ── learn.ongiini.ai surface (must register BEFORE chat mount) ────
+    # Starlette matches routes in registration order. The chat sub-app
+    # mounts at "/v1" and so catches /v1/* greedily — registering the
+    # learn router on the parent app first ensures /v1/learn/* routes
+    # are matched before the chat catch-all sub-app.
     if settings.learn_enabled:
         if not settings.learn_token_secret:
             # Magic-link issuance (Phase 2) requires the secret, but the
@@ -160,15 +144,30 @@ async def lifespan(app: FastAPI):
                 model=shared.model,
                 skill_content=learn_skill_text,
             )
-            # Include directly on the parent app at /v1/learn — we
-            # cannot mount a second sub-app at /v1 because the chat
-            # sub-app's mount already owns that prefix.
             app.include_router(learn_router, prefix="/v1/learn")
             log.info("learn endpoint enabled at /v1/learn")
         except Exception as exc:                            # noqa: BLE001
             # Don't bring the webhook down if the learn surface can't
             # warm up — same soft-fail discipline contributions uses.
             log.warning("learn endpoint warmup failed: %s", exc)
+
+    if settings.chat_enabled:
+        chat_sub = FastAPI(title="Ongiini Chat", openapi_url=None)
+        # build_chat_router returns an APIRouter with no prefix; the
+        # sub-app is mounted at "/v1" so chat routes resolve as
+        # /v1/chat and /v1/chat/clear at the parent app's path layer.
+        chat_sub.include_router(
+            build_chat_router(
+                store=chat_session_store,
+                shared=shared,
+                pii_sanitiser=pii.sanitize,
+                resize_image=_resize_for_gemma4,
+            )
+        )
+        app.mount("/v1", chat_sub)
+        log.info("chat endpoint enabled at /v1/chat")
+    else:
+        log.info("chat endpoint DISABLED via ONGIINI_CHAT_ENABLED=false")
     # Kick off the LLM-driven qualitative-analysis loop (topics, roles).
     # Runs in the background; never blocks message handling. Pauses
     # between passes; one-shot failures are caught inside.
