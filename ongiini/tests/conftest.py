@@ -24,3 +24,9 @@ os.environ.setdefault("WHATSAPP_TOKEN", "")
 os.environ.setdefault("WHATSAPP_PHONE_ID", "")
 os.environ.setdefault("WHATSAPP_APP_SECRET", "")
 os.environ.setdefault("TAVILY_API_KEY", "")
+# Many tests use hash_msisdn (contributions, opt-outs, broadcast). The
+# salt MUST be set before settings is constructed; without it the
+# helper raises and test order becomes fragile (whichever file imports
+# settings first wins). Locked in here so any test file can import
+# the API or store modules without breaking broadcast tests downstream.
+os.environ.setdefault("CONTRIBUTIONS_HASH_SALT", "test-salt")

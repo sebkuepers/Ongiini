@@ -32,11 +32,33 @@ log = logging.getLogger("ongiini.learning.db")
 IDENTITY_ANONYMOUS = "anonymous"
 IDENTITY_WHATSAPP = "whatsapp"
 
-# Card types — the three the model can generate. See cards.py.
+# Card types. vocab / translation / production are EXERCISE cards
+# (the learner answers, the model grades, SRS tracks). ``lesson`` is
+# a TEACHING card — the model authors instructional content with
+# examples; the learner reads + clicks "Got it →". Lessons appear at
+# the start of a new module so the learner is taught a concept before
+# being asked to apply it.
 CARD_VOCAB = "vocab"
 CARD_TRANSLATION = "translation"
 CARD_PRODUCTION = "production"
-CARD_TYPES = (CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION)
+CARD_LESSON = "lesson"
+CARD_TYPES = (CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION, CARD_LESSON)
+EXERCISE_CARD_TYPES = (CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION)
+
+
+# Message kinds for the learner_messages chat thread. The frontend
+# renders each kind differently — text bubble vs rich lesson card vs
+# coloured feedback callout. See coach.py for what writes them.
+MSG_COACH_TEXT = "coach_text"
+MSG_LEARNER_TEXT = "learner_text"
+MSG_LESSON = "lesson"
+MSG_EXERCISE = "exercise"
+MSG_FEEDBACK = "feedback"
+MSG_PROGRESS = "progress"
+MESSAGE_KINDS = (
+    MSG_COACH_TEXT, MSG_LEARNER_TEXT, MSG_LESSON, MSG_EXERCISE,
+    MSG_FEEDBACK, MSG_PROGRESS,
+)
 
 # Attempt ratings — set by the grading layer (model output). 'partial'
 # is what the model returns when the answer captures the right idea
@@ -175,7 +197,39 @@ def warmup() -> None:
         -- table scan on every card delete).
         CREATE INDEX IF NOT EXISTS idx_review_card
             ON card_review_state(card_id);
+
+        -- Phase 2: per-(learner, goal) chat thread. The whole UI is a
+        -- chat conversation; cards pop up inside it as rich messages.
+        -- payload_json is the rich content (shape depends on kind);
+        -- card_id is set for exercise/feedback/progress messages so the
+        -- frontend can link them.
+        CREATE TABLE IF NOT EXISTS learner_messages (
+            message_id    TEXT PRIMARY KEY,
+            learner_id    TEXT NOT NULL
+                          REFERENCES learners(learner_id) ON DELETE CASCADE,
+            goal_id       TEXT NOT NULL
+                          REFERENCES learning_goals(goal_id) ON DELETE CASCADE,
+            kind          TEXT NOT NULL,
+            payload_json  TEXT NOT NULL,
+            card_id       TEXT,
+            answered      INTEGER NOT NULL DEFAULT 0,
+            created_at    TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_messages_goal_created
+            ON learner_messages(goal_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_messages_unanswered
+            ON learner_messages(learner_id, goal_id, answered);
         """)
+
+        # Idempotent ALTERs on learning_goals for the title + archived_at
+        # columns. SQLite has no IF NOT EXISTS for ALTER COLUMN — we
+        # introspect PRAGMA table_info and add only when missing.
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(learning_goals)").fetchall()}
+        if "title" not in cols:
+            c.execute("ALTER TABLE learning_goals ADD COLUMN title TEXT")
+        if "archived_at" not in cols:
+            c.execute("ALTER TABLE learning_goals ADD COLUMN archived_at TEXT")
+
     log.info("learning sqlite warmed at %s", _db_path())
 
 

@@ -394,3 +394,191 @@ def test_progress_for_after_attempts(temp_db):
     assert p["total_seen"] == 1
     assert p["total_correct"] == 1
     assert p["by_box"] == {2: 1}
+
+
+# ============================================================
+# Phase 2: multi-curriculum helpers
+# ============================================================
+
+def test_list_goals_excludes_archived_by_default(temp_db):
+    learner_id = store.create_anonymous_learner()
+    g1 = store.get_or_create_active_goal(learner_id)
+    g2 = store.create_new_goal(learner_id, title="Family chat")
+    store.archive_goal(learner_id, g1["goal_id"])
+
+    visible = store.list_goals(learner_id)
+    assert len(visible) == 1
+    assert visible[0]["goal_id"] == g2["goal_id"]
+
+    all_goals = store.list_goals(learner_id, include_archived=True)
+    assert len(all_goals) == 2
+
+
+def test_list_goals_has_outline_flag(temp_db):
+    """The frontend's curriculum panel shows "Plan ready" vs "Plan
+    pending" without a second fetch — locked in by has_outline."""
+    learner_id = store.create_anonymous_learner()
+    g = store.get_or_create_active_goal(learner_id)
+    assert store.list_goals(learner_id)[0]["has_outline"] is False
+    store.save_curriculum_outline(g["goal_id"], {"summary": "x", "modules": []})
+    assert store.list_goals(learner_id)[0]["has_outline"] is True
+
+
+def test_create_new_goal_demotes_existing_active(temp_db):
+    """Only one active goal per learner at a time."""
+    learner_id = store.create_anonymous_learner()
+    g1 = store.get_or_create_active_goal(learner_id)
+    g2 = store.create_new_goal(
+        learner_id, title="Interview prep", context="hospitality job",
+    )
+    goals = store.list_goals(learner_id)
+    by_id = {g["goal_id"]: g for g in goals}
+    assert by_id[g1["goal_id"]]["status"] == "paused"
+    assert by_id[g2["goal_id"]]["status"] == "active"
+    assert by_id[g2["goal_id"]]["title"] == "Interview prep"
+
+
+def test_create_new_goal_without_activate_stays_paused(temp_db):
+    """A 'draft' goal — created but not switched to."""
+    learner_id = store.create_anonymous_learner()
+    store.get_or_create_active_goal(learner_id)
+    g2 = store.create_new_goal(learner_id, title="Later", activate=False)
+    assert g2["status"] == "paused"
+
+
+def test_create_new_goal_scrubs_title_and_context(temp_db):
+    """Free-text user input on a goal must be PII-scrubbed — same
+    contract as profile.objective."""
+    learner_id = store.create_anonymous_learner()
+    g = store.create_new_goal(
+        learner_id,
+        title="Email maria@example.com",
+        context="Ping hr@example.com about the role",
+    )
+    assert "maria@example.com" not in (g["title"] or "")
+    assert "hr@example.com" not in (g["context"] or "")
+
+
+def test_activate_goal_swaps_active_and_paused(temp_db):
+    learner_id = store.create_anonymous_learner()
+    g1 = store.get_or_create_active_goal(learner_id)
+    g2 = store.create_new_goal(learner_id, title="Interview")
+    store.activate_goal(learner_id, g1["goal_id"])
+    goals = {g["goal_id"]: g for g in store.list_goals(learner_id)}
+    assert goals[g1["goal_id"]]["status"] == "active"
+    assert goals[g2["goal_id"]]["status"] == "paused"
+
+
+def test_activate_goal_rejects_foreign_learner(temp_db):
+    """A learner can't activate someone else's goal — would be a
+    cross-tenant data leak."""
+    alice = store.create_anonymous_learner()
+    bob = store.create_anonymous_learner()
+    bob_goal = store.get_or_create_active_goal(bob)
+    with pytest.raises(RuntimeError, match="not found"):
+        store.activate_goal(alice, bob_goal["goal_id"])
+
+
+def test_activate_goal_rejects_archived(temp_db):
+    """Archived goals are intentional dead-ends; restart or create
+    fresh, don't un-archive."""
+    learner_id = store.create_anonymous_learner()
+    g = store.get_or_create_active_goal(learner_id)
+    store.archive_goal(learner_id, g["goal_id"])
+    with pytest.raises(RuntimeError, match="archived"):
+        store.activate_goal(learner_id, g["goal_id"])
+
+
+def test_restart_goal_wipes_cards_attempts_review_state_messages(temp_db):
+    """Restart must scrub the in-curriculum work but keep the row +
+    outline so the learner gets the same plan back fresh."""
+    from ongiini.learning import messages as msg_mod
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    store.save_curriculum_outline(goal["goal_id"], {"summary": "x", "modules": []})
+    card_id = store.save_card(goal["goal_id"], db.CARD_VOCAB, "dankie?")
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_id,
+        user_answer="dankie", ai_feedback="yes", rating=db.RATING_CORRECT,
+    )
+    msg_mod.append(
+        learner_id=learner_id, goal_id=goal["goal_id"],
+        kind=db.MSG_COACH_TEXT, payload={"text": "hi"},
+    )
+
+    summary = store.restart_goal(learner_id, goal["goal_id"])
+    assert summary["cards_deleted"] == 1
+    assert summary["messages_deleted"] == 1
+
+    # Cards gone (cascades attempts + review_state).
+    assert store.next_due_cards(learner_id) == []
+    assert store.progress_for(learner_id) == {
+        "total_seen": 0, "total_correct": 0, "by_box": {},
+    }
+    # Goal row + outline still there.
+    outline = store.get_curriculum_outline(goal["goal_id"])
+    assert outline == {"summary": "x", "modules": []}
+    # Thread empty.
+    assert msg_mod.list_for_goal(
+        learner_id=learner_id, goal_id=goal["goal_id"],
+    ) == []
+
+
+def test_restart_goal_rejects_foreign_learner(temp_db):
+    alice = store.create_anonymous_learner()
+    bob = store.create_anonymous_learner()
+    bob_goal = store.get_or_create_active_goal(bob)
+    with pytest.raises(RuntimeError, match="not found"):
+        store.restart_goal(alice, bob_goal["goal_id"])
+
+
+def test_archive_goal_sets_status_and_timestamp(temp_db):
+    learner_id = store.create_anonymous_learner()
+    g = store.get_or_create_active_goal(learner_id)
+    archived = store.archive_goal(learner_id, g["goal_id"])
+    assert archived["status"] == "archived"
+    assert archived["archived_at"]
+
+
+def test_archive_goal_rejects_foreign_learner(temp_db):
+    alice = store.create_anonymous_learner()
+    bob = store.create_anonymous_learner()
+    bob_goal = store.get_or_create_active_goal(bob)
+    with pytest.raises(RuntimeError, match="not found"):
+        store.archive_goal(alice, bob_goal["goal_id"])
+
+
+def test_update_goal_title_scrubs_pii(temp_db):
+    learner_id = store.create_anonymous_learner()
+    g = store.get_or_create_active_goal(learner_id)
+    store.update_goal_title(learner_id, g["goal_id"], "Reach hr@example.com")
+    goals = store.list_goals(learner_id)
+    assert "hr@example.com" not in (goals[0]["title"] or "")
+
+
+def test_progress_for_goal_filter_scopes_to_one_curriculum(temp_db):
+    """Per-curriculum progress — locks in that attempts on curriculum
+    A don't leak into curriculum B's progress numbers."""
+    learner_id = store.create_anonymous_learner()
+    g_a = store.get_or_create_active_goal(learner_id)
+    g_b = store.create_new_goal(learner_id, title="other", activate=False)
+    card_a = store.save_card(g_a["goal_id"], db.CARD_VOCAB, "A?")
+    card_b = store.save_card(g_b["goal_id"], db.CARD_VOCAB, "B?")
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_a, user_answer="x",
+        ai_feedback="y", rating=db.RATING_CORRECT,
+    )
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_b, user_answer="x",
+        ai_feedback="y", rating=db.RATING_WRONG,
+    )
+
+    pa = store.progress_for(learner_id, goal_id=g_a["goal_id"])
+    pb = store.progress_for(learner_id, goal_id=g_b["goal_id"])
+    assert pa["total_seen"] == 1 and pa["total_correct"] == 1
+    assert pb["total_seen"] == 1 and pb["total_correct"] == 0
+
+    # Whole-learner: both attempts roll up.
+    p_all = store.progress_for(learner_id)
+    assert p_all["total_seen"] == 2 and p_all["total_correct"] == 1
+

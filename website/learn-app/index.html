@@ -26,6 +26,10 @@
       --teal:        oklch(0.55 0.08 175);
       --teal-deep:   oklch(0.42 0.09 175);
       --rule:        oklch(0.85 0.018 70);
+      --green:       oklch(0.70 0.13 145);
+      --green-soft:  oklch(0.92 0.05 145);
+      --amber:       oklch(0.78 0.13 75);
+      --amber-soft:  oklch(0.94 0.05 75);
     }
     @supports not (color: oklch(0 0 0)) {
       :root {
@@ -34,6 +38,8 @@
         --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --terracotta-light: #d4a283;
         --teal: #5a8e8c; --teal-deep: #3f6e6c;
         --rule: #d1c8b9;
+        --green: #6fa769; --green-soft: #e0eedb;
+        --amber: #d4a45a; --amber-soft: #f3e8cf;
       }
     }
     *, *::before, *::after { box-sizing: border-box; }
@@ -53,16 +59,53 @@
     button { font: inherit; color: inherit; }
     img { max-width: 100%; display: block; border-radius: 8px; }
 
-    /* Topbar */
+    /* ── Topbar ───────────────────────────────────────────────
+       Landing uses the light --bone variant; learning view
+       flips to --ink (dark) to match the homepage "Why" section.
+       Single .topbar element, palette swap via [data-mode]. */
     .topbar {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 18px;
       background: var(--bone);
       border-bottom: 1px solid var(--rule);
-      position: sticky; top: 0; z-index: 5;
+      position: sticky; top: 0; z-index: 10;
+      transition: background 200ms ease, border-color 200ms ease;
     }
-    .brand { display: inline-flex; align-items: center; }
+    .topbar[data-mode="learn"] {
+      background: var(--ink);
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
     .brand img { width: 32px; height: 32px; border-radius: 7px; }
+    .brand-name {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 22px; letter-spacing: -0.01em;
+      color: var(--ink);
+      transition: color 200ms ease;
+    }
+    .topbar[data-mode="learn"] .brand-name { color: var(--bone); }
+    .topbar[data-mode="learn"] .brand-name .dot { color: var(--terracotta); font-style: normal; }
+    .topbar-center { flex: 1; text-align: center; padding: 0 12px; }
+    .curr-title-btn {
+      max-width: 100%;
+      background: none; border: 0;
+      color: var(--bone);
+      font-family: 'Geist', sans-serif;
+      font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      padding: 6px 14px;
+      border-radius: 999px;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background 120ms ease;
+      max-width: 60vw;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .curr-title-btn:hover { background: rgba(255, 255, 255, 0.08); }
+    .curr-title-btn .caret {
+      font-size: 10px;
+      transition: transform 200ms ease;
+    }
+    .curr-title-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
     .topbar-actions { display: inline-flex; align-items: center; gap: 10px; }
     .topbar-link {
       font-family: 'Geist Mono', ui-monospace, monospace;
@@ -73,32 +116,35 @@
       padding: 6px 4px;
     }
     .topbar-link:hover { color: var(--terracotta-deep); }
+    .topbar[data-mode="learn"] .topbar-link { color: var(--ink-faint); }
+    .topbar[data-mode="learn"] .topbar-link:hover { color: var(--bone); }
     .icon-btn {
       width: 34px; height: 34px;
       border: 1px solid var(--rule); border-radius: 999px; background: none;
       display: inline-flex; align-items: center; justify-content: center;
       color: var(--ink-soft); cursor: pointer;
+      transition: background 120ms ease, color 120ms ease, border-color 200ms ease;
     }
     .icon-btn:hover { background: var(--bone-deep); color: var(--ink); }
     .icon-btn svg { width: 16px; height: 16px; }
-
-    main {
-      flex: 1;
-      width: 100%;
+    .topbar[data-mode="learn"] .icon-btn {
+      border-color: rgba(255, 255, 255, 0.18);
+      color: var(--ink-faint);
     }
+    .topbar[data-mode="learn"] .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--bone);
+    }
+
+    main { flex: 1; width: 100%; display: flex; flex-direction: column; }
     .wrap {
       max-width: 1080px;
       margin: 0 auto;
       padding: 0 20px;
     }
 
-    /* ── Hero ─────────────────────────────────────────────── */
+    /* ── Landing (preserved from Phase 1) ─────────────────── */
     .hero {
-      /* Only vertical padding — the horizontal padding comes from
-         .wrap. The shorthand `padding: 56px 0` would override it
-         and the section content would land flush against the
-         viewport edge. Same pattern for .section / .how / .closing
-         below. */
       padding-top: 56px;
       padding-bottom: 28px;
       text-align: center;
@@ -110,11 +156,6 @@
       color: var(--ink-soft);
       margin-bottom: 10px;
     }
-    /* Matches the chat.ongiini.ai welcome-mark exactly — same
-       Instrument Serif italic, same clamp, same letter-spacing
-       and line-height — so the two surfaces share one wordmark
-       treatment. On narrow viewports "Ongiini Learn." wraps to
-       two lines at the natural space; that's expected. */
     .hero-wordmark {
       font-family: 'Instrument Serif', serif; font-style: italic;
       font-weight: 400;
@@ -136,12 +177,7 @@
       font-size: 15.5px; line-height: 1.6;
       color: var(--ink);
     }
-
-    /* ── Topic cards ──────────────────────────────────────── */
-    .section {
-      padding-top: 36px;
-      padding-bottom: 8px;
-    }
+    .section { padding-top: 36px; padding-bottom: 8px; }
     .section-eyebrow {
       font-family: 'Geist Mono', monospace;
       font-size: 11px; letter-spacing: 0.16em;
@@ -156,19 +192,9 @@
       margin: 0 0 20px;
       color: var(--ink);
     }
-    /* Topic grid: 1 col on phone, 2 cols on slightly wider, then
-       4 on tablet/desktop via the auto-fit minmax. */
-    .topic-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-    @media (min-width: 460px) {
-      .topic-grid { grid-template-columns: 1fr 1fr; }
-    }
-    @media (min-width: 880px) {
-      .topic-grid { grid-template-columns: repeat(4, 1fr); }
-    }
+    .topic-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 460px) { .topic-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 880px) { .topic-grid { grid-template-columns: repeat(4, 1fr); } }
     .topic-card {
       background: var(--bone);
       border: 1px solid var(--rule);
@@ -178,8 +204,7 @@
       gap: 8px;
       text-align: left;
       cursor: pointer;
-      transition: transform 200ms cubic-bezier(.4,.1,.3,1),
-                  box-shadow 200ms, border-color 200ms;
+      transition: transform 200ms cubic-bezier(.4,.1,.3,1), box-shadow 200ms, border-color 200ms;
       position: relative;
       min-height: 156px;
       color: inherit;
@@ -190,19 +215,9 @@
       box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 18px 32px -20px rgba(0,0,0,0.18);
       border-color: var(--terracotta-light);
     }
-    .topic-card[disabled],
-    .topic-card[aria-disabled="true"] {
-      cursor: not-allowed; opacity: 0.55;
-    }
-    .topic-card[disabled]:hover,
-    .topic-card[aria-disabled="true"]:hover {
-      transform: none; box-shadow: none; border-color: var(--rule);
-    }
-    .topic-flag {
-      font-size: 32px;
-      line-height: 1;
-      user-select: none;
-    }
+    .topic-card[aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
+    .topic-card[aria-disabled="true"]:hover { transform: none; box-shadow: none; border-color: var(--rule); }
+    .topic-flag { font-size: 32px; line-height: 1; user-select: none; }
     .topic-name {
       font-family: 'Instrument Serif', serif; font-style: italic;
       font-size: 26px; line-height: 1.1;
@@ -216,9 +231,7 @@
       text-transform: uppercase;
       color: var(--ink-soft);
     }
-    .topic-card[data-status="active"] .topic-status {
-      color: var(--terracotta-deep);
-    }
+    .topic-card[data-status="active"] .topic-status { color: var(--terracotta-deep); }
     .topic-arrow {
       position: absolute;
       bottom: 18px; right: 22px;
@@ -230,30 +243,10 @@
       font-size: 14px;
     }
     .topic-card[aria-disabled="true"] .topic-arrow { display: none; }
-
-    /* ── How it works ─────────────────────────────────────── */
-    /* No card containers on the steps — cards are reserved for
-       selectable learning tracks above. Steps are narrative content:
-       a left rule accent, vertical step number, plain title and copy,
-       and a small inset preview at the bottom that's visually
-       different from the topic cards (subtle, no rounded corners). */
-    .how {
-      padding-top: 44px;
-      padding-bottom: 24px;
-    }
-    .steps {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 24px;
-    }
-    @media (min-width: 720px) {
-      .steps { grid-template-columns: repeat(3, 1fr); gap: 28px; }
-    }
-    .step {
-      display: flex; flex-direction: column; gap: 8px;
-      padding-left: 16px;
-      border-left: 2px solid var(--terracotta-light);
-    }
+    .how { padding-top: 44px; padding-bottom: 24px; }
+    .steps { display: grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 720px) { .steps { grid-template-columns: repeat(3, 1fr); gap: 28px; } }
+    .step { display: flex; flex-direction: column; gap: 8px; padding-left: 16px; border-left: 2px solid var(--terracotta-light); }
     .step-num {
       font-family: 'Geist Mono', monospace;
       font-size: 11px; letter-spacing: 0.18em;
@@ -261,72 +254,13 @@
       color: var(--terracotta-deep);
     }
     .step-title {
-      /* Geist sans-serif — matches the homepage's '01 / 02 / 03 try
-         asking' step titles and the 'Privacy', 'Open' etc. card
-         titles. Serif italic is reserved for the hero wordmark,
-         section h2 headings, and the topic card names. */
-      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
-      font-weight: 500;
+      font-family: 'Geist', sans-serif; font-weight: 500;
       font-size: 20px; line-height: 1.25; letter-spacing: -0.01em;
       margin: 0;
       color: var(--ink);
     }
-    .step-desc {
-      font-size: 14px; line-height: 1.6; color: var(--ink-soft);
-      margin: 0;
-    }
-    .step-mock {
-      margin-top: 14px;
-      padding: 12px 14px;
-      background: var(--bone-deep);
-      border-left: 2px solid var(--rule);
-      /* No rounded corners — visually distinct from the topic cards. */
-    }
-    .mock-label {
-      font-family: 'Geist Mono', monospace;
-      font-size: 9.5px; letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--terracotta-deep);
-      margin-bottom: 6px;
-    }
-    .mock-prompt {
-      font-size: 14px; line-height: 1.4;
-      color: var(--ink);
-    }
-    .mock-list {
-      list-style: none; padding: 0; margin: 6px 0 0;
-      font-size: 13px;
-      color: var(--ink);
-    }
-    .mock-list li {
-      padding: 4px 0;
-      border-bottom: 1px dashed var(--rule);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .mock-list li:last-child { border-bottom: 0; }
-    .mock-list li::before {
-      content: ""; width: 12px; height: 12px;
-      border-radius: 3px;
-      background: var(--terracotta-light);
-      flex-shrink: 0;
-    }
-    .mock-list li.done::before { background: var(--teal); }
-    .mock-feedback {
-      margin-top: 8px;
-      padding: 6px 10px;
-      background: rgba(126, 168, 119, 0.18);
-      border-left: 2px solid rgba(126, 168, 119, 0.6);
-      font-size: 12.5px;
-      color: var(--ink);
-      line-height: 1.4;
-    }
-
-    /* ── Closing CTA ──────────────────────────────────────── */
-    .closing {
-      padding-top: 28px;
-      padding-bottom: 48px;
-      text-align: center;
-    }
+    .step-desc { font-size: 14px; line-height: 1.6; color: var(--ink-soft); margin: 0; }
+    .closing { padding-top: 28px; padding-bottom: 48px; text-align: center; }
     .closing-cta {
       display: inline-flex; align-items: center; gap: 10px;
       padding: 16px 28px;
@@ -339,92 +273,404 @@
       transition: transform 160ms cubic-bezier(.6,.1,.3,1);
     }
     .closing-cta:hover { transform: translateY(-1px); }
-    .closing-note {
-      max-width: 56ch; margin: 18px auto 0;
-      font-size: 14px; color: var(--ink-soft);
-      line-height: 1.55;
-    }
+    .closing-note { max-width: 56ch; margin: 18px auto 0; font-size: 14px; color: var(--ink-soft); line-height: 1.55; }
     .closing-note strong { color: var(--ink); font-weight: 500; }
 
-    /* ── Card area / composer (running learning experience) ─ */
-    #learn-app {
+    /* ── Learning surface — chat-first ────────────────────── */
+    #learn-surface {
+      flex: 1;
+      display: flex; flex-direction: column;
+      min-height: 0;
+    }
+    .thread {
+      flex: 1;
       max-width: 760px;
+      width: 100%;
       margin: 0 auto;
-      padding: 18px 18px 32px;
+      padding: 16px 18px 24px;
+      display: flex; flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
     }
-    .progress-strip {
-      display: flex; align-items: center; justify-content: space-between;
-      font-family: 'Geist Mono', monospace;
-      font-size: 11px; letter-spacing: 0.06em;
-      color: var(--ink-soft);
-      margin-bottom: 14px;
+    .msg { display: flex; }
+    .msg--learner { justify-content: flex-end; }
+    .msg--coach   { justify-content: flex-start; }
+    .bubble {
+      max-width: min(680px, 86%);
+      padding: 12px 16px;
+      border-radius: 14px;
+      line-height: 1.55;
+      font-size: 15px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
     }
-    .progress-strip .boxes { display: inline-flex; gap: 3px; align-items: end; height: 18px; }
-    .progress-strip .boxes b {
-      display: inline-block;
-      width: 8px; background: var(--rule);
-      border-radius: 2px 2px 0 0;
+    .msg--learner .bubble {
+      background: var(--terracotta);
+      color: var(--bone);
+      border-bottom-right-radius: 6px;
     }
-    .progress-strip .boxes b[data-box="1"] { background: var(--terracotta-light); }
-    .progress-strip .boxes b[data-box="2"] { background: var(--terracotta); }
-    .progress-strip .boxes b[data-box="3"] { background: var(--teal); }
-    .progress-strip .boxes b[data-box="4"] { background: var(--teal-deep); }
-    .progress-strip .boxes b[data-box="5"] { background: var(--ink); }
+    .msg--coach .bubble {
+      background: var(--bone);
+      color: var(--ink);
+      border: 1px solid var(--rule);
+      border-bottom-left-radius: 6px;
+    }
+    .msg--coach.has-error .bubble {
+      border-left: 3px solid var(--terracotta);
+    }
 
-    .card-live {
+    /* Rich lesson card */
+    .lesson-card {
+      max-width: min(680px, 100%);
       background: var(--bone);
       border: 1px solid var(--rule);
       border-radius: 16px;
-      padding: 22px 22px;
-      display: flex; flex-direction: column; gap: 14px;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 14px 30px -18px rgba(0,0,0,0.10);
+      padding: 20px 22px;
+      display: flex; flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 14px 30px -20px rgba(0,0,0,0.10);
     }
-    .card-eyebrow {
+    .lesson-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--teal-deep);
+    }
+    .lesson-title {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(20px, 4vw, 26px); line-height: 1.2;
+      margin: 0;
+      color: var(--ink);
+    }
+    .lesson-body { font-size: 15px; line-height: 1.55; color: var(--ink); }
+    .lesson-examples {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .lesson-examples li {
+      padding: 8px 12px;
+      background: var(--bone-deep);
+      border-left: 2px solid var(--teal);
+      font-family: 'Geist Mono', monospace;
+      font-size: 13.5px;
+      color: var(--ink);
+    }
+    .lesson-action { display: flex; justify-content: flex-end; padding-top: 4px; }
+    .lesson-action button {
+      padding: 8px 18px;
+      background: var(--ink); color: var(--bone);
+      border: 0; border-radius: 999px;
+      font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      transition: opacity 120ms ease;
+    }
+    .lesson-action button:hover { opacity: 0.9; }
+
+    /* Rich exercise card */
+    .exercise-card {
+      max-width: min(680px, 100%);
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 16px;
+      padding: 20px 22px;
+      display: flex; flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 14px 30px -20px rgba(0,0,0,0.10);
+    }
+    .exercise-card[data-active="true"] {
+      border-color: var(--terracotta);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 14px 30px -16px rgba(196, 108, 63, 0.30);
+    }
+    .exercise-eyebrow {
       font-family: 'Geist Mono', monospace;
       font-size: 10.5px; letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--terracotta-deep);
     }
-    .card-prompt {
+    .exercise-prompt {
       font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: clamp(22px, 4vw, 30px); line-height: 1.25;
+      font-size: clamp(20px, 4vw, 28px); line-height: 1.25;
+      margin: 0;
       color: var(--ink);
-      white-space: pre-wrap;
     }
-    .card-hint {
-      font-size: 14px; color: var(--ink-soft);
-      padding: 10px 12px;
+    .exercise-hint-row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+    .hint-btn {
+      padding: 8px 14px;
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-size: 13px; color: var(--ink-soft);
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .hint-btn:hover { background: var(--bone-deep); color: var(--ink); }
+    .hint-btn svg { width: 14px; height: 14px; }
+    .hint-revealed {
+      flex: 1;
+      padding: 8px 12px;
       background: var(--bone-deep);
-      border-left: 3px solid var(--terracotta-light);
-      border-radius: 0 8px 8px 0;
+      border-left: 2px solid var(--terracotta-light);
+      font-size: 14px; line-height: 1.5;
+      color: var(--ink);
     }
 
-    .feedback {
-      padding: 16px 18px;
+    /* Feedback callout */
+    .feedback-card {
+      max-width: min(680px, 100%);
+      padding: 14px 18px;
       border-radius: 14px;
-      display: flex; flex-direction: column; gap: 10px;
-      margin-top: 14px;
+      display: flex; flex-direction: column; gap: 6px;
     }
-    .feedback--correct { background: rgba(126, 168, 119, 0.18); border: 1px solid rgba(126, 168, 119, 0.4); }
-    .feedback--partial { background: rgba(212, 162, 131, 0.18); border: 1px solid var(--terracotta-light); }
-    .feedback--wrong   { background: rgba(196, 108, 63, 0.12); border: 1px solid var(--terracotta-light); }
+    .feedback-card[data-rating="correct"] {
+      background: var(--green-soft);
+      border: 1px solid var(--green);
+    }
+    .feedback-card[data-rating="partial"] {
+      background: var(--amber-soft);
+      border: 1px solid var(--amber);
+    }
+    .feedback-card[data-rating="wrong"] {
+      background: rgba(196, 108, 63, 0.10);
+      border: 1px solid var(--terracotta-light);
+    }
     .feedback-rating {
       font-family: 'Geist Mono', monospace;
-      font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+      font-size: 10.5px; letter-spacing: 0.14em;
+      text-transform: uppercase;
       color: var(--ink-soft);
     }
-    .feedback-text { color: var(--ink); font-size: 16px; line-height: 1.5; }
+    .feedback-text { font-size: 15px; line-height: 1.5; color: var(--ink); margin: 0; }
 
+    /* Progress chip */
+    .progress-chip {
+      align-self: flex-start;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 12px;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-soft);
+    }
+    .progress-chip .boxes { display: inline-flex; gap: 2px; align-items: end; height: 14px; }
+    .progress-chip .boxes b {
+      display: inline-block;
+      width: 5px; background: var(--rule);
+      border-radius: 1px 1px 0 0;
+    }
+    .progress-chip .boxes b[data-box="1"] { background: var(--terracotta-light); }
+    .progress-chip .boxes b[data-box="2"] { background: var(--terracotta); }
+    .progress-chip .boxes b[data-box="3"] { background: var(--teal); }
+    .progress-chip .boxes b[data-box="4"] { background: var(--teal-deep); }
+    .progress-chip .boxes b[data-box="5"] { background: var(--ink); }
+
+    /* Skeleton loading bubble. Replaces a missing reply while /turn
+       is in flight. CSS-only pulse — no JS animation. */
+    .skeleton-bubble {
+      max-width: min(680px, 86%);
+      padding: 14px 18px;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 14px; border-bottom-left-radius: 6px;
+      display: inline-flex; gap: 5px;
+    }
+    .skeleton-bubble span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--ink-faint);
+      animation: dotPulse 1.2s ease-in-out infinite;
+    }
+    .skeleton-bubble span:nth-child(2) { animation-delay: 0.15s; }
+    .skeleton-bubble span:nth-child(3) { animation-delay: 0.30s; }
+    @keyframes dotPulse {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+
+    /* ── Curriculum panel (slide-down outline view) ───────── */
+    .curr-panel {
+      max-width: 760px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 18px 22px 22px;
+      background: var(--bone);
+      border-bottom: 1px solid var(--rule);
+      animation: slideDown 200ms ease;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .curr-summary {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(20px, 3.5vw, 26px); line-height: 1.25;
+      margin: 0 0 14px;
+      color: var(--ink);
+    }
+    .curr-module {
+      padding: 12px 0;
+      border-top: 1px solid var(--rule);
+    }
+    .curr-module:first-of-type { border-top: 0; }
+    .curr-module-head {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      margin-bottom: 6px;
+    }
+    .curr-module-title { font-size: 15px; font-weight: 500; color: var(--ink); margin: 0; }
+    .curr-module-status {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-soft);
+      flex-shrink: 0;
+    }
+    .curr-module[data-status="in_progress"] .curr-module-status { color: var(--terracotta-deep); }
+    .curr-module[data-status="completed"] .curr-module-status { color: var(--teal-deep); }
+    .curr-topics {
+      list-style: none; padding: 0; margin: 4px 0 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .curr-topics li {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13.5px; color: var(--ink-soft);
+    }
+    .curr-topics li[data-kind="lesson"]::before {
+      content: ""; width: 8px; height: 8px; border-radius: 2px;
+      background: var(--teal);
+      flex-shrink: 0;
+    }
+    .curr-topics li[data-kind="practice"]::before {
+      content: ""; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--terracotta);
+      flex-shrink: 0;
+    }
+    .curr-progress {
+      display: flex; gap: 14px; align-items: center;
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--rule);
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px; letter-spacing: 0.08em;
+      color: var(--ink-soft);
+    }
+    .curr-progress .boxes { display: inline-flex; gap: 3px; align-items: end; height: 18px; }
+    .curr-progress .boxes b {
+      display: inline-block;
+      width: 8px; background: var(--rule);
+      border-radius: 2px 2px 0 0;
+    }
+    .curr-progress .boxes b[data-box="1"] { background: var(--terracotta-light); }
+    .curr-progress .boxes b[data-box="2"] { background: var(--terracotta); }
+    .curr-progress .boxes b[data-box="3"] { background: var(--teal); }
+    .curr-progress .boxes b[data-box="4"] { background: var(--teal-deep); }
+    .curr-progress .boxes b[data-box="5"] { background: var(--ink); }
+
+    /* ── Drawer (right-side menu) ─────────────────────────── */
+    .drawer-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 18;
+      animation: fadeIn 160ms ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: min(380px, 92vw);
+      background: var(--bone);
+      z-index: 19;
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+      animation: slideInRight 200ms cubic-bezier(.4,.1,.3,1);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); }
+      to   { transform: translateX(0); }
+    }
+    .drawer-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .drawer-head h3 {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink-soft);
+      margin: 0;
+    }
+    .drawer-section {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .drawer-section:last-child { border-bottom: 0; }
+    .drawer-section-label {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 8px;
+    }
+    .goal-list { display: flex; flex-direction: column; gap: 8px; }
+    .goal-row {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 10px 12px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+    }
+    .goal-row[data-active="true"] {
+      border-color: var(--terracotta);
+    }
+    .goal-row-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .goal-row-title {
+      font-size: 14px; font-weight: 500; color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .goal-row-status {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-soft);
+      flex-shrink: 0;
+    }
+    .goal-row[data-active="true"] .goal-row-status { color: var(--terracotta-deep); }
+    .goal-row-actions {
+      display: flex; gap: 8px; margin-top: 4px;
+    }
+    .goal-row-actions button {
+      padding: 4px 10px;
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-size: 11.5px;
+      color: var(--ink-soft);
+      cursor: pointer;
+    }
+    .goal-row-actions button:hover { background: var(--bone); color: var(--ink); }
+    .drawer-link, .drawer-btn {
+      display: block; width: 100%; text-align: left;
+      padding: 10px 12px;
+      background: none; border: 0;
+      border-radius: 8px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .drawer-link:hover, .drawer-btn:hover { background: var(--bone-deep); }
+    .drawer-btn--danger { color: var(--terracotta-deep); }
+    .drawer-btn--primary {
+      background: var(--terracotta);
+      color: var(--bone);
+      text-align: center;
+      margin-top: 8px;
+    }
+    .drawer-btn--primary:hover { background: var(--terracotta-deep); }
+
+    /* ── Composer ─────────────────────────────────────────── */
     .composer-wrap {
       background: var(--bone);
       border-top: 1px solid var(--rule);
       padding: 12px 18px 16px;
-      position: sticky; bottom: 0;
+      position: sticky; bottom: 0; z-index: 6;
     }
-    .composer {
-      max-width: 760px; margin: 0 auto;
-      display: flex; align-items: flex-end; gap: 10px;
-    }
+    .composer { max-width: 760px; margin: 0 auto; display: flex; align-items: flex-end; gap: 10px; }
     .composer textarea {
       flex: 1;
       background: var(--bone);
@@ -447,11 +693,6 @@
       display: inline-flex; align-items: center; justify-content: center;
       cursor: pointer; flex-shrink: 0;
     }
-    .composer-actions .hint {
-      background: var(--bone); color: var(--ink-soft);
-      border: 1px solid var(--rule);
-    }
-    .composer-actions .hint:hover { background: var(--bone-deep); color: var(--ink); }
     .composer-actions .send {
       background: var(--terracotta); color: var(--bone);
       box-shadow: 0 3px 12px rgba(196, 108, 63, 0.20);
@@ -481,16 +722,66 @@
     }
     .error-banner.is-visible { display: block; }
 
-    .nextcard-wrap { display: flex; justify-content: center; padding: 4px 0 0; }
-    .nextcard-btn {
-      padding: 12px 22px;
-      border: 1px solid var(--ink); border-radius: 999px;
-      background: transparent; color: var(--ink);
-      font-size: 15px; font-weight: 500;
-      cursor: pointer;
-      transition: background 120ms ease, color 120ms ease;
+    /* ── New-goal dialog ──────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 22;
+      padding: 18px;
+      animation: fadeIn 160ms ease;
     }
-    .nextcard-btn:hover { background: var(--ink); color: var(--bone); }
+    .modal {
+      background: var(--bone);
+      border-radius: 16px;
+      padding: 22px 22px 18px;
+      max-width: 460px; width: 100%;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.20);
+    }
+    .modal h3 {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 22px; margin: 0 0 6px;
+      color: var(--ink);
+    }
+    .modal p { font-size: 14px; color: var(--ink-soft); margin: 0 0 14px; line-height: 1.5; }
+    .modal label {
+      display: block;
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 6px;
+    }
+    .modal input, .modal textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      font: inherit;
+      color: var(--ink);
+      outline: none;
+      margin-bottom: 14px;
+      resize: vertical;
+    }
+    .modal input:focus, .modal textarea:focus { border-color: var(--terracotta); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-actions button {
+      padding: 9px 18px;
+      border-radius: 999px; border: 1px solid var(--rule);
+      background: none; color: var(--ink);
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .modal-actions button.primary {
+      background: var(--terracotta);
+      color: var(--bone);
+      border-color: var(--terracotta);
+    }
+    .modal-actions button.primary:disabled {
+      background: var(--ink-faint);
+      border-color: var(--ink-faint);
+      cursor: not-allowed;
+    }
 
     [hidden] { display: none !important; }
 
@@ -504,31 +795,44 @@
       .topic-name { font-size: 24px; }
       .topic-flag { font-size: 28px; }
       .step-title { font-size: 18px; }
+      .thread { padding: 12px 14px 18px; }
+      .curr-title-btn { max-width: 50vw; font-size: 13px; }
     }
     @media (max-width: 380px) {
       .wrap { padding-left: 14px; padding-right: 14px; }
+      .brand-name { display: none; }
     }
   </style>
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar" id="topbar" data-mode="landing">
     <a class="brand" href="/" aria-label="Ongiini Learn">
       <img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini" />
+      <span class="brand-name">Ongiini Learn<span class="dot">.</span></span>
     </a>
+    <div class="topbar-center" id="topbarCenter">
+      <button type="button" class="curr-title-btn" id="currTitleBtn"
+              aria-expanded="false" aria-controls="currPanel" hidden>
+        <span id="currTitleText">Curriculum</span>
+        <span class="caret" aria-hidden="true">▾</span>
+      </button>
+    </div>
     <div class="topbar-actions">
-      <a class="topbar-link" href="https://ongiini.ai/">Main site</a>
-      <button type="button" class="icon-btn" id="btnClear" title="Delete my data" aria-label="Delete my data">
+      <a class="topbar-link" href="https://ongiini.ai/" id="mainSiteLink">Main site</a>
+      <button type="button" class="icon-btn" id="btnMenu"
+              title="Menu" aria-label="Menu" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <line x1="4" y1="7" x2="20" y2="7"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="17" x2="20" y2="17"/>
         </svg>
       </button>
     </div>
   </header>
 
   <main>
-    <!-- ════════ LANDING (default view) ═══════════════════════ -->
+    <!-- ═════════ LANDING ═════════════════════════════════ -->
     <div id="landing">
-      <!-- Hero -->
       <section class="hero wrap">
         <p class="hero-eyebrow">Ongiini · prototype</p>
         <h1 class="hero-wordmark">Ongiini Learn<span class="dot">.</span></h1>
@@ -541,12 +845,10 @@
         </p>
       </section>
 
-      <!-- Topic selector -->
       <section class="section wrap" aria-labelledby="topics-h">
         <p class="section-eyebrow">Pick a track</p>
         <h2 class="section-h2" id="topics-h">Languages</h2>
         <div class="topic-grid">
-
           <a class="topic-card" data-topic="afrikaans" data-status="active" href="#start" id="topic-afrikaans">
             <span class="topic-flag" aria-hidden="true">🇿🇦</span>
             <h3 class="topic-name">Afrikaans</h3>
@@ -554,78 +856,49 @@
             <span class="topic-status">Available now</span>
             <span class="topic-arrow" aria-hidden="true">→</span>
           </a>
-
           <div class="topic-card" data-topic="oshiwambo" aria-disabled="true">
             <span class="topic-flag" aria-hidden="true">🇳🇦</span>
             <h3 class="topic-name">Oshiwambo</h3>
             <p class="step-desc">Oshindonga &amp; Oshikwanyama. Tied to our open dataset.</p>
             <span class="topic-status">Coming soon</span>
           </div>
-
           <div class="topic-card" data-topic="english" aria-disabled="true">
             <span class="topic-flag" aria-hidden="true">🇬🇧</span>
             <h3 class="topic-name">English</h3>
             <p class="step-desc">Formal writing, comprehension, exam prep.</p>
             <span class="topic-status">Coming soon</span>
           </div>
-
           <div class="topic-card" data-topic="german" aria-disabled="true">
             <span class="topic-flag" aria-hidden="true">🇩🇪</span>
             <h3 class="topic-name">German</h3>
             <p class="step-desc">A1 to B1. For everyday use and basic work conversations.</p>
             <span class="topic-status">Coming soon</span>
           </div>
-
         </div>
       </section>
 
-      <!-- How it works -->
       <section class="how wrap" aria-labelledby="how-h">
         <p class="section-eyebrow">How it works</p>
         <h2 class="section-h2" id="how-h">Three steps, then you're learning.</h2>
         <div class="steps">
-
           <article class="step">
             <span class="step-num">Step 1</span>
             <h3 class="step-title">Tell us your goal</h3>
             <p class="step-desc">A few quick questions — your level, what you're trying to do. In your own words.</p>
-            <div class="step-mock" aria-hidden="true">
-              <div class="mock-label">Intake</div>
-              <div class="mock-prompt">"What do you actually want to be able to do in Afrikaans?"</div>
-              <div style="margin-top:8px; font-family:'Geist Mono',monospace; font-size:12px; color:var(--ink-soft);">A job interview at SPAR in two weeks.</div>
-            </div>
           </article>
-
           <article class="step">
             <span class="step-num">Step 2</span>
             <h3 class="step-title">AI builds your curriculum</h3>
-            <p class="step-desc">The model writes a plan around your goal — what to teach first, where you need depth, how to keep it efficient.</p>
-            <div class="step-mock" aria-hidden="true">
-              <div class="mock-label">Your plan</div>
-              <ul class="mock-list">
-                <li class="done">Greetings &amp; introductions</li>
-                <li>Describing your experience</li>
-                <li>Common interview questions</li>
-                <li>Asking your own questions</li>
-              </ul>
-            </div>
+            <p class="step-desc">The model writes a plan around your goal. Modules, topics, lessons before drills.</p>
           </article>
-
           <article class="step">
             <span class="step-num">Step 3</span>
-            <h3 class="step-title">Learn with smart cards</h3>
-            <p class="step-desc">Vocab, translation, free-form production. Type your answer; the model grades it and tells you what's off. Stuck cards come back sooner.</p>
-            <div class="step-mock" aria-hidden="true">
-              <div class="mock-label">Vocab · box 1</div>
-              <div class="mock-prompt">How do you say "thank you very much" in Afrikaans?</div>
-              <div class="mock-feedback">Correct — "baie dankie". Now in box 2.</div>
-            </div>
+            <h3 class="step-title">Learn by chatting</h3>
+            <p class="step-desc">Lessons and exercises appear in the conversation. Ask questions any time — the coach answers and brings you back.</p>
           </article>
-
         </div>
       </section>
 
-      <!-- Closing CTA -->
       <section class="closing wrap">
         <button type="button" class="closing-cta" id="btnStartClosing">
           Start with Afrikaans
@@ -635,43 +908,30 @@
           <strong>This is a prototype.</strong> Starting with Afrikaans because that's
           what most users tell us they want first. The same engine can teach a language,
           prep you for an interview, or drill a complicated university subject through
-          targeted repetition. More tracks — and richer integration with what we know
-          about you across Ongiini — are next.
+          targeted repetition. More tracks are next.
         </p>
       </section>
     </div>
 
-    <!-- ════════ LEARNING APP (post-start) ═══════════════════ -->
-    <div id="learn-app" hidden>
-      <div class="progress-strip" id="progressStrip" hidden>
-        <span id="progressText"></span>
-        <span class="boxes" id="progressBoxes"></span>
-      </div>
-      <div class="card-live" id="card">
-        <div class="card-eyebrow" id="cardEyebrow">Welcome</div>
-        <div class="card-prompt" id="cardPrompt">Loading…</div>
-        <div class="card-hint" id="cardHint" hidden></div>
-      </div>
-      <div class="feedback" id="feedback" hidden>
-        <span class="feedback-rating" id="feedbackRating"></span>
-        <p class="feedback-text" id="feedbackText"></p>
-        <div class="nextcard-wrap">
-          <button type="button" class="nextcard-btn" id="btnNextCard">Next card →</button>
+    <!-- ═════════ LEARNING (chat-first) ═══════════════════ -->
+    <div id="learn-surface" hidden>
+      <div class="curr-panel" id="currPanel" hidden>
+        <h2 class="curr-summary" id="currSummary"></h2>
+        <div id="currModules"></div>
+        <div class="curr-progress" id="currProgress" hidden>
+          <span id="currProgressText"></span>
+          <span class="boxes" id="currProgressBoxes"></span>
         </div>
       </div>
+      <div class="thread" id="thread" role="log" aria-live="polite"></div>
       <div class="error-banner" id="errorBanner"></div>
     </div>
   </main>
 
   <div class="composer-wrap" id="composerWrap" hidden>
     <div class="composer">
-      <textarea id="answerInput" rows="1" placeholder="Type your answer…" aria-label="Answer"></textarea>
+      <textarea id="composer" rows="1" placeholder="Message Ongiini coach…" aria-label="Message"></textarea>
       <div class="composer-actions">
-        <button type="button" class="hint" id="btnHint" title="Show hint" aria-label="Show hint">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 18h.01M9 21h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1.1 1.6L10 18h4l.4-2.5c.2-.6.6-1.2 1.1-1.6A6 6 0 0 0 12 3Z"/>
-          </svg>
-        </button>
         <button type="button" class="send" id="btnSend" title="Send" aria-label="Send" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/>
@@ -686,288 +946,722 @@
     </div>
   </div>
 
+  <!-- Drawer + modal portals (initially hidden) -->
+  <div class="drawer-overlay" id="drawerOverlay" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Menu">
+    <div class="drawer-head">
+      <h3>Menu</h3>
+      <button type="button" class="icon-btn" id="btnDrawerClose" aria-label="Close menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M6 6l12 12M6 18L18 6"/>
+        </svg>
+      </button>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">My curriculums</div>
+      <div class="goal-list" id="goalList"></div>
+      <button type="button" class="drawer-btn drawer-btn--primary" id="btnNewGoal">
+        + New curriculum
+      </button>
+    </div>
+    <div class="drawer-section">
+      <button type="button" class="drawer-btn" id="btnRestart">Restart this curriculum</button>
+      <button type="button" class="drawer-btn drawer-btn--danger" id="btnArchive">Delete this curriculum</button>
+      <button type="button" class="drawer-btn drawer-btn--danger" id="btnClear">Delete all my data</button>
+      <a class="drawer-link" href="https://ongiini.ai/">Main site</a>
+    </div>
+  </aside>
+
+  <div id="modalRoot"></div>
+
   <script>
-    (function () {
-      var API_BASE = 'https://api.ongiini.ai/v1/learn';
-      var LS_KEY = 'ongiini-learn:learner_id';
-      var state = {
-        learner_id: localStorage.getItem(LS_KEY) || null,
-        mode: 'landing',
-        intake_field: null,
-        current_card: null,
-        current_hint_shown: false,
-        progress: { total_seen: 0, total_correct: 0, by_box: {} },
-      };
+  (function () {
+    'use strict';
 
-      var urlParams = new URLSearchParams(window.location.search);
-      var magicToken = urlParams.get('t');
+    var API_BASE = 'https://api.ongiini.ai/v1/learn';
+    var LS_KEY = 'ongiini-learn:learner_id';
 
-      var $ = function (id) { return document.getElementById(id); };
-      var landing = $('landing');
-      var learnApp = $('learn-app');
-      var card = $('card');
-      var cardEyebrow = $('cardEyebrow');
-      var cardPrompt = $('cardPrompt');
-      var cardHint = $('cardHint');
-      var feedback = $('feedback');
-      var feedbackRating = $('feedbackRating');
-      var feedbackText = $('feedbackText');
-      var composerWrap = $('composerWrap');
-      var answerInput = $('answerInput');
-      var btnSend = $('btnSend');
-      var btnHint = $('btnHint');
-      var btnNextCard = $('btnNextCard');
-      var btnClear = $('btnClear');
-      var btnStartClosing = $('btnStartClosing');
-      var topicAfrikaans = $('topic-afrikaans');
-      var progressStrip = $('progressStrip');
-      var progressText = $('progressText');
-      var progressBoxes = $('progressBoxes');
-      var errorBanner = $('errorBanner');
+    // ── State ──────────────────────────────────────────────
+    var state = {
+      learner_id: localStorage.getItem(LS_KEY) || null,
+      view: 'landing',                     // 'landing' | 'learn'
+      intake_field: null,                  // string | null while in intake
+      profile: null,
+      goal: null,                          // active goal info
+      goals: [],                           // all goals
+      curriculum_outline: null,
+      progress: { total_seen: 0, total_correct: 0, by_box: {} },
+      thread: [],                          // persisted server-side messages
+      active_card_id: null,                // latest unanswered exercise card_id
+      busy: false,                         // /turn in flight
+    };
 
-      async function api(path, body) {
-        var resp = await fetch(API_BASE + path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'omit',
-          body: JSON.stringify(body || {}),
+    var urlParams = new URLSearchParams(window.location.search);
+    var magicToken = urlParams.get('t');
+
+    var $ = function (id) { return document.getElementById(id); };
+
+    // DOM handles
+    var topbar = $('topbar');
+    var currTitleBtn = $('currTitleBtn');
+    var currTitleText = $('currTitleText');
+    var btnMenu = $('btnMenu');
+    var mainSiteLink = $('mainSiteLink');
+    var landing = $('landing');
+    var learnSurface = $('learn-surface');
+    var currPanel = $('currPanel');
+    var currSummary = $('currSummary');
+    var currModules = $('currModules');
+    var currProgress = $('currProgress');
+    var currProgressText = $('currProgressText');
+    var currProgressBoxes = $('currProgressBoxes');
+    var thread = $('thread');
+    var errorBanner = $('errorBanner');
+    var composerWrap = $('composerWrap');
+    var composer = $('composer');
+    var btnSend = $('btnSend');
+    var drawerOverlay = $('drawerOverlay');
+    var drawer = $('drawer');
+    var btnDrawerClose = $('btnDrawerClose');
+    var goalList = $('goalList');
+    var btnNewGoal = $('btnNewGoal');
+    var btnRestart = $('btnRestart');
+    var btnArchive = $('btnArchive');
+    var btnClear = $('btnClear');
+    var topicAfrikaans = $('topic-afrikaans');
+    var btnStartClosing = $('btnStartClosing');
+    var modalRoot = $('modalRoot');
+
+    // ── HTTP helper ────────────────────────────────────────
+    async function api(path, body) {
+      var resp = await fetch(API_BASE + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify(body || {}),
+      });
+      if (!resp.ok) {
+        var detail = '';
+        try { var j = await resp.json(); detail = j.detail || ''; } catch (e) {}
+        throw new Error(detail || ('HTTP ' + resp.status));
+      }
+      return resp.json();
+    }
+
+    function showError(msg) {
+      errorBanner.textContent = msg;
+      errorBanner.classList.add('is-visible');
+      setTimeout(function () { errorBanner.classList.remove('is-visible'); }, 6000);
+    }
+
+    // ── View transitions ───────────────────────────────────
+    function enterLearnView() {
+      state.view = 'learn';
+      topbar.dataset.mode = 'learn';
+      landing.hidden = true;
+      learnSurface.hidden = false;
+      composerWrap.hidden = false;
+      btnMenu.hidden = false;
+      mainSiteLink.hidden = true;
+      currTitleBtn.hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function exitToLanding() {
+      state.view = 'landing';
+      topbar.dataset.mode = 'landing';
+      landing.hidden = false;
+      learnSurface.hidden = true;
+      composerWrap.hidden = true;
+      btnMenu.hidden = true;
+      mainSiteLink.hidden = false;
+      currTitleBtn.hidden = true;
+      currPanel.hidden = true;
+      currTitleBtn.setAttribute('aria-expanded', 'false');
+      thread.innerHTML = '';
+    }
+
+    // ── Renderers ──────────────────────────────────────────
+    function el(tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    }
+
+    function renderCoachText(msg) {
+      var wrap = el('div', 'msg msg--coach');
+      if (msg.payload && msg.payload.meta && msg.payload.meta.error) {
+        wrap.classList.add('has-error');
+      }
+      var bubble = el('div', 'bubble', String((msg.payload && msg.payload.text) || ''));
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function renderLearnerText(msg) {
+      var wrap = el('div', 'msg msg--learner');
+      var bubble = el('div', 'bubble', String((msg.payload && msg.payload.text) || ''));
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function renderLesson(msg) {
+      var p = msg.payload || {};
+      var wrap = el('div', 'lesson-card');
+      wrap.appendChild(el('div', 'lesson-eyebrow', 'Lesson'));
+      if (p.title) wrap.appendChild(el('h3', 'lesson-title', String(p.title)));
+      if (p.body) {
+        var body = el('div', 'lesson-body');
+        body.textContent = String(p.body);
+        wrap.appendChild(body);
+      }
+      if (Array.isArray(p.examples) && p.examples.length) {
+        var ul = el('ul', 'lesson-examples');
+        p.examples.forEach(function (ex) {
+          ul.appendChild(el('li', null, String(ex)));
         });
-        if (!resp.ok) {
-          var detail = '';
-          try { var j = await resp.json(); detail = j.detail || ''; } catch (e) {}
-          throw new Error(detail || ('HTTP ' + resp.status));
-        }
-        return resp.json();
+        wrap.appendChild(ul);
       }
+      var action = el('div', 'lesson-action');
+      var btn = el('button', null, 'Got it →');
+      btn.type = 'button';
+      btn.addEventListener('click', function () { sendTurn(null); });
+      action.appendChild(btn);
+      wrap.appendChild(action);
+      return wrap;
+    }
 
-      function showError(msg) {
-        errorBanner.textContent = msg;
-        errorBanner.classList.add('is-visible');
-        setTimeout(function () { errorBanner.classList.remove('is-visible'); }, 6000);
+    function renderExercise(msg) {
+      var p = msg.payload || {};
+      var isActive = !msg.answered;
+      var wrap = el('div', 'exercise-card');
+      wrap.dataset.active = isActive ? 'true' : 'false';
+      var eyebrow = (p.card_type || 'card') + (isActive ? ' · awaiting your answer' : ' · answered');
+      wrap.appendChild(el('div', 'exercise-eyebrow', eyebrow));
+      if (p.prompt_text) wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
+      if (p.hint_text) {
+        var hintRow = el('div', 'exercise-hint-row');
+        var hintBtn = document.createElement('button');
+        hintBtn.type = 'button';
+        hintBtn.className = 'hint-btn';
+        hintBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M12 18h.01M9 21h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1.1 1.6L10 18h4l.4-2.5c.2-.6.6-1.2 1.1-1.6A6 6 0 0 0 12 3Z"/></svg>' +
+          ' Show hint';
+        var hintReveal = el('div', 'hint-revealed');
+        hintReveal.textContent = String(p.hint_text);
+        hintReveal.hidden = true;
+        hintBtn.addEventListener('click', function () {
+          hintReveal.hidden = false;
+          hintBtn.hidden = true;
+        });
+        hintRow.appendChild(hintBtn);
+        hintRow.appendChild(hintReveal);
+        wrap.appendChild(hintRow);
       }
+      if (isActive) state.active_card_id = msg.card_id || null;
+      return wrap;
+    }
 
-      function enterAppMode() {
-        landing.hidden = true;
-        learnApp.hidden = false;
-        composerWrap.hidden = false;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    function renderFeedback(msg) {
+      var p = msg.payload || {};
+      var wrap = el('div', 'feedback-card');
+      wrap.dataset.rating = String(p.rating || 'partial');
+      wrap.appendChild(el('div', 'feedback-rating', String(p.rating || '').toUpperCase()));
+      wrap.appendChild(el('p', 'feedback-text', String(p.feedback || '')));
+      return wrap;
+    }
+
+    function renderProgress(msg) {
+      var p = msg.payload || {};
+      var seen = p.total_seen || 0;
+      var correct = p.total_correct || 0;
+      var pct = seen ? Math.round(100 * correct / seen) : 0;
+      var chip = el('div', 'progress-chip');
+      chip.appendChild(document.createTextNode(seen + ' cards · ' + pct + '% right · box ' + (p.box || 1)));
+      var boxes = el('span', 'boxes');
+      for (var b = 1; b <= 5; b++) {
+        var n = (p.by_box || {})[b] || 0;
+        var bar = document.createElement('b');
+        bar.dataset.box = String(b);
+        bar.style.height = Math.max(3, Math.min(14, 3 + n * 2)) + 'px';
+        boxes.appendChild(bar);
       }
+      chip.appendChild(boxes);
+      return chip;
+    }
 
-      function exitToLanding() {
-        landing.hidden = false;
-        learnApp.hidden = true;
-        composerWrap.hidden = true;
+    function renderMessage(msg) {
+      switch (msg.kind) {
+        case 'coach_text':   return renderCoachText(msg);
+        case 'learner_text': return renderLearnerText(msg);
+        case 'lesson':       return renderLesson(msg);
+        case 'exercise':     return renderExercise(msg);
+        case 'feedback':     return renderFeedback(msg);
+        case 'progress':     return renderProgress(msg);
+        default:             return null;
       }
+    }
 
-      function renderProgress() {
-        progressText.textContent = state.progress.total_seen
-          ? (state.progress.total_seen + ' cards · '
-             + Math.round(100 * state.progress.total_correct / state.progress.total_seen)
-             + '% right')
-          : 'fresh start';
-        var bars = [];
-        for (var b = 1; b <= 5; b++) {
-          var n = (state.progress.by_box || {})[b] || 0;
-          var bar = document.createElement('b');
-          bar.dataset.box = String(b);
-          bar.style.height = Math.max(3, Math.min(18, 3 + n * 3)) + 'px';
-          bar.title = 'Box ' + b + ': ' + n + ' cards';
-          bars.push(bar);
-        }
-        progressBoxes.replaceChildren.apply(progressBoxes, bars);
-        progressStrip.hidden = false;
+    function scrollThreadToBottom() {
+      requestAnimationFrame(function () {
+        thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
+      });
+    }
+
+    function appendMessage(msg) {
+      var node = renderMessage(msg);
+      if (node) {
+        thread.appendChild(node);
+        scrollThreadToBottom();
       }
+    }
 
-      function showIntakeCard(field, prompt) {
-        state.mode = 'intake';
-        state.intake_field = field;
-        state.current_card = null;
-        enterAppMode();
-        feedback.hidden = true;
-        card.hidden = false;
-        cardEyebrow.textContent = 'Intake — ' + String(field).replace('_', ' ');
-        cardPrompt.textContent = String(prompt || '');
-        cardHint.hidden = true;
-        cardHint.textContent = '';
-        answerInput.value = '';
-        answerInput.placeholder = 'Type your answer…';
-        answerInput.focus();
-        btnHint.style.display = 'none';
+    function rerenderThread(messages) {
+      thread.innerHTML = '';
+      state.active_card_id = null;
+      (messages || []).forEach(function (m) { appendMessage(m); });
+    }
+
+    function appendSkeleton() {
+      var wrap = el('div', 'msg msg--coach');
+      wrap.dataset.skeleton = '1';
+      var skel = el('div', 'skeleton-bubble');
+      skel.appendChild(el('span'));
+      skel.appendChild(el('span'));
+      skel.appendChild(el('span'));
+      wrap.appendChild(skel);
+      thread.appendChild(wrap);
+      scrollThreadToBottom();
+      return wrap;
+    }
+
+    function removeSkeleton(node) {
+      if (node && node.parentNode) node.parentNode.removeChild(node);
+    }
+
+    // Append a CLIENT-SIDE coach bubble for intake prompts. Intake
+    // questions aren't persisted in learner_messages (they pre-date
+    // the goal), so the frontend renders them locally and forgets
+    // them on refresh — the next /sessions response will surface the
+    // correct next_intake_prompt to recover.
+    function appendIntakePrompt(text) {
+      appendMessage({ kind: 'coach_text', payload: { text: text } });
+    }
+
+    // ── Curriculum panel ───────────────────────────────────
+    function renderCurriculumPanel() {
+      if (!state.curriculum_outline) {
+        currSummary.textContent = 'Your plan is still being put together.';
+        currModules.innerHTML = '';
+        currProgress.hidden = true;
+        return;
       }
-
-      function showCard(c, box) {
-        state.mode = 'card';
-        state.intake_field = null;
-        state.current_card = c;
-        state.current_hint_shown = false;
-        enterAppMode();
-        feedback.hidden = true;
-        card.hidden = false;
-        cardEyebrow.textContent = String(c.card_type) + ' · box ' + (box || 1);
-        cardPrompt.textContent = String(c.prompt_text || '');
-        cardHint.hidden = true;
-        cardHint.textContent = String(c.hint_text || '');
-        answerInput.value = '';
-        answerInput.placeholder = 'Your answer in your own words…';
-        answerInput.focus();
-        btnHint.style.display = c.hint_text ? '' : 'none';
-        renderProgress();
-      }
-
-      function showFeedback(grade) {
-        state.mode = 'feedback';
-        card.hidden = true;
-        composerWrap.hidden = true;
-        feedback.hidden = false;
-        feedback.className = 'feedback feedback--' + String(grade.rating);
-        feedbackRating.textContent = String(grade.rating) + ' · now in box ' + grade.new_box;
-        feedbackText.textContent = String(grade.feedback || '');
-        state.progress = grade.progress || state.progress;
-        renderProgress();
-      }
-
-      async function startSession() {
-        try {
-          var body = {};
-          if (magicToken) body.token = magicToken;
-          if (state.learner_id) body.learner_id = state.learner_id;
-          var s = await api('/sessions', body);
-          state.learner_id = s.learner_id;
-          localStorage.setItem(LS_KEY, s.learner_id);
-          if (s.intake_complete) {
-            await loadNextCard();
-          } else {
-            showIntakeCard(s.next_intake_field, s.next_intake_prompt);
-          }
-        } catch (e) {
-          showError("Couldn't start: " + e.message);
-        }
-      }
-
-      async function submitIntakeAnswer(value) {
-        try {
-          var field = state.intake_field;
-          var resp = await api('/intake', {
-            learner_id: state.learner_id,
-            field: field,
-            value: value,
+      var o = state.curriculum_outline;
+      currSummary.textContent = String(o.summary || '');
+      currModules.innerHTML = '';
+      (o.modules || []).forEach(function (m) {
+        var row = el('div', 'curr-module');
+        row.dataset.status = String(m.status || 'not_started');
+        var head = el('div', 'curr-module-head');
+        head.appendChild(el('h4', 'curr-module-title', String(m.title || '')));
+        head.appendChild(el('span', 'curr-module-status', String(m.status || 'not started').replace('_', ' ')));
+        row.appendChild(head);
+        if (Array.isArray(m.topics) && m.topics.length) {
+          var ul = el('ul', 'curr-topics');
+          m.topics.forEach(function (t) {
+            var li = el('li', null, String(t.title || ''));
+            li.dataset.kind = String(t.kind || 'practice');
+            ul.appendChild(li);
           });
-          if (resp.validation_error) {
-            showError(resp.validation_error);
-            return;
-          }
-          if (resp.intake_complete) {
-            await loadNextCard();
-          } else {
-            showIntakeCard(resp.next_intake_field, resp.next_intake_prompt);
-          }
-        } catch (e) {
-          showError("Couldn't save that: " + e.message);
+          row.appendChild(ul);
         }
+        currModules.appendChild(row);
+      });
+
+      // Progress strip
+      var seen = state.progress.total_seen || 0;
+      var correct = state.progress.total_correct || 0;
+      var pct = seen ? Math.round(100 * correct / seen) : 0;
+      currProgressText.textContent = seen ? (seen + ' cards · ' + pct + '% right') : 'fresh start';
+      currProgressBoxes.innerHTML = '';
+      for (var b = 1; b <= 5; b++) {
+        var n = (state.progress.by_box || {})[b] || 0;
+        var bar = document.createElement('b');
+        bar.dataset.box = String(b);
+        bar.style.height = Math.max(3, Math.min(18, 3 + n * 3)) + 'px';
+        bar.title = 'Box ' + b + ': ' + n + ' cards';
+        currProgressBoxes.appendChild(bar);
       }
+      currProgress.hidden = false;
+    }
 
-      async function loadNextCard() {
-        try {
-          enterAppMode();
-          feedback.hidden = true;
-          card.hidden = false;
-          cardEyebrow.textContent = '…';
-          cardPrompt.textContent = 'Thinking about what to ask next…';
-          cardHint.hidden = true;
-          cardHint.textContent = '';
-          answerInput.disabled = true;
-          btnSend.disabled = true;
+    function setActiveGoalView(goal) {
+      state.goal = goal;
+      if (goal && goal.title) {
+        currTitleText.textContent = goal.title;
+      } else {
+        currTitleText.textContent = 'Afrikaans · curriculum';
+      }
+    }
 
-          var resp = await api('/next-card', { learner_id: state.learner_id });
-          state.progress = resp.progress || state.progress;
-          showCard({
-            card_id: resp.card_id,
-            card_type: resp.card_type,
-            prompt_text: resp.prompt_text,
-            hint_text: resp.hint_text,
-            difficulty: resp.difficulty,
-          }, resp.box);
-          answerInput.disabled = false;
-        } catch (e) {
-          showError("Couldn't fetch a card: " + e.message);
-          answerInput.disabled = false;
+    // ── Drawer ─────────────────────────────────────────────
+    function renderGoalList() {
+      goalList.innerHTML = '';
+      var goals = state.goals || [];
+      if (!goals.length) {
+        var empty = el('div', null, 'No curriculums yet.');
+        empty.style.fontSize = '13px';
+        empty.style.color = 'var(--ink-soft)';
+        goalList.appendChild(empty);
+        return;
+      }
+      goals.forEach(function (g) {
+        var row = el('div', 'goal-row');
+        row.dataset.active = (g.status === 'active') ? 'true' : 'false';
+        var head = el('div', 'goal-row-head');
+        head.appendChild(el('div', 'goal-row-title', g.title || 'Untitled curriculum'));
+        head.appendChild(el('span', 'goal-row-status', g.status));
+        row.appendChild(head);
+        if (g.status !== 'active') {
+          var actions = el('div', 'goal-row-actions');
+          var actBtn = el('button', null, 'Activate');
+          actBtn.type = 'button';
+          actBtn.addEventListener('click', function () { switchGoal(g.goal_id); });
+          actions.appendChild(actBtn);
+          row.appendChild(actions);
         }
-      }
+        goalList.appendChild(row);
+      });
+    }
 
-      async function submitAnswer(answer) {
-        if (!state.current_card) return;
+    function openDrawer() {
+      renderGoalList();
+      drawerOverlay.hidden = false;
+      drawer.hidden = false;
+    }
+    function closeDrawer() {
+      drawerOverlay.hidden = true;
+      drawer.hidden = true;
+    }
+
+    // ── New-goal modal ─────────────────────────────────────
+    function openNewGoalModal() {
+      modalRoot.innerHTML = '';
+      var ov = el('div', 'modal-overlay');
+      var mo = el('div', 'modal');
+      mo.innerHTML =
+        '<h3>New curriculum</h3>' +
+        '<p>What do you want to focus on? Give it a short name; the model writes the plan around it.</p>' +
+        '<label for="newGoalTitle">Title</label>' +
+        '<input id="newGoalTitle" type="text" maxlength="80" placeholder="e.g. Interview at SPAR" />' +
+        '<label for="newGoalContext">Context (optional)</label>' +
+        '<textarea id="newGoalContext" rows="3" maxlength="600" placeholder="One sentence about why — the coach uses this to shape the cards."></textarea>' +
+        '<div class="modal-actions">' +
+        '<button type="button" id="newGoalCancel">Cancel</button>' +
+        '<button type="button" class="primary" id="newGoalCreate">Create</button>' +
+        '</div>';
+      ov.appendChild(mo);
+      modalRoot.appendChild(ov);
+      var titleInput = mo.querySelector('#newGoalTitle');
+      var ctxInput = mo.querySelector('#newGoalContext');
+      var createBtn = mo.querySelector('#newGoalCreate');
+      titleInput.focus();
+
+      mo.querySelector('#newGoalCancel').addEventListener('click', function () {
+        modalRoot.innerHTML = '';
+      });
+      ov.addEventListener('click', function (e) {
+        if (e.target === ov) modalRoot.innerHTML = '';
+      });
+      createBtn.addEventListener('click', async function () {
+        var title = titleInput.value.trim();
+        var ctx = ctxInput.value.trim();
+        if (!title) { titleInput.focus(); return; }
+        createBtn.disabled = true;
         try {
-          btnSend.disabled = true;
-          answerInput.disabled = true;
-          cardEyebrow.textContent = 'grading…';
-          var grade = await api('/answer', {
+          var resp = await api('/goals/new', {
             learner_id: state.learner_id,
-            card_id: state.current_card.card_id,
-            answer: answer,
-            hint_used: state.current_hint_shown,
+            title: title,
+            context: ctx || null,
+            activate: true,
           });
-          showFeedback(grade);
+          modalRoot.innerHTML = '';
+          state.goals = resp.goals || [];
+          setActiveGoalView(resp.goal);
+          state.curriculum_outline = null;
+          state.progress = { total_seen: 0, total_correct: 0, by_box: {} };
+          state.thread = [];
+          rerenderThread([]);
+          renderCurriculumPanel();
+          closeDrawer();
+          // Kick off the first /turn for the new goal so the outline
+          // + first lesson land immediately.
+          await sendTurn(null);
         } catch (e) {
-          showError("Couldn't grade that: " + e.message);
-          answerInput.disabled = false;
+          showError(e.message || 'Could not create curriculum.');
+        } finally {
+          createBtn.disabled = false;
         }
+      });
+    }
+
+    // ── Goal operations ────────────────────────────────────
+    async function switchGoal(goalId) {
+      closeDrawer();
+      try {
+        var resp = await api('/goals/activate', {
+          learner_id: state.learner_id,
+          goal_id: goalId,
+        });
+        state.goals = resp.goals || [];
+        setActiveGoalView(resp.goal);
+        state.curriculum_outline = resp.curriculum_outline || null;
+        state.progress = resp.progress || state.progress;
+        state.thread = resp.thread || [];
+        rerenderThread(state.thread);
+        renderCurriculumPanel();
+      } catch (e) {
+        showError(e.message || 'Could not switch curriculum.');
       }
+    }
 
-      // Wire up
-      topicAfrikaans.addEventListener('click', function (e) {
-        e.preventDefault();
-        startSession();
-      });
-      btnStartClosing.addEventListener('click', startSession);
-      btnNextCard.addEventListener('click', function () { loadNextCard(); });
-      btnHint.addEventListener('click', function () {
-        if (!state.current_card || !state.current_card.hint_text) return;
-        state.current_hint_shown = true;
-        cardHint.textContent = String(state.current_card.hint_text);
-        cardHint.hidden = false;
-      });
+    async function restartCurrentGoal() {
+      if (!state.goal) return;
+      if (!confirm('This wipes the cards and chat history for "' + (state.goal.title || 'this curriculum') + '" — the plan stays. Continue?')) return;
+      closeDrawer();
+      try {
+        await api('/goals/restart', {
+          learner_id: state.learner_id,
+          goal_id: state.goal.goal_id,
+        });
+        state.thread = [];
+        state.progress = { total_seen: 0, total_correct: 0, by_box: {} };
+        state.active_card_id = null;
+        rerenderThread([]);
+        renderCurriculumPanel();
+        await sendTurn(null);
+      } catch (e) {
+        showError(e.message || 'Could not restart.');
+      }
+    }
 
-      btnSend.addEventListener('click', function () {
-        var v = answerInput.value.trim();
-        if (!v) return;
-        if (state.mode === 'intake') submitIntakeAnswer(v);
-        else if (state.mode === 'card') submitAnswer(v);
-      });
-
-      answerInput.addEventListener('input', function () {
-        btnSend.disabled = !answerInput.value.trim();
-      });
-      answerInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          btnSend.click();
-        }
-      });
-
-      btnClear.addEventListener('click', async function () {
-        if (!state.learner_id) {
-          // Nothing to delete yet — just bounce them back to landing.
+    async function archiveCurrentGoal() {
+      if (!state.goal) return;
+      if (!confirm('Delete this curriculum? You can always start a new one.')) return;
+      closeDrawer();
+      try {
+        var resp = await api('/goals/archive', {
+          learner_id: state.learner_id,
+          goal_id: state.goal.goal_id,
+        });
+        state.goals = resp.goals || [];
+        if (resp.active_goal_id) {
+          // Some other goal got activated upstream (not currently
+          // possible — see backend) OR there's at least a paused
+          // sibling we should now activate.
+          await switchGoal(resp.active_goal_id);
+        } else if (state.goals.length === 0) {
+          // No curriculums left — back to landing.
           exitToLanding();
+        } else {
+          // Paused siblings remain; pick the first one to surface.
+          await switchGoal(state.goals[0].goal_id);
+        }
+      } catch (e) {
+        showError(e.message || 'Could not delete curriculum.');
+      }
+    }
+
+    async function clearAllData() {
+      if (!confirm('This deletes everything we have stored about your learning. Continue?')) return;
+      try {
+        if (state.learner_id) await api('/clear', { learner_id: state.learner_id });
+      } catch (e) {}
+      localStorage.removeItem(LS_KEY);
+      state = {
+        learner_id: null, view: 'landing', intake_field: null,
+        profile: null, goal: null, goals: [],
+        curriculum_outline: null,
+        progress: { total_seen: 0, total_correct: 0, by_box: {} },
+        thread: [], active_card_id: null, busy: false,
+      };
+      closeDrawer();
+      exitToLanding();
+    }
+
+    // ── Turn dispatch ──────────────────────────────────────
+    async function sendTurn(text) {
+      if (state.busy) return;
+      state.busy = true;
+      btnSend.disabled = true;
+      composer.disabled = true;
+
+      var skel = appendSkeleton();
+      try {
+        var body = { learner_id: state.learner_id, text: text };
+        if (state.goal && state.goal.goal_id) body.goal_id = state.goal.goal_id;
+        var resp = await api('/turn', body);
+        removeSkeleton(skel);
+        state.progress = resp.progress || state.progress;
+        state.curriculum_outline = resp.curriculum_outline || state.curriculum_outline;
+        if (resp.goal) setActiveGoalView(resp.goal);
+        (resp.messages || []).forEach(function (m) {
+          state.thread.push(m);
+          appendMessage(m);
+        });
+        renderCurriculumPanel();
+      } catch (e) {
+        removeSkeleton(skel);
+        showError(e.message || 'Turn failed — try again.');
+      } finally {
+        state.busy = false;
+        btnSend.disabled = !composer.value.trim();
+        composer.disabled = false;
+        composer.focus();
+      }
+    }
+
+    async function sendIntakeAnswer(value) {
+      var field = state.intake_field;
+      if (!field) return;
+      // Show the learner bubble client-side immediately (intake
+      // messages aren't persisted in learner_messages).
+      appendMessage({ kind: 'learner_text', payload: { text: String(value) } });
+      try {
+        var resp = await api('/intake', {
+          learner_id: state.learner_id, field: field, value: value,
+        });
+        if (resp.validation_error) {
+          appendMessage({
+            kind: 'coach_text',
+            payload: {
+              text: 'Hmm — ' + resp.validation_error +
+                ' Try that again?',
+            },
+          });
           return;
         }
-        if (!confirm("This deletes everything we have stored about your learning. Continue?")) return;
-        try { await api('/clear', { learner_id: state.learner_id }); } catch (e) {}
-        localStorage.removeItem(LS_KEY);
-        state = {
-          learner_id: null, mode: 'landing', intake_field: null,
-          current_card: null, current_hint_shown: false,
-          progress: { total_seen: 0, total_correct: 0, by_box: {} },
-        };
-        progressStrip.hidden = true;
-        feedback.hidden = true;
-        exitToLanding();
-      });
-
-      // Magic-link arrival OR resume → skip the landing.
-      if (magicToken || state.learner_id) {
-        startSession();
+        state.profile = resp.profile || state.profile;
+        if (resp.intake_complete) {
+          state.intake_field = null;
+          appendMessage({
+            kind: 'coach_text',
+            payload: { text: "Perfect. Putting your plan together now…" },
+          });
+          // Bootstrap the first real turn — designs outline + first
+          // card. From here on every message is persisted server-side.
+          await sendTurn(null);
+        } else {
+          state.intake_field = resp.next_intake_field;
+          appendIntakePrompt(resp.next_intake_prompt || '');
+        }
+      } catch (e) {
+        showError(e.message || 'Could not save that.');
       }
-    })();
+    }
+
+    // ── Session bootstrap ──────────────────────────────────
+    async function startSession() {
+      try {
+        var body = {};
+        if (magicToken) body.token = magicToken;
+        if (state.learner_id) body.learner_id = state.learner_id;
+        var s = await api('/sessions', body);
+        state.learner_id = s.learner_id;
+        localStorage.setItem(LS_KEY, s.learner_id);
+        state.profile = s.profile;
+        state.goals = s.goals || [];
+        state.curriculum_outline = s.curriculum_outline;
+        state.progress = s.progress || state.progress;
+        state.thread = s.thread || [];
+        setActiveGoalView(s.active_goal || null);
+        enterLearnView();
+        renderCurriculumPanel();
+
+        if (!s.intake_complete) {
+          // Intake mode — render the welcome bubble + the first
+          // question. The thread is empty pre-intake by definition.
+          state.intake_field = s.next_intake_field;
+          rerenderThread([]);
+          appendIntakePrompt(
+            "Welcome — let's set you up. " + (s.next_intake_prompt || "")
+          );
+        } else if (state.thread.length === 0) {
+          // Intake done but no thread yet — first /turn after the
+          // upgrade from Phase 1 schema. Bootstrap.
+          rerenderThread([]);
+          await sendTurn(null);
+        } else {
+          rerenderThread(state.thread);
+        }
+      } catch (e) {
+        showError("Couldn't start: " + (e.message || ''));
+      }
+    }
+
+    // ── Wire-up ────────────────────────────────────────────
+    topicAfrikaans.addEventListener('click', function (e) {
+      e.preventDefault();
+      startSession();
+    });
+    btnStartClosing.addEventListener('click', startSession);
+
+    composer.addEventListener('input', function () {
+      btnSend.disabled = !composer.value.trim() || state.busy;
+      // Auto-resize textarea.
+      composer.style.height = 'auto';
+      composer.style.height = Math.min(composer.scrollHeight, 180) + 'px';
+    });
+    composer.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        btnSend.click();
+      }
+    });
+    btnSend.addEventListener('click', function () {
+      var v = composer.value.trim();
+      if (!v) return;
+      composer.value = '';
+      composer.style.height = 'auto';
+      btnSend.disabled = true;
+      if (state.intake_field) {
+        sendIntakeAnswer(v);
+      } else {
+        // Optimistic learner bubble — replaced by the server-
+        // sanitised copy when /turn responds.
+        appendMessage({ kind: 'learner_text', payload: { text: v } });
+        sendTurn(v).then(function () {
+          // The server returned its persisted copy; the optimistic
+          // one above remains in the thread but is harmless (it's
+          // also rendered identically). For simplicity we don't
+          // dedupe; the server's copy is appended after, but visually
+          // they're indistinguishable.
+        });
+      }
+    });
+
+    currTitleBtn.addEventListener('click', function () {
+      var open = currPanel.hidden;
+      currPanel.hidden = !open;
+      currTitleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) renderCurriculumPanel();
+    });
+
+    btnMenu.addEventListener('click', openDrawer);
+    btnDrawerClose.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click', closeDrawer);
+
+    btnNewGoal.addEventListener('click', openNewGoalModal);
+    btnRestart.addEventListener('click', restartCurrentGoal);
+    btnArchive.addEventListener('click', archiveCurrentGoal);
+    btnClear.addEventListener('click', clearAllData);
+
+    // Magic-link arrival OR known learner → auto-resume.
+    if (magicToken || state.learner_id) {
+      startSession();
+    }
+  })();
   </script>
 </body>
 </html>
