@@ -485,16 +485,20 @@ def build_chat_runtime(
     ``memory_provider`` are created per HTTP request so each request has
     its own reply-capture slot and session-specific memory write target.
 
-    The hook chain is intentionally trimmed:
-    - BillingHook stays (we need per-session token totals for the cap)
-    - TracingHook stays (web chat turns trace just like WA turns —
-      grep for transport_name=web_chat to find session activity)
-    - OngiiniMemoryRecordingHook DROPPED (no disk / no mem0 for
-      sessions; the SessionMemoryProvider's record_turn appends to the
-      in-process store directly)
+    The hook chain is intentionally trimmed vs. WhatsApp:
+    - BillingHook stays (per-session token totals feed the cap check)
+    - TracingHook stays (web chat turns trace like WA turns — grep for
+      transport_name=web_chat in trace.jsonl)
+    - OngiiniMemoryRecordingHook STAYS — despite the "no disk for
+      sessions" promise, this hook is what actually invokes
+      ``runtime.memory.record_turn(...)`` at end-of-turn. For the chat
+      runtime that dispatches to ``SessionMemoryProvider.record_turn``
+      which writes to the in-process SessionStore (no disk / no mem0).
+      Without it, every turn looks like the first one to the bot —
+      production bug 2026-06-02 (conversation context lost mid-thread).
     - SourceIndexHook DROPPED (writes per-user JSON to disk and the
-      web-chat OngiiniMemoryProvider isn't wired to read it back —
-      sessions get cited URLs via the rolling history alone)
+      web-chat memory provider isn't wired to read it back — sessions
+      get cited URLs via the rolling history alone)
     - ContributeHallucinationGuardHook DROPPED (no contribute flow when
       memory is per-session — the recovery would have nowhere to land)
     - ReviseEvalCaptureHook DROPPED (PII capture flag doesn't apply to
@@ -506,6 +510,10 @@ def build_chat_runtime(
             trace_path=shared.trace_destination,
             include_critique_detail=settings.trace_critique_detail,
         ),
+        # PII sanitiser runs on user text + reply before they reach
+        # the memory provider's record_turn. Mirrors the WhatsApp
+        # contract: model sees raw text, persistence sees sanitised.
+        OngiiniMemoryRecordingHook(sanitiser=pii.sanitize),
     ]
     hooks = HookRegistry(hooks_list)
 
