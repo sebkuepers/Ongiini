@@ -280,6 +280,8 @@
       var isActive = !msg.answered;
       var wrap = el('div', 'exercise-card');
       wrap.dataset.active = isActive ? 'true' : 'false';
+      var ct = p.card_type || 'card';
+      wrap.dataset.cardType = ct;
       var eyebrow;
       if (p.review_box) {
         // Re-review surfaced by the SRS scheduler — distinct visual
@@ -288,11 +290,120 @@
         eyebrow = t('card.review_eyebrow', { box: p.review_box }) + ' · ' +
           (isActive ? t('card.awaiting') : t('card.answered'));
       } else {
-        eyebrow = (p.card_type || 'card') + ' · ' +
+        // Per-type eyebrow label — every CARD_TYPES member has a
+        // card.type.<ct> entry in i18n; if a future type slips through
+        // without one, t() returns the raw key, which is fine.
+        var labelKey = 'card.type.' + ct;
+        var label = t(labelKey);
+        if (label === labelKey) label = ct;
+        eyebrow = label + ' · ' +
           (isActive ? t('card.awaiting') : t('card.answered'));
       }
       wrap.appendChild(el('div', 'exercise-eyebrow', eyebrow));
+
+      // Per-type structural extras BEFORE the prompt: grammar drills
+      // show their source sentence; dialogue cards show the
+      // conversation so the prompt slot is contextually anchored.
+      if (ct === 'grammar' && p.source_sentence) {
+        var src = el('div', 'card-source-sentence');
+        src.appendChild(el('span', 'card-source-eyebrow', t('card.grammar.source_label')));
+        src.appendChild(el('p', 'card-source-text', String(p.source_sentence)));
+        wrap.appendChild(src);
+      }
+      if (ct === 'dialogue' && Array.isArray(p.turns) && p.turns.length) {
+        var convo = el('div', 'card-dialogue-turns');
+        p.turns.forEach(function (turnObj) {
+          if (!turnObj || typeof turnObj !== 'object') return;
+          var spk = String(turnObj.speaker || '');
+          var txt = String(turnObj.text || '');
+          var bubble = el('div', 'dialogue-bubble');
+          if (spk) bubble.appendChild(el('div', 'dialogue-speaker', spk));
+          bubble.appendChild(el('div', 'dialogue-line', txt));
+          convo.appendChild(bubble);
+        });
+        wrap.appendChild(convo);
+      }
+
       if (p.prompt_text) wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
+
+      // Per-type structural extras AFTER the prompt: multiple-choice
+      // options become click-to-answer buttons; reorder shows a
+      // token bank that feeds the composer; proverb optionally
+      // surfaces a cultural-note panel once answered.
+      if (ct === 'multiple_choice' && Array.isArray(p.options) && p.options.length) {
+        var optsWrap = el('div', 'card-mc-options');
+        p.options.forEach(function (opt) {
+          if (!opt || typeof opt !== 'object') return;
+          var lbl = String(opt.label || '');
+          var txt = String(opt.text || '');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mc-option';
+          btn.dataset.label = lbl;
+          var letterSpan = el('span', 'mc-letter', lbl);
+          var textSpan = el('span', 'mc-text', txt);
+          btn.appendChild(letterSpan);
+          btn.appendChild(textSpan);
+          if (isActive) {
+            btn.addEventListener('click', function () {
+              if (state.busy) return;
+              // Disable every option button in this card to prevent
+              // double-submit while the turn is in flight.
+              optsWrap.querySelectorAll('.mc-option').forEach(function (b) {
+                b.disabled = true;
+              });
+              btn.classList.add('mc-option-selected');
+              appendMessage({ kind: 'learner_text', payload: { text: lbl } });
+              sendTurn(lbl, { optimisticLearnerText: true });
+            });
+          } else {
+            btn.disabled = true;
+          }
+          optsWrap.appendChild(btn);
+        });
+        wrap.appendChild(optsWrap);
+      }
+      if (ct === 'reorder' && Array.isArray(p.tokens) && p.tokens.length) {
+        // Token bank — clicking a chip appends it to the composer so
+        // the learner builds the sentence by tapping. They can still
+        // type freely if they prefer.
+        var bank = el('div', 'card-reorder-bank');
+        var note = el('div', 'reorder-hint', t('card.reorder.hint'));
+        bank.appendChild(note);
+        var chipRow = el('div', 'reorder-chips');
+        var shuffled = p.tokens.slice();
+        // Light shuffle so the bank isn't already in the right order.
+        // (deterministic-ish: rotate by length so re-renders are stable)
+        var shift = (shuffled.length % 3) + 1;
+        shuffled = shuffled.slice(shift).concat(shuffled.slice(0, shift));
+        shuffled.forEach(function (tok) {
+          var chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'reorder-chip';
+          chip.textContent = String(tok);
+          if (isActive) {
+            chip.addEventListener('click', function () {
+              if (state.busy) return;
+              var existing = composer.value.trim();
+              composer.value = (existing ? existing + ' ' : '') + String(tok);
+              composer.dispatchEvent(new Event('input'));
+              composer.focus();
+            });
+          } else {
+            chip.disabled = true;
+          }
+          chipRow.appendChild(chip);
+        });
+        bank.appendChild(chipRow);
+        wrap.appendChild(bank);
+      }
+      if (ct === 'proverb' && p.cultural_note && !isActive) {
+        var note2 = el('div', 'card-cultural-note');
+        note2.appendChild(el('span', 'card-cultural-eyebrow', t('card.proverb.cultural_label')));
+        note2.appendChild(el('p', 'card-cultural-text', String(p.cultural_note)));
+        wrap.appendChild(note2);
+      }
+
       if (p.hint_text) {
         var hintRow = el('div', 'exercise-hint-row');
         var hintBtn = document.createElement('button');

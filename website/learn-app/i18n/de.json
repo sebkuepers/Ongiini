@@ -57,7 +57,28 @@
     "show_hint": "Hinweis zeigen",
     "awaiting": "wartet auf deine Antwort",
     "answered": "beantwortet",
-    "review_eyebrow": "Wiederholung · Box {box}"
+    "review_eyebrow": "Wiederholung · Box {box}",
+    "type": {
+      "lesson": "Lektion",
+      "vocab": "Vokabel",
+      "translation": "Übersetzung",
+      "production": "frei schreiben",
+      "cloze": "Lücke füllen",
+      "reorder": "Reihenfolge",
+      "multiple_choice": "auswählen",
+      "grammar": "Grammatik",
+      "proverb": "Redewendung",
+      "dialogue": "Dialog"
+    },
+    "grammar": {
+      "source_label": "Umformen"
+    },
+    "reorder": {
+      "hint": "Tippe die Wörter in der richtigen Reihenfolge — sie wandern in das Nachrichtenfeld."
+    },
+    "proverb": {
+      "cultural_label": "Kulturelle Notiz"
+    }
   },
   "modal": {
     "source_pick_heading": "Du hast {target} gewählt.",

@@ -57,7 +57,28 @@
     "show_hint": "Show hint",
     "awaiting": "awaiting your answer",
     "answered": "answered",
-    "review_eyebrow": "review · box {box}"
+    "review_eyebrow": "review · box {box}",
+    "type": {
+      "lesson": "lesson",
+      "vocab": "vocab",
+      "translation": "translation",
+      "production": "production",
+      "cloze": "fill in the blank",
+      "reorder": "reorder",
+      "multiple_choice": "pick one",
+      "grammar": "grammar drill",
+      "proverb": "proverb",
+      "dialogue": "dialogue"
+    },
+    "grammar": {
+      "source_label": "Transform this"
+    },
+    "reorder": {
+      "hint": "Tap the words in order — they go into the message box."
+    },
+    "proverb": {
+      "cultural_label": "Cultural note"
+    }
   },
   "modal": {
     "source_pick_heading": "You picked {target}.",
