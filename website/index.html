@@ -539,6 +539,24 @@
     }
     .og-cta-legal a:hover { color: var(--terracotta); }
 
+    /* Secondary path for visitors without WhatsApp. Sits between the
+       WA button and the legal line — slightly more present than the
+       legal disclaimer (Geist, not mono) so it actually reads as an
+       offer, but still small enough that the WA CTA stays primary. */
+    .og-cta-alt {
+      margin-top: 14px;
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px; line-height: 1.5;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+    .og-cta-alt a {
+      color: var(--terracotta-deep);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .og-cta-alt a:hover { color: var(--terracotta); }
+
 
     /* Try-asking */
     .og-try { list-style: none; margin: 22px 0 0; padding: 0; }
@@ -1262,6 +1280,10 @@
               </span>
               <span class="og-cta-arrow">→</span>
             </a>
+            <div class="og-cta-alt">
+              <span data-en="i">No WhatsApp? <a href="https://chat.ongiini.ai/">Try it in your browser</a>.</span>
+              <span data-af="i">Geen WhatsApp? <a href="https://chat.ongiini.ai/">Probeer in jou blaaier</a>.</span>
+            </div>
             <div class="og-cta-legal">
               <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
               <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
@@ -1591,6 +1613,10 @@
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
+          <div class="og-cta-alt">
+            <span data-en="i">No WhatsApp? <a href="https://chat.ongiini.ai/">Try it in your browser</a>.</span>
+            <span data-af="i">Geen WhatsApp? <a href="https://chat.ongiini.ai/">Probeer in jou blaaier</a>.</span>
+          </div>
           <div class="og-cta-legal">
             <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
             <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
@@ -1865,6 +1891,10 @@
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
+          <div class="og-cta-alt">
+            <span data-en="i">No WhatsApp? <a href="https://chat.ongiini.ai/">Try it in your browser</a>.</span>
+            <span data-af="i">Geen WhatsApp? <a href="https://chat.ongiini.ai/">Probeer in jou blaaier</a>.</span>
+          </div>
           <div class="og-cta-legal">
             <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
             <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
