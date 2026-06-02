@@ -655,6 +655,26 @@
         </div>
       </div>
 
+      <div id="webChatSection" hidden>
+        <h2 id="web-chat">Web chat — chat.ongiini.ai</h2>
+        <p class="stat-section-note">An anonymous browser version of Ongiini that anyone can try without WhatsApp. <strong>A session = a browser tab</strong>, not a person; sessions disappear after about 6 hours. The numbers below come from the same trace data as the WhatsApp metrics above, bucketed separately. No per-session detail is ever published. <a href="/privacy/">See §2.8 of the Privacy Policy</a> for the data model.</p>
+        <div class="stat-kpis" id="webChatKpis"></div>
+        <div class="stat-chart-row">
+          <div class="stat-chart">
+            <p class="stat-chart-title">Sessions per day</p>
+            <p class="stat-chart-sub">Unique browser sessions · one bar per UTC day</p>
+            <div id="chart-webchat-sessions"></div>
+          </div>
+          <div class="stat-chart">
+            <p class="stat-chart-title">Messages per day</p>
+            <p class="stat-chart-sub">User turns sent through the web chat</p>
+            <div id="chart-webchat-messages"></div>
+          </div>
+        </div>
+        <p class="stat-section-note" style="margin-top: 24px;">Same operational signals as the WhatsApp <em>How it performs</em> row below, but scoped to chat.ongiini.ai turns only.</p>
+        <div class="stat-perf" id="webChatPerf"></div>
+      </div>
+
       <h2>When people use Ongiini.ai</h2>
       <p class="stat-section-note">Activity by day-of-week × hour-of-day in <strong>Africa/Windhoek time</strong>. Darker cells = more messages. UTC offsets handled — a message sent at UTC 23:00 Sunday counts as Monday 01:00.</p>
       <div class="stat-chart">
@@ -786,6 +806,7 @@
       renderTopTopics(d.top_topics);
       renderWho(d.who, d.totals.unique_users);
       renderPerf(d.performance);
+      renderWebChat(d.web_chat);
       renderFoot(d);
     }
 
@@ -1872,6 +1893,67 @@
         div.appendChild(el('div', { className: 'stat-perf-label', text: t[0] }));
         div.appendChild(el('div', { className: 'stat-perf-value', text: t[1] }));
         wrap.appendChild(div);
+      }
+    }
+
+    // ----- Web chat (chat.ongiini.ai) renderer ---------------------------
+    //
+    // Mirrors the shape of renderKpis + renderPerf + renderBarTimeseries
+    // so the section reads as a parallel block to the WhatsApp content.
+    // Auto-hides the whole section when the aggregator returns null
+    // (zero qualifying observations in the trace window).
+
+    function renderWebChat(wc) {
+      const section = document.getElementById('webChatSection');
+      if (!wc || !wc.totals || !wc.totals.messages) {
+        section.hidden = true;
+        return;
+      }
+      section.hidden = false;
+
+      // KPI tiles — same `tile()` helper used by the WhatsApp Volume
+      // section. Accent groups mirror the WhatsApp page rhythm:
+      // teal = people/sessions, terracotta = activity, olive = compute.
+      const wrap = document.getElementById('webChatKpis');
+      clear(wrap);
+      const t = wc.totals;
+      const dx = wc.totals_deltas || {};
+      wrap.appendChild(tile('Sessions', fmtInt.format(t.sessions || 0), 'Browser tabs · UUID v4', 'people', dx.sessions));
+      wrap.appendChild(tile('Messages', fmtInt.format(t.messages || 0), 'User turns sent', 'people', dx.messages));
+      wrap.appendChild(tile('Tokens generated', fmtCompact.format(t.tokens_out_total || 0), 'In the AI replies', 'compute'));
+      wrap.appendChild(tile('Images', fmtInt.format(t.images || 0), 'Photos attached', 'activity'));
+      wrap.appendChild(tile('Tool-call turns', fmtInt.format(t.tool_call_turns || 0), 'Turns where a tool fired', 'activity'));
+
+      // Per-day charts — reuse the same `renderBarTimeseries` used for
+      // DAU on the WhatsApp side so the visual rhythm matches.
+      const series = wc.timeseries || {};
+      if (series.sessions_per_day && series.sessions_per_day.length) {
+        renderBarTimeseries('chart-webchat-sessions', series.sessions_per_day);
+      } else {
+        emptyChart('chart-webchat-sessions', 'No data yet.');
+      }
+      if (series.messages_per_day && series.messages_per_day.length) {
+        renderBarTimeseries('chart-webchat-messages', series.messages_per_day);
+      } else {
+        emptyChart('chart-webchat-messages', 'No data yet.');
+      }
+
+      // Performance — clone of the WhatsApp `renderPerf` shape so the
+      // four tiles look identical.
+      const perfWrap = document.getElementById('webChatPerf');
+      clear(perfWrap);
+      const p = wc.performance || {};
+      const perfTiles = [
+        ['Median latency', formatMs(p.median_latency_ms)],
+        ['p95 latency', formatMs(p.p95_latency_ms)],
+        ['Tool-call rate', formatPct(p.tool_call_rate)],
+        ['Truncation rate', formatPct(p.truncation_rate)],
+      ];
+      for (const pt of perfTiles) {
+        const div = el('div', { className: 'stat-perf-tile' });
+        div.appendChild(el('div', { className: 'stat-perf-label', text: pt[0] }));
+        div.appendChild(el('div', { className: 'stat-perf-value', text: pt[1] }));
+        perfWrap.appendChild(div);
       }
     }
 
