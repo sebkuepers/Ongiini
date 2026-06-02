@@ -283,6 +283,256 @@ def get_or_create_active_goal(
     return dict(row)
 
 
+def list_goals(
+    learner_id: str,
+    *,
+    include_archived: bool = False,
+) -> list[dict[str, Any]]:
+    """All goals for one learner, newest first. Excludes archived by
+    default so the frontend's switcher only surfaces live ones.
+
+    Returns dicts that include the persisted goal columns plus a
+    ``has_outline`` boolean derived from ``curriculum_outline IS NOT NULL``
+    so the UI can show "Plan ready" vs "Plan pending" without a second
+    fetch."""
+    if not learner_id:
+        return []
+    sql = (
+        "SELECT goal_id, learner_id, language, context, status, title, "
+        "       archived_at, created_at, outline_updated_at, "
+        "       CASE WHEN curriculum_outline IS NULL THEN 0 ELSE 1 END "
+        "       AS has_outline "
+        "FROM learning_goals WHERE learner_id = ?"
+    )
+    params: list[Any] = [learner_id]
+    if not include_archived:
+        sql += " AND status != 'archived'"
+    sql += " ORDER BY created_at DESC"
+    with _conn() as c:
+        rows = c.execute(sql, params).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        d = dict(r)
+        d["has_outline"] = bool(d.get("has_outline"))
+        out.append(d)
+    return out
+
+
+def create_new_goal(
+    learner_id: str,
+    *,
+    title: str | None = None,
+    context: str | None = None,
+    language: str = "afrikaans",
+    activate: bool = True,
+) -> dict[str, Any]:
+    """Create a fresh learning goal. When ``activate=True`` (the
+    default), any existing active goal for this learner is moved to
+    ``paused`` so only ONE active goal exists at a time. Returns the
+    new goal row.
+
+    Both ``title`` (the user-chosen name like "Job interview at SPAR")
+    and ``context`` (the underlying objective) are PII-scrubbed before
+    storage — same contract as ``save_profile_field`` for free-text
+    profile values.
+
+    Wrapped in BEGIN IMMEDIATE so the demote-then-insert pair can't be
+    interleaved with another caller's create."""
+    if not learner_id:
+        raise ValueError("learner_id is required")
+    if isinstance(title, str):
+        title = pii.sanitize(title).strip() or None
+    if isinstance(context, str):
+        context = pii.sanitize(context).strip() or None
+    new_goal_id = str(uuid4())
+    now = _now_iso()
+    with _conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        try:
+            if activate:
+                c.execute(
+                    "UPDATE learning_goals SET status = 'paused' "
+                    "WHERE learner_id = ? AND status = 'active'",
+                    (learner_id,),
+                )
+            status_val = "active" if activate else "paused"
+            c.execute(
+                "INSERT INTO learning_goals (goal_id, learner_id, language, "
+                "context, status, title, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (new_goal_id, learner_id, language, context,
+                 status_val, title, now),
+            )
+            row = c.execute(
+                "SELECT * FROM learning_goals WHERE goal_id = ?",
+                (new_goal_id,),
+            ).fetchone()
+            c.execute("COMMIT")
+        except Exception:
+            try:
+                c.execute("ROLLBACK")
+            except Exception:                               # noqa: BLE001
+                pass
+            raise
+    return dict(row)
+
+
+def activate_goal(learner_id: str, goal_id: str) -> dict[str, Any]:
+    """Switch the active goal. Atomically demotes the existing active
+    goal to ``paused`` and promotes the requested one to ``active``.
+
+    Raises ``RuntimeError`` if the goal doesn't belong to this learner
+    or is archived (archived goals can't be re-activated — restart or
+    create a new one)."""
+    if not learner_id or not goal_id:
+        raise ValueError("learner_id and goal_id are required")
+    with _conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        try:
+            row = c.execute(
+                "SELECT learner_id, status FROM learning_goals WHERE goal_id = ?",
+                (goal_id,),
+            ).fetchone()
+            if not row or row["learner_id"] != learner_id:
+                c.execute("ROLLBACK")
+                raise RuntimeError(f"activate_goal: goal {goal_id} not found")
+            if row["status"] == "archived":
+                c.execute("ROLLBACK")
+                raise RuntimeError(
+                    "activate_goal: cannot re-activate archived goal; "
+                    "create a new one instead"
+                )
+            # Demote the currently-active goal (no-op if there isn't one,
+            # or if it's the same as goal_id and already active).
+            c.execute(
+                "UPDATE learning_goals SET status = 'paused' "
+                "WHERE learner_id = ? AND status = 'active' AND goal_id != ?",
+                (learner_id, goal_id),
+            )
+            c.execute(
+                "UPDATE learning_goals SET status = 'active' WHERE goal_id = ?",
+                (goal_id,),
+            )
+            row = c.execute(
+                "SELECT * FROM learning_goals WHERE goal_id = ?",
+                (goal_id,),
+            ).fetchone()
+            c.execute("COMMIT")
+        except Exception:
+            try:
+                c.execute("ROLLBACK")
+            except Exception:                               # noqa: BLE001
+                pass
+            raise
+    return dict(row)
+
+
+def restart_goal(learner_id: str, goal_id: str) -> dict[str, Any]:
+    """Wipe one curriculum's progress without deleting the goal row.
+    Removes all cards (which cascades to attempts + review_state) and
+    all messages on the thread. KEEPS the goal row + curriculum_outline
+    so the learner gets the same plan back, fresh.
+
+    Validates ownership — a learner can't restart someone else's goal.
+    Returns a small summary dict (rows removed per table)."""
+    if not learner_id or not goal_id:
+        raise ValueError("learner_id and goal_id are required")
+    with _conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        try:
+            row = c.execute(
+                "SELECT learner_id FROM learning_goals WHERE goal_id = ?",
+                (goal_id,),
+            ).fetchone()
+            if not row or row["learner_id"] != learner_id:
+                c.execute("ROLLBACK")
+                raise RuntimeError(f"restart_goal: goal {goal_id} not found")
+            # Cards cascade to attempts + card_review_state via FK ON
+            # DELETE CASCADE — so a single DELETE on learning_cards is
+            # enough to wipe the SRS state too.
+            cur_cards = c.execute(
+                "DELETE FROM learning_cards WHERE goal_id = ?", (goal_id,),
+            )
+            cards_deleted = cur_cards.rowcount
+            cur_msgs = c.execute(
+                "DELETE FROM learner_messages WHERE goal_id = ?", (goal_id,),
+            )
+            msgs_deleted = cur_msgs.rowcount
+            c.execute("COMMIT")
+        except Exception:
+            try:
+                c.execute("ROLLBACK")
+            except Exception:                               # noqa: BLE001
+                pass
+            raise
+    return {
+        "goal_id": goal_id,
+        "cards_deleted": cards_deleted,
+        "messages_deleted": msgs_deleted,
+    }
+
+
+def archive_goal(learner_id: str, goal_id: str) -> dict[str, Any]:
+    """Soft-delete a goal. Sets ``status='archived'`` and stamps
+    ``archived_at``. The goal row and all its content stays on disk so
+    historical analytics still work; the switcher just hides it.
+
+    If the archived goal was the active one, leaves the learner with no
+    active goal — the frontend should prompt them to pick or create a
+    new one. (We don't auto-activate a paused goal: silently changing
+    focus is more surprising than helpful.)"""
+    if not learner_id or not goal_id:
+        raise ValueError("learner_id and goal_id are required")
+    now = _now_iso()
+    with _conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        try:
+            row = c.execute(
+                "SELECT learner_id FROM learning_goals WHERE goal_id = ?",
+                (goal_id,),
+            ).fetchone()
+            if not row or row["learner_id"] != learner_id:
+                c.execute("ROLLBACK")
+                raise RuntimeError(f"archive_goal: goal {goal_id} not found")
+            c.execute(
+                "UPDATE learning_goals SET status = 'archived', "
+                "archived_at = ? WHERE goal_id = ?",
+                (now, goal_id),
+            )
+            row = c.execute(
+                "SELECT * FROM learning_goals WHERE goal_id = ?",
+                (goal_id,),
+            ).fetchone()
+            c.execute("COMMIT")
+        except Exception:
+            try:
+                c.execute("ROLLBACK")
+            except Exception:                               # noqa: BLE001
+                pass
+            raise
+    return dict(row)
+
+
+def update_goal_title(learner_id: str, goal_id: str, title: str) -> None:
+    """Set the human-readable goal name. PII-scrubbed (titles are user-
+    typed, e.g. "interview at SPAR"). Raises if the goal isn't this
+    learner's."""
+    if not learner_id or not goal_id:
+        raise ValueError("learner_id and goal_id are required")
+    title = pii.sanitize(title or "").strip() or None
+    with _conn() as c:
+        row = c.execute(
+            "SELECT learner_id FROM learning_goals WHERE goal_id = ?",
+            (goal_id,),
+        ).fetchone()
+        if not row or row["learner_id"] != learner_id:
+            raise RuntimeError(f"update_goal_title: goal {goal_id} not found")
+        c.execute(
+            "UPDATE learning_goals SET title = ? WHERE goal_id = ?",
+            (title, goal_id),
+        )
+
+
 def save_curriculum_outline(goal_id: str, outline: dict[str, Any]) -> None:
     """Persist the LLM-authored curriculum outline as JSON.
 
@@ -494,25 +744,51 @@ def record_attempt(
 # Aggregate progress (drives the stats panel on the UI)
 # ──────────────────────────────────────────────────────────────────
 
-def progress_for(learner_id: str) -> dict[str, Any]:
+def progress_for(
+    learner_id: str,
+    *,
+    goal_id: str | None = None,
+) -> dict[str, Any]:
     """Return summary stats: total seen, total correct, per-box counts.
 
     Used by the API to echo into every learn-turn response so the UI
-    can update the progress widget without a separate request."""
+    can update the progress widget without a separate request.
+
+    When ``goal_id`` is provided, the counts are scoped to cards in that
+    one curriculum (joined via ``learning_cards.goal_id``). When
+    omitted, aggregates across ALL of the learner's cards — used for
+    learner-level views like the homepage progress badge."""
     if not learner_id:
         return {"total_seen": 0, "total_correct": 0, "by_box": {}}
     with _conn() as c:
-        agg = c.execute(
-            "SELECT COALESCE(SUM(total_seen), 0) AS seen, "
-            "COALESCE(SUM(total_correct), 0) AS correct "
-            "FROM card_review_state WHERE learner_id = ?",
-            (learner_id,),
-        ).fetchone()
-        boxes = c.execute(
-            "SELECT box, COUNT(*) AS n FROM card_review_state "
-            "WHERE learner_id = ? GROUP BY box",
-            (learner_id,),
-        ).fetchall()
+        if goal_id:
+            agg = c.execute(
+                "SELECT COALESCE(SUM(crs.total_seen), 0) AS seen, "
+                "COALESCE(SUM(crs.total_correct), 0) AS correct "
+                "FROM card_review_state crs "
+                "JOIN learning_cards lc ON lc.card_id = crs.card_id "
+                "WHERE crs.learner_id = ? AND lc.goal_id = ?",
+                (learner_id, goal_id),
+            ).fetchone()
+            boxes = c.execute(
+                "SELECT crs.box, COUNT(*) AS n FROM card_review_state crs "
+                "JOIN learning_cards lc ON lc.card_id = crs.card_id "
+                "WHERE crs.learner_id = ? AND lc.goal_id = ? "
+                "GROUP BY crs.box",
+                (learner_id, goal_id),
+            ).fetchall()
+        else:
+            agg = c.execute(
+                "SELECT COALESCE(SUM(total_seen), 0) AS seen, "
+                "COALESCE(SUM(total_correct), 0) AS correct "
+                "FROM card_review_state WHERE learner_id = ?",
+                (learner_id,),
+            ).fetchone()
+            boxes = c.execute(
+                "SELECT box, COUNT(*) AS n FROM card_review_state "
+                "WHERE learner_id = ? GROUP BY box",
+                (learner_id,),
+            ).fetchall()
     return {
         "total_seen": int(agg["seen"] or 0),
         "total_correct": int(agg["correct"] or 0),

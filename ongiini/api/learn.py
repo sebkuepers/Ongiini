@@ -1,28 +1,30 @@
-"""HTTP endpoints for the learn.ongiini.ai surface.
+"""HTTP endpoints for the learn.ongiini.ai chat-first learning surface.
 
-Five POST routes, all under ``/v1/learn/``:
+Phase 2 model: the whole UI is a chat thread between the learner and
+the Ongiini coach. Rich cards (lessons / exercises / feedback /
+progress) appear as messages inside the thread, alongside plain text
+bubbles. The composer at the bottom dispatches into a single
+``/turn`` endpoint that the coach orchestrator decides how to route —
+answer to the active card, free-form question, or off-topic redirect.
 
-  * ``/sessions`` — create a fresh anonymous learner or resume from a
-    magic-link token. Returns the learner_id + a snapshot of profile
-    completeness and the next intake field (if any).
-  * ``/intake`` — submit one intake answer (name / age / level /
-    objective). Validates the SHAPE through ``intake.validate_field``,
-    persists via ``store.save_profile_field``, and returns the next
-    field to ask for (or ``intake_complete=True``).
-  * ``/next-card`` — return a card to study now. If the SRS queue has
-    something due, surface it; otherwise ask the model to generate a
-    new one (and, on the very first learning turn, design the
-    curriculum outline before generating).
-  * ``/answer`` — grade a submitted answer (model call), persist the
-    attempt + updated Leitner state, return the rating + feedback +
-    new progress snapshot.
-  * ``/clear`` — delete the learner row and cascade (GDPR / "delete
-    my data" parity).
+Endpoints (all under ``/v1/learn/``):
 
-The intake prompts are hard-coded friendly defaults — Sebastian's
-explicit decision: the four fields are always the same so the LLM
-doesn't need to design them; the LLM owns everything AFTER intake
-(curriculum design, card authoring, grading).
+  * ``/sessions``    — create or resume an anonymous learner. Returns
+    profile completeness, the list of the learner's goals, the active
+    goal info, and the active goal's thread so the frontend can
+    rehydrate on a cold visit.
+  * ``/intake``      — submit one intake answer. Same shape as Phase 1.
+  * ``/turn``        — one chat turn. ``text`` is the learner's typed
+    message (None means "give me what's next"). Coach decides whether
+    to grade, teach, answer a question, or redirect off-topic. Returns
+    the new messages to append + updated progress + outline + goal.
+  * ``/goals``       — list this learner's goals.
+  * ``/goals/new``   — create a new curriculum (activates by default).
+  * ``/goals/activate`` — switch the active goal.
+  * ``/goals/restart``  — wipe one goal's cards + thread (keep outline).
+  * ``/goals/archive``  — soft-delete a goal.
+  * ``/clear``       — delete the learner row + cascade (GDPR right-
+    to-erasure).
 """
 from __future__ import annotations
 
@@ -35,10 +37,8 @@ from pydantic import BaseModel, Field
 from owela import Model
 
 from ..config import settings
-from ..learning import cards as cards_mod
-from ..learning import context as ctx_mod
-from ..learning import curriculum, db, grading, intake, store, tokens
-from ..learning.llm import ModelOutputError
+from ..learning import coach as coach_mod
+from ..learning import db, intake, messages as messages_mod, store, tokens
 
 log = logging.getLogger("ongiini.api.learn")
 
@@ -70,19 +70,57 @@ def _intake_prompt(field: str | None) -> str | None:
     return _INTAKE_PROMPTS.get(field)
 
 
+def _ensure_enabled() -> None:
+    """All learn endpoints honor the kill-switch except /clear (data
+    deletion is always allowed). Single helper so the message stays
+    consistent."""
+    if not settings.learn_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Learning surface is temporarily disabled.",
+        )
+
+
+def _active_or_none(learner_id: str) -> dict[str, Any] | None:
+    """Return the learner's currently-active goal dict, or None when
+    they have no active goal (just archived their last one, never had
+    one, etc.). NEVER auto-creates — endpoints that need a fresh goal
+    must call ``store.get_or_create_active_goal`` explicitly so the
+    side-effect is visible."""
+    for g in store.list_goals(learner_id, include_archived=False):
+        if g["status"] == "active":
+            return g
+    return None
+
+
 # ──────────────────────────────────────────────────────────────────
 # Request / response models
 # ──────────────────────────────────────────────────────────────────
 
 class SessionRequest(BaseModel):
     """POST /v1/learn/sessions body."""
-    # Existing browser-side learner_id from localStorage (cold-visit
-    # resume). If absent and no token, we create a fresh anonymous row.
     learner_id: str | None = Field(default=None, max_length=128)
-    # Optional magic-link token (Phase 2 — issued by the chat-side
-    # offer flow). Verified; on success the learner row is upserted
-    # by the embedded learner_id and any goal_text is carried over.
     token: str | None = Field(default=None, max_length=4096)
+
+
+class GoalInfo(BaseModel):
+    goal_id: str
+    title: str | None
+    status: str
+    language: str
+    context: str | None
+    has_outline: bool
+    archived_at: str | None
+    created_at: str
+
+
+class MessageItem(BaseModel):
+    message_id: str
+    kind: str
+    payload: dict[str, Any]
+    card_id: str | None = None
+    answered: bool = False
+    created_at: str
 
 
 class SessionResponse(BaseModel):
@@ -91,6 +129,11 @@ class SessionResponse(BaseModel):
     next_intake_field: str | None
     next_intake_prompt: str | None
     profile: dict[str, Any] | None
+    goals: list[GoalInfo]
+    active_goal: GoalInfo | None
+    thread: list[MessageItem]
+    progress: dict[str, Any]
+    curriculum_outline: dict[str, Any] | None
 
 
 class IntakeRequest(BaseModel):
@@ -107,33 +150,79 @@ class IntakeResponse(BaseModel):
     profile: dict[str, Any] | None
 
 
-class NextCardRequest(BaseModel):
+class TurnRequest(BaseModel):
     learner_id: str = Field(..., max_length=128)
+    goal_id: str | None = Field(default=None, max_length=128)
+    # ``text`` is the learner's typed message. ``None`` is a deliberate
+    # "give me what's next" — used by the frontend on first paint after
+    # intake completes, and after a graded answer that yielded a
+    # transition coach_text but no follow-up exercise (rare).
+    text: str | None = Field(default=None, max_length=4000)
 
 
-class NextCardResponse(BaseModel):
-    card_id: str
-    card_type: str
-    prompt_text: str
-    hint_text: str | None = None
-    difficulty: int | None = None
+class TurnResponse(BaseModel):
+    learner_id: str
+    goal_id: str
+    messages: list[MessageItem]
     progress: dict[str, Any]
-    box: int   # current Leitner box for this card (1 for a freshly-generated card)
+    curriculum_outline: dict[str, Any] | None
+    goal: GoalInfo
 
 
-class AnswerRequest(BaseModel):
+class GoalsRequest(BaseModel):
     learner_id: str = Field(..., max_length=128)
-    card_id: str = Field(..., max_length=128)
-    answer: str = Field(..., max_length=4000)
-    hint_used: bool = False
+    include_archived: bool = False
 
 
-class AnswerResponse(BaseModel):
-    rating: str
-    feedback: str
-    new_box: int
-    next_due_at: str
+class GoalsResponse(BaseModel):
+    goals: list[GoalInfo]
+    active_goal_id: str | None
+
+
+class GoalsNewRequest(BaseModel):
+    learner_id: str = Field(..., max_length=128)
+    title: str | None = Field(default=None, max_length=200)
+    context: str | None = Field(default=None, max_length=2000)
+    activate: bool = True
+
+
+class GoalsNewResponse(BaseModel):
+    goal: GoalInfo
+    goals: list[GoalInfo]
+
+
+class GoalsActivateRequest(BaseModel):
+    learner_id: str = Field(..., max_length=128)
+    goal_id: str = Field(..., max_length=128)
+
+
+class GoalsActivateResponse(BaseModel):
+    goal: GoalInfo
+    goals: list[GoalInfo]
+    thread: list[MessageItem]
     progress: dict[str, Any]
+    curriculum_outline: dict[str, Any] | None
+
+
+class GoalsRestartRequest(BaseModel):
+    learner_id: str = Field(..., max_length=128)
+    goal_id: str = Field(..., max_length=128)
+
+
+class GoalsRestartResponse(BaseModel):
+    goal: GoalInfo
+    cards_deleted: int
+    messages_deleted: int
+
+
+class GoalsArchiveRequest(BaseModel):
+    learner_id: str = Field(..., max_length=128)
+    goal_id: str = Field(..., max_length=128)
+
+
+class GoalsArchiveResponse(BaseModel):
+    goals: list[GoalInfo]
+    active_goal_id: str | None
 
 
 class ClearRequest(BaseModel):
@@ -146,6 +235,58 @@ class ClearResponse(BaseModel):
 
 
 # ──────────────────────────────────────────────────────────────────
+# Marshalling helpers
+# ──────────────────────────────────────────────────────────────────
+
+def _goal_info(row: dict[str, Any]) -> GoalInfo:
+    """Coerce a store-row into the API's GoalInfo. Tolerant of dict
+    shapes from ``list_goals`` (has_outline pre-computed) and from
+    ``get_or_create_active_goal`` (has curriculum_outline column)."""
+    has_outline = row.get("has_outline")
+    if has_outline is None:
+        has_outline = bool(row.get("curriculum_outline"))
+    return GoalInfo(
+        goal_id=row["goal_id"],
+        title=row.get("title"),
+        status=row["status"],
+        language=row.get("language") or "afrikaans",
+        context=row.get("context"),
+        has_outline=bool(has_outline),
+        archived_at=row.get("archived_at"),
+        created_at=row["created_at"],
+    )
+
+
+def _message_item(row: dict[str, Any]) -> MessageItem:
+    return MessageItem(
+        message_id=row["message_id"],
+        kind=row["kind"],
+        payload=row["payload"],
+        card_id=row.get("card_id"),
+        answered=bool(row.get("answered")),
+        created_at=row["created_at"],
+    )
+
+
+def _goal_payload_bundle(
+    learner_id: str,
+    goal: dict[str, Any],
+) -> tuple[GoalInfo, list[MessageItem], dict[str, Any], dict[str, Any] | None]:
+    """Common (goal, thread, progress, outline) bundle. The /turn,
+    /sessions, and /goals/activate endpoints all need exactly this
+    shape — factor once so the API stays consistent."""
+    goal_info = _goal_info(goal)
+    thread = [
+        _message_item(m) for m in messages_mod.list_for_goal(
+            learner_id=learner_id, goal_id=goal["goal_id"],
+        )
+    ]
+    progress = store.progress_for(learner_id, goal_id=goal["goal_id"])
+    outline = store.get_curriculum_outline(goal["goal_id"])
+    return goal_info, thread, progress, outline
+
+
+# ──────────────────────────────────────────────────────────────────
 # Router factory
 # ──────────────────────────────────────────────────────────────────
 
@@ -154,25 +295,20 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
 
     ``model`` is the shared VLLMGemmaModel instance built once at
     startup. ``skill_content`` is the rendered ``learning-afrikaans``
-    SKILL.md (markdown body without the YAML frontmatter), loaded by
-    the lifespan and passed in here so each call doesn't re-read it.
+    SKILL.md, loaded by the lifespan and passed in here so each call
+    doesn't re-read it.
     """
     router = APIRouter()
 
     # ── /sessions ───────────────────────────────────────────────
     @router.post("/sessions", response_model=SessionResponse)
     async def create_or_resume_session(req: SessionRequest) -> SessionResponse:
-        if not settings.learn_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Learning surface is temporarily disabled.",
-            )
+        _ensure_enabled()
 
         learner_id: str | None = None
         goal_text: str | None = None
 
-        # Magic-link arrivals (Phase 2 — verified token carries the
-        # learner_id + goal_text). Verify before trusting either.
+        # Magic-link arrivals carry a signed learner_id + goal_text.
         if req.token:
             payload = tokens.verify(req.token)
             if not payload:
@@ -183,14 +319,7 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             learner_id = str(payload.get("lid") or "")
             goal_text = payload.get("g")
             if learner_id:
-                # The learner_id was issued by us (signed); just refresh
-                # last_active_at. If the row doesn't exist yet (new
-                # magic-link with no prior intake), it'll be created
-                # below by the create_anonymous_learner fallback.
                 if not store.get_learner(learner_id):
-                    # The token referred to a learner row that doesn't
-                    # exist — could be a magic link for a brand-new
-                    # anonymous learner. Create it.
                     learner_id = store.create_anonymous_learner()
                 else:
                     store.touch_learner(learner_id)
@@ -207,7 +336,12 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             learner_id = store.create_anonymous_learner()
 
         # Seed the goal context if we have one from the magic link.
-        if goal_text:
+        # Only seed when the learner has NO live goals at all — a paused
+        # goal is still a curriculum we should respect; silently spawning
+        # a third on every magic-link arrival is the previous bug. If the
+        # learner has paused-only state, the frontend should prompt them
+        # to pick or restart rather than the API guessing.
+        if goal_text and not store.list_goals(learner_id, include_archived=False):
             store.get_or_create_active_goal(learner_id, context=goal_text)
 
         profile = store.get_profile(learner_id)
@@ -215,29 +349,40 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
         missing = intake.missing_fields(profile)
         next_field = missing[0] if missing else None
 
+        goals_list = [_goal_info(g) for g in store.list_goals(learner_id)]
+        active = _active_or_none(learner_id)
+
+        if active:
+            goal_info, thread, progress, outline = _goal_payload_bundle(
+                learner_id, active,
+            )
+        else:
+            goal_info = None
+            thread = []
+            progress = store.progress_for(learner_id)
+            outline = None
+
         return SessionResponse(
             learner_id=learner_id,
             intake_complete=complete,
             next_intake_field=next_field,
             next_intake_prompt=_intake_prompt(next_field),
             profile=profile,
+            goals=goals_list,
+            active_goal=goal_info,
+            thread=thread,
+            progress=progress,
+            curriculum_outline=outline,
         )
 
     # ── /intake ─────────────────────────────────────────────────
     @router.post("/intake", response_model=IntakeResponse)
     async def submit_intake(req: IntakeRequest) -> IntakeResponse:
-        if not settings.learn_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Learning surface is temporarily disabled.",
-            )
+        _ensure_enabled()
 
-        # Validate the SHAPE — semantic correctness is the LLM's job
-        # later, but the field name + value type must be storable.
         result = intake.validate_field(req.field, req.value)
         if not result.ok:
             profile = store.get_profile(req.learner_id)
-            missing = intake.missing_fields(profile)
             return IntakeResponse(
                 intake_complete=False,
                 next_intake_field=req.field,
@@ -246,8 +391,6 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
                 profile=profile,
             )
 
-        # Persist (PII-scrubbed inside store.save_profile_field for
-        # free-text fields).
         try:
             store.save_profile_field(req.learner_id, req.field, result.value)
         except RuntimeError as exc:
@@ -256,7 +399,6 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
                 detail=str(exc),
             )
 
-        # Recompute completeness.
         profile = store.get_profile(req.learner_id)
         if intake.is_complete(profile):
             store.mark_intake_complete(req.learner_id)
@@ -277,153 +419,196 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             profile=profile,
         )
 
-    # ── /next-card ──────────────────────────────────────────────
-    @router.post("/next-card", response_model=NextCardResponse)
-    async def get_next_card(req: NextCardRequest) -> NextCardResponse:
-        if not settings.learn_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Learning surface is temporarily disabled.",
-            )
+    # ── /turn ───────────────────────────────────────────────────
+    @router.post("/turn", response_model=TurnResponse)
+    async def take_turn(req: TurnRequest) -> TurnResponse:
+        _ensure_enabled()
 
+        # Intake gating — the coach assumes a fully-onboarded profile;
+        # without it the prompts are useless and we'd burn tokens.
         profile = store.get_profile(req.learner_id)
         if not intake.is_complete(profile):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Intake not complete yet — finish onboarding first.",
+                detail="Intake not complete — finish onboarding first.",
             )
 
-        # 1) Anything due in the SRS queue? Surface that first.
-        due = store.next_due_cards(req.learner_id, limit=1)
-        if due:
-            d = due[0]
-            return NextCardResponse(
-                card_id=d["card_id"],
-                card_type=d["card_type"],
-                prompt_text=d["prompt_text"],
-                hint_text=d.get("hint_text"),
-                difficulty=d.get("difficulty"),
-                progress=store.progress_for(req.learner_id),
-                box=int(d.get("box") or 1),
-            )
-
-        # 2) Nothing due — get/create the goal, ensure outline exists,
-        # then ask the model to author a new card.
-        goal = store.get_or_create_active_goal(req.learner_id)
-        ctx = ctx_mod.build_learner_context(
-            req.learner_id, goal_id=goal["goal_id"]
-        )
-
-        # On the very first learning turn there's no outline yet —
-        # design one before generating the card.
-        if not ctx.curriculum_outline:
-            try:
-                outline = await curriculum.design_outline(
-                    ctx, model=model, skill_content=skill_content,
-                )
-            except ModelOutputError as exc:
-                log.warning("design_outline failed: %s", exc)
+        # Resolve the goal: explicit goal_id (validated for ownership),
+        # else the active goal, else get-or-create. ``get_or_create``
+        # is the legacy single-curriculum behaviour — preserves it for
+        # the simple case where the frontend ignores goal_id.
+        if req.goal_id:
+            row = store.get_learner(req.learner_id)
+            if not row:
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Couldn't design your curriculum just now — try again in a moment.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Learner not found.",
                 )
-            store.save_curriculum_outline(goal["goal_id"], outline)
-            # Rebuild the context so the card prompt sees the freshly-
-            # written outline.
-            ctx = ctx_mod.build_learner_context(
-                req.learner_id, goal_id=goal["goal_id"]
+            goals = store.list_goals(req.learner_id, include_archived=True)
+            match = next(
+                (g for g in goals if g["goal_id"] == req.goal_id), None,
             )
+            if not match:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Goal not found.",
+                )
+            if match["status"] == "archived":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Goal is archived — re-create or activate "
+                    "another curriculum.",
+                )
+            goal = match
+        else:
+            active = _active_or_none(req.learner_id)
+            if active:
+                goal = active
+            else:
+                goal = store.get_or_create_active_goal(req.learner_id)
 
-        try:
-            card_payload = await cards_mod.generate_card(
-                ctx, model=model, skill_content=skill_content,
-            )
-        except ModelOutputError as exc:
-            log.warning("generate_card failed: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Couldn't generate a card just now — try again in a moment.",
-            )
-
-        # Persist the card so a future SRS re-review surfaces the same
-        # prompt rather than re-rolling.
-        card_id = store.save_card(
-            goal["goal_id"],
-            card_payload["card_type"],
-            card_payload["prompt_text"],
-            reference_answer=card_payload.get("reference_answer"),
-            hint_text=card_payload.get("hint_text"),
-            difficulty=card_payload.get("difficulty"),
+        new_msgs = await coach_mod.run_turn(
+            learner_id=req.learner_id,
+            goal_id=goal["goal_id"],
+            user_text=req.text,
+            model=model,
+            skill_content=skill_content,
         )
 
-        return NextCardResponse(
-            card_id=card_id,
-            card_type=card_payload["card_type"],
-            prompt_text=card_payload["prompt_text"],
-            hint_text=card_payload.get("hint_text"),
-            difficulty=card_payload.get("difficulty"),
-            progress=store.progress_for(req.learner_id),
-            box=1,    # brand-new card starts in box 1
+        # Re-read the goal so any side-effects (outline written, title
+        # set) surface in the response.
+        fresh = next(
+            (g for g in store.list_goals(req.learner_id, include_archived=True)
+             if g["goal_id"] == goal["goal_id"]),
+            goal,
+        )
+        progress = store.progress_for(req.learner_id, goal_id=goal["goal_id"])
+        outline = store.get_curriculum_outline(goal["goal_id"])
+
+        return TurnResponse(
+            learner_id=req.learner_id,
+            goal_id=goal["goal_id"],
+            messages=[_message_item(m) for m in new_msgs],
+            progress=progress,
+            curriculum_outline=outline,
+            goal=_goal_info(fresh),
         )
 
-    # ── /answer ─────────────────────────────────────────────────
-    @router.post("/answer", response_model=AnswerResponse)
-    async def submit_answer(req: AnswerRequest) -> AnswerResponse:
-        if not settings.learn_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Learning surface is temporarily disabled.",
-            )
+    # ── /goals ──────────────────────────────────────────────────
+    @router.post("/goals", response_model=GoalsResponse)
+    async def list_goals_endpoint(req: GoalsRequest) -> GoalsResponse:
+        _ensure_enabled()
+        goals = store.list_goals(
+            req.learner_id, include_archived=req.include_archived,
+        )
+        active = next((g for g in goals if g["status"] == "active"), None)
+        return GoalsResponse(
+            goals=[_goal_info(g) for g in goals],
+            active_goal_id=active["goal_id"] if active else None,
+        )
 
-        card = store.get_card(req.card_id)
-        if not card:
+    # ── /goals/new ──────────────────────────────────────────────
+    @router.post("/goals/new", response_model=GoalsNewResponse)
+    async def create_goal(req: GoalsNewRequest) -> GoalsNewResponse:
+        _ensure_enabled()
+        if not store.get_learner(req.learner_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Card not found.",
+                detail="Learner not found.",
             )
-        # Establish goal_id so the LLM sees the curriculum outline.
-        goal = store.get_or_create_active_goal(req.learner_id)
-        ctx = ctx_mod.build_learner_context(
-            req.learner_id, goal_id=goal["goal_id"]
+        new_goal = store.create_new_goal(
+            req.learner_id,
+            title=req.title,
+            context=req.context,
+            activate=req.activate,
+        )
+        return GoalsNewResponse(
+            goal=_goal_info(new_goal),
+            goals=[_goal_info(g) for g in store.list_goals(req.learner_id)],
         )
 
+    # ── /goals/activate ─────────────────────────────────────────
+    @router.post("/goals/activate", response_model=GoalsActivateResponse)
+    async def activate_goal_endpoint(
+        req: GoalsActivateRequest,
+    ) -> GoalsActivateResponse:
+        _ensure_enabled()
         try:
-            grading_payload = await grading.grade_answer(
-                ctx, card=card, user_answer=req.answer,
-                hint_used=req.hint_used,
-                model=model, skill_content=skill_content,
-            )
-        except ModelOutputError as exc:
-            log.warning("grade_answer failed: %s", exc)
+            activated = store.activate_goal(req.learner_id, req.goal_id)
+        except RuntimeError as exc:
+            # Cross-tenant / archived / missing — all collapse to 404
+            # to avoid leaking which path was wrong.
             raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Couldn't grade your answer just now — try again in a moment.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
             )
 
-        # record_attempt updates the Leitner state + persists the
-        # PII-scrubbed user_answer.
-        attempt = store.record_attempt(
-            learner_id=req.learner_id,
-            card_id=req.card_id,
-            user_answer=req.answer,
-            ai_feedback=grading_payload["feedback"],
-            rating=grading_payload["rating"],
-            hint_used=req.hint_used,
+        goal_info, thread, progress, outline = _goal_payload_bundle(
+            req.learner_id, activated,
+        )
+        return GoalsActivateResponse(
+            goal=goal_info,
+            goals=[_goal_info(g) for g in store.list_goals(req.learner_id)],
+            thread=thread,
+            progress=progress,
+            curriculum_outline=outline,
         )
 
-        return AnswerResponse(
-            rating=attempt["rating"],
-            feedback=grading_payload["feedback"],
-            new_box=attempt["new_box"],
-            next_due_at=attempt["next_due_at"],
-            progress=store.progress_for(req.learner_id),
+    # ── /goals/restart ──────────────────────────────────────────
+    @router.post("/goals/restart", response_model=GoalsRestartResponse)
+    async def restart_goal_endpoint(
+        req: GoalsRestartRequest,
+    ) -> GoalsRestartResponse:
+        _ensure_enabled()
+        try:
+            summary = store.restart_goal(req.learner_id, req.goal_id)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            )
+        # Re-read the goal row so the response carries the up-to-date
+        # title + status (the underlying restart only wiped content).
+        row = next(
+            (g for g in store.list_goals(req.learner_id, include_archived=True)
+             if g["goal_id"] == req.goal_id),
+            None,
+        )
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Goal not found after restart.",
+            )
+        return GoalsRestartResponse(
+            goal=_goal_info(row),
+            cards_deleted=summary["cards_deleted"],
+            messages_deleted=summary["messages_deleted"],
+        )
+
+    # ── /goals/archive ──────────────────────────────────────────
+    @router.post("/goals/archive", response_model=GoalsArchiveResponse)
+    async def archive_goal_endpoint(
+        req: GoalsArchiveRequest,
+    ) -> GoalsArchiveResponse:
+        _ensure_enabled()
+        try:
+            store.archive_goal(req.learner_id, req.goal_id)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            )
+        goals = store.list_goals(req.learner_id)
+        active = next((g for g in goals if g["status"] == "active"), None)
+        return GoalsArchiveResponse(
+            goals=[_goal_info(g) for g in goals],
+            active_goal_id=active["goal_id"] if active else None,
         )
 
     # ── /clear ──────────────────────────────────────────────────
     @router.post("/clear", response_model=ClearResponse)
     async def clear_learner(req: ClearRequest) -> ClearResponse:
-        # Always allowed even when learn_enabled is False — let users
-        # delete their data regardless of feature flags.
+        # Always allowed — data deletion is independent of feature flags.
         n = store.delete_learner(req.learner_id)
         return ClearResponse(ok=True, rows_deleted=n)
 

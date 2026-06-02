@@ -72,10 +72,16 @@ def tag_learner_input(text: str) -> str:
     across cold/warm starts."""
     if not text or not str(text).strip():
         return "(none)"
-    # Strip the literal closing tag if present, just in case the
-    # learner happened to type the exact tag string — single line so
-    # they can't reopen another `<learner_input>`.
-    sanitised = str(text).replace("</learner_input>", "").strip()
+    # Strip BOTH the literal opening and closing tags if present, in
+    # case the learner pasted the exact tag string — otherwise they
+    # could nest tags inside our wrapper and confuse the model about
+    # where the trust boundary actually is.
+    sanitised = (
+        str(text)
+        .replace("<learner_input>", "")
+        .replace("</learner_input>", "")
+        .strip()
+    )
     return f"<learner_input>{sanitised}</learner_input>"
 
 

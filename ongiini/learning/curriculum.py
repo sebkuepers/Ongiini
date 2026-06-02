@@ -118,7 +118,10 @@ def _build_design_user_prompt(ctx: LearnerContext) -> str:
         "Pick a sensible module count for this learner's goal (tighter "
         "for time-pressured objectives, broader for open-ended ones). "
         "The first module should have status 'in_progress'; the rest "
-        "'not_started'."
+        "'not_started'. "
+        "Each module SHOULD include a `topics` list — mix `kind: \"lesson\"` "
+        "topics with `kind: \"practice\"` topics, starting each module "
+        "with a lesson topic (teach first, then drill)."
     )
 
 
