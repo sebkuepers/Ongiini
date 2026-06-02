@@ -75,18 +75,6 @@ def _intake_prompt(field: str | None) -> str | None:
     return _INTAKE_PROMPTS.get(field)
 
 
-def _render_skill(
-    renderer: Callable[..., str], *, source: str, target: str,
-) -> str:
-    """Call the skill renderer, tolerating both positional-friendly
-    test stubs ``f(source, target)`` and the production keyword-only
-    ``render_skill_for_pair(*, source, target)``."""
-    try:
-        return renderer(source=source, target=target)
-    except TypeError:
-        return renderer(source, target)
-
-
 def _ensure_enabled() -> None:
     """All learn endpoints honor the kill-switch except /clear (data
     deletion is always allowed). Single helper so the message stays
@@ -644,8 +632,7 @@ def build_router(
         # Render the per-pair skill once per turn from the goal row.
         # Defaults exist on existing data via the backfill so this is
         # always callable; the renderer also validates the pair.
-        skill_text = _render_skill(
-            skill_renderer,
+        skill_text = skill_renderer(
             source=goal.get("source_language") or "english",
             target=goal.get("language") or "afrikaans",
         )
