@@ -400,6 +400,40 @@ def test_progress_for_after_attempts(temp_db):
 # Phase 2: multi-curriculum helpers
 # ============================================================
 
+def test_get_or_create_active_goal_persists_title_when_creating(temp_db):
+    """The /turn handler passes profile.objective as title so the
+    auto-created first curriculum shows up in the drawer with a real
+    name. Lock in the create path actually stores it."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(
+        learner_id, title="job interview at SPAR",
+    )
+    assert goal["title"] == "job interview at SPAR"
+    # Re-read confirms persistence.
+    listed = store.list_goals(learner_id)
+    assert listed[0]["title"] == "job interview at SPAR"
+
+
+def test_get_or_create_active_goal_ignores_title_when_existing(temp_db):
+    """A second call for the same learner returns the existing active
+    goal — its title MUST NOT be silently relabelled by a later call."""
+    learner_id = store.create_anonymous_learner()
+    store.get_or_create_active_goal(learner_id, title="first")
+    again = store.get_or_create_active_goal(learner_id, title="second")
+    assert again["title"] == "first"
+
+
+def test_get_or_create_active_goal_scrubs_title_pii(temp_db):
+    """Goal title is user-derived (intake objective) and must pass
+    through the project-wide PII scrub, same as other free-text
+    profile fields."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(
+        learner_id, title="contact maria@example.com",
+    )
+    assert "maria@example.com" not in (goal["title"] or "")
+
+
 def test_list_goals_excludes_archived_by_default(temp_db):
     learner_id = store.create_anonymous_learner()
     g1 = store.get_or_create_active_goal(learner_id)

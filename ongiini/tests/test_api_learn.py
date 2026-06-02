@@ -302,6 +302,73 @@ def test_turn_returns_409_before_intake(temp_db):
     assert r.status_code == 409
 
 
+def test_turn_response_includes_goals_list_after_auto_create(temp_db):
+    """When the FIRST /turn after intake auto-creates a goal, the
+    response must include the refreshed goals[] so the drawer shows
+    the new curriculum. Previously /turn returned only `goal`
+    (singular) and the drawer stayed at 'No curriculums yet.'"""
+    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    client = _client(fm)
+    s = client.post("/v1/learn/sessions", json={}).json()
+    _finish_intake(client, s["learner_id"])
+
+    r = client.post(
+        "/v1/learn/turn",
+        json={"learner_id": s["learner_id"], "text": None},
+    )
+    body = r.json()
+    # The auto-created goal is in the list, with title seeded from
+    # profile.objective so the drawer doesn't render it as
+    # "Untitled curriculum".
+    assert "goals" in body
+    assert len(body["goals"]) == 1
+    assert body["goals"][0]["goal_id"] == body["goal_id"]
+    assert body["goals"][0]["title"] == "job interview at SPAR"
+    assert body["goals"][0]["status"] == "active"
+
+
+def test_goals_activate_includes_module_progress_for_target_goal(temp_db):
+    """Switching curriculums used to leave the slim progress bar stuck
+    on the previous goal's module because /goals/activate didn't carry
+    module_progress + active_module_id. Lock in that the new response
+    fields are populated AND scoped to the activated goal."""
+    client = _client()
+    s = client.post("/v1/learn/sessions", json={}).json()
+    _finish_intake(client, s["learner_id"])
+
+    # Goal A with an outline that has its own modules.
+    goal_a = store.get_or_create_active_goal(s["learner_id"])
+    store.save_curriculum_outline(goal_a["goal_id"], {
+        "summary": "A",
+        "modules": [
+            {"id": "a-1", "title": "A first", "status": "in_progress",
+             "estimated_cards": 8},
+        ],
+    })
+
+    # Goal B becomes active (demoting A to paused).
+    goal_b = store.create_new_goal(s["learner_id"], title="B")
+    store.save_curriculum_outline(goal_b["goal_id"], {
+        "summary": "B",
+        "modules": [
+            {"id": "b-1", "title": "B first", "status": "in_progress",
+             "estimated_cards": 4},
+        ],
+    })
+
+    r = client.post(
+        "/v1/learn/goals/activate",
+        json={"learner_id": s["learner_id"], "goal_id": goal_a["goal_id"]},
+    )
+    body = r.json()
+    # The response carries A's module_progress + active_module_id,
+    # NOT B's — that was the bug.
+    assert body["active_module_id"] == "a-1"
+    assert len(body["module_progress"]) == 1
+    assert body["module_progress"][0]["module_id"] == "a-1"
+    assert body["module_progress"][0]["estimated_cards"] == 8
+
+
 def test_turn_no_text_no_goal_id_designs_outline_and_emits_exercise(temp_db):
     fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
     client = _client(fm)
