@@ -189,6 +189,16 @@ class TracingHook:
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "msisdn": ctx.msg.user_id,
             "msg_id": ctx.msg.msg_id,
+            # Channel the turn came in on — "whatsapp" or "web_chat".
+            # Surfaced on the /statistics page (web-chat block) and used
+            # by the stats aggregator to bucket trace rows. The aggregator
+            # also has a UUID-v4 msisdn fallback for older records that
+            # predate this field.
+            "transport": getattr(ctx.runtime.transport, "name", None),
+            # True when the user attached a photo this turn. Powers the
+            # "Images" KPI tile on /statistics; cheaper than scanning
+            # per-user memory files like the WhatsApp path used to.
+            "has_image": bool(getattr(ctx.msg, "has_image", False)),
             "user_msg_len": len(ctx.msg.text or ""),
             "history_len": len(ctx.msg.history),
             "policy": ctx.policy.name,

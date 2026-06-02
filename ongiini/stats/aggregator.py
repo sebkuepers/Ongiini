@@ -178,6 +178,63 @@ def _parse_trace_lines(excluded: frozenset[str]) -> Iterator[dict[str, Any]]:
             yield obj
 
 
+# --- Web-chat trace classification ------------------------------------------
+
+# Canonical lowercase UUID v4: 8-4-4-4-12 hex with the version + variant
+# bits fixed. Web-chat session_ids are produced by the browser's
+# crypto.randomUUID() and validated server-side against this exact form.
+# Using it here as the historical-data fallback when a trace record was
+# written before TracingHook started emitting an explicit `transport`
+# field. Anything that matches is unambiguously a web-chat session.
+_UUID_V4_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+
+
+def _is_web_chat_msisdn(s: str) -> bool:
+    return bool(_UUID_V4_RE.match(s))
+
+
+def _resolve_transport(record: dict[str, Any]) -> str:
+    """Bucket a trace record into 'whatsapp' or 'web_chat'.
+
+    Prefers the explicit ``transport`` field (added to TracingHook on
+    2026-06-02); falls back to the msisdn shape so historical records
+    still classify correctly without a backfill script.
+    """
+    t = record.get("transport")
+    if t in ("whatsapp", "web_chat"):
+        return t
+    if _is_web_chat_msisdn(str(record.get("msisdn", ""))):
+        return "web_chat"
+    return "whatsapp"
+
+
+def _parse_web_chat_trace_lines() -> Iterator[dict[str, Any]]:
+    """Yield only the trace rows that belong to chat.ongiini.ai.
+
+    Mirrors :func:`_parse_trace_lines` but inverts the filter: instead
+    of keeping Namibian phone numbers, keep anything whose resolved
+    transport is "web_chat". Does NOT consult the objections list —
+    that file is keyed by phone number and has no bearing on anonymous
+    browser sessions.
+    """
+    path = _trace_path()
+    if not path.exists():
+        return
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if _resolve_transport(obj) == "web_chat":
+                yield obj
+
+
 # --- Bucket-floor enforcement (privacy) -------------------------------------
 
 def _collapse_small_buckets(
@@ -854,6 +911,170 @@ def _top_topics_block(top_n: int = 20) -> dict[str, Any]:
     }
 
 
+# --- Web-chat (chat.ongiini.ai) aggregation ---------------------------------
+
+def _compute_web_chat() -> dict[str, Any] | None:
+    """Aggregate metrics for the anonymous web-chat channel.
+
+    Walks the same trace.jsonl as the WhatsApp aggregation but with the
+    inverse filter — only rows whose resolved transport is "web_chat".
+    Produces the block that appears under ``payload["web_chat"]`` in
+    /stats.json. Returns None when there isn't a single qualifying
+    observation in the trace (the frontend auto-hides the section).
+
+    Privacy contract:
+      * No source IP, no user-agent, no geo. None of those are even in
+        the trace; the rate-limiter is in-memory only and never writes
+        anything aggregator-readable.
+      * "Sessions" = distinct UUID v4 msisdns. A session is a browsing
+        session, not a person — that's the whole point of the channel.
+      * Counts are aggregate; no per-session detail surfaces.
+    """
+    by_day_messages: dict[str, int] = {}
+    by_day_sessions: dict[str, set[str]] = {}
+    by_day_tokens_in: dict[str, int] = {}
+    by_day_tokens_out: dict[str, int] = {}
+
+    sessions: set[str] = set()
+    messages = 0
+    tokens_in_total = 0
+    tokens_out_total = 0
+    images = 0
+    tool_call_turns = 0
+    truncations = 0
+    latencies: list[int] = []
+    timestamps: list[datetime] = []
+    rows_for_deltas: list[tuple[datetime, str]] = []
+
+    for r in _parse_web_chat_trace_lines():
+        msisdn = str(r.get("msisdn", ""))
+        if not msisdn:
+            continue
+        ts = _parse_ts(r.get("ts", ""))
+        if ts is None:
+            continue
+        day = ts.date().isoformat()
+
+        sessions.add(msisdn)
+        messages += 1
+        by_day_messages[day] = by_day_messages.get(day, 0) + 1
+        by_day_sessions.setdefault(day, set()).add(msisdn)
+
+        ti = int(r.get("total_tokens_in") or 0)
+        to = int(r.get("total_tokens_out") or 0)
+        tokens_in_total += ti
+        tokens_out_total += to
+        by_day_tokens_in[day] = by_day_tokens_in.get(day, 0) + ti
+        by_day_tokens_out[day] = by_day_tokens_out.get(day, 0) + to
+
+        if r.get("has_image"):
+            images += 1
+
+        # A "tool-call turn" = at least one of the model calls in this
+        # turn produced a non-empty tool_calls list. Mirrors the WhatsApp
+        # aggregator's definition so tool_call_rate is directly
+        # comparable across the two channels.
+        if any(c.get("tool_calls") for c in (r.get("calls") or [])):
+            tool_call_turns += 1
+
+        if r.get("truncated"):
+            truncations += 1
+
+        lat = int(r.get("total_latency_ms") or 0)
+        if lat > 0:
+            latencies.append(lat)
+
+        timestamps.append(ts)
+        rows_for_deltas.append((ts, msisdn))
+
+    if messages == 0:
+        return None
+
+    # Per-day series — sorted ascending by date, one tuple per
+    # observation day. We deliberately keep raw counts (no <5 floor on
+    # the per-day cell), matching the WhatsApp timeseries pattern.
+    days = sorted(by_day_messages.keys())
+    sessions_per_day = [[d, len(by_day_sessions.get(d, ()))] for d in days]
+    messages_per_day = [[d, by_day_messages[d]] for d in days]
+    tokens_per_day = [
+        [d, by_day_tokens_in.get(d, 0), by_day_tokens_out.get(d, 0)]
+        for d in days
+    ]
+
+    # WoW deltas — same anchor logic as _compute_deltas for WhatsApp.
+    anchor = max(timestamps)
+    current_start = anchor - timedelta(days=7)
+    prior_start = anchor - timedelta(days=14)
+
+    def _window(start_excl: datetime, end_incl: datetime) -> tuple[int, int]:
+        # Returns (messages, unique_sessions) in (start_excl, end_incl].
+        msgs = 0
+        ses: set[str] = set()
+        for ts, m in rows_for_deltas:
+            if start_excl < ts <= end_incl:
+                msgs += 1
+                ses.add(m)
+        return msgs, len(ses)
+
+    cur_msgs, cur_ses = _window(current_start, anchor)
+    pri_msgs, pri_ses = _window(prior_start, current_start)
+
+    def _delta(curr: int, prior: int) -> dict[str, Any]:
+        out = {"current": curr, "prior": prior}
+        if prior > 0:
+            out["pct_change"] = round((curr - prior) / prior * 100.0, 1)
+        return out
+
+    deltas_block = {
+        "messages": _delta(cur_msgs, pri_msgs),
+        "sessions": _delta(cur_ses, pri_ses),
+    }
+
+    # Performance — same shape (median, p95, rates) as the WhatsApp
+    # `perf` block so the rendered cards look identical.
+    if latencies:
+        latencies.sort()
+        median_lat = int(statistics.median(latencies))
+        p95_idx = max(0, int(len(latencies) * 0.95) - 1)
+        p95_lat = latencies[p95_idx]
+    else:
+        median_lat = 0
+        p95_lat = 0
+
+    perf = {
+        "median_latency_ms": median_lat,
+        "p95_latency_ms": p95_lat,
+        "tool_call_rate": round(tool_call_turns / messages, 4),
+        "truncation_rate": round(truncations / messages, 4),
+    }
+
+    return {
+        "totals": {
+            "sessions": len(sessions),
+            "messages": messages,
+            "tokens_in_total": tokens_in_total,
+            "tokens_out_total": tokens_out_total,
+            "images": images,
+            "tool_call_turns": tool_call_turns,
+        },
+        "totals_deltas": deltas_block,
+        "timeseries": {
+            "sessions_per_day": sessions_per_day,
+            "messages_per_day": messages_per_day,
+            "tokens_per_day": tokens_per_day,
+        },
+        "performance": perf,
+        "methodology": (
+            "Aggregate counts over anonymous browser sessions on "
+            "chat.ongiini.ai. A session is a browser-side UUID v4 stored "
+            "in localStorage and discarded when the tab closes or after "
+            "~6 hours of inactivity. Per-session detail is never "
+            "published; the source IP used for rate-limiting is never "
+            "stored or analysed (see Privacy Section 2.8)."
+        ),
+    }
+
+
 # --- Main aggregator --------------------------------------------------------
 
 def _compute_sync() -> dict[str, Any]:
@@ -1273,6 +1494,10 @@ def _compute_sync() -> dict[str, Any]:
             ),
         },
         "performance": perf,
+        # Anonymous web-chat (chat.ongiini.ai) — populated when there is
+        # at least one qualifying observation in the trace. Returns None
+        # otherwise, and the /statistics page hides the section.
+        "web_chat": _compute_web_chat(),
     }
 
 

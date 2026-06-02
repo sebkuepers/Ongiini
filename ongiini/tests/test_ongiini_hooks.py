@@ -24,7 +24,12 @@ def _ctx(msisdn: str = "+264u") -> TurnContext:
         content_parts=[],
         history=[{"role": "user", "content": "earlier"}],
     )
-    return TurnContext(msg=msg, policy=Policy(name="test"), runtime=MagicMock())
+    runtime = MagicMock()
+    # TracingHook serialises transport.name onto the trace record so
+    # the stats aggregator can bucket WhatsApp vs web-chat. Pin a real
+    # string here — production transports always expose a str name.
+    runtime.transport.name = "whatsapp"
+    return TurnContext(msg=msg, policy=Policy(name="test"), runtime=runtime)
 
 
 # ============================================================
