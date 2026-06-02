@@ -21,26 +21,27 @@
       --bone:           oklch(0.965 0.012 75);
       --bone-deep:      oklch(0.945 0.018 75);
       --sand:           oklch(0.92  0.025 70);
+      --sand-deep:      oklch(0.87  0.030 70);
       --ink:            oklch(0.20  0.018 50);
       --ink-soft:       oklch(0.50  0.020 50);
       --ink-faint:      oklch(0.68  0.020 50);
       --terracotta:       oklch(0.60 0.14 45);
       --terracotta-deep:  oklch(0.48 0.13 40);
       --terracotta-light: oklch(0.78 0.10 50);
-      --rule:        oklch(0.85 0.018 70);
+      --rule:        oklch(0.82 0.022 70);
     }
     @supports not (color: oklch(0 0 0)) {
       :root {
-        --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd;
+        --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd; --sand-deep: #ddd1ba;
         --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
         --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --terracotta-light: #d4a283;
-        --rule: #d1c8b9;
+        --rule: #c8bda8;
       }
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; height: 100%; }
     body {
-      background: var(--bone);
+      background: var(--sand-deep);
       color: var(--ink);
       font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
       font-size: 16px;
@@ -129,7 +130,7 @@
     }
     .chip {
       padding: 8px 14px;
-      background: var(--bone-deep);
+      background: var(--bone);
       border: 1px solid var(--rule);
       border-radius: 999px;
       font-size: 14px;
@@ -137,7 +138,7 @@
       cursor: pointer;
       transition: background 120ms ease;
     }
-    .chip:hover { background: var(--sand); }
+    .chip:hover { background: var(--bone-deep); }
 
     .turns { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
     .turn { display: flex; }
@@ -157,8 +158,9 @@
     }
     .turn--user .bubble a { color: var(--bone); }
     .turn--bot .bubble {
-      background: var(--bone-deep);
+      background: var(--bone);
       color: var(--ink);
+      border: 1px solid var(--rule);
       border-bottom-left-radius: 6px;
     }
     .bubble p:first-child { margin-top: 0; }
@@ -184,7 +186,8 @@
     .bubble img { margin-top: 4px; }
     .typing {
       display: inline-flex; gap: 4px; padding: 14px 18px;
-      background: var(--bone-deep);
+      background: var(--bone);
+      border: 1px solid var(--rule);
       border-radius: 14px; border-bottom-left-radius: 6px;
     }
     .typing span {
@@ -208,7 +211,7 @@
     }
     .composer textarea {
       flex: 1;
-      background: var(--bone-deep);
+      background: var(--bone);
       border: 1px solid var(--rule);
       border-radius: 14px;
       padding: 12px 14px;
@@ -232,11 +235,11 @@
       cursor: pointer; flex-shrink: 0;
     }
     .composer-actions .attach {
-      background: var(--bone-deep);
+      background: var(--bone);
       color: var(--ink-soft);
       border: 1px solid var(--rule);
     }
-    .composer-actions .attach:hover { background: var(--sand); color: var(--ink); }
+    .composer-actions .attach:hover { background: var(--bone-deep); color: var(--ink); }
     .composer-actions .send {
       background: var(--terracotta);
       color: var(--bone);
@@ -252,7 +255,7 @@
       max-width: 760px; margin: 0 auto 10px;
       display: none; align-items: center; gap: 10px;
       padding: 8px 12px;
-      background: var(--bone-deep);
+      background: var(--bone);
       border-radius: 10px;
       border: 1px solid var(--rule);
     }
