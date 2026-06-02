@@ -160,9 +160,10 @@ async def lifespan(app: FastAPI):
                 model=shared.model,
                 skill_content=learn_skill_text,
             )
-            learn_sub = FastAPI(title="Ongiini Learn", openapi_url=None)
-            learn_sub.include_router(learn_router, prefix="/learn")
-            app.mount("/v1", learn_sub)
+            # Include directly on the parent app at /v1/learn — we
+            # cannot mount a second sub-app at /v1 because the chat
+            # sub-app's mount already owns that prefix.
+            app.include_router(learn_router, prefix="/v1/learn")
             log.info("learn endpoint enabled at /v1/learn")
         except Exception as exc:                            # noqa: BLE001
             # Don't bring the webhook down if the learn surface can't
