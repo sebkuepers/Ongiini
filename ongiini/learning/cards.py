@@ -135,7 +135,7 @@ def _build_user_prompt(ctx: LearnerContext) -> str:
         "LEARNER:\n"
         f"  name: {tag_learner_input(p.get('name'))}\n"
         f"  level: {p.get('current_level') or 'beginner'}\n"
-        f"  objective: {tag_learner_input(ctx.goal_context or p.get('objective'))}\n"
+        f"  focus: {tag_learner_input(ctx.goal_title or ctx.goal_context or p.get('objective'))}\n"
         f"\nCURRICULUM OUTLINE:\n{outline_json}\n"
         f"\nPROGRESS: {progress_summary}\n"
         f"\nMODULE DIGEST (per-module rollup — load-bearing for "

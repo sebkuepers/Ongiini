@@ -40,7 +40,12 @@ def test_context_picks_up_profile_after_intake(temp_db):
     assert ctx.profile is not None
     assert ctx.profile["name"] == "Sebastian"
     assert ctx.profile["age"] == 35
-    assert ctx.goal_context == "job interview at SPAR"   # fallback to profile
+    # profile.objective is exposed via ctx.profile['objective'] for
+    # use as a fallback when no goal title is set. It is NO LONGER
+    # silently copied into ctx.goal_context (see
+    # test_goal_context_no_longer_silently_falls_back_to_profile_objective).
+    assert ctx.profile["objective"] == "job interview at SPAR"
+    assert ctx.goal_context is None
 
 
 def test_context_goal_context_overrides_profile(temp_db):
@@ -96,3 +101,40 @@ def test_context_is_frozen(temp_db):
     ctx = context.build_learner_context(learner_id)
     with pytest.raises(Exception):
         ctx.learner_id = "different"     # type: ignore[misc]
+
+
+def test_goal_title_overrides_stale_profile_objective(temp_db):
+    """Regression for the "restaurant when title says Job Interview at
+    Serviceplan" bug. When a learner picks a fresh focus via
+    /goals/new, the goal's TITLE must drive the curriculum prompt
+    instead of an older intake objective."""
+    learner_id = store.create_anonymous_learner()
+    # Older intake objective on the profile.
+    store.save_profile_field(learner_id, "objective", "ordering food at restaurant")
+    goal = store.create_new_goal(
+        learner_id, title="Job Interview at Serviceplan",
+        language="german", source_language="english",
+    )
+    ctx = context.build_learner_context(
+        learner_id, goal_id=goal["goal_id"],
+    )
+    assert ctx.goal_title == "Job Interview at Serviceplan"
+    # profile.objective is still on the profile (kept for fallback /
+    # history); the prompt's "focus" line will read goal_title first.
+    assert (ctx.profile or {}).get("objective") == "ordering food at restaurant"
+
+
+def test_goal_context_no_longer_silently_falls_back_to_profile_objective(temp_db):
+    """When a goal has no context column set, ctx.goal_context must
+    be None — not stealthily populated with profile.objective. Prior
+    behaviour caused stale objectives to override fresh goal titles."""
+    learner_id = store.create_anonymous_learner()
+    store.save_profile_field(learner_id, "objective", "old intake answer")
+    goal = store.create_new_goal(
+        learner_id, title="fresh focus",
+        language="german", source_language="english",
+    )
+    ctx = context.build_learner_context(
+        learner_id, goal_id=goal["goal_id"],
+    )
+    assert ctx.goal_context is None

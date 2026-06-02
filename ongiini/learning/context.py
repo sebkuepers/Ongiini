@@ -55,6 +55,15 @@ class LearnerContext:
     learner_id: str
     profile: dict[str, object] | None
     goal_id: str | None = None
+    # The user's most recent stated focus for THIS curriculum. The
+    # primary anchor for the curriculum-design prompt — when set, it
+    # overrides the older profile.objective so a learner who created
+    # a German goal titled "Job Interview at Serviceplan" doesn't get
+    # a curriculum based on the restaurant-themed objective they
+    # entered at intake last week.
+    goal_title: str | None = None
+    # Optional longer-form context the user supplied when creating
+    # the goal (the modal's "Context" textarea).
     goal_context: str | None = None
     recent_excerpts: list[str] = field(default_factory=list)
     mem0_facts: list[str] = field(default_factory=list)
@@ -120,13 +129,15 @@ def build_learner_context(
     """
     profile = store.get_profile(learner_id)
     outline: dict[str, object] | None = None
-    # Pull source/target/level from the goal row when one is supplied.
+    # Pull source/target/level + title + context from the goal row.
     # Defaults match the back-fill (source=english, target=afrikaans)
     # so callers without a goal still get sensible behaviour for the
     # legacy single-language flow.
     source_language = "english"
     target_language = "afrikaans"
     goal_level: str | None = None
+    goal_title: str | None = None
+    goal_row_context: str | None = None
     if goal_id:
         outline = store.get_curriculum_outline(goal_id)
         goal_row = next(
@@ -141,12 +152,17 @@ def build_learner_context(
                 target_language = goal_row["language"]
             if isinstance(goal_row.get("current_level"), str) and goal_row["current_level"].strip():
                 goal_level = goal_row["current_level"]
-    # Fall back to the intake objective when the caller didn't supply
-    # one. Keeps a sensible context for cold-visitor flows where the
-    # only "why" we have is what intake captured.
-    fallback_objective = None
-    if profile and isinstance(profile.get("objective"), str):
-        fallback_objective = str(profile.get("objective")) or None
+            if isinstance(goal_row.get("title"), str) and goal_row["title"].strip():
+                goal_title = goal_row["title"].strip()
+            if isinstance(goal_row.get("context"), str) and goal_row["context"].strip():
+                goal_row_context = goal_row["context"].strip()
+    # The goal_context parameter is an explicit caller override (e.g.
+    # the magic-link path supplying a fresh objective for a new goal).
+    # Persisted goal data is preferred when the caller didn't supply
+    # one — we DELIBERATELY do not fall back to profile.objective here
+    # because doing so caused the prior bug: a learner with stale
+    # intake objective + a freshly-named new goal got a curriculum
+    # designed for the old objective.
 
     progress = (
         store.progress_for(learner_id, goal_id=goal_id) if learner_id and goal_id
@@ -190,7 +206,8 @@ def build_learner_context(
         learner_id=learner_id,
         profile=profile,
         goal_id=goal_id,
-        goal_context=goal_context or fallback_objective,
+        goal_title=goal_title,
+        goal_context=goal_context or goal_row_context,
         recent_excerpts=[],     # Phase 2 — wire to chat short-term memory
         mem0_facts=[],          # Phase 2 — wire to mem0 search by objective
         curriculum_outline=outline,

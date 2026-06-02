@@ -64,7 +64,7 @@ def _build_user_prompt(
     return (
         "LEARNER:\n"
         f"  level: {p.get('current_level') or 'beginner'}\n"
-        f"  objective: {tag_learner_input(ctx.goal_context or p.get('objective'))}\n"
+        f"  focus: {tag_learner_input(ctx.goal_title or ctx.goal_context or p.get('objective'))}\n"
         "\nCARD:\n"
         f"  card_type: {card.get('card_type')}\n"
         f"  prompt_text: {card.get('prompt_text')}\n"
