@@ -94,7 +94,13 @@
 
     /* ── Hero ─────────────────────────────────────────────── */
     .hero {
-      padding: 56px 0 28px;
+      /* Only vertical padding — the horizontal padding comes from
+         .wrap. The shorthand `padding: 56px 0` would override it
+         and the section content would land flush against the
+         viewport edge. Same pattern for .section / .how / .closing
+         below. */
+      padding-top: 56px;
+      padding-bottom: 28px;
       text-align: center;
     }
     .hero-eyebrow {
@@ -130,7 +136,8 @@
 
     /* ── Topic cards ──────────────────────────────────────── */
     .section {
-      padding: 36px 0 8px;
+      padding-top: 36px;
+      padding-bottom: 8px;
     }
     .section-eyebrow {
       font-family: 'Geist Mono', monospace;
@@ -228,7 +235,8 @@
        and a small inset preview at the bottom that's visually
        different from the topic cards (subtle, no rounded corners). */
     .how {
-      padding: 44px 0 24px;
+      padding-top: 44px;
+      padding-bottom: 24px;
     }
     .steps {
       display: grid;
@@ -312,7 +320,8 @@
 
     /* ── Closing CTA ──────────────────────────────────────── */
     .closing {
-      padding: 28px 0 48px;
+      padding-top: 28px;
+      padding-bottom: 48px;
       text-align: center;
     }
     .closing-cta {
@@ -483,18 +492,18 @@
     [hidden] { display: none !important; }
 
     @media (max-width: 600px) {
-      .wrap { padding: 0 16px; }
-      .hero { padding: 32px 0 20px; }
-      .section { padding: 24px 0 4px; }
-      .how { padding: 32px 0 16px; }
-      .closing { padding: 24px 0 40px; }
+      .wrap { padding-left: 16px; padding-right: 16px; }
+      .hero { padding-top: 32px; padding-bottom: 20px; }
+      .section { padding-top: 24px; padding-bottom: 4px; }
+      .how { padding-top: 32px; padding-bottom: 16px; }
+      .closing { padding-top: 24px; padding-bottom: 40px; }
       .topic-card { min-height: 140px; padding: 18px 18px 14px; }
       .topic-name { font-size: 24px; }
       .topic-flag { font-size: 28px; }
       .step-title { font-size: 18px; }
     }
     @media (max-width: 380px) {
-      .wrap { padding: 0 14px; }
+      .wrap { padding-left: 14px; padding-right: 14px; }
     }
   </style>
 </head>
