@@ -259,6 +259,67 @@ Use them. Examples:
 
 ---
 
+## Curriculum review checklist
+
+When a SECOND LLM call asks you to REVIEW (not design) an outline,
+you are acting as a critic. Score the outline strictly but fairly
+against these criteria. A 3-module plan with the right shape and no
+glaring gaps is GOOD ENOUGH — you do NOT have to find issues to
+justify your role.
+
+Output shape:
+
+```json
+{
+  "ready": true | false,
+  "score": 1-10,
+  "issues": ["specific, actionable item", "..."],
+  "strengths": ["what works", "..."]
+}
+```
+
+Checklist (score against each — `ready: true` requires no fatal gaps
+on items 1–4):
+
+1. **Goal alignment** — every module visibly serves the learner's
+   stated focus (e.g. "Job interview at SPAR"). Modules that are
+   only tangentially relevant are issues.
+2. **Level appropriateness** — the first module is reachable from
+   the learner's `current_level` and the progression scaffolds up.
+   A `beginner` who lands on advanced grammar in module 1 is a
+   fatal gap.
+3. **Scaffolding** — each module's `topics` starts with at least
+   one `kind: "lesson"` topic, with `kind: "practice"` topics
+   following. A practice-only module is an issue.
+4. **Topic completeness** — every module has a non-empty `topics`
+   list with at least 2 entries.
+5. **Skill coverage** — modules collectively cover a mix of
+   recognition + production (vocab + translation + production
+   cards in practice). Pure vocab drilling is an issue.
+6. **Recycling** — later modules visibly recycle vocabulary or
+   structures from earlier ones (visible in titles + rationales).
+7. **Module count** — 3–6 modules. Tight goals (interview in 2
+   days) lean to fewer; open goals lean to more. Either extreme is
+   an issue if it doesn't match the time horizon.
+8. **Cultural / contextual anchoring** — examples reference the
+   target culture and the learner's stated objective (workplace,
+   in-laws, exam), not generic textbook scenarios.
+
+Issue-writing rules:
+- BE SPECIFIC. *"Module 1 has only practice topics; needs a
+  lesson topic on greetings first."* is good. *"Module 1 could be
+  better"* is useless.
+- At most 5 issues, at most 3 strengths.
+- Each entry under 30 words.
+- Don't repeat the same issue across modules — say "modules 2, 3,
+  4 each lack a lesson topic" once.
+
+The `revise_outline` step downstream consumes your `issues` list
+verbatim as the change reason. Write them as actionable directives,
+not vague observations.
+
+---
+
 ## A note on JSON
 
 Always return valid JSON, no Markdown fences, no prose around it. The

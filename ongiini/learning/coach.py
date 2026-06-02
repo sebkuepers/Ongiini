@@ -553,10 +553,13 @@ async def _produce_next_thing(
     """
     new_messages: list[dict[str, Any]] = list(prefix_messages)
 
-    # Step 1: ensure we have a curriculum outline.
+    # Step 1: ensure we have a curriculum outline. Uses the
+    # design → critic → revise loop so the plan is QA'd against the
+    # CURRICULUM REVIEW CHECKLIST before we burn turns on cards
+    # designed against a bad outline.
     if not ctx.curriculum_outline:
         try:
-            outline = await curriculum.design_outline(
+            outline = await curriculum.design_outline_with_review(
                 ctx, model=model, skill_content=skill_content,
             )
         except ModelOutputError as exc:

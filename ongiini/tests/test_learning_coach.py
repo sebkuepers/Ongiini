@@ -56,6 +56,10 @@ _EXERCISE = json.dumps({
     "prompt_text": "How do you say 'thank you'?",
     "reference_answer": "dankie",
 })
+# The design-review loop calls the critic immediately after the
+# designer. Tests that just want the curriculum to ship can queue
+# this "ready on iter 1" response right after the outline.
+_CRITIC_READY = json.dumps({"ready": True, "score": 9, "issues": []})
 _LESSON = json.dumps({
     "card_type": "lesson",
     "prompt_text": "In Afrikaans, common greetings include 'goeie môre'.",
@@ -81,7 +85,7 @@ def _setup(temp_db):
 @pytest.mark.asyncio
 async def test_run_turn_no_text_no_active_card_designs_outline_and_emits_card(temp_db):
     learner_id, goal_id = _setup(temp_db)
-    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
@@ -138,6 +142,8 @@ async def test_answer_verdict_grades_and_advances(temp_db):
         '{"rating": "correct", "feedback": "Yes, dankie."}',
         # next thing: outline (designed lazily on first call)
         _OUTLINE,
+        # critic approves on iter 1
+        _CRITIC_READY,
         # ...then the next card
         _EXERCISE,
     ])

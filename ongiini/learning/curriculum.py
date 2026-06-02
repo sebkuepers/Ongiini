@@ -207,3 +207,115 @@ async def revise_outline(
     )
     _validate_outline(payload)
     return payload
+
+
+# ──────────────────────────────────────────────────────────────────
+# Design-review loop — design → critique → (revise if not ready) ×N
+# ──────────────────────────────────────────────────────────────────
+
+_DEFAULT_MAX_ITERATIONS = 3
+
+
+async def design_outline_with_review(
+    ctx: LearnerContext,
+    *,
+    model: Model,
+    skill_content: str,
+    max_iterations: int = _DEFAULT_MAX_ITERATIONS,
+) -> dict[str, Any]:
+    """Author a curriculum outline that's been QA'd by an LLM critic.
+
+    Loop:
+      1. Designer LLM writes the outline.
+      2. Critic LLM scores it against the checklist in SKILL.md.
+      3. If critic.ready → return outline.
+      4. Else: pass critic.issues as change_reason to revise_outline.
+      5. Cap at ``max_iterations`` (default 3) — after that, return
+         the last outline with a WARNING log. We do NOT block the
+         learner on a stubborn critic.
+
+    Soft-fail on revise: if a revision fails JSON-validation, we
+    keep the most recent valid outline and stop iterating rather than
+    rolling back to nothing. The critic's degraded-mode (`ready=True`
+    on model failure) means a flaky critic falls through to "ship as
+    designed."
+
+    Total LLM calls: 1 (designer) + 1–N×2 (critic + maybe revise
+    per iteration). For a typical median-1-iteration goal that's 2
+    calls; worst case at N=3 it's 7."""
+    from . import curriculum_critic as critic_mod   # local — break cycle
+
+    # Clamp non-positive iteration counts. The function name promises
+    # "with_review"; a caller asking for 0 (or negative) iterations
+    # would silently get an un-reviewed outline. Treat that as a
+    # caller bug, log it at debug, and ship the designed outline.
+    if max_iterations <= 0:
+        log.debug(
+            "curriculum: design_outline_with_review called with "
+            "max_iterations=%d; skipping critic loop",
+            max_iterations,
+        )
+        return await design_outline(
+            ctx, model=model, skill_content=skill_content,
+        )
+
+    outline = await design_outline(
+        ctx, model=model, skill_content=skill_content,
+    )
+
+    for iteration in range(1, max_iterations + 1):
+        critique = await critic_mod.critique_outline(
+            ctx, outline, model=model, skill_content=skill_content,
+        )
+        log.info(
+            "curriculum: critic iter=%d score=%d ready=%s issues=%d",
+            iteration, critique.score, critique.ready, len(critique.issues),
+        )
+        if critique.ready:
+            return outline
+        if iteration == max_iterations:
+            # Out of iterations — ship the last version. Warning level
+            # so ops can spot stubborn critics or weak designer prompts.
+            log.warning(
+                "curriculum: max iterations (%d) hit without critic "
+                "approval; shipping last outline. final_score=%d "
+                "open_issues=%d",
+                max_iterations, critique.score, len(critique.issues),
+            )
+            return outline
+        # Build the change reason for the next revise. If the critic
+        # said "not ready" but didn't actually list issues (degenerate
+        # but possible — e.g. ready=false with score=3 and no specific
+        # complaints), synthesize a meaningful prompt from the score
+        # so the revise model still has something to act on. Without
+        # this the revise turn is shaped by the boilerplate header
+        # alone, which is barely better than a re-roll.
+        if critique.issues:
+            change_reason = "Critic feedback to address:\n" + "\n".join(
+                f"- {item}" for item in critique.issues
+            )
+        else:
+            change_reason = (
+                f"The critic scored this {critique.score}/10 but did "
+                "not list specific issues. Strengthen the plan overall: "
+                "tighten goal alignment, ensure each module has a lesson "
+                "topic before practice topics, and improve recycling "
+                "across modules."
+            )
+        # Revise based on the critic's specific issues. revise_outline
+        # has its own _validate_outline call; on failure we surface
+        # ModelOutputError to the caller (coach has its own retry
+        # path) so we don't silently ship a broken revision.
+        try:
+            outline = await revise_outline(
+                ctx, model=model, skill_content=skill_content,
+                change_reason=change_reason,
+            )
+        except ModelOutputError as exc:
+            log.warning(
+                "curriculum: revise_outline failed on iter=%d, "
+                "shipping prior version: %s", iteration, exc,
+            )
+            return outline
+
+    return outline
