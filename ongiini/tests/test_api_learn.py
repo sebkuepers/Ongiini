@@ -79,19 +79,45 @@ _EXERCISE = json.dumps({
 
 def _client(fake_model: FakeModel | None = None) -> TestClient:
     """Build a TestClient against a fresh FastAPI app with the learn
-    router mounted at /v1/learn — same path layout production uses."""
+    router mounted at /v1/learn — same path layout production uses.
+
+    The intake LLM parser is invoked on every /intake POST with a
+    string value, so 4 canned ``{"value": ...}`` responses are PRE-
+    PENDED to the FakeModel queue. Tests that exercise a specific
+    /turn or grading flow continue to control their own response order
+    by passing a FakeModel — those responses run AFTER the intake
+    prefix the helper installs."""
     app = FastAPI()
-    model = fake_model or FakeModel()
-    router = build_router(model=model, skill_content="SKILL")
+    if fake_model is None:
+        fake_model = FakeModel(responses=list(_INTAKE_PARSER_RESPONSES))
+    else:
+        fake_model.responses = (
+            list(_INTAKE_PARSER_RESPONSES) + fake_model.responses
+        )
+    router = build_router(model=fake_model, skill_content="SKILL")
     app.include_router(router, prefix="/v1/learn")
     return TestClient(app)
 
 
+_INTAKE_PARSER_RESPONSES = [
+    json.dumps({"value": "Sebastian"}),
+    json.dumps({"value": 35}),
+    json.dumps({"value": "beginner"}),
+    json.dumps({"value": "job interview at SPAR"}),
+]
+
+
 def _finish_intake(client: TestClient, learner_id: str) -> None:
-    """Convenience — drive the four intake POSTs so /turn isn't gated."""
+    """Convenience — drive the four intake POSTs so /turn isn't gated.
+
+    The intake LLM is in front of the validator now (free-text →
+    {value} or {clarify}); each POST consumes one model response from
+    the queue. Tests that only need intake done can call this; tests
+    that explicitly exercise intake should set up FakeModel responses
+    themselves."""
     for field_name, value in [
         ("name", "Sebastian"),
-        ("age", 35),
+        ("age", "35"),    # str so it routes through the parser
         ("current_level", "beginner"),
         ("objective", "job interview at SPAR"),
     ]:
@@ -195,20 +221,63 @@ def test_sessions_resume_includes_thread_after_intake(temp_db):
 # /intake
 # ============================================================
 
-def test_intake_validation_error_does_not_persist(temp_db):
-    client = _client()
+def test_intake_clarify_surfaces_natural_language_followup(temp_db):
+    """The fix to Sebastian's "this is dumb" complaint: when the user
+    types "#46" or "I dont know anything", the LLM intermediary writes
+    a natural-voice clarify question. The frontend surfaces it as a
+    coach bubble. NO mechanical "age must be a positive integer"
+    string ever reaches the user."""
+    fm = FakeModel(responses=[
+        json.dumps({"clarify": "No worries — could you give me your age as a number?"}),
+    ])
+    # Bypass _INTAKE_PARSER_RESPONSES prefix — we want this exact response.
+    fm.responses = list(fm.responses)
+    app = FastAPI()
+    router = build_router(model=fm, skill_content="SKILL")
+    app.include_router(router, prefix="/v1/learn")
+    client = TestClient(app)
+
     learner_id = store.create_anonymous_learner()
     r = client.post(
         "/v1/learn/intake",
-        json={"learner_id": learner_id, "field": "age", "value": "not a number"},
+        json={"learner_id": learner_id, "field": "age", "value": "#46"},
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["validation_error"]
     assert body["intake_complete"] is False
-    # Profile should not have been touched.
+    assert body["next_intake_field"] == "age"
+    assert body["clarify_text"]
+    assert "age" in body["clarify_text"].lower()
+    # Nothing got persisted — defence in depth.
     profile = store.get_profile(learner_id)
     assert (profile or {}).get("age") is None
+
+
+def test_intake_defence_in_depth_when_llm_value_fails_validator(temp_db):
+    """If the LLM extracts a value the shape validator rejects (e.g.
+    hallucinated age 999), surface a polite clarify text rather than
+    the mechanical reason. The validator's reason is still attached for
+    server-side debugging."""
+    fm = FakeModel(responses=[json.dumps({"value": 999})])
+    app = FastAPI()
+    router = build_router(model=fm, skill_content="SKILL")
+    app.include_router(router, prefix="/v1/learn")
+    client = TestClient(app)
+
+    learner_id = store.create_anonymous_learner()
+    r = client.post(
+        "/v1/learn/intake",
+        json={"learner_id": learner_id, "field": "age", "value": "I am 999"},
+    )
+    body = r.json()
+    # User sees the natural clarify, not the raw validator string.
+    assert body["clarify_text"]
+    assert "must be between" not in body["clarify_text"]
+    # Server-side reason still recorded for debugging.
+    assert body["validation_error"]
+    assert "between" in body["validation_error"]
+    # Nothing persisted.
+    assert (store.get_profile(learner_id) or {}).get("age") is None
 
 
 def test_intake_completion_flips_flag(temp_db):

@@ -60,6 +60,30 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
+def _render_recent_cards(ctx: LearnerContext) -> str:
+    """Compact bullet list of the most recent cards the learner has
+    seen on this goal's thread. Without this the model has no way to
+    tell that it just emitted a lesson — so on every "Got it →" tap
+    it re-decides "module just started → lesson" and emits the same
+    thing again. Showing it the recent cards lets it pick the right
+    next move (drill the lesson it just gave, or start a new sub-topic).
+    """
+    if not ctx.recent_cards:
+        return "(none yet — this is the first card on this goal)"
+    lines: list[str] = []
+    for c in ctx.recent_cards:
+        kind = c.get("kind") or "?"
+        ct = c.get("card_type") or kind
+        ans = "answered" if c.get("answered") else "active"
+        title = c.get("title")
+        prompt = (c.get("prompt_text") or "")
+        # Compact the prompt — first 80 chars is enough to recognise
+        # the topic; we don't need to echo the whole lesson body.
+        snippet = (title or prompt).strip().splitlines()[0][:80] if (title or prompt) else "(empty)"
+        lines.append(f"  - [{kind}/{ct}] [{ans}] {snippet}")
+    return "\n".join(lines)
+
+
 def _build_user_prompt(ctx: LearnerContext) -> str:
     p = ctx.profile or {}
     import json as _json
@@ -80,10 +104,16 @@ def _build_user_prompt(ctx: LearnerContext) -> str:
         f"  objective: {tag_learner_input(ctx.goal_context or p.get('objective'))}\n"
         f"\nCURRICULUM OUTLINE:\n{outline_json}\n"
         f"\nPROGRESS: {progress_summary}\n"
-        "\nTASK: Author the next card. Pick the card_type that fits the "
-        "in-progress module and the learner's current ability. If lots "
-        "of cards are stuck in Leitner box 1, prefer consolidating cards "
-        "(easier, in-module) over introducing new themes. Output JSON only."
+        f"\nRECENT CARDS ON THIS GOAL (oldest first):\n{_render_recent_cards(ctx)}\n"
+        "\nTASK: Author the next card. Use RECENT CARDS to decide what's "
+        "next — if the last card was a lesson, DRILL the lesson with an "
+        "exercise (vocab / translation / production) rather than emitting "
+        "another lesson. Two lessons in a row should only happen if a "
+        "concept genuinely needs more setup, and even then prefer an "
+        "exercise. Pick the card_type that fits the in-progress module "
+        "and the learner's current ability. If lots of cards are stuck in "
+        "Leitner box 1, prefer consolidating cards (easier, in-module) "
+        "over introducing new themes. Output JSON only."
     )
 
 

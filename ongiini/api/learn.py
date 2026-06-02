@@ -38,7 +38,9 @@ from owela import Model
 
 from ..config import settings
 from ..learning import coach as coach_mod
-from ..learning import db, intake, messages as messages_mod, store, tokens
+from ..learning import (
+    db, intake, intake_parser, messages as messages_mod, store, tokens,
+)
 
 log = logging.getLogger("ongiini.api.learn")
 
@@ -146,6 +148,13 @@ class IntakeResponse(BaseModel):
     intake_complete: bool
     next_intake_field: str | None
     next_intake_prompt: str | None
+    # When the LLM can't confidently extract a value from free-text,
+    # it returns a natural-voice follow-up here. The frontend renders
+    # this as a normal coach bubble (no "Hmm — validation error" stiff
+    # template). Either ``clarify_text`` OR ``validation_error`` is set;
+    # ``validation_error`` is kept for the rare defence-in-depth case
+    # where the LLM extracts something the shape validator rejects.
+    clarify_text: str | None = None
     validation_error: str | None = None
     profile: dict[str, Any] | None
 
@@ -380,13 +389,46 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
     async def submit_intake(req: IntakeRequest) -> IntakeResponse:
         _ensure_enabled()
 
-        result = intake.validate_field(req.field, req.value)
+        # LLM step — interpret the learner's free text BEFORE running
+        # the shape validator. Without this the validator's mechanical
+        # rejection ("age must be a positive integer") leaks through to
+        # the chat as a bot bubble, which violates "the LLM owns
+        # content; the deterministic layer owns shape/persistence".
+        # The parser returns either a clean value to validate or a
+        # natural-voice follow-up to surface as a coach bubble.
+        if not isinstance(req.value, str):
+            # Legacy callers (or magic-link prefills) may pass typed
+            # primitives — go straight to the shape validator in that
+            # case, no LLM call needed.
+            extracted_value: Any = req.value
+            clarify: str | None = None
+        else:
+            parser_result = await intake_parser.parse_intake_answer(
+                field=req.field, user_text=req.value, model=model,
+            )
+            if intake_parser.CLARIFY_KEY in parser_result:
+                profile = store.get_profile(req.learner_id)
+                return IntakeResponse(
+                    intake_complete=False,
+                    next_intake_field=req.field,
+                    next_intake_prompt=_intake_prompt(req.field),
+                    clarify_text=parser_result[intake_parser.CLARIFY_KEY],
+                    profile=profile,
+                )
+            extracted_value = parser_result.get(intake_parser.VALUE_KEY, req.value)
+            clarify = None
+
+        result = intake.validate_field(req.field, extracted_value)
         if not result.ok:
+            # Defence in depth — the LLM produced something the shape
+            # validator rejects. Surface as a polite clarify so the user
+            # never sees the raw "must be a positive integer" string.
             profile = store.get_profile(req.learner_id)
             return IntakeResponse(
                 intake_complete=False,
                 next_intake_field=req.field,
                 next_intake_prompt=_intake_prompt(req.field),
+                clarify_text="Sorry — could you say that another way?",
                 validation_error=result.reason,
                 profile=profile,
             )

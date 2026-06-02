@@ -55,6 +55,14 @@
       flex-direction: column;
       min-height: 100dvh;
     }
+    /* When the chat-first learning view is active, lock the body to
+       the viewport so the thread becomes the only scroll context.
+       Without this, big lesson cards push the body taller than 100dvh
+       and the WINDOW scrolls instead of the thread — which means
+       scrollThreadToBottom() targets the wrong element and new
+       messages can land below the fold. */
+    body.learn-mode { height: 100dvh; overflow: hidden; }
+    body.learn-mode main { min-height: 0; overflow: hidden; }
     a { color: var(--terracotta-deep); text-decoration: underline; text-underline-offset: 2px; }
     button { font: inherit; color: inherit; }
     img { max-width: 100%; display: block; border-radius: 8px; }
@@ -281,6 +289,7 @@
       flex: 1;
       display: flex; flex-direction: column;
       min-height: 0;
+      position: relative;   /* anchor for the curriculum panel overlay */
     }
     .thread {
       flex: 1;
@@ -291,6 +300,7 @@
       display: flex; flex-direction: column;
       gap: 12px;
       overflow-y: auto;
+      overscroll-behavior: contain;   /* don't bubble scroll to body */
     }
     .msg { display: flex; }
     .msg--learner { justify-content: flex-end; }
@@ -337,8 +347,10 @@
       color: var(--teal-deep);
     }
     .lesson-title {
-      font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: clamp(20px, 4vw, 26px); line-height: 1.2;
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 18px; line-height: 1.3;
+      letter-spacing: -0.01em;
       margin: 0;
       color: var(--ink);
     }
@@ -388,8 +400,9 @@
       color: var(--terracotta-deep);
     }
     .exercise-prompt {
-      font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: clamp(20px, 4vw, 28px); line-height: 1.25;
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 400;
+      font-size: 17px; line-height: 1.45;
       margin: 0;
       color: var(--ink);
     }
@@ -487,14 +500,31 @@
       40% { opacity: 1; }
     }
 
-    /* ── Curriculum panel (slide-down outline view) ───────── */
+    /* ── Curriculum panel (overlay from the top of the chat) ──
+       Lives OVER the thread (not inside the flex flow) so opening it
+       doesn't push the thread out of view. Closes via the title
+       toggle in the topbar or by clicking the dimmer underneath. */
+    .curr-panel-dimmer {
+      position: absolute; inset: 0;
+      background: rgba(0, 0, 0, 0.25);
+      z-index: 7;
+      animation: fadeIn 160ms ease;
+    }
     .curr-panel {
+      position: absolute;
+      top: 0; left: 0; right: 0;
       max-width: 760px;
       width: 100%;
       margin: 0 auto;
       padding: 18px 22px 22px;
       background: var(--bone);
       border-bottom: 1px solid var(--rule);
+      border-bottom-left-radius: 14px;
+      border-bottom-right-radius: 14px;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+      max-height: 80%;
+      overflow-y: auto;
+      z-index: 8;
       animation: slideDown 200ms ease;
     }
     @keyframes slideDown {
@@ -502,8 +532,10 @@
       to   { opacity: 1; transform: translateY(0); }
     }
     .curr-summary {
-      font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: clamp(20px, 3.5vw, 26px); line-height: 1.25;
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 17px; line-height: 1.4;
+      letter-spacing: -0.005em;
       margin: 0 0 14px;
       color: var(--ink);
     }
@@ -739,8 +771,10 @@
       box-shadow: 0 12px 36px rgba(0, 0, 0, 0.20);
     }
     .modal h3 {
-      font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: 22px; margin: 0 0 6px;
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 18px; letter-spacing: -0.01em;
+      margin: 0 0 6px;
       color: var(--ink);
     }
     .modal p { font-size: 14px; color: var(--ink-soft); margin: 0 0 14px; line-height: 1.5; }
@@ -1058,26 +1092,27 @@
     function enterLearnView() {
       state.view = 'learn';
       topbar.dataset.mode = 'learn';
+      document.body.classList.add('learn-mode');   // lock body to viewport
       landing.hidden = true;
       learnSurface.hidden = false;
       composerWrap.hidden = false;
       btnMenu.hidden = false;
       mainSiteLink.hidden = true;
       currTitleBtn.hidden = false;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo(0, 0);
     }
 
     function exitToLanding() {
       state.view = 'landing';
       topbar.dataset.mode = 'landing';
+      document.body.classList.remove('learn-mode');
       landing.hidden = false;
       learnSurface.hidden = true;
       composerWrap.hidden = true;
       btnMenu.hidden = true;
       mainSiteLink.hidden = false;
       currTitleBtn.hidden = true;
-      currPanel.hidden = true;
-      currTitleBtn.setAttribute('aria-expanded', 'false');
+      closeCurriculumPanel();
       thread.innerHTML = '';
     }
 
@@ -1204,8 +1239,16 @@
     }
 
     function scrollThreadToBottom() {
+      // Double rAF: the first lets the just-appended DOM mutation
+      // settle through layout; the second runs AFTER the reflow has
+      // grown thread.scrollHeight to include the new content. Without
+      // both, big cards (lessons / exercises with examples) can be
+      // appended and the scroll fires before the thread's height has
+      // grown, so the new card lands below the visible fold.
       requestAnimationFrame(function () {
-        thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
+        requestAnimationFrame(function () {
+          thread.scrollTop = thread.scrollHeight;
+        });
       });
     }
 
@@ -1528,17 +1571,23 @@
       // Show the learner bubble client-side immediately (intake
       // messages aren't persisted in learner_messages).
       appendMessage({ kind: 'learner_text', payload: { text: String(value) } });
+      // Skeleton while the LLM parser interprets the reply.
+      var skel = appendSkeleton();
       try {
         var resp = await api('/intake', {
           learner_id: state.learner_id, field: field, value: value,
         });
-        if (resp.validation_error) {
+        removeSkeleton(skel);
+        // The LLM intermediary either extracted a value (advance) OR
+        // wrote a natural-voice follow-up question (stay on field).
+        // Either way the frontend just renders the next coach bubble —
+        // no more "Hmm — must be a positive integer Try that again?"
+        // mechanical string. clarify_text is the authoritative copy
+        // when present.
+        if (resp.clarify_text) {
           appendMessage({
             kind: 'coach_text',
-            payload: {
-              text: 'Hmm — ' + resp.validation_error +
-                ' Try that again?',
-            },
+            payload: { text: resp.clarify_text },
           });
           return;
         }
@@ -1557,6 +1606,7 @@
           appendIntakePrompt(resp.next_intake_prompt || '');
         }
       } catch (e) {
+        removeSkeleton(skel);
         showError(e.message || 'Could not save that.');
       }
     }
@@ -1641,11 +1691,33 @@
       }
     });
 
+    var _currDimmer = null;
+
+    function openCurriculumPanel() {
+      renderCurriculumPanel();
+      currPanel.hidden = false;
+      currTitleBtn.setAttribute('aria-expanded', 'true');
+      // Click-anywhere-else-to-close dimmer overlay between thread and
+      // panel. Removed when panel closes.
+      if (!_currDimmer) {
+        _currDimmer = document.createElement('div');
+        _currDimmer.className = 'curr-panel-dimmer';
+        _currDimmer.addEventListener('click', closeCurriculumPanel);
+        learnSurface.insertBefore(_currDimmer, currPanel);
+      }
+    }
+    function closeCurriculumPanel() {
+      currPanel.hidden = true;
+      currTitleBtn.setAttribute('aria-expanded', 'false');
+      if (_currDimmer && _currDimmer.parentNode) {
+        _currDimmer.parentNode.removeChild(_currDimmer);
+        _currDimmer = null;
+      }
+    }
+
     currTitleBtn.addEventListener('click', function () {
-      var open = currPanel.hidden;
-      currPanel.hidden = !open;
-      currTitleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (open) renderCurriculumPanel();
+      if (currPanel.hidden) openCurriculumPanel();
+      else closeCurriculumPanel();
     });
 
     btnMenu.addEventListener('click', openDrawer);
@@ -1657,8 +1729,13 @@
     btnArchive.addEventListener('click', archiveCurrentGoal);
     btnClear.addEventListener('click', clearAllData);
 
-    // Magic-link arrival OR known learner → auto-resume.
-    if (magicToken || state.learner_id) {
+    // Magic-link arrival → auto-enter (they came from a specific link
+    // and the landing would be confusing). Otherwise default to the
+    // landing — even for returning learners — so they always see the
+    // marketing entrance and pick "Start with Afrikaans" deliberately.
+    // The session/state is still recovered server-side when they
+    // click Start, so there's no progress loss.
+    if (magicToken) {
       startSession();
     }
   })();
