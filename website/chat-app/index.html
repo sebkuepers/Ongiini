@@ -70,6 +70,15 @@
     .brand { display: inline-flex; align-items: center; }
     .brand img { width: 32px; height: 32px; border-radius: 7px; }
     .topbar-actions { display: inline-flex; align-items: center; gap: 10px; }
+    .topbar-link {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      text-decoration: none;
+      padding: 6px 4px;
+    }
+    .topbar-link:hover { color: var(--terracotta-deep); }
     .lang-segment {
       display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden;
     }
@@ -325,6 +334,10 @@
       <img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini AI" />
     </a>
     <div class="topbar-actions">
+      <a class="topbar-link" href="https://ongiini.ai/">
+        <span data-en>Learn more</span>
+        <span data-af>Lees meer</span>
+      </a>
       <span class="lang-segment" role="group" aria-label="Language">
         <button type="button" data-set-locale="en" class="is-active">EN</button>
         <button type="button" data-set-locale="af">AF</button>
