@@ -110,13 +110,16 @@
       color: var(--ink-soft);
       margin-bottom: 10px;
     }
-    /* Single-line italic "Ongiini Learn." matching the homepage
-       wordmark treatment. Sized to fit on phones without wrapping. */
+    /* Matches the chat.ongiini.ai welcome-mark exactly — same
+       Instrument Serif italic, same clamp, same letter-spacing
+       and line-height — so the two surfaces share one wordmark
+       treatment. On narrow viewports "Ongiini Learn." wraps to
+       two lines at the natural space; that's expected. */
     .hero-wordmark {
       font-family: 'Instrument Serif', serif; font-style: italic;
       font-weight: 400;
-      font-size: clamp(40px, 10vw, 96px);
-      line-height: 0.95; letter-spacing: -0.035em;
+      font-size: clamp(72px, 22vw, 180px);
+      line-height: 0.86; letter-spacing: -0.035em;
       color: var(--ink);
       margin: 0;
     }
