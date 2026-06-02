@@ -471,11 +471,16 @@
        block cohesive without touching the global rules the WhatsApp
        side depends on. h2 gets a touch more breathing room above so
        the section break reads cleanly after the engagement grid. */
-    #webChatSection { margin-top: 12px; }
-    #webChatSection h2 { margin-top: 72px; }
+    #webChatSection h2 { margin-top: 56px; }
     #webChatSection .stat-kpis { margin-top: 18px; }
     #webChatSection .stat-chart-row { margin-top: 18px; }
     #webChatSection .stat-perf { margin-top: 12px; }
+    /* And the section that FOLLOWS web chat: the global h2 margin-top
+       of 56px feels disproportionately large after the now-tight
+       internal rhythm above. Match the in-section ~18px gap so the
+       page reads as one consistent vertical cadence. Scoped via
+       adjacent-sibling so no other h2 is affected. */
+    #webChatSection + h2 { margin-top: 36px; }
 
     .stat-chart-meta {
       margin: 6px 0 0;
