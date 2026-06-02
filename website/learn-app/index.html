@@ -1534,20 +1534,32 @@
     }
 
     // ── New-goal modal ─────────────────────────────────────
-    function openNewGoalModal() {
+    function openNewGoalModal(opts) {
       modalRoot.innerHTML = '';
+      opts = opts || {};
+      var isInitial = !!opts.initial;   // first-curriculum / no-active-goal flow
+      var heading = isInitial
+        ? 'What do you want to focus on?'
+        : 'New curriculum';
+      var blurb = isInitial
+        ? "Tell me what you actually want to be able to do in Afrikaans. " +
+          "I'll write a plan around that and start the first lesson."
+        : "What do you want to focus on? Give it a short name; the model writes the plan around it.";
+      var titlePlaceholder = isInitial
+        ? 'e.g. Job interview at SPAR'
+        : 'e.g. Interview at SPAR';
       var ov = el('div', 'modal-overlay');
       var mo = el('div', 'modal');
       mo.innerHTML =
-        '<h3>New curriculum</h3>' +
-        '<p>What do you want to focus on? Give it a short name; the model writes the plan around it.</p>' +
-        '<label for="newGoalTitle">Title</label>' +
-        '<input id="newGoalTitle" type="text" maxlength="80" placeholder="e.g. Interview at SPAR" />' +
+        '<h3>' + heading + '</h3>' +
+        '<p>' + blurb + '</p>' +
+        '<label for="newGoalTitle">Focus</label>' +
+        '<input id="newGoalTitle" type="text" maxlength="80" placeholder="' + titlePlaceholder + '" />' +
         '<label for="newGoalContext">Context (optional)</label>' +
         '<textarea id="newGoalContext" rows="3" maxlength="600" placeholder="One sentence about why — the coach uses this to shape the cards."></textarea>' +
         '<div class="modal-actions">' +
-        '<button type="button" id="newGoalCancel">Cancel</button>' +
-        '<button type="button" class="primary" id="newGoalCreate">Create</button>' +
+        '<button type="button" id="newGoalCancel">' + (isInitial ? 'Back' : 'Cancel') + '</button>' +
+        '<button type="button" class="primary" id="newGoalCreate">' + (isInitial ? 'Start' : 'Create') + '</button>' +
         '</div>';
       ov.appendChild(mo);
       modalRoot.appendChild(ov);
@@ -1556,11 +1568,13 @@
       var createBtn = mo.querySelector('#newGoalCreate');
       titleInput.focus();
 
-      mo.querySelector('#newGoalCancel').addEventListener('click', function () {
+      function onCancel() {
         modalRoot.innerHTML = '';
-      });
+        if (isInitial) exitToLanding();
+      }
+      mo.querySelector('#newGoalCancel').addEventListener('click', onCancel);
       ov.addEventListener('click', function (e) {
-        if (e.target === ov) modalRoot.innerHTML = '';
+        if (e.target === ov) onCancel();
       });
       createBtn.addEventListener('click', async function () {
         var title = titleInput.value.trim();
@@ -1795,9 +1809,19 @@
           appendIntakePrompt(
             "Welcome — let's set you up. " + (s.next_intake_prompt || "")
           );
+        } else if (!s.active_goal) {
+          // Intake done but no active curriculum — the learner either
+          // archived all their goals and came back, or this is their
+          // very first /sessions after intake. ASK what they want to
+          // learn instead of silently spawning a generic Afrikaans
+          // goal (the previous bug: get_or_create_active_goal would
+          // re-seed from profile.objective and the result felt like
+          // 'the old curriculum came back').
+          rerenderThread([]);
+          openNewGoalModal({ initial: true });
         } else if (state.thread.length === 0) {
-          // Intake done but no thread yet — first /turn after the
-          // upgrade from Phase 1 schema. Bootstrap.
+          // Active goal exists but no thread yet — first /turn for
+          // this goal. Bootstrap.
           rerenderThread([]);
           await sendTurn(null);
         } else {
