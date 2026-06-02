@@ -170,6 +170,36 @@ class Settings:
         ).split(",") if o.strip()
     ]
 
+    # ── learn.ongiini.ai (adaptive language learning surface) ────────
+    # Kill switch — set to false to serve a 503 from /v1/learn/* without
+    # tearing the rest of the webhook down.
+    learn_enabled: bool = os.getenv("ONGIINI_LEARN_ENABLED", "true").lower() == "true"
+    # HMAC secret for magic-link tokens. Required when learn_enabled is
+    # true. Tokens are issued by the assistant when normal chat detects
+    # an Afrikaans-learning intent; verified at /v1/learn/sessions when
+    # the browser lands.
+    learn_token_secret: str = os.getenv("ONGIINI_LEARN_TOKEN_SECRET", "")
+    # Magic-link validity window. One week by default — long enough that
+    # a user can come back from a WhatsApp message tomorrow without the
+    # link going stale, short enough that an old leaked URL is useless.
+    learn_token_expiry_hours: int = int(
+        os.getenv("ONGIINI_LEARN_TOKEN_EXPIRY_HOURS", "168")
+    )
+    # LRU cap on the in-process LearnerStore cache. Persistent rows live
+    # in /data/learning.sqlite regardless; this just bounds the working-
+    # set held in memory.
+    learn_max_learners: int = int(os.getenv("ONGIINI_LEARN_MAX_LEARNERS", "10000"))
+    # CORS allowlist for the learn endpoint. Mirrors chat_allowed_origins.
+    learn_allowed_origins: list[str] = [
+        o.strip() for o in os.getenv(
+            "ONGIINI_LEARN_ALLOWED_ORIGINS",
+            "https://learn.ongiini.ai,http://localhost:8080,http://localhost:5173",
+        ).split(",") if o.strip()
+    ]
+    # Language the MVP targets. We may expand to other languages later;
+    # putting it in config means callers don't bake "afrikaans" in.
+    learn_default_language: str = os.getenv("ONGIINI_LEARN_DEFAULT_LANGUAGE", "afrikaans")
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
