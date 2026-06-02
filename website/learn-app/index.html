@@ -27,8 +27,10 @@
       </button>
     </div>
     <div class="topbar-actions">
-      <a class="topbar-link" href="https://ongiini.ai/" id="mainSiteLink">Main site</a>
+      <a class="topbar-link" href="https://ongiini.ai/" id="mainSiteLink"
+         data-i18n="topbar.main_site">Main site</a>
       <button type="button" class="icon-btn" id="btnMenu"
+              data-i18n-attr="title=topbar.menu,aria-label=topbar.menu"
               title="Menu" aria-label="Menu" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <line x1="4" y1="7" x2="20" y2="7"/>
@@ -43,10 +45,10 @@
     <!-- ═════════ LANDING ═════════════════════════════════ -->
     <div id="landing">
       <section class="hero wrap">
-        <p class="hero-eyebrow">Ongiini · prototype</p>
+        <p class="hero-eyebrow" data-i18n="landing.eyebrow">Ongiini · prototype</p>
         <h1 class="hero-wordmark">Ongiini Learn<span class="dot">.</span></h1>
-        <p class="hero-tag">A personalised AI learning experience, powered by your assistant.</p>
-        <p class="hero-pitch">
+        <p class="hero-tag" data-i18n="landing.tagline">A personalised AI learning experience, powered by your assistant.</p>
+        <p class="hero-pitch" data-i18n="landing.pitch">
           Tell us what you want to learn and why. The model writes a curriculum
           just for you, then teaches it with cards that adapt as you go.
           Spaced repetition keeps things sticking. No app, no signup, no
@@ -55,71 +57,68 @@
       </section>
 
       <section class="section wrap" aria-labelledby="topics-h">
-        <p class="section-eyebrow">Pick a track</p>
-        <h2 class="section-h2" id="topics-h">Languages</h2>
+        <p class="section-eyebrow" data-i18n="landing.topics_eyebrow">Pick a track</p>
+        <h2 class="section-h2" id="topics-h" data-i18n="landing.topics_h">Languages</h2>
         <div class="topic-grid">
           <a class="topic-card" data-topic="afrikaans" data-status="active" href="#start" id="topic-afrikaans">
             <span class="topic-flag" aria-hidden="true">🇿🇦</span>
             <h3 class="topic-name">Afrikaans</h3>
-            <p class="step-desc">Workplace, interviews, in-laws. Start where you are.</p>
-            <span class="topic-status">Available now</span>
+            <p class="step-desc" data-i18n="landing.topic_afrikaans_desc">Workplace, interviews, in-laws. Start where you are.</p>
+            <span class="topic-status" data-i18n="landing.status_available">Available now</span>
             <span class="topic-arrow" aria-hidden="true">→</span>
           </a>
           <a class="topic-card" data-topic="english" data-status="active" href="#start" id="topic-english">
             <span class="topic-flag" aria-hidden="true">🇬🇧</span>
             <h3 class="topic-name">English</h3>
-            <p class="step-desc">Formal writing, comprehension, exam prep.</p>
-            <span class="topic-status">Available now</span>
+            <p class="step-desc" data-i18n="landing.topic_english_desc">Formal writing, comprehension, exam prep.</p>
+            <span class="topic-status" data-i18n="landing.status_available">Available now</span>
             <span class="topic-arrow" aria-hidden="true">→</span>
           </a>
           <a class="topic-card" data-topic="german" data-status="active" href="#start" id="topic-german">
             <span class="topic-flag" aria-hidden="true">🇩🇪</span>
             <h3 class="topic-name">German</h3>
-            <p class="step-desc">A1 to B1. For everyday use and basic work conversations.</p>
-            <span class="topic-status">Available now</span>
+            <p class="step-desc" data-i18n="landing.topic_german_desc">A1 to B1. For everyday use and basic work conversations.</p>
+            <span class="topic-status" data-i18n="landing.status_available">Available now</span>
             <span class="topic-arrow" aria-hidden="true">→</span>
           </a>
           <div class="topic-card" data-topic="oshiwambo" aria-disabled="true">
             <span class="topic-flag" aria-hidden="true">🇳🇦</span>
             <h3 class="topic-name">Oshiwambo</h3>
-            <p class="step-desc">Oshindonga &amp; Oshikwanyama. Tied to our open dataset.</p>
-            <span class="topic-status">Coming soon</span>
+            <p class="step-desc" data-i18n="landing.topic_oshiwambo_desc">Oshindonga &amp; Oshikwanyama. Tied to our open dataset.</p>
+            <span class="topic-status" data-i18n="landing.status_coming_soon">Coming soon</span>
           </div>
         </div>
       </section>
 
       <section class="how wrap" aria-labelledby="how-h">
-        <p class="section-eyebrow">How it works</p>
-        <h2 class="section-h2" id="how-h">Three steps, then you're learning.</h2>
+        <p class="section-eyebrow" data-i18n="landing.how_eyebrow">How it works</p>
+        <h2 class="section-h2" id="how-h" data-i18n="landing.how_h">Three steps, then you're learning.</h2>
         <div class="steps">
           <article class="step">
-            <span class="step-num">Step 1</span>
-            <h3 class="step-title">Tell us your goal</h3>
-            <p class="step-desc">A few quick questions — your level, what you're trying to do. In your own words.</p>
+            <span class="step-num" data-i18n="landing.step1_label">Step 1</span>
+            <h3 class="step-title" data-i18n="landing.step1_title">Tell us your goal</h3>
+            <p class="step-desc" data-i18n="landing.step1_desc">A few quick questions — your level, what you're trying to do. In your own words.</p>
           </article>
           <article class="step">
-            <span class="step-num">Step 2</span>
-            <h3 class="step-title">AI builds your curriculum</h3>
-            <p class="step-desc">The model writes a plan around your goal. Modules, topics, lessons before drills.</p>
+            <span class="step-num" data-i18n="landing.step2_label">Step 2</span>
+            <h3 class="step-title" data-i18n="landing.step2_title">AI builds your curriculum</h3>
+            <p class="step-desc" data-i18n="landing.step2_desc">The model writes a plan around your goal. Modules, topics, lessons before drills.</p>
           </article>
           <article class="step">
-            <span class="step-num">Step 3</span>
-            <h3 class="step-title">Learn by chatting</h3>
-            <p class="step-desc">Lessons and exercises appear in the conversation. Ask questions any time — the coach answers and brings you back.</p>
+            <span class="step-num" data-i18n="landing.step3_label">Step 3</span>
+            <h3 class="step-title" data-i18n="landing.step3_title">Learn by chatting</h3>
+            <p class="step-desc" data-i18n="landing.step3_desc">Lessons and exercises appear in the conversation. Ask questions any time — the coach answers and brings you back.</p>
           </article>
         </div>
       </section>
 
       <section class="closing wrap">
         <button type="button" class="closing-cta" id="btnStartClosing">
-          Start with Afrikaans
+          <span data-i18n="landing.cta_start">Get started</span>
           <span aria-hidden="true">→</span>
         </button>
-        <p class="closing-note">
-          <strong>This is a prototype.</strong> Starting with Afrikaans because that's
-          what most users tell us they want first. The same engine can teach a language,
-          prep you for an interview, or drill a complicated university subject through
-          targeted repetition. More tracks are next.
+        <p class="closing-note" data-i18n="landing.closing_note">
+          This is a prototype. Starting with three languages — Afrikaans, English, German. The same engine can teach a language, prep you for an interview, or drill a complicated university subject through targeted repetition. More tracks are next.
         </p>
       </section>
     </div>
@@ -146,7 +145,9 @@
 
   <div class="composer-wrap" id="composerWrap" hidden>
     <div class="composer">
-      <textarea id="composer" rows="1" placeholder="Message Ongiini coach…" aria-label="Message"></textarea>
+      <textarea id="composer" rows="1"
+                data-i18n-attr="placeholder=composer.placeholder"
+                placeholder="Message Ongiini coach…" aria-label="Message"></textarea>
       <div class="composer-actions">
         <button type="button" class="send" id="btnSend" title="Send" aria-label="Send" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -156,9 +157,10 @@
       </div>
     </div>
     <div class="composer-legal">
-      By using this you accept our
-      <a href="https://ongiini.ai/terms/">Terms</a> and
-      <a href="https://ongiini.ai/privacy/">Privacy Policy</a>.
+      <span data-i18n="composer.legal_pre">By using this you accept our</span>
+      <a href="https://ongiini.ai/terms/" data-i18n="composer.legal_terms">Terms</a>
+      <span data-i18n="composer.legal_and">and</span>
+      <a href="https://ongiini.ai/privacy/" data-i18n="composer.legal_privacy">Privacy Policy</a>.
     </div>
   </div>
 
@@ -166,7 +168,7 @@
   <div class="drawer-overlay" id="drawerOverlay" hidden></div>
   <aside class="drawer" id="drawer" hidden aria-label="Menu">
     <div class="drawer-head">
-      <h3>Menu</h3>
+      <h3 data-i18n="drawer.menu">Menu</h3>
       <button type="button" class="icon-btn" id="btnDrawerClose" aria-label="Close menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
           <path d="M6 6l12 12M6 18L18 6"/>
@@ -174,17 +176,22 @@
       </button>
     </div>
     <div class="drawer-section">
-      <div class="drawer-section-label">My curriculums</div>
+      <div class="drawer-section-label" data-i18n="drawer.my_curriculums">My curriculums</div>
       <div class="goal-list" id="goalList"></div>
-      <button type="button" class="drawer-btn drawer-btn--primary" id="btnNewGoal">
+      <button type="button" class="drawer-btn drawer-btn--primary" id="btnNewGoal"
+              data-i18n="drawer.new_curriculum">
         + New curriculum
       </button>
     </div>
     <div class="drawer-section">
-      <button type="button" class="drawer-btn" id="btnRestart">Restart this curriculum</button>
-      <button type="button" class="drawer-btn drawer-btn--danger" id="btnArchive">Delete this curriculum</button>
-      <button type="button" class="drawer-btn drawer-btn--danger" id="btnClear">Delete all my data</button>
-      <a class="drawer-link" href="https://ongiini.ai/">Main site</a>
+      <button type="button" class="drawer-btn" id="btnRestart"
+              data-i18n="drawer.restart_this">Restart this curriculum</button>
+      <button type="button" class="drawer-btn drawer-btn--danger" id="btnArchive"
+              data-i18n="drawer.delete_this">Delete this curriculum</button>
+      <button type="button" class="drawer-btn drawer-btn--danger" id="btnClear"
+              data-i18n="drawer.delete_all">Delete all my data</button>
+      <a class="drawer-link" href="https://ongiini.ai/"
+         data-i18n="drawer.main_site">Main site</a>
     </div>
   </aside>
 
