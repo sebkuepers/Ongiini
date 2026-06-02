@@ -464,6 +464,143 @@
       color: var(--ink);
     }
 
+    /* ─── Per-card-type structural extras ─────────────────────── */
+
+    /* Grammar drill: highlight the source sentence so it reads as
+       "transform THIS", not just a generic header above the prompt. */
+    .card-source-sentence {
+      padding: 10px 14px;
+      background: var(--bone-deep);
+      border-left: 2px solid var(--teal);
+      border-radius: 0 8px 8px 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .card-source-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--teal-deep);
+    }
+    .card-source-text {
+      font-size: 16px; font-style: italic;
+      margin: 0; color: var(--ink);
+    }
+
+    /* Dialogue card: render the scripted turns as speaker bubbles
+       above the prompt so the learner sees who said what. */
+    .card-dialogue-turns {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 12px 14px;
+      background: var(--bone-deep);
+      border-radius: 12px;
+    }
+    .dialogue-bubble {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 8px 12px;
+      background: var(--bone);
+      border-radius: 10px;
+      border: 1px solid var(--rule);
+    }
+    .dialogue-speaker {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--terracotta-deep);
+    }
+    .dialogue-line {
+      font-size: 15px; line-height: 1.45; color: var(--ink);
+    }
+
+    /* Multiple choice: tap-to-answer buttons. Selected option locks
+       with a subtle highlight while the turn is in flight. */
+    .card-mc-options {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .mc-option {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      font-size: 15px; line-height: 1.4;
+      color: var(--ink); text-align: left;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .mc-option:hover:not(:disabled) {
+      background: var(--bone-deep);
+      border-color: var(--terracotta-light);
+    }
+    .mc-option:disabled { cursor: default; opacity: 0.85; }
+    .mc-option-selected {
+      background: var(--amber-soft);
+      border-color: var(--amber);
+    }
+    .mc-letter {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      background: var(--terracotta);
+      color: var(--bone);
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px; font-weight: 600;
+    }
+    .mc-option-selected .mc-letter { background: var(--amber); color: var(--ink); }
+    .mc-text { flex: 1; }
+
+    /* Reorder: token bank. Chips append to the composer on click. */
+    .card-reorder-bank {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 10px 12px;
+      background: var(--bone-deep);
+      border-radius: 12px;
+    }
+    .reorder-hint {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px; letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .reorder-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .reorder-chip {
+      padding: 7px 13px;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-size: 14px; color: var(--ink);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .reorder-chip:hover:not(:disabled) {
+      background: var(--terracotta-light);
+      border-color: var(--terracotta);
+      color: var(--ink);
+    }
+    .reorder-chip:disabled { cursor: default; opacity: 0.7; }
+
+    /* Proverb cultural-note panel — shown AFTER the learner answers
+       so it teaches without giving away the answer up front. */
+    .card-cultural-note {
+      padding: 10px 14px;
+      background: var(--amber-soft);
+      border-left: 2px solid var(--amber);
+      border-radius: 0 8px 8px 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .card-cultural-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .card-cultural-text {
+      font-size: 14px; line-height: 1.5; margin: 0;
+      color: var(--ink);
+    }
+
     /* Feedback callout */
     .feedback-card {
       max-width: min(680px, 100%);

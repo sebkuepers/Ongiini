@@ -57,7 +57,28 @@
     "show_hint": "Wys wenk",
     "awaiting": "wag vir jou antwoord",
     "answered": "beantwoord",
-    "review_eyebrow": "hersiening · boks {box}"
+    "review_eyebrow": "hersiening · boks {box}",
+    "type": {
+      "lesson": "les",
+      "vocab": "woordeskat",
+      "translation": "vertaling",
+      "production": "skrywe",
+      "cloze": "vul die spasie in",
+      "reorder": "herrangskik",
+      "multiple_choice": "kies een",
+      "grammar": "grammatika",
+      "proverb": "spreekwoord",
+      "dialogue": "gesprek"
+    },
+    "grammar": {
+      "source_label": "Skryf dit oor"
+    },
+    "reorder": {
+      "hint": "Tik die woorde in volgorde — hulle gaan na die boodskapkassie."
+    },
+    "proverb": {
+      "cultural_label": "Kulturele nota"
+    }
   },
   "modal": {
     "source_pick_heading": "Jy het {target} gekies.",
