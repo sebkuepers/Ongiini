@@ -75,6 +75,9 @@ _EXERCISE = json.dumps({
     "prompt_text": "How do you say 'thank you'?",
     "reference_answer": "dankie",
 })
+# Critic-approves-on-iter-1 response — slots between outline and the
+# next exercise in queues that exercise the curriculum-design path.
+_CRITIC_READY = json.dumps({"ready": True, "score": 9, "issues": []})
 
 
 def _stub_skill_renderer(*, source: str, target: str) -> str:
@@ -316,7 +319,7 @@ def test_turn_response_includes_goals_list_after_auto_create(temp_db):
     response must include the refreshed goals[] so the drawer shows
     the new curriculum. Previously /turn returned only `goal`
     (singular) and the drawer stayed at 'No curriculums yet.'"""
-    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
     client = _client(fm)
     s = client.post("/v1/learn/sessions", json={}).json()
     _finish_intake(client, s["learner_id"])
@@ -379,7 +382,7 @@ def test_goals_activate_includes_module_progress_for_target_goal(temp_db):
 
 
 def test_turn_no_text_no_goal_id_designs_outline_and_emits_exercise(temp_db):
-    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
     client = _client(fm)
     s = client.post("/v1/learn/sessions", json={}).json()
     _finish_intake(client, s["learner_id"])
@@ -402,7 +405,7 @@ def test_turn_with_explicit_goal_id_uses_that_goal(temp_db):
     """The chat-first frontend may have a curriculum switcher — passing
     goal_id lets it scope a turn to a non-active goal (e.g. previewing
     a paused curriculum). Lock in that explicit goal_id is honored."""
-    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
     client = _client(fm)
     s = client.post("/v1/learn/sessions", json={}).json()
     _finish_intake(client, s["learner_id"])
@@ -528,7 +531,7 @@ def test_turn_renders_skill_for_goal_language_pair(temp_db):
     prompt. The stub renderer encodes the pair in the returned text
     — we can spy on what the coach saw via the FakeModel's captured
     requests."""
-    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
     client = _client(fm)
     s = client.post("/v1/learn/sessions", json={}).json()
     _finish_intake(client, s["learner_id"])
