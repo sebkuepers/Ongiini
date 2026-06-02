@@ -230,6 +230,21 @@ def warmup() -> None:
         if "archived_at" not in cols:
             c.execute("ALTER TABLE learning_goals ADD COLUMN archived_at TEXT")
 
+        # Multi-language overhaul: learning_goals gains source_language
+        # (the learner's strongest language) + current_level (per-goal
+        # override of the profile's intake-time level). Existing rows
+        # had only the legacy `language` column (target). Backfill
+        # source_language='english' for existing rows so they keep
+        # making sense post-deploy.
+        if "source_language" not in cols:
+            c.execute("ALTER TABLE learning_goals ADD COLUMN source_language TEXT")
+            c.execute(
+                "UPDATE learning_goals SET source_language = 'english' "
+                "WHERE source_language IS NULL"
+            )
+        if "current_level" not in cols:
+            c.execute("ALTER TABLE learning_goals ADD COLUMN current_level TEXT")
+
         # module_id on learning_cards. Nullable so prior cards (which
         # the LLM authored without module tagging) keep working — they
         # just don't count toward any module's progress, which is the

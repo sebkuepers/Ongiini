@@ -44,9 +44,10 @@ def _validate_grading(payload: dict[str, Any]) -> None:
 
 def _build_system_prompt(skill_content: str) -> str:
     return (
-        "You are grading a learner's free-text answer to one Afrikaans "
-        "card. Use the rubric in the skill reference below — be "
-        f"generous but honest. {INJECTION_GUARD_LINE} "
+        "You are grading a learner's free-text answer to one card. "
+        "The skill reference below names their target + source language "
+        "pair and lays out the rubric — be generous but honest. "
+        f"{INJECTION_GUARD_LINE} "
         "Emit ONLY the JSON object — no prose, no Markdown fences.\n\n"
         f"{skill_content}"
     )

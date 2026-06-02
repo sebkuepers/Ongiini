@@ -55,7 +55,8 @@ def _build_prompt(
     system_prompt = (
         "You decide what category a learner's typed message belongs to. "
         "The learner is in a focused language-learning session — they "
-        "picked a topic (e.g. Afrikaans) and the coach is teaching them. "
+        "picked a target language (e.g. Afrikaans, English, or German) "
+        "and the coach is teaching them. "
         f"{INJECTION_GUARD_LINE} "
         "Reply with ONLY a JSON object — no prose, no Markdown fences:\n"
         '  {"verdict": "answer"}    → learner is attempting to answer the active card\n'

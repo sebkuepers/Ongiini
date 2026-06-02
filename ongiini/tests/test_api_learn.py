@@ -77,6 +77,14 @@ _EXERCISE = json.dumps({
 })
 
 
+def _stub_skill_renderer(source: str, target: str) -> str:
+    """Test-time replacement for the per-pair skill renderer — emits a
+    short marker string so tests can assert on which pair was selected
+    without dragging the real template + anchor files into every
+    test fixture."""
+    return f"SKILL source={source} target={target}"
+
+
 def _client(fake_model: FakeModel | None = None) -> TestClient:
     """Build a TestClient against a fresh FastAPI app with the learn
     router mounted at /v1/learn — same path layout production uses.
@@ -94,7 +102,7 @@ def _client(fake_model: FakeModel | None = None) -> TestClient:
         fake_model.responses = (
             list(_INTAKE_PARSER_RESPONSES) + fake_model.responses
         )
-    router = build_router(model=fake_model, skill_content="SKILL")
+    router = build_router(model=fake_model, skill_renderer=_stub_skill_renderer)
     app.include_router(router, prefix="/v1/learn")
     return TestClient(app)
 
@@ -233,7 +241,7 @@ def test_intake_clarify_surfaces_natural_language_followup(temp_db):
     # Bypass _INTAKE_PARSER_RESPONSES prefix — we want this exact response.
     fm.responses = list(fm.responses)
     app = FastAPI()
-    router = build_router(model=fm, skill_content="SKILL")
+    router = build_router(model=fm, skill_renderer=_stub_skill_renderer)
     app.include_router(router, prefix="/v1/learn")
     client = TestClient(app)
 
@@ -260,7 +268,7 @@ def test_intake_defence_in_depth_when_llm_value_fails_validator(temp_db):
     server-side debugging."""
     fm = FakeModel(responses=[json.dumps({"value": 999})])
     app = FastAPI()
-    router = build_router(model=fm, skill_content="SKILL")
+    router = build_router(model=fm, skill_renderer=_stub_skill_renderer)
     app.include_router(router, prefix="/v1/learn")
     client = TestClient(app)
 
@@ -468,6 +476,84 @@ def test_goals_list_includes_only_non_archived_by_default(temp_db):
         json={"learner_id": s["learner_id"], "include_archived": True},
     )
     assert len(r2.json()["goals"]) == 2
+
+
+def test_goals_new_accepts_language_pair_and_level(temp_db):
+    """The frontend's new-curriculum modal sends source + target +
+    level. Lock in that the API persists all three and surfaces them
+    in the response GoalInfo."""
+    client = _client()
+    s = client.post("/v1/learn/sessions", json={}).json()
+    _finish_intake(client, s["learner_id"])
+    r = client.post(
+        "/v1/learn/goals/new",
+        json={
+            "learner_id": s["learner_id"],
+            "title": "Berlin trip",
+            "language": "german",
+            "source_language": "english",
+            "current_level": "elementary",
+        },
+    )
+    assert r.status_code == 200, r.text
+    goal = r.json()["goal"]
+    assert goal["language"] == "german"
+    assert goal["source_language"] == "english"
+    assert goal["current_level"] == "elementary"
+
+
+def test_goals_new_rejects_same_source_and_target(temp_db):
+    """Validation runs at the store boundary and surfaces as 422 —
+    the frontend never lets the user pick source == target, but a
+    direct API caller could try."""
+    client = _client()
+    s = client.post("/v1/learn/sessions", json={}).json()
+    _finish_intake(client, s["learner_id"])
+    r = client.post(
+        "/v1/learn/goals/new",
+        json={
+            "learner_id": s["learner_id"],
+            "title": "x",
+            "language": "english",
+            "source_language": "english",
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_turn_renders_skill_for_goal_language_pair(temp_db):
+    """The /turn handler must invoke the skill_renderer with the
+    goal's (source, target) so the LLM sees the right per-pair
+    prompt. The stub renderer encodes the pair in the returned text
+    — we can spy on what the coach saw via the FakeModel's captured
+    requests."""
+    fm = FakeModel(responses=[_OUTLINE, _EXERCISE])
+    client = _client(fm)
+    s = client.post("/v1/learn/sessions", json={}).json()
+    _finish_intake(client, s["learner_id"])
+
+    # Create a German-from-Afrikaans goal explicitly.
+    r = client.post(
+        "/v1/learn/goals/new",
+        json={
+            "learner_id": s["learner_id"],
+            "title": "Berlin trip",
+            "language": "german",
+            "source_language": "afrikaans",
+        },
+    )
+    goal_id = r.json()["goal"]["goal_id"]
+
+    # First /turn for that goal — the prompt should carry the stub
+    # marker for the pair we set.
+    client.post(
+        "/v1/learn/turn",
+        json={"learner_id": s["learner_id"], "goal_id": goal_id, "text": None},
+    )
+    # Find the curriculum-design call in fm.requests (system prompt
+    # contains the marker).
+    sys_prompts = [r.messages[0]["content"] for r in fm.requests]
+    assert any("source=afrikaans target=german" in sp for sp in sys_prompts)
 
 
 def test_goals_new_creates_and_activates_demoting_previous(temp_db):

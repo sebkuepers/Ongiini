@@ -132,17 +132,15 @@ async def lifespan(app: FastAPI):
             )
         try:
             learning_db.warmup()
-            # Load the learning-afrikaans skill body once, hand it to
-            # every prompt. The SkillRegistry has the manifest already;
-            # we read the raw markdown for the prompt content.
-            learn_skill = (
-                Path(__file__).resolve().parents[1]
-                / "skills" / "learning-afrikaans" / "SKILL.md"
-            )
-            learn_skill_text = learn_skill.read_text(encoding="utf-8")
+            # Pass the per-pair skill renderer directly — it composes
+            # the skill text from the language-agnostic core template +
+            # the target-language anchor file on every turn so each
+            # learner sees the right prompts for their (source, target)
+            # pair.
+            from ..learning.skill_renderer import render_skill_for_pair
             learn_router = build_learn_router(
                 model=shared.model,
-                skill_content=learn_skill_text,
+                skill_renderer=render_skill_for_pair,
             )
             app.include_router(learn_router, prefix="/v1/learn")
             log.info("learn endpoint enabled at /v1/learn")

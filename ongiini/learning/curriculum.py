@@ -78,9 +78,10 @@ def _build_system_prompt(skill_content: str) -> str:
     more than the per-call savings. Phase 2 can split SKILL.md into
     addressable sections if production load demands it."""
     return (
-        "You are designing a personalised Afrikaans learning curriculum "
-        "for one specific learner. Use the skill reference below to "
-        "decide JSON shape, module composition, and how to personalise. "
+        "You are designing a personalised language-learning curriculum "
+        "for one specific learner. The skill reference below names "
+        "their target + source language and gives the JSON shape, "
+        "module composition rules, and personalisation guidance. "
         f"{INJECTION_GUARD_LINE} "
         "Emit ONLY the JSON object — no prose, no Markdown fences.\n\n"
         f"{skill_content}"

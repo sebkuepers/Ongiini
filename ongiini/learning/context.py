@@ -79,6 +79,15 @@ class LearnerContext:
     # window even after a long drill streak.
     recent_cards: list[dict[str, object]] = field(default_factory=list)
 
+    # Language pair for this goal, mirrored from the row so prompt
+    # builders (curriculum / cards / grading / coach.question_handler)
+    # and the off-topic redirect text can read them without re-querying
+    # the store. ``source_language`` defaults to 'english' to match
+    # back-fill on legacy rows; ``target_language`` defaults to
+    # 'afrikaans' to match the prior single-language behaviour.
+    source_language: str = "english"
+    target_language: str = "afrikaans"
+
     # Per-module rollup: how many lessons + exercises this learner has
     # already seen for each module_id in the outline. This is the
     # SURVIVAL signal that the recent_cards window can't carry once
@@ -111,8 +120,27 @@ def build_learner_context(
     """
     profile = store.get_profile(learner_id)
     outline: dict[str, object] | None = None
+    # Pull source/target/level from the goal row when one is supplied.
+    # Defaults match the back-fill (source=english, target=afrikaans)
+    # so callers without a goal still get sensible behaviour for the
+    # legacy single-language flow.
+    source_language = "english"
+    target_language = "afrikaans"
+    goal_level: str | None = None
     if goal_id:
         outline = store.get_curriculum_outline(goal_id)
+        goal_row = next(
+            (g for g in store.list_goals(learner_id, include_archived=True)
+             if g["goal_id"] == goal_id),
+            None,
+        )
+        if goal_row:
+            if isinstance(goal_row.get("source_language"), str):
+                source_language = goal_row["source_language"]
+            if isinstance(goal_row.get("language"), str):
+                target_language = goal_row["language"]
+            if isinstance(goal_row.get("current_level"), str) and goal_row["current_level"].strip():
+                goal_level = goal_row["current_level"]
     # Fall back to the intake objective when the caller didn't supply
     # one. Keeps a sensible context for cold-visitor flows where the
     # only "why" we have is what intake captured.
@@ -151,6 +179,13 @@ def build_learner_context(
         # numbers.
         module_digest = store.progress_for_modules(learner_id, goal_id)
 
+    # Augment the profile dict with the resolved goal-level so prompts
+    # that read ctx.profile['current_level'] get the per-goal value
+    # when one is set. Profile-level stays as the fallback.
+    if profile is not None and goal_level:
+        profile = dict(profile)
+        profile["current_level"] = goal_level
+
     return LearnerContext(
         learner_id=learner_id,
         profile=profile,
@@ -162,6 +197,8 @@ def build_learner_context(
         progress=progress,
         recent_cards=recent_cards,
         module_digest=module_digest,
+        source_language=source_language,
+        target_language=target_language,
     )
 
 

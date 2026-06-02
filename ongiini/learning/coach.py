@@ -347,8 +347,12 @@ async def _coach_respond_to_question(
     sentences. Returns ``(text, error_code)`` — ``error_code`` is
     ``None`` on success and a short string on fallback so the API can
     surface it via the message ``meta``."""
+    from .skill_renderer import LANGUAGE_DISPLAY
+    target_name = LANGUAGE_DISPLAY.get(
+        ctx.target_language, ctx.target_language.title(),
+    )
     system_prompt = (
-        "You are the learner's Afrikaans coach. Answer their question "
+        f"You are the learner's {target_name} coach. Answer their question "
         "directly and plainly. 1-3 sentences. If a quick example helps, "
         "include one. Don't lecture; the learner will see more cards on "
         "this pattern. Stay focused on the curriculum and the language. "
@@ -432,13 +436,15 @@ def _emit_off_topic_redirect(
     model call to vary it is waste. The text points the learner at the
     chat / WhatsApp surfaces for general-purpose questions.
 
-    The MVP target language is Afrikaans across the board; if/when we
-    add more tracks we'd pull this from ``goal.language``. For now
-    a hard-coded string is correct (the earlier inline expression
-    silently produced 'your None learning' when the profile.level was
-    null — bad)."""
+    Target language comes from the goal — interpolated via the
+    skill_renderer's display map so the text reads naturally for any
+    of the supported languages (Afrikaans / English / German)."""
+    from .skill_renderer import LANGUAGE_DISPLAY
+    target_name = LANGUAGE_DISPLAY.get(
+        ctx.target_language, ctx.target_language.title(),
+    )
     text = (
-        "I'm focused on your Afrikaans learning right now and that's "
+        f"I'm focused on your {target_name} learning right now and that's "
         "outside the curriculum. For general questions, the chat at "
         "chat.ongiini.ai or the WhatsApp assistant is set up for that. "
         "Want to keep going with the next card?"

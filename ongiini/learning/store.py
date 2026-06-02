@@ -233,6 +233,8 @@ def get_or_create_active_goal(
     learner_id: str,
     *,
     language: str = "afrikaans",
+    source_language: str = "english",
+    current_level: str | None = None,
     context: str | None = None,
     title: str | None = None,
 ) -> dict[str, Any]:
@@ -256,6 +258,11 @@ def get_or_create_active_goal(
     SPAR") rather than "Untitled curriculum"."""
     if not learner_id:
         raise ValueError("learner_id is required")
+    # Validate the language pair at the boundary — same checks the API
+    # request handlers run. Centralised here so callers (including the
+    # legacy /turn auto-create path) can't slip an invalid pair in.
+    from .skill_renderer import validate_language_pair
+    validate_language_pair(source_language, language)
     if isinstance(context, str):
         context = pii.sanitize(context)
     if isinstance(title, str):
@@ -274,9 +281,11 @@ def get_or_create_active_goal(
             goal_id = str(uuid4())
             c.execute(
                 "INSERT INTO learning_goals (goal_id, learner_id, language, "
-                "context, status, title, created_at) "
-                "VALUES (?, ?, ?, ?, 'active', ?, ?)",
-                (goal_id, learner_id, language, context, title, _now_iso()),
+                "source_language, current_level, context, status, title, "
+                "created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+                (goal_id, learner_id, language, source_language,
+                 current_level, context, title, _now_iso()),
             )
             row = c.execute(
                 "SELECT * FROM learning_goals WHERE goal_id = ?",
@@ -307,7 +316,8 @@ def list_goals(
     if not learner_id:
         return []
     sql = (
-        "SELECT goal_id, learner_id, language, context, status, title, "
+        "SELECT goal_id, learner_id, language, source_language, "
+        "       current_level, context, status, title, "
         "       archived_at, created_at, outline_updated_at, "
         "       CASE WHEN curriculum_outline IS NULL THEN 0 ELSE 1 END "
         "       AS has_outline "
@@ -333,6 +343,8 @@ def create_new_goal(
     title: str | None = None,
     context: str | None = None,
     language: str = "afrikaans",
+    source_language: str = "english",
+    current_level: str | None = None,
     activate: bool = True,
 ) -> dict[str, Any]:
     """Create a fresh learning goal. When ``activate=True`` (the
@@ -349,6 +361,9 @@ def create_new_goal(
     interleaved with another caller's create."""
     if not learner_id:
         raise ValueError("learner_id is required")
+    # Validate the language pair at the boundary.
+    from .skill_renderer import validate_language_pair
+    validate_language_pair(source_language, language)
     if isinstance(title, str):
         title = pii.sanitize(title).strip() or None
     if isinstance(context, str):
@@ -367,10 +382,11 @@ def create_new_goal(
             status_val = "active" if activate else "paused"
             c.execute(
                 "INSERT INTO learning_goals (goal_id, learner_id, language, "
-                "context, status, title, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (new_goal_id, learner_id, language, context,
-                 status_val, title, now),
+                "source_language, current_level, context, status, title, "
+                "created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (new_goal_id, learner_id, language, source_language,
+                 current_level, context, status_val, title, now),
             )
             row = c.execute(
                 "SELECT * FROM learning_goals WHERE goal_id = ?",
