@@ -56,7 +56,8 @@
     "got_it": "Got it →",
     "show_hint": "Show hint",
     "awaiting": "awaiting your answer",
-    "answered": "answered"
+    "answered": "answered",
+    "review_eyebrow": "review · box {box}"
   },
   "modal": {
     "source_pick_heading": "You picked {target}.",

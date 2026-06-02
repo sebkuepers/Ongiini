@@ -419,6 +419,95 @@ def test_advance_module_when_emitted_overshoots(temp_db):
     assert new_outline["modules"][0]["status"] == "completed"
 
 
+@pytest.mark.asyncio
+async def test_srs_replay_surfaces_due_card_instead_of_generating_new(temp_db):
+    """The previously-missing piece: a card the learner got wrong
+    earlier and is now due for re-review must come back via the SRS
+    queue, not be silently replaced by a brand-new model-authored
+    card."""
+    learner_id, goal_id = _setup(temp_db)
+    # Plant the outline + an existing wrong-answer card whose box-1
+    # next_due_at is now (the default for box 1).
+    store.save_curriculum_outline(goal_id, {
+        "summary": "x",
+        "modules": [{"id": "m1", "title": "M", "status": "in_progress",
+                     "estimated_cards": 6}],
+    })
+    card_id = store.save_card(
+        goal_id, db.CARD_VOCAB, "How do you say 'thanks'?",
+        reference_answer="dankie", module_id="m1",
+    )
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_id,
+        user_answer="garbage", ai_feedback="that's not right",
+        rating=db.RATING_WRONG,
+    )
+    # Verify the card is now in box 1 and due for review.
+    due = store.next_due_cards(learner_id, goal_id=goal_id)
+    assert len(due) == 1
+    assert due[0]["card_id"] == card_id
+
+    # Trigger a "what's next" turn.
+    fm = FakeModel()
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    # The SRS-due card should have surfaced — no model call needed.
+    exercise_msgs = [m for m in out if m["kind"] == db.MSG_EXERCISE]
+    assert len(exercise_msgs) == 1
+    assert exercise_msgs[0]["card_id"] == card_id
+    assert exercise_msgs[0]["payload"].get("review_box") == 1
+    assert fm.requests == []   # no LLM call for the card
+
+
+@pytest.mark.asyncio
+async def test_srs_replay_skips_just_answered_card(temp_db):
+    """Anki-style: the card the learner JUST answered (which may be
+    immediately due again if they got it wrong) does not come back
+    back-to-back. It surfaces on the turn AFTER one new card has been
+    served."""
+    learner_id, goal_id = _setup(temp_db)
+    store.save_curriculum_outline(goal_id, {
+        "summary": "x",
+        "modules": [{"id": "m1", "title": "M", "status": "in_progress",
+                     "estimated_cards": 6}],
+    })
+    card_id = store.save_card(
+        goal_id, db.CARD_VOCAB, "thanks?",
+        reference_answer="dankie", module_id="m1",
+    )
+    # Active exercise message for the card.
+    messages.append(
+        learner_id=learner_id, goal_id=goal_id,
+        kind=db.MSG_EXERCISE,
+        payload={"card_type": "vocab", "prompt_text": "thanks?"},
+        card_id=card_id,
+    )
+    # Wrong answer → card is due-now in box 1.
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_id,
+        user_answer="x", ai_feedback="no", rating=db.RATING_WRONG,
+    )
+
+    # User sends an answer → grading + next-card flow.
+    fm = FakeModel(responses=[
+        '{"verdict": "answer"}',
+        '{"rating": "wrong", "feedback": "no, dankie"}',
+        _EXERCISE,                # new card the model authors
+    ])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text="x",
+        model=fm, skill_content="SKILL",
+    )
+    # The exercise emitted at the end is the NEW one — not the
+    # just-answered card_id re-surfaced.
+    exercise_msgs = [m for m in out if m["kind"] == db.MSG_EXERCISE]
+    assert len(exercise_msgs) == 1
+    assert exercise_msgs[0]["card_id"] != card_id
+
+
 def test_advance_module_no_op_when_under_target(temp_db):
     outline = {
         "summary": "x",
