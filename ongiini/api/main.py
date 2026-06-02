@@ -106,21 +106,14 @@ async def lifespan(app: FastAPI):
         ttl_minutes=settings.chat_session_ttl_min,
     )
 
-    # Mount the chat endpoint as a sub-app on /v1 so its CORSMiddleware
-    # only applies to those routes — the parent app's CORS stays
-    # GET-locked to ongiini.ai (no POST/OPTIONS leakage onto /whatsapp
-    # webhook, /api/stats, etc). Done inside lifespan so the sub-app
-    # picks up startup-built singletons (shared components + session
-    # store + sanitiser + image resizer).
+    # Mount the chat endpoint. CORS is handled by the parent app's
+    # CORSMiddleware (declared at module scope above) — it's the first
+    # middleware in the stack and sees every OPTIONS preflight, so
+    # adding a second per-route CORS layer wouldn't change behaviour
+    # for preflights and would only add an unneeded inner middleware
+    # hop on the actual POST.
     if settings.chat_enabled:
         chat_sub = FastAPI(title="Ongiini Chat", openapi_url=None)
-        chat_sub.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.chat_allowed_origins,
-            allow_methods=["POST", "OPTIONS"],
-            allow_headers=["*"],
-            allow_credentials=False,
-        )
         # build_chat_router returns an APIRouter with no prefix; the
         # sub-app is mounted at "/v1" so chat routes resolve as
         # /v1/chat and /v1/chat/clear at the parent app's path layer.
@@ -133,7 +126,7 @@ async def lifespan(app: FastAPI):
             )
         )
         app.mount("/v1", chat_sub)
-        log.info("chat endpoint enabled at /v1/chat (sub-app with scoped CORS)")
+        log.info("chat endpoint enabled at /v1/chat")
     else:
         log.info("chat endpoint DISABLED via ONGIINI_CHAT_ENABLED=false")
     # Kick off the LLM-driven qualitative-analysis loop (topics, roles).
@@ -170,17 +163,32 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ongiini Webhook", lifespan=lifespan)
 
-# Allow the public website (Cloudflare Pages) to poll /status from
-# the browser. GET only, no credentials. Locked to the ongiini.ai
-# subdomain — webhook and admin endpoints must NEVER accept
-# cross-origin mutating requests.
+# CORS for the public surface. Starlette's CORSMiddleware sits on the
+# parent app and is the FIRST gatekeeper for every request, including
+# OPTIONS preflights destined for sub-app routes — so the parent's
+# allow_origins + allow_methods must cover EVERY origin × method
+# combination the public surface needs:
+#
+#  - `https://ongiini.ai` / `https://www.ongiini.ai` need GET (for the
+#    website's /status poll + Pages-Functions /api/stats proxy).
+#  - `https://chat.ongiini.ai` (and the localhost dev variants from
+#    settings.chat_allowed_origins) need POST + OPTIONS for /v1/chat
+#    and /v1/chat/clear.
+#
+# Widening allow_methods to GET+POST+OPTIONS doesn't expose the
+# webhook or admin endpoints because the WhatsApp webhook is gated by
+# its own signature-verify (cross-origin POSTs without a valid Meta
+# signature get 403), and /status / /api/stats have no POST routes —
+# a stray POST would return 405. The webhook isn't even in any CORS
+# origin so the browser couldn't reach it from a third-party page
+# even if it tried.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://ongiini.ai",
         "https://www.ongiini.ai",
-    ],
-    allow_methods=["GET"],
+    ] + settings.chat_allowed_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=False,
 )
