@@ -438,6 +438,20 @@ _PRODUCT_DOCS_PATH = Path(__file__).resolve().parents[1] / "knowledge" / "produc
 _product_docs_cache: str | None = None
 
 
+_DOCS_PREAMBLE = (
+    "The text below is Ongiini's PUBLIC product documentation — FAQ,\n"
+    "Privacy Policy, Terms of Service, and Imprint, all already published\n"
+    "on ongiini.ai. Every fact in it (including the foundation name, the\n"
+    "operator's name, the location of the hardware) is public information\n"
+    "AUTHORISED to be quoted back to users who ask about Ongiini itself.\n"
+    "Do not refuse to name the foundation or operator on privacy grounds —\n"
+    "this is the legally-required imprint of a public service. Paraphrase\n"
+    "the relevant section in plain language; don't paste markdown back.\n"
+    "\n"
+    "--- PUBLIC PRODUCT DOCS ---\n"
+)
+
+
 def _load_product_docs() -> str:
     """Return the canonical product.md, loaded once per process.
 
@@ -447,7 +461,7 @@ def _load_product_docs() -> str:
     if _product_docs_cache is not None:
         return _product_docs_cache
     try:
-        _product_docs_cache = _PRODUCT_DOCS_PATH.read_text(encoding="utf-8")
+        _product_docs_cache = _DOCS_PREAMBLE + _PRODUCT_DOCS_PATH.read_text(encoding="utf-8")
     except FileNotFoundError:
         log.warning(
             "product knowledge file missing at %s — lookup_ongiini_docs will "
