@@ -118,7 +118,9 @@
   },
   "intake": {
     "welcome_prefix": "Willkommen — lass uns dich einrichten. ",
-    "putting_plan": "Perfekt. Ich stelle jetzt deinen Plan zusammen…"
+    "putting_plan": "Perfekt. Ich stelle jetzt deinen Plan zusammen…",
+    "welcome_back_short": "Willkommen zurück.",
+    "focus_prompt_template": "Worauf möchtest du dich diesmal bei {target} konzentrieren?"
   },
   "errors": {
     "could_not_start": "Konnte nicht starten: {detail}",

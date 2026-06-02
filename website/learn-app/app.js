@@ -24,6 +24,12 @@
       // or when the user creates a goal from the drawer.
       pending_target: null,
       pending_source: null,
+      // The chat-focus fallback path: a returning learner with
+      // completed intake but no captured objective is asked, in chat,
+      // "What do you want to focus on for {target}?" — the composer's
+      // btnSend handler checks this flag and routes the typed answer
+      // to /goals/new instead of /turn or /intake.
+      awaiting_focus: false,
     };
 
     var LANGUAGE_DISPLAY = {
@@ -610,6 +616,10 @@
         currTitleText.textContent = t('topbar.curriculum_fallback');
         return;
       }
+      // Once any goal is active, the first-curriculum focus prompt is
+      // moot — clear the flag so the composer doesn't mis-route the
+      // next typed message into /goals/new.
+      state.awaiting_focus = false;
       // Prefer the goal title; otherwise build a language-pair label
       // like "Afrikaans for English speakers" so the user always knows
       // which curriculum they're in even before they name it.
@@ -806,8 +816,16 @@
         : t('modal.focus_placeholder_secondary');
       var ov = el('div', 'modal-overlay');
       var mo = el('div', 'modal');
-      var defTarget = (state.goal && state.goal.language) || 'afrikaans';
-      var defSource = (state.goal && state.goal.source_language) || 'english';
+      // Prefer the active goal's pair; fall through to the source-pick
+      // selection (state.pending_target/source) before the hard-coded
+      // default — otherwise this modal would silently drop the
+      // language the user just picked on the landing page.
+      var defTarget = (state.goal && state.goal.language)
+                      || state.pending_target
+                      || 'afrikaans';
+      var defSource = (state.goal && state.goal.source_language)
+                      || state.pending_source
+                      || 'english';
 
       function makeLabel(forId, text) {
         var l = document.createElement('label');
@@ -1170,6 +1188,111 @@
       }
     }
 
+    // ── First-curriculum, post-intake creation ─────────────
+    // Three small helpers that replace the openNewGoalModal({initial:true})
+    // call. They keep the onboarding chat-first: once the source-pick
+    // modal is closed and intake is already done, the user shouldn't
+    // see another form — the assistant just spins up their curriculum
+    // (or asks the one missing thing in chat).
+
+    async function _createGoalAndBootstrap(title) {
+      // Shared body for both auto-create and chat-focus paths. Mirrors
+      // sendTurn's busy-state pattern so a spam-click or Enter-spam
+      // during the in-flight /goals/new can't fire a second create.
+      if (state.busy) return;
+      state.busy = true;
+      btnSend.disabled = true;
+      composer.disabled = true;
+      try {
+        var ngResp = await api('/goals/new', {
+          learner_id: state.learner_id,
+          title: title || null,
+          language: state.pending_target,
+          source_language: state.pending_source,
+          current_level: state.profile && state.profile.current_level
+            ? state.profile.current_level : null,
+          activate: true,
+        });
+        state.goals = ngResp.goals || [];
+        setActiveGoalView(ngResp.goal);
+        state.pending_target = null;
+        state.pending_source = null;
+        // Only release busy/composer AFTER success — sendTurn(null)
+        // will re-acquire them. If we released before sendTurn, an
+        // Enter-spam could fire a /turn with no goal.
+        await sendTurn(null);
+      } catch (e) {
+        // Same defensive policy as sendIntakeAnswer: don't silently
+        // fall through to /turn (the backend's auto-create would
+        // spawn a default Afrikaans goal). Surface the error and
+        // keep awaiting_focus armed so the next typed message
+        // retries through the focus branch instead of /turn.
+        state.pending_target = null;
+        state.pending_source = null;
+        showError(t('errors.could_not_create', { detail: e.message || '' }));
+      } finally {
+        state.busy = false;
+        btnSend.disabled = !composer.value.trim();
+        composer.disabled = false;
+      }
+    }
+
+    async function autoCreateGoalFromPending() {
+      // We know the language pair AND the focus (from earlier intake).
+      // Show the "putting your plan together…" coach bubble and create
+      // the goal silently — no modal, no extra questions. Early-return
+      // if busy so a rapid-fire startSession can't append the bubble
+      // twice.
+      if (state.busy) return;
+      appendMessage({
+        kind: 'coach_text',
+        payload: { text: t('intake.putting_plan') },
+      });
+      var title = state.profile && state.profile.objective
+        ? state.profile.objective : null;
+      await _createGoalAndBootstrap(title);
+    }
+
+    function askForFocusInChat() {
+      // Edge case: returning learner, intake marked complete, but
+      // profile.objective is empty (legacy data). Ask the one missing
+      // thing in chat and route the answer to /goals/new via the
+      // composer's awaiting_focus branch.
+      state.awaiting_focus = true;
+      var target = state.pending_target || 'language';
+      var displayTarget = LANGUAGE_DISPLAY[target] || target;
+      // LANGUAGE_DISPLAY values are already capitalised in en.json but
+      // belt-and-braces in case a future locale routes via this code
+      // path with a lowercase name.
+      if (displayTarget && displayTarget.length) {
+        displayTarget = displayTarget.charAt(0).toUpperCase() + displayTarget.slice(1);
+      }
+      var greeting = t('intake.welcome_back_short');
+      var question = t('intake.focus_prompt_template', { target: displayTarget });
+      appendIntakePrompt(greeting + ' ' + question);
+    }
+
+    async function createGoalWithFocus(text) {
+      // Composer routed here when state.awaiting_focus is true. Note:
+      // we DON'T clear awaiting_focus eagerly — if /goals/new fails
+      // inside _createGoalAndBootstrap, the user's retry should stay
+      // in this branch (typing again hits createGoalWithFocus, not
+      // sendTurn(/turn), which would trigger the backend's auto-create
+      // and spawn an unintended default Afrikaans goal).
+      // Early-return if busy so a spam-Enter can't append double
+      // bubbles before _createGoalAndBootstrap acquires the lock.
+      if (state.busy) return;
+      appendMessage({ kind: 'learner_text', payload: { text: String(text) } });
+      appendMessage({
+        kind: 'coach_text',
+        payload: { text: t('intake.putting_plan') },
+      });
+      await _createGoalAndBootstrap(String(text));
+      // On success, setActiveGoalView (inside _createGoalAndBootstrap)
+      // has already cleared awaiting_focus. On error it's still true,
+      // which is what we want for the retry path.
+    }
+
     // ── Session bootstrap ──────────────────────────────────
     async function startSession() {
       try {
@@ -1197,15 +1320,25 @@
             t('intake.welcome_prefix') + (s.next_intake_prompt || "")
           );
         } else if (!s.active_goal) {
-          // Intake done but no active curriculum — the learner either
-          // archived all their goals and came back, or this is their
-          // very first /sessions after intake. ASK what they want to
-          // learn instead of silently spawning a generic Afrikaans
-          // goal (the previous bug: get_or_create_active_goal would
-          // re-seed from profile.objective and the result felt like
-          // 'the old curriculum came back').
+          // Intake done but no active curriculum. Stay chat-first:
+          // if we have a pending language pair (came from the
+          // source-pick modal) AND we know the learner's focus
+          // (captured during intake), spin up the goal silently.
+          // If the pair is missing — magic-link / cold-resume with
+          // no topic-card click — fall back to the new-goal modal.
+          // If we have the pair but no objective on file (legacy
+          // data), ask in chat instead of opening a form.
           rerenderThread([]);
-          openNewGoalModal({ initial: true });
+          if (state.pending_target && state.pending_source) {
+            var have_objective = !!(state.profile && state.profile.objective);
+            if (have_objective) {
+              await autoCreateGoalFromPending();
+            } else {
+              askForFocusInChat();
+            }
+          } else {
+            openNewGoalModal({ initial: true });
+          }
         } else if (state.thread.length === 0) {
           // Active goal exists but no thread yet — first /turn for
           // this goal. Bootstrap.
@@ -1254,7 +1387,12 @@
       composer.value = '';
       composer.style.height = 'auto';
       btnSend.disabled = true;
-      if (state.intake_field) {
+      if (state.awaiting_focus) {
+        // First-curriculum focus prompt — route directly to /goals/new
+        // (NOT /intake — intake is already complete by definition when
+        // this branch fires) and bootstrap the first card.
+        createGoalWithFocus(v);
+      } else if (state.intake_field) {
         sendIntakeAnswer(v);
       } else {
         // Optimistic learner bubble — `optimisticLearnerText: true`
