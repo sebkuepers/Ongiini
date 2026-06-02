@@ -464,6 +464,19 @@
     }
     .stat-section-note strong { color: var(--ink); font-weight: 500; }
 
+    /* Web chat section — tighten the internal rhythm. The page-wide
+       margins on .stat-kpis (36px top) + .stat-section-note (24px
+       bottom) compound here because we stack note → kpis → chart-row
+       → note → perf inside one section. Override locally to keep the
+       block cohesive without touching the global rules the WhatsApp
+       side depends on. h2 gets a touch more breathing room above so
+       the section break reads cleanly after the engagement grid. */
+    #webChatSection { margin-top: 12px; }
+    #webChatSection h2 { margin-top: 72px; }
+    #webChatSection .stat-kpis { margin-top: 18px; }
+    #webChatSection .stat-chart-row { margin-top: 18px; }
+    #webChatSection .stat-perf { margin-top: 12px; }
+
     .stat-chart-meta {
       margin: 6px 0 0;
       font-family: 'Geist Mono', monospace;
@@ -671,7 +684,7 @@
             <div id="chart-webchat-messages"></div>
           </div>
         </div>
-        <p class="stat-section-note" style="margin-top: 24px;">Same operational signals as the WhatsApp <em>How it performs</em> row below, but scoped to chat.ongiini.ai turns only.</p>
+        <p class="stat-section-note">Same operational signals as the WhatsApp <em>How it performs</em> row below, but scoped to chat.ongiini.ai turns only.</p>
         <div class="stat-perf" id="webChatPerf"></div>
       </div>
 
