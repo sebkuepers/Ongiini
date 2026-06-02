@@ -770,7 +770,10 @@
         profile: null, goal: null, goals: [],
         curriculum_outline: null,
         progress: { total_seen: 0, total_correct: 0, by_box: {} },
-        thread: [], active_card_id: null, busy: false,
+        thread: [], active_card_id: null,
+        module_progress: [], active_module_id: null,
+        pending_target: null, pending_source: null,
+        busy: false,
       };
       closeDrawer();
       exitToLanding();
@@ -880,7 +883,15 @@
               state.pending_target = null;
               state.pending_source = null;
             } catch (e) {
+              // /goals/new failed — DO NOT fall through to sendTurn,
+              // because the backend's /turn auto-create would silently
+              // spawn a default Afrikaans-from-English goal and the
+              // user would land in the wrong curriculum. Show the
+              // error and bail.
+              state.pending_target = null;
+              state.pending_source = null;
               showError("Could not create curriculum: " + (e.message || ''));
+              return;
             }
           }
           // Bootstrap the first real turn — designs outline + first

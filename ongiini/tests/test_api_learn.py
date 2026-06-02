@@ -77,11 +77,12 @@ _EXERCISE = json.dumps({
 })
 
 
-def _stub_skill_renderer(source: str, target: str) -> str:
+def _stub_skill_renderer(*, source: str, target: str) -> str:
     """Test-time replacement for the per-pair skill renderer — emits a
     short marker string so tests can assert on which pair was selected
     without dragging the real template + anchor files into every
-    test fixture."""
+    test fixture. Mirrors the production renderer's keyword-only
+    signature so the call sites stay honest."""
     return f"SKILL source={source} target={target}"
 
 
