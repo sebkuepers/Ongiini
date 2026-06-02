@@ -311,6 +311,10 @@
       min-width: 60px;
     }
     .progress-strip .bar-fill {
+      display: block;                       /* span defaults to inline,
+                                               which ignores width/height
+                                               so the bar showed empty
+                                               even when JS set 17% */
       height: 100%;
       background: var(--terracotta);
       transition: width 320ms cubic-bezier(.4,.1,.3,1);
@@ -338,7 +342,18 @@
       gap: 12px;
       overflow-y: auto;
       overscroll-behavior: contain;   /* don't bubble scroll to body */
+      /* Hide the scrollbar — Mac trackpads + iOS already auto-hide,
+         but on a desktop mouse the persistent gutter is ugly. The
+         thread is still scrollable, just visually clean. Same trick
+         for .drawer and .curr-panel so the whole learning surface
+         feels gutter-free. */
+      scrollbar-width: none;            /* Firefox */
+      -ms-overflow-style: none;         /* Edge / IE */
     }
+    .thread::-webkit-scrollbar { display: none; }   /* Webkit / Blink */
+    .drawer, .curr-panel { scrollbar-width: none; -ms-overflow-style: none; }
+    .drawer::-webkit-scrollbar,
+    .curr-panel::-webkit-scrollbar { display: none; }
     .msg { display: flex; }
     .msg--learner { justify-content: flex-end; }
     .msg--coach   { justify-content: flex-start; }
@@ -1664,11 +1679,12 @@
     }
 
     // ── Turn dispatch ──────────────────────────────────────
-    async function sendTurn(text) {
+    async function sendTurn(text, opts) {
       if (state.busy) return;
       state.busy = true;
       btnSend.disabled = true;
       composer.disabled = true;
+      var skipOptimisticEcho = !!(opts && opts.optimisticLearnerText);
 
       var skel = appendSkeleton();
       try {
@@ -1681,8 +1697,17 @@
         state.module_progress = resp.module_progress || [];
         state.active_module_id = resp.active_module_id || state.active_module_id;
         if (resp.goal) setActiveGoalView(resp.goal);
+        var skippedOnce = false;
         (resp.messages || []).forEach(function (m) {
-          state.thread.push(m);
+          state.thread.push(m);   // persisted history for rehydration
+          // The server echoes back the learner_text it just persisted.
+          // When the composer rendered the bubble optimistically we
+          // must NOT re-render it on the response or the user sees
+          // their text twice (the screenshot bug).
+          if (skipOptimisticEcho && !skippedOnce && m.kind === 'learner_text') {
+            skippedOnce = true;
+            return;
+          }
           appendMessage(m);
         });
         renderCurriculumPanel();
@@ -1811,16 +1836,11 @@
       if (state.intake_field) {
         sendIntakeAnswer(v);
       } else {
-        // Optimistic learner bubble — replaced by the server-
-        // sanitised copy when /turn responds.
+        // Optimistic learner bubble — `optimisticLearnerText: true`
+        // tells sendTurn to drop the server's echo of this message
+        // when the response lands, so the user sees ONE bubble.
         appendMessage({ kind: 'learner_text', payload: { text: v } });
-        sendTurn(v).then(function () {
-          // The server returned its persisted copy; the optimistic
-          // one above remains in the thread but is harmless (it's
-          // also rendered identically). For simplicity we don't
-          // dedupe; the server's copy is appended after, but visually
-          // they're indistinguishable.
-        });
+        sendTurn(v, { optimisticLearnerText: true });
       }
     });
 
