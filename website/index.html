@@ -539,23 +539,27 @@
     }
     .og-cta-legal a:hover { color: var(--terracotta); }
 
-    /* Secondary path for visitors without WhatsApp. Sits between the
-       WA button and the legal line — slightly more present than the
-       legal disclaimer (Geist, not mono) so it actually reads as an
-       offer, but still small enough that the WA CTA stays primary. */
-    .og-cta-alt {
-      margin-top: 14px;
-      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
-      font-size: 14px; line-height: 1.5;
-      color: var(--ink-soft);
-      text-align: center;
+    /* Secondary path for visitors without WhatsApp. Mirrors the
+       primary CTA's shape and padding so they stack as a matched
+       pair, but in a ghost style (transparent fill, ink border) so
+       the WA button still carries the colour weight and stays the
+       primary action. */
+    .og-cta-ghost {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px;
+      padding: 17px 22px 17px 26px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--ink);
+      font-size: 17px; font-weight: 500; letter-spacing: -0.005em;
+      text-decoration: none;
+      transition: background 120ms ease, color 120ms ease;
     }
-    .og-cta-alt a {
-      color: var(--terracotta-deep);
-      text-decoration: underline;
-      text-underline-offset: 2px;
+    .og-cta-ghost:hover { background: var(--ink); color: var(--bone); }
+    @media (max-width: 600px) {
+      .og-cta-ghost { padding: 15px 18px 15px 20px; font-size: 16px; }
     }
-    .og-cta-alt a:hover { color: var(--terracotta); }
 
 
     /* Try-asking */
@@ -582,7 +586,10 @@
     }
     .og-try-lang--af { color: var(--terracotta-deep); border: 1px solid var(--terracotta); }
     .og-try-lang--en { color: var(--ink-soft); border: 1px solid var(--rule); }
-    .og-try-cta { margin-top: 32px; max-width: 380px; }
+    .og-try-cta {
+      margin-top: 32px; max-width: 380px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
 
     /* Three-card grid (used by Open/Transparent + Privacy) */
     .og-grid {
@@ -838,6 +845,7 @@
       font-size: clamp(22px, 3.4vw, 32px); line-height: 1.2;
       color: var(--ink-soft); max-width: 22ch;
     }
+    .og-close-cta { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 380px; }
 
     /* Footer */
     .og-footer { background: var(--ink); color: var(--bone); padding: 56px 0 28px; }
@@ -1201,7 +1209,7 @@
       }
       .og-close-mark { grid-column: 1 / -1; }
       .og-close-tag { grid-column: 1; align-self: end; }
-      .og-close-inner > .og-close-cta { grid-column: 2; align-self: end; display: flex; flex-direction: column; gap: 8px; }
+      .og-close-inner > .og-close-cta { grid-column: 2; align-self: end; gap: 14px; }
       .og-footer-inner { grid-template-columns: 1.4fr 1fr 1.2fr; gap: 56px; align-items: start; }
     }
     @media (max-width: 380px) {
@@ -1280,10 +1288,12 @@
               </span>
               <span class="og-cta-arrow">→</span>
             </a>
-            <div class="og-cta-alt">
-              <span data-en="i">No WhatsApp? <a href="https://chat.ongiini.ai/">Try it in your browser</a>.</span>
-              <span data-af="i">Geen WhatsApp? <a href="https://chat.ongiini.ai/">Probeer in jou blaaier</a>.</span>
-            </div>
+            <a class="og-cta-ghost" href="https://chat.ongiini.ai/">
+              <span>
+                <span data-en="i">Try in browser</span><span data-af="i">Probeer in blaaier</span>
+              </span>
+              <span class="og-cta-arrow">→</span>
+            </a>
             <div class="og-cta-legal">
               <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
               <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
@@ -1613,10 +1623,12 @@
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
-          <div class="og-cta-alt">
-            <span data-en="i">No WhatsApp? <a href="https://chat.ongiini.ai/">Try it in your browser</a>.</span>
-            <span data-af="i">Geen WhatsApp? <a href="https://chat.ongiini.ai/">Probeer in jou blaaier</a>.</span>
-          </div>
+          <a class="og-cta-ghost" href="https://chat.ongiini.ai/">
+            <span>
+              <span data-en="i">Try in browser</span><span data-af="i">Probeer in blaaier</span>
+            </span>
+            <span class="og-cta-arrow">→</span>
+          </a>
           <div class="og-cta-legal">
             <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
             <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
@@ -1891,10 +1903,12 @@
             </span>
             <span class="og-cta-arrow">→</span>
           </a>
-          <div class="og-cta-alt">
-            <span data-en="i">No WhatsApp? <a href="https://chat.ongiini.ai/">Try it in your browser</a>.</span>
-            <span data-af="i">Geen WhatsApp? <a href="https://chat.ongiini.ai/">Probeer in jou blaaier</a>.</span>
-          </div>
+          <a class="og-cta-ghost" href="https://chat.ongiini.ai/">
+            <span>
+              <span data-en="i">Try in browser</span><span data-af="i">Probeer in blaaier</span>
+            </span>
+            <span class="og-cta-arrow">→</span>
+          </a>
           <div class="og-cta-legal">
             <span data-en="i">By chatting you accept our <a href="/terms/">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span>
             <span data-af="i">Deur te gesels aanvaar jy ons <a href="/terms/">Bepalings</a> en <a href="/privacy/">Privaatheidsbeleid</a>.</span>
