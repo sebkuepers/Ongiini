@@ -71,10 +71,19 @@ _FIELD_GUIDANCE: dict[str, str] = {
         "If genuinely ambiguous, clarify with one short follow-up."
     ),
     "objective": (
-        "FIELD: objective — a one-sentence description of what the "
-        "learner wants to be able to do in Afrikaans.\n"
-        "Pass through near-verbatim. Trim padding ('I want to ' → ''). "
-        "If empty / one word / clearly off-topic, clarify."
+        "FIELD: objective — a short description of what the learner "
+        "wants to be able to do in Afrikaans.\n"
+        "Pass through near-verbatim. Trim only obvious padding "
+        "('I want to ' → '', 'I would like to ' → ''). \n"
+        "SHORT noun phrases are FINE and should be extracted as-is. "
+        "All of these are GOOD objectives — do NOT clarify them:\n"
+        "  - 'A job interview' → 'job interview'\n"
+        "  - 'Job interview' → 'job interview'\n"
+        "  - 'Talking to in-laws' → 'talking to in-laws'\n"
+        "  - 'Workplace conversation' → 'workplace conversation'\n"
+        "  - 'CV writing' → 'CV writing'\n"
+        "Only clarify if the reply is empty, gibberish (random "
+        "letters), or clearly off-topic (asking about the weather)."
     ),
 }
 

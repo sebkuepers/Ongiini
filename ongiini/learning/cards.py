@@ -46,6 +46,16 @@ def _validate_card(payload: dict[str, Any]) -> None:
         raise ModelOutputError(f"card_type must be one of {CARD_TYPES}; got {ct!r}")
     if not isinstance(payload["prompt_text"], str) or not payload["prompt_text"].strip():
         raise ModelOutputError("card prompt_text must be a non-empty string")
+    # module_id is soft-required: if missing the card still saves (the
+    # store accepts None for back-compat), but the per-module progress
+    # bar can't count it. Log via downstream so we can spot LLM
+    # regressions without breaking the turn. Type-check when present.
+    if "module_id" in payload and payload["module_id"] is not None:
+        if not isinstance(payload["module_id"], str):
+            raise ModelOutputError(
+                f"module_id must be a string; got "
+                f"{type(payload['module_id']).__name__}"
+            )
 
 
 def _build_system_prompt(skill_content: str) -> str:
@@ -58,6 +68,29 @@ def _build_system_prompt(skill_content: str) -> str:
         "Emit ONLY the JSON object — no prose, no Markdown fences.\n\n"
         f"{skill_content}"
     )
+
+
+def _render_module_digest(ctx: LearnerContext) -> str:
+    """Per-module rollup the recent_cards window can't carry once the
+    learner is deep in a module. Without this the model loses track of
+    'lessons already given for module mod-1' after ~12 turns and
+    re-emits the original lesson — the exact bug Sebastian hit at the
+    13-card mark."""
+    if not ctx.module_digest:
+        return "(no per-module data yet)"
+    lines: list[str] = []
+    for mod_id, d in ctx.module_digest.items():
+        lessons = d.get("lessons_given", 0)
+        ex_emit = d.get("exercises_emitted", 0)
+        ex_seen = d.get("exercises_attempted", 0)
+        ex_correct = d.get("exercises_correct", 0)
+        lines.append(
+            f"  - {mod_id}: lessons_given={lessons}, "
+            f"exercises_emitted={ex_emit}, "
+            f"exercises_attempted={ex_seen}, "
+            f"exercises_correct={ex_correct}"
+        )
+    return "\n".join(lines)
 
 
 def _render_recent_cards(ctx: LearnerContext) -> str:
@@ -104,16 +137,28 @@ def _build_user_prompt(ctx: LearnerContext) -> str:
         f"  objective: {tag_learner_input(ctx.goal_context or p.get('objective'))}\n"
         f"\nCURRICULUM OUTLINE:\n{outline_json}\n"
         f"\nPROGRESS: {progress_summary}\n"
-        f"\nRECENT CARDS ON THIS GOAL (oldest first):\n{_render_recent_cards(ctx)}\n"
-        "\nTASK: Author the next card. Use RECENT CARDS to decide what's "
-        "next — if the last card was a lesson, DRILL the lesson with an "
-        "exercise (vocab / translation / production) rather than emitting "
-        "another lesson. Two lessons in a row should only happen if a "
-        "concept genuinely needs more setup, and even then prefer an "
-        "exercise. Pick the card_type that fits the in-progress module "
-        "and the learner's current ability. If lots of cards are stuck in "
-        "Leitner box 1, prefer consolidating cards (easier, in-module) "
-        "over introducing new themes. Output JSON only."
+        f"\nMODULE DIGEST (per-module rollup — load-bearing for "
+        "lesson-vs-drill decisions; refer here BEFORE recent cards):\n"
+        f"{_render_module_digest(ctx)}\n"
+        f"\nRECENT CARDS ON THIS GOAL (oldest first, last 12):\n"
+        f"{_render_recent_cards(ctx)}\n"
+        "\nTASK: Author the next card. "
+        "INCLUDE the JSON key `module_id` matching one of the module "
+        "ids from the outline above — required so per-module progress "
+        "can be tracked.\n"
+        "Rules:\n"
+        " - If MODULE DIGEST shows lessons_given >= 1 for the "
+        "in-progress module, EMIT AN EXERCISE, not another lesson — "
+        "the lesson has already been taught. The recent-cards window "
+        "may have rolled past it; the digest is authoritative.\n"
+        " - If MODULE DIGEST shows lessons_given == 0 for a freshly-"
+        "started module, emit a lesson first.\n"
+        " - If lots of cards are stuck in Leitner box 1, prefer "
+        "consolidating cards (easier, in-module) over introducing new "
+        "themes.\n"
+        " - Pick the card_type that fits the in-progress module and "
+        "the learner's level.\n"
+        "Output JSON only."
     )
 
 

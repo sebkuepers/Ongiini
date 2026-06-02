@@ -230,6 +230,19 @@ def warmup() -> None:
         if "archived_at" not in cols:
             c.execute("ALTER TABLE learning_goals ADD COLUMN archived_at TEXT")
 
+        # module_id on learning_cards. Nullable so prior cards (which
+        # the LLM authored without module tagging) keep working — they
+        # just don't count toward any module's progress, which is the
+        # honest behaviour. New cards must include it (cards.py prompts
+        # for it; soft-required at the validator).
+        card_cols = {r["name"] for r in c.execute("PRAGMA table_info(learning_cards)").fetchall()}
+        if "module_id" not in card_cols:
+            c.execute("ALTER TABLE learning_cards ADD COLUMN module_id TEXT")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cards_goal_module "
+            "ON learning_cards(goal_id, module_id)"
+        )
+
     log.info("learning sqlite warmed at %s", _db_path())
 
 

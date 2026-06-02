@@ -74,12 +74,21 @@ class LearnerContext:
     # The most recent lesson / exercise cards on this goal's thread,
     # oldest first. The card-generation prompt uses this so the model
     # can see "I just emitted a lesson on greetings — switch to a
-    # drill" rather than re-emitting another lesson on every "Got it
-    # →" tap (the Phase 2 bug: same lesson three times in a row
-    # because the model had nothing in context except the outline).
-    # Capped at 6 — enough to anchor decisions, small enough to keep
-    # prompt cost flat.
+    # drill" rather than re-emitting another lesson.
+    # Capped at 12 — enough to keep an early-module lesson in the
+    # window even after a long drill streak.
     recent_cards: list[dict[str, object]] = field(default_factory=list)
+
+    # Per-module rollup: how many lessons + exercises this learner has
+    # already seen for each module_id in the outline. This is the
+    # SURVIVAL signal that the recent_cards window can't carry once
+    # the learner is deep in a module — without it the model loses
+    # track of "yep, I gave the greetings lesson 14 turns ago" and
+    # re-emits it.
+    # Shape: {module_id: {"lessons_given": int, "exercises_emitted": int,
+    #                     "exercises_attempted": int, "exercises_correct": int,
+    #                     "cards_in_module": int}}
+    module_digest: dict[str, dict[str, object]] = field(default_factory=dict)
 
 
 def build_learner_context(
@@ -117,9 +126,10 @@ def build_learner_context(
     )
 
     recent_cards: list[dict[str, object]] = []
+    module_digest: dict[str, dict[str, object]] = {}
     if learner_id and goal_id:
         thread = _messages.list_for_goal(
-            learner_id=learner_id, goal_id=goal_id, limit=40,
+            learner_id=learner_id, goal_id=goal_id, limit=200,
         )
         for row in thread:
             if row.get("kind") in (MSG_LESSON, MSG_EXERCISE):
@@ -131,8 +141,15 @@ def build_learner_context(
                     "prompt_text": p.get("prompt_text") or p.get("body"),
                     "answered": bool(row.get("answered")),
                 })
-        # Keep only the tail so the prompt budget stays predictable.
-        recent_cards = recent_cards[-6:]
+        # Keep only the tail of the recent window so the prompt budget
+        # stays predictable — the deeper history is summarised below
+        # in module_digest, which doesn't grow with thread length.
+        recent_cards = recent_cards[-12:]
+
+        # Build the module digest via the store helper — same query
+        # the API uses to serve /turn so context + UI see the same
+        # numbers.
+        module_digest = store.progress_for_modules(learner_id, goal_id)
 
     return LearnerContext(
         learner_id=learner_id,
@@ -144,4 +161,7 @@ def build_learner_context(
         curriculum_outline=outline,
         progress=progress,
         recent_cards=recent_cards,
+        module_digest=module_digest,
     )
+
+
