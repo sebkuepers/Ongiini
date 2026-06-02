@@ -99,8 +99,19 @@ def _render_context_for_prompt(ctx: LearnerContext) -> str:
     lines.append(f"  name: {tag_learner_input(p.get('name'))}")
     lines.append(f"  age: {p.get('age') if p.get('age') is not None else '(not given)'}")
     lines.append(f"  current_level: {p.get('current_level') or '(not given)'}")
-    lines.append(f"  objective (from intake): {tag_learner_input(p.get('objective'))}")
-    lines.append(f"  goal_context (override): {tag_learner_input(ctx.goal_context)}")
+    lines.append("")
+    lines.append("FOCUS FOR THIS CURRICULUM (authoritative — the learner picked")
+    lines.append("this specifically for THIS plan; design around it, NOT around")
+    lines.append("an older intake objective if they differ):")
+    lines.append(f"  goal title: {tag_learner_input(ctx.goal_title)}")
+    lines.append(f"  goal context (optional notes): {tag_learner_input(ctx.goal_context)}")
+    if p.get('objective') and ctx.goal_title:
+        lines.append(
+            f"  (older intake objective — use ONLY if the goal title above is "
+            f"empty or generic): {tag_learner_input(p.get('objective'))}"
+        )
+    elif p.get('objective'):
+        lines.append(f"  intake objective (used as fallback): {tag_learner_input(p.get('objective'))}")
     if ctx.mem0_facts:
         lines.append("  prior facts from long-term memory:")
         for fact in ctx.mem0_facts[:6]:
