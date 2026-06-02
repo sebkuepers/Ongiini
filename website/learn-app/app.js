@@ -436,8 +436,9 @@
           var denom = mp.estimated_cards
             || ((mp.exercises_emitted || 0) + (mp.lessons_given || 0))
             || null;
+          var displayDone = denom ? Math.min(done, denom) : done;
           var count = el('span', 'curr-module-count',
-            denom ? (done + ' / ' + denom) : t('progress.cards', { n: done }));
+            denom ? (displayDone + ' / ' + denom) : t('progress.cards', { n: done }));
           head.appendChild(count);
         }
         row.appendChild(head);
@@ -539,9 +540,14 @@
         return;
       }
       var pct = Math.min(100, Math.round(100 * done / denom));
+      // Clamp the displayed numerator to the denominator so the
+      // counter reads "6 / 6" once the target is hit instead of
+      // "10 / 6". Auto-advance on the backend will switch us to the
+      // next module on the next turn; until then the bar stays full.
+      var doneDisplay = Math.min(done, denom);
       progressStrip.hidden = false;
       progressLabel.innerHTML = '<b>' + (mod.title || 'Module') + '</b>';
-      progressCount.textContent = done + ' / ' + denom;
+      progressCount.textContent = doneDisplay + ' / ' + denom;
       progressFill.style.width = pct + '%';
     }
 
