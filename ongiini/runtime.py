@@ -19,7 +19,9 @@ to touch. Anti-trap principle #6: one Runtime object holds everything.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from owela import (
     Agent, AUTO, DEPTH_DEEP, DEPTH_SHALLOW, HookRegistry, Policy, PolicyTable,
@@ -307,13 +309,34 @@ def _interstitial_on() -> bool:
     return not settings.disable_interstitial
 
 
-def build_runtime(*, trace_path: Path | None = None) -> Runtime:
-    """Build the Ongiini Runtime — called once at startup.
+@dataclass(frozen=True)
+class SharedComponents:
+    """Transport-agnostic Owela components, built ONCE at app startup
+    and shared across both the WhatsApp runtime and any per-request
+    chat runtime. Frozen so callers can't accidentally mutate the
+    classifier/tools/policies mid-flight."""
+    model: Any
+    classifier: Any
+    planner: Any
+    reviewer: Any
+    tools: Any
+    policies: Any
+    skills: Any
+    trace_destination: Path
 
-    ``trace_path`` defaults to ``{data_dir}/trace.jsonl`` to match the
-    pre-migration tracing destination. Tests can pass a tmp path.
+
+def build_shared_components(*, trace_path: Path | None = None) -> SharedComponents:
+    """Build all transport-agnostic Owela components.
+
+    The returned `SharedComponents` is used by `build_whatsapp_runtime`
+    (single Runtime constructed at startup) and `build_chat_runtime`
+    (per-request Runtime for the chat.ongiini.ai endpoint). Sharing is
+    safe because every component is either stateless or holds its own
+    concurrency protection (AsyncOpenAI clients are thread-safe per the
+    SDK contract, ToolRegistry/PolicyTable/SkillRegistry are read-only
+    after construction).
     """
-    log.info("building Ongiini runtime…")
+    log.info("building Ongiini shared components…")
 
     model = VLLMGemmaModel(
         base_url=settings.vllm_base_url,
@@ -322,22 +345,7 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         max_tokens=1500,
     )
 
-    transport = WhatsAppTransport()
-
-    # Skills load from ongiini/skills/<name>/SKILL.md (Claude-compatible
-    # layout). The MemoryProvider renders the manifest into the system
-    # prompt; load_skill (in ALL_TOOLS) fetches on-demand skill content.
     skills = load_skills()
-
-    memory_provider = OngiiniMemoryProvider(
-        system_prompt=SYSTEM_PROMPT,
-        short_term=memory,
-        long_term=mem,
-        source_index_loader=source_index.load,
-        source_index_formatter=source_index.format_for_injection,
-        source_index_deleter=source_index.delete,
-        skills=skills,
-    )
 
     # State-gated wrapper around GemmaClassifier. The inner classifier
     # emits its best opinion; the wrapper blocks CONTRIBUTE_* verdicts
@@ -352,8 +360,7 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
 
     # v1.1 components — planner runs only when policy.enable_planner
     # fires (SEARCH_DEEP); reviewer runs only when policy.enable_critique
-    # fires (DOCS + both SEARCH depths). Both are soft-fail by contract
-    # so a flaky reviewer never blocks a reply.
+    # fires (DOCS + both SEARCH depths). Both are soft-fail by contract.
     planner = OngiiniPlanner(
         base_url=settings.vllm_base_url,
         model_id=settings.vllm_model,
@@ -364,13 +371,8 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
     )
 
     tools = ToolRegistry(list(ALL_TOOLS))
-
     policies = build_policy_table()
 
-    # Hooks observe step events for billing, tracing, and persistence.
-    # Order matters: BillingHook + TracingHook run before
-    # MemoryRecordingHook so the trace line is written even if mem0 is
-    # down. All three are soft-fail at the registry level.
     trace_destination = trace_path or (settings.data_dir / "trace.jsonl")
     if settings.trace_critique_detail:
         log.warning(
@@ -389,10 +391,52 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
             "Disable this flag and rm -rf data/revise_eval/ when the "
             "evaluation window closes."
         )
+
+    return SharedComponents(
+        model=model,
+        classifier=classifier,
+        planner=planner,
+        reviewer=reviewer,
+        tools=tools,
+        policies=policies,
+        skills=skills,
+        trace_destination=trace_destination,
+    )
+
+
+def build_whatsapp_runtime(
+    shared: SharedComponents | None = None,
+    *,
+    trace_path: Path | None = None,
+) -> Runtime:
+    """Build the Runtime used by the WhatsApp webhook path.
+
+    Uses the existing per-msisdn disk + mem0 memory provider and the
+    full hook chain. ``shared`` is reused when provided (chat path also
+    needs the model/classifier/etc); falls back to building components
+    fresh when called standalone.
+    """
+    if shared is None:
+        shared = build_shared_components(trace_path=trace_path)
+
+    memory_provider = OngiiniMemoryProvider(
+        system_prompt=SYSTEM_PROMPT,
+        short_term=memory,
+        long_term=mem,
+        source_index_loader=source_index.load,
+        source_index_formatter=source_index.format_for_injection,
+        source_index_deleter=source_index.delete,
+        skills=shared.skills,
+    )
+
+    # Hooks observe step events for billing, tracing, and persistence.
+    # Order matters: BillingHook + TracingHook run before
+    # MemoryRecordingHook so the trace line is written even if mem0 is
+    # down. All are soft-fail at the registry level.
     hooks_list = [
         BillingHook(recorder=usage),
         TracingHook(
-            trace_path=trace_destination,
+            trace_path=shared.trace_destination,
             include_critique_detail=settings.trace_critique_detail,
         ),
         OngiiniMemoryRecordingHook(sanitiser=pii.sanitize),
@@ -401,7 +445,7 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
         # serves an English sentence without calling contribute_next,
         # this hook detects the pattern in the reply and retroactively
         # sets pending_save so the user's next reply (their translation)
-        # lands normally. See ongiini/hooks/contribute_hallucination_hook.py.
+        # lands normally.
         ContributeHallucinationGuardHook(),
     ]
     if settings.capture_revise_eval:
@@ -409,26 +453,84 @@ def build_runtime(*, trace_path: Path | None = None) -> Runtime:
     hooks = HookRegistry(hooks_list)
 
     rt = Runtime(
-        model=model,
-        transport=transport,
+        model=shared.model,
+        transport=WhatsAppTransport(),
         memory=memory_provider,
-        classifier=classifier,
-        tools=tools,
-        policies=policies,
+        classifier=shared.classifier,
+        tools=shared.tools,
+        policies=shared.policies,
         hooks=hooks,
-        planner=planner,
-        reviewer=reviewer,
-        skills=skills,
+        planner=shared.planner,
+        reviewer=shared.reviewer,
+        skills=shared.skills,
     )
     log.info(
-        "Ongiini runtime ready — tools=%d, policies=%d, hooks=%d, "
-        "skills=%d, planner=on, reviewer=on",
-        len(tools.names()), len(policies.all()), len(hooks.hooks),
-        len(skills.all()),
+        "Ongiini WhatsApp runtime ready — tools=%d, policies=%d, hooks=%d, "
+        "skills=%d",
+        len(shared.tools.names()), len(shared.policies.all()),
+        len(hooks.hooks), len(shared.skills.all()),
     )
     return rt
 
 
+def build_chat_runtime(
+    shared: SharedComponents,
+    *,
+    transport,         # WebChatTransport — per-request instance
+    memory_provider,   # SessionMemoryProvider bound to the session id
+) -> Runtime:
+    """Build a per-request Runtime for the chat.ongiini.ai endpoint.
+
+    ``shared`` is the singleton built once at startup. ``transport`` and
+    ``memory_provider`` are created per HTTP request so each request has
+    its own reply-capture slot and session-specific memory write target.
+
+    The hook chain is intentionally trimmed:
+    - BillingHook stays (we need per-session token totals for the cap)
+    - TracingHook stays (web chat turns trace just like WA turns —
+      grep for transport_name=web_chat to find session activity)
+    - OngiiniMemoryRecordingHook DROPPED (no disk / no mem0 for
+      sessions; the SessionMemoryProvider's record_turn appends to the
+      in-process store directly)
+    - SourceIndexHook DROPPED (writes per-user JSON to disk and the
+      web-chat OngiiniMemoryProvider isn't wired to read it back —
+      sessions get cited URLs via the rolling history alone)
+    - ContributeHallucinationGuardHook DROPPED (no contribute flow when
+      memory is per-session — the recovery would have nowhere to land)
+    - ReviseEvalCaptureHook DROPPED (PII capture flag doesn't apply to
+      anonymous web sessions; we don't persist content)
+    """
+    hooks_list = [
+        BillingHook(recorder=usage),
+        TracingHook(
+            trace_path=shared.trace_destination,
+            include_critique_detail=settings.trace_critique_detail,
+        ),
+    ]
+    hooks = HookRegistry(hooks_list)
+
+    return Runtime(
+        model=shared.model,
+        transport=transport,
+        memory=memory_provider,
+        classifier=shared.classifier,
+        tools=shared.tools,
+        policies=shared.policies,
+        hooks=hooks,
+        planner=shared.planner,
+        reviewer=shared.reviewer,
+        skills=shared.skills,
+    )
+
+
+# Backwards-compat alias for existing callers (tests + scripts that
+# import build_runtime). The WhatsApp path is what build_runtime ever
+# built; keeping the name avoids touching unrelated callsites.
+def build_runtime(*, trace_path: Path | None = None) -> Runtime:
+    """Alias for build_whatsapp_runtime — the historical entry point."""
+    return build_whatsapp_runtime(trace_path=trace_path)
+
+
 def build_agent() -> Agent:
-    """Convenience wrapper: build_runtime() + Agent(rt)."""
+    """Convenience wrapper for the WhatsApp path: build_runtime() + Agent(rt)."""
     return Agent(build_runtime())
