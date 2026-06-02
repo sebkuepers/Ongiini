@@ -32,19 +32,6 @@ log = logging.getLogger("ongiini.learning.db")
 IDENTITY_ANONYMOUS = "anonymous"
 IDENTITY_WHATSAPP = "whatsapp"
 
-# Intake step values, in order. Used by intake.py to advance the state
-# machine and by the API to surface which question to ask next.
-INTAKE_START = "start"
-INTAKE_NAME = "name"
-INTAKE_AGE = "age"
-INTAKE_LEVEL = "level"
-INTAKE_OBJECTIVE = "objective"
-INTAKE_DONE = "done"
-INTAKE_STEPS = (
-    INTAKE_START, INTAKE_NAME, INTAKE_AGE, INTAKE_LEVEL,
-    INTAKE_OBJECTIVE, INTAKE_DONE,
-)
-
 # Card types — the three the model can generate. See cards.py.
 CARD_VOCAB = "vocab"
 CARD_TRANSLATION = "translation"
@@ -97,12 +84,15 @@ def warmup() -> None:
     _db_path().parent.mkdir(parents=True, exist_ok=True)
     with _conn() as c:
         c.executescript("""
+        -- learner_profiles.intake_completed_at IS NULL is the canonical
+        -- "intake in progress" signal — no separate cursor on this table.
+        -- The LLM conducts the conversation; the API checks completeness
+        -- by looking at the profile fields.
         CREATE TABLE IF NOT EXISTS learners (
             learner_id      TEXT PRIMARY KEY,
             identity_type   TEXT NOT NULL,
             created_at      TEXT NOT NULL,
-            last_active_at  TEXT NOT NULL,
-            intake_step     TEXT NOT NULL DEFAULT 'start'
+            last_active_at  TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS learner_profiles (
@@ -115,14 +105,22 @@ def warmup() -> None:
             intake_completed_at   TEXT
         );
 
+        -- One active goal per learner for MVP. The curriculum outline
+        -- is a JSON document the LLM produces after intake and revises
+        -- as the learner progresses. We do NOT validate its inner
+        -- shape — that's the LLM's design space, not ours. Outline is
+        -- nullable so a goal can exist before the LLM has had its
+        -- first turn to write one.
         CREATE TABLE IF NOT EXISTS learning_goals (
-            goal_id      TEXT PRIMARY KEY,
-            learner_id   TEXT NOT NULL
-                         REFERENCES learners(learner_id) ON DELETE CASCADE,
-            language     TEXT NOT NULL DEFAULT 'afrikaans',
-            context      TEXT,
-            status       TEXT NOT NULL DEFAULT 'active',
-            created_at   TEXT NOT NULL
+            goal_id              TEXT PRIMARY KEY,
+            learner_id           TEXT NOT NULL
+                                 REFERENCES learners(learner_id) ON DELETE CASCADE,
+            language             TEXT NOT NULL DEFAULT 'afrikaans',
+            context              TEXT,
+            status               TEXT NOT NULL DEFAULT 'active',
+            curriculum_outline   TEXT,                    -- JSON, LLM-authored
+            outline_updated_at   TEXT,                    -- ISO ts of last outline write
+            created_at           TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_goals_learner
             ON learning_goals(learner_id);
