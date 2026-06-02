@@ -1,0 +1,117 @@
+{
+  "locale": "de",
+  "landing": {
+    "eyebrow": "Ongiini · Prototyp",
+    "tagline": "Eine persönliche KI-Lernerfahrung, angetrieben von deinem Assistenten.",
+    "pitch": "Erzähl uns, was du lernen willst und warum. Das Modell schreibt dir einen ganz eigenen Lehrplan und bringt ihn dir dann mit Karten bei, die sich an dich anpassen. Verteiltes Wiederholen sorgt dafür, dass es sitzt. Keine App, keine Anmeldung, kein Multiple-Choice-Geraten.",
+    "topics_eyebrow": "Eine Spur wählen",
+    "topics_h": "Sprachen",
+    "topic_afrikaans_desc": "Beruf, Vorstellungsgespräche, Schwiegereltern. Fang an, wo du stehst.",
+    "topic_english_desc": "Formelles Schreiben, Verständnis, Prüfungsvorbereitung.",
+    "topic_german_desc": "A1 bis B1. Für den Alltag und einfache Arbeitsgespräche.",
+    "topic_oshiwambo_desc": "Oshindonga & Oshikwanyama. Verknüpft mit unserem offenen Datensatz.",
+    "status_available": "Jetzt verfügbar",
+    "status_coming_soon": "Bald verfügbar",
+    "how_eyebrow": "So funktioniert es",
+    "how_h": "Drei Schritte — dann lernst du.",
+    "step1_label": "Schritt 1",
+    "step1_title": "Sag uns dein Ziel",
+    "step1_desc": "Ein paar schnelle Fragen — dein Level, was du erreichen willst. In deinen eigenen Worten.",
+    "step2_label": "Schritt 2",
+    "step2_title": "KI baut deinen Lehrplan",
+    "step2_desc": "Das Modell schreibt einen Plan rund um dein Ziel. Module, Themen, Lektionen vor Übungen.",
+    "step3_label": "Schritt 3",
+    "step3_title": "Lerne im Chat",
+    "step3_desc": "Lektionen und Übungen erscheinen im Gespräch. Stell jederzeit Fragen — der Coach antwortet und bringt dich zurück.",
+    "cta_start": "Loslegen",
+    "closing_note": "Das ist ein Prototyp. Wir starten mit drei Sprachen — Afrikaans, Englisch, Deutsch. Dieselbe Engine kann eine Sprache lehren, dich auf ein Vorstellungsgespräch vorbereiten oder ein kompliziertes Studienfach durch gezielte Wiederholung einüben. Weitere Spuren kommen."
+  },
+  "topbar": {
+    "main_site": "Hauptseite",
+    "menu": "Menü",
+    "curriculum_fallback": "Lehrplan",
+    "title_pair_template": "{target} für {source}-Sprecher"
+  },
+  "drawer": {
+    "menu": "Menü",
+    "my_curriculums": "Meine Lehrpläne",
+    "none_yet": "Noch keine Lehrpläne.",
+    "new_curriculum": "+ Neuer Lehrplan",
+    "restart_this": "Diesen Lehrplan neu starten",
+    "delete_this": "Diesen Lehrplan löschen",
+    "delete_all": "Alle meine Daten löschen",
+    "main_site": "Hauptseite",
+    "activate": "Aktivieren"
+  },
+  "composer": {
+    "placeholder": "Schreib an Ongiini-Coach…",
+    "legal_pre": "Mit der Nutzung akzeptierst du unsere",
+    "legal_terms": "Bedingungen",
+    "legal_and": "und",
+    "legal_privacy": "Datenschutzrichtlinie",
+    "send": "Senden"
+  },
+  "card": {
+    "lesson_eyebrow": "Lektion",
+    "got_it": "Verstanden →",
+    "show_hint": "Hinweis zeigen",
+    "awaiting": "wartet auf deine Antwort",
+    "answered": "beantwortet"
+  },
+  "modal": {
+    "source_pick_heading": "Du hast {target} gewählt.",
+    "source_pick_blurb": "Welche Sprache sprichst du schon gut? Der Coach nutzt sie für Erklärungen und um daraus zu übersetzen.",
+    "source_pick_back": "Zurück",
+    "source_pick_start": "Starten",
+    "new_initial_heading": "Worauf willst du dich konzentrieren?",
+    "new_initial_blurb": "Erzähl mir, was du wirklich können willst. Ich schreibe einen Plan dazu und starte die erste Lektion.",
+    "new_secondary_heading": "Neuer Lehrplan",
+    "new_secondary_blurb": "Worauf willst du dich konzentrieren? Gib ihm einen kurzen Namen; das Modell schreibt den Plan dazu.",
+    "focus_label": "Fokus",
+    "focus_placeholder_initial": "z. B. Vorstellungsgespräch bei SPAR",
+    "focus_placeholder_secondary": "z. B. Gespräch bei SPAR",
+    "target_label": "Sprache zum Lernen",
+    "source_label": "Von",
+    "level_label": "Dein Level",
+    "level_beginner": "Anfänger",
+    "level_elementary": "Grundkenntnisse",
+    "level_intermediate": "Mittelstufe",
+    "level_advanced": "Fortgeschritten",
+    "context_label": "Kontext (optional)",
+    "context_placeholder": "Ein Satz zum Warum — der Coach nutzt das, um die Karten zu gestalten.",
+    "back": "Zurück",
+    "cancel": "Abbrechen",
+    "start": "Starten",
+    "create": "Erstellen",
+    "pick_different": "Wähle eine andere Quell- und Zielsprache."
+  },
+  "panel": {
+    "summary_pending": "Dein Plan wird noch zusammengestellt."
+  },
+  "progress": {
+    "cards": "{n} Karten",
+    "cards_pct": "{n} Karten · {pct}% richtig",
+    "fresh_start": "Neuanfang",
+    "split_template": "{seen} Karten · {pct}% richtig · Box {box}"
+  },
+  "intake": {
+    "welcome_prefix": "Willkommen — lass uns dich einrichten. ",
+    "putting_plan": "Perfekt. Ich stelle jetzt deinen Plan zusammen…"
+  },
+  "errors": {
+    "could_not_start": "Konnte nicht starten: {detail}",
+    "could_not_save": "Konnte das nicht speichern.",
+    "turn_failed": "Zug fehlgeschlagen — versuch's nochmal.",
+    "could_not_switch": "Konnte Lehrplan nicht wechseln.",
+    "could_not_restart": "Konnte nicht neu starten.",
+    "could_not_delete": "Konnte Lehrplan nicht löschen.",
+    "could_not_create": "Konnte Lehrplan nicht erstellen: {detail}",
+    "could_not_create_short": "Konnte Lehrplan nicht erstellen."
+  },
+  "confirm": {
+    "restart": "Das löscht die Karten und den Chat-Verlauf für \"{title}\" — der Plan bleibt. Fortfahren?",
+    "this_curriculum_fallback": "diesen Lehrplan",
+    "archive": "Diesen Lehrplan löschen? Du kannst jederzeit einen neuen starten.",
+    "clear_all": "Das löscht alles, was wir über dein Lernen gespeichert haben. Fortfahren?"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "locale": "en",
+  "landing": {
+    "eyebrow": "Ongiini · prototype",
+    "tagline": "A personalised AI learning experience, powered by your assistant.",
+    "pitch": "Tell us what you want to learn and why. The model writes a curriculum just for you, then teaches it with cards that adapt as you go. Spaced repetition keeps things sticking. No app, no signup, no multiple-choice gambling.",
+    "topics_eyebrow": "Pick a track",
+    "topics_h": "Languages",
+    "topic_afrikaans_desc": "Workplace, interviews, in-laws. Start where you are.",
+    "topic_english_desc": "Formal writing, comprehension, exam prep.",
+    "topic_german_desc": "A1 to B1. For everyday use and basic work conversations.",
+    "topic_oshiwambo_desc": "Oshindonga & Oshikwanyama. Tied to our open dataset.",
+    "status_available": "Available now",
+    "status_coming_soon": "Coming soon",
+    "how_eyebrow": "How it works",
+    "how_h": "Three steps, then you're learning.",
+    "step1_label": "Step 1",
+    "step1_title": "Tell us your goal",
+    "step1_desc": "A few quick questions — your level, what you're trying to do. In your own words.",
+    "step2_label": "Step 2",
+    "step2_title": "AI builds your curriculum",
+    "step2_desc": "The model writes a plan around your goal. Modules, topics, lessons before drills.",
+    "step3_label": "Step 3",
+    "step3_title": "Learn by chatting",
+    "step3_desc": "Lessons and exercises appear in the conversation. Ask questions any time — the coach answers and brings you back.",
+    "cta_start": "Get started",
+    "closing_note": "This is a prototype. Starting with three languages — Afrikaans, English, German. The same engine can teach a language, prep you for an interview, or drill a complicated university subject through targeted repetition. More tracks are next."
+  },
+  "topbar": {
+    "main_site": "Main site",
+    "menu": "Menu",
+    "curriculum_fallback": "Curriculum",
+    "title_pair_template": "{target} for {source} speakers"
+  },
+  "drawer": {
+    "menu": "Menu",
+    "my_curriculums": "My curriculums",
+    "none_yet": "No curriculums yet.",
+    "new_curriculum": "+ New curriculum",
+    "restart_this": "Restart this curriculum",
+    "delete_this": "Delete this curriculum",
+    "delete_all": "Delete all my data",
+    "main_site": "Main site",
+    "activate": "Activate"
+  },
+  "composer": {
+    "placeholder": "Message Ongiini coach…",
+    "legal_pre": "By using this you accept our",
+    "legal_terms": "Terms",
+    "legal_and": "and",
+    "legal_privacy": "Privacy Policy",
+    "send": "Send"
+  },
+  "card": {
+    "lesson_eyebrow": "Lesson",
+    "got_it": "Got it →",
+    "show_hint": "Show hint",
+    "awaiting": "awaiting your answer",
+    "answered": "answered"
+  },
+  "modal": {
+    "source_pick_heading": "You picked {target}.",
+    "source_pick_blurb": "Which language do you already speak well? The coach will use it for explanations and to translate from.",
+    "source_pick_back": "Back",
+    "source_pick_start": "Start",
+    "new_initial_heading": "What do you want to focus on?",
+    "new_initial_blurb": "Tell me what you actually want to be able to do. I'll write a plan around that and start the first lesson.",
+    "new_secondary_heading": "New curriculum",
+    "new_secondary_blurb": "What do you want to focus on? Give it a short name; the model writes the plan around it.",
+    "focus_label": "Focus",
+    "focus_placeholder_initial": "e.g. Job interview at SPAR",
+    "focus_placeholder_secondary": "e.g. Interview at SPAR",
+    "target_label": "Language to learn",
+    "source_label": "From",
+    "level_label": "Your level",
+    "level_beginner": "Beginner",
+    "level_elementary": "Elementary",
+    "level_intermediate": "Intermediate",
+    "level_advanced": "Advanced",
+    "context_label": "Context (optional)",
+    "context_placeholder": "One sentence about why — the coach uses this to shape the cards.",
+    "back": "Back",
+    "cancel": "Cancel",
+    "start": "Start",
+    "create": "Create",
+    "pick_different": "Pick a different source and target language."
+  },
+  "panel": {
+    "summary_pending": "Your plan is still being put together."
+  },
+  "progress": {
+    "cards": "{n} cards",
+    "cards_pct": "{n} cards · {pct}% right",
+    "fresh_start": "fresh start",
+    "split_template": "{seen} cards · {pct}% right · box {box}"
+  },
+  "intake": {
+    "welcome_prefix": "Welcome — let's set you up. ",
+    "putting_plan": "Perfect. Putting your plan together now…"
+  },
+  "errors": {
+    "could_not_start": "Couldn't start: {detail}",
+    "could_not_save": "Could not save that.",
+    "turn_failed": "Turn failed — try again.",
+    "could_not_switch": "Could not switch curriculum.",
+    "could_not_restart": "Could not restart.",
+    "could_not_delete": "Could not delete curriculum.",
+    "could_not_create": "Could not create curriculum: {detail}",
+    "could_not_create_short": "Could not create curriculum."
+  },
+  "confirm": {
+    "restart": "This wipes the cards and chat history for \"{title}\" — the plan stays. Continue?",
+    "this_curriculum_fallback": "this curriculum",
+    "archive": "Delete this curriculum? You can always start a new one.",
+    "clear_all": "This deletes everything we have stored about your learning. Continue?"
+  }
+}

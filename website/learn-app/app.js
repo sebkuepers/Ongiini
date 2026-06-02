@@ -32,6 +32,105 @@
       german: 'German',
     };
 
+    // ── i18n ────────────────────────────────────────────────
+    // Single-locale-at-a-time: the active source_language drives the
+    // UI language. Three bundles ship as static JSON next to the SPA;
+    // the loader picks the right one and exposes t(key, vars) +
+    // applyI18nToDom() for static elements tagged with data-i18n.
+    var LOCALE_KEY = 'ongiini-learn:locale';
+    var SUPPORTED_LOCALES = ['en', 'af', 'de'];
+    var SOURCE_TO_LOCALE = {
+      english: 'en', afrikaans: 'af', german: 'de',
+    };
+    var i18nBundle = {};
+    var currentLocale = 'en';
+
+    function detectInitialLocale() {
+      // Priority: previously-saved locale → browser language (if it
+      // maps to a supported one) → English.
+      var saved = localStorage.getItem(LOCALE_KEY);
+      if (saved && SUPPORTED_LOCALES.indexOf(saved) !== -1) return saved;
+      var browser = (navigator.language || 'en').toLowerCase().slice(0, 2);
+      if (SUPPORTED_LOCALES.indexOf(browser) !== -1) return browser;
+      return 'en';
+    }
+
+    function lookupKey(obj, dottedKey) {
+      var parts = dottedKey.split('.');
+      var v = obj;
+      for (var i = 0; i < parts.length; i++) {
+        if (!v || typeof v !== 'object') return null;
+        v = v[parts[i]];
+      }
+      return (typeof v === 'string') ? v : null;
+    }
+
+    function t(key, vars) {
+      // Resolve from active bundle; fall back to the key itself so
+      // missing translations are visible during development rather
+      // than vanishing silently.
+      var raw = lookupKey(i18nBundle, key);
+      if (raw === null) return key;
+      if (!vars) return raw;
+      return raw.replace(/\{(\w+)\}/g, function (_, name) {
+        return Object.prototype.hasOwnProperty.call(vars, name)
+          ? String(vars[name]) : ('{' + name + '}');
+      });
+    }
+
+    function applyI18nToDom() {
+      // Substitute textContent for every element tagged
+      // data-i18n="bundle.key" and the equivalent for attributes
+      // (placeholder, aria-label, title) via data-i18n-attr.
+      var nodes = document.querySelectorAll('[data-i18n]');
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        var key = n.getAttribute('data-i18n');
+        var val = lookupKey(i18nBundle, key);
+        if (val !== null) n.textContent = val;
+      }
+      var attrNodes = document.querySelectorAll('[data-i18n-attr]');
+      for (var j = 0; j < attrNodes.length; j++) {
+        var node = attrNodes[j];
+        var spec = node.getAttribute('data-i18n-attr');   // "attr=key,attr=key"
+        spec.split(',').forEach(function (pair) {
+          var pieces = pair.split('=');
+          if (pieces.length !== 2) return;
+          var attr = pieces[0].trim();
+          var key = pieces[1].trim();
+          var val = lookupKey(i18nBundle, key);
+          if (val !== null) node.setAttribute(attr, val);
+        });
+      }
+      document.documentElement.lang = currentLocale;
+    }
+
+    async function loadLocale(locale) {
+      if (SUPPORTED_LOCALES.indexOf(locale) === -1) locale = 'en';
+      try {
+        var resp = await fetch('i18n/' + locale + '.json', {
+          credentials: 'omit',
+        });
+        if (!resp.ok) throw new Error('locale fetch ' + resp.status);
+        i18nBundle = await resp.json();
+        currentLocale = locale;
+        localStorage.setItem(LOCALE_KEY, locale);
+        applyI18nToDom();
+      } catch (e) {
+        // Network / parse failure — keep the previous bundle if any.
+        // If this was the cold-load and even the default failed, t()
+        // will echo keys, which is at least visible.
+        console.warn('i18n load failed:', e);
+      }
+    }
+
+    function setLocaleFromSource(source) {
+      var locale = SOURCE_TO_LOCALE[source];
+      if (locale && locale !== currentLocale) {
+        loadLocale(locale);
+      }
+    }
+
     var urlParams = new URLSearchParams(window.location.search);
     var magicToken = urlParams.get('t');
 
@@ -153,7 +252,7 @@
     function renderLesson(msg) {
       var p = msg.payload || {};
       var wrap = el('div', 'lesson-card');
-      wrap.appendChild(el('div', 'lesson-eyebrow', 'Lesson'));
+      wrap.appendChild(el('div', 'lesson-eyebrow', t('card.lesson_eyebrow')));
       if (p.title) wrap.appendChild(el('h3', 'lesson-title', String(p.title)));
       if (p.body) {
         var body = el('div', 'lesson-body');
@@ -168,7 +267,7 @@
         wrap.appendChild(ul);
       }
       var action = el('div', 'lesson-action');
-      var btn = el('button', null, 'Got it →');
+      var btn = el('button', null, t('card.got_it'));
       btn.type = 'button';
       btn.addEventListener('click', function () { sendTurn(null); });
       action.appendChild(btn);
@@ -181,7 +280,8 @@
       var isActive = !msg.answered;
       var wrap = el('div', 'exercise-card');
       wrap.dataset.active = isActive ? 'true' : 'false';
-      var eyebrow = (p.card_type || 'card') + (isActive ? ' · awaiting your answer' : ' · answered');
+      var eyebrow = (p.card_type || 'card') + ' · ' +
+        (isActive ? t('card.awaiting') : t('card.answered'));
       wrap.appendChild(el('div', 'exercise-eyebrow', eyebrow));
       if (p.prompt_text) wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
       if (p.hint_text) {
@@ -189,9 +289,13 @@
         var hintBtn = document.createElement('button');
         hintBtn.type = 'button';
         hintBtn.className = 'hint-btn';
+        // SVG icon + translated label. innerHTML stays for the SVG
+        // (closed string constant); the label is appended as a text
+        // node to keep the t() value safe even if a translator slips
+        // an HTML-looking character into a future locale.
         hintBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
-          '<path d="M12 18h.01M9 21h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1.1 1.6L10 18h4l.4-2.5c.2-.6.6-1.2 1.1-1.6A6 6 0 0 0 12 3Z"/></svg>' +
-          ' Show hint';
+          '<path d="M12 18h.01M9 21h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1.1 1.6L10 18h4l.4-2.5c.2-.6.6-1.2 1.1-1.6A6 6 0 0 0 12 3Z"/></svg>';
+        hintBtn.appendChild(document.createTextNode(' ' + t('card.show_hint')));
         var hintReveal = el('div', 'hint-revealed');
         hintReveal.textContent = String(p.hint_text);
         hintReveal.hidden = true;
@@ -222,7 +326,9 @@
       var correct = p.total_correct || 0;
       var pct = seen ? Math.round(100 * correct / seen) : 0;
       var chip = el('div', 'progress-chip');
-      chip.appendChild(document.createTextNode(seen + ' cards · ' + pct + '% right · box ' + (p.box || 1)));
+      chip.appendChild(document.createTextNode(
+        t('progress.split_template', { seen: seen, pct: pct, box: p.box || 1 })
+      ));
       var boxes = el('span', 'boxes');
       for (var b = 1; b <= 5; b++) {
         var n = (p.by_box || {})[b] || 0;
@@ -304,7 +410,7 @@
     // ── Curriculum panel ───────────────────────────────────
     function renderCurriculumPanel() {
       if (!state.curriculum_outline) {
-        currSummary.textContent = 'Your plan is still being put together.';
+        currSummary.textContent = t('panel.summary_pending');
         currModules.innerHTML = '';
         currProgress.hidden = true;
         return;
@@ -331,7 +437,7 @@
             || ((mp.exercises_emitted || 0) + (mp.lessons_given || 0))
             || null;
           var count = el('span', 'curr-module-count',
-            denom ? (done + ' / ' + denom) : (done + ' cards'));
+            denom ? (done + ' / ' + denom) : t('progress.cards', { n: done }));
           head.appendChild(count);
         }
         row.appendChild(head);
@@ -362,7 +468,9 @@
       var seen = state.progress.total_seen || 0;
       var correct = state.progress.total_correct || 0;
       var pct = seen ? Math.round(100 * correct / seen) : 0;
-      currProgressText.textContent = seen ? (seen + ' cards · ' + pct + '% right') : 'fresh start';
+      currProgressText.textContent = seen
+        ? t('progress.cards_pct', { n: seen, pct: pct })
+        : t('progress.fresh_start');
       currProgressBoxes.innerHTML = '';
       for (var b = 1; b <= 5; b++) {
         var n = (state.progress.by_box || {})[b] || 0;
@@ -378,7 +486,7 @@
     function setActiveGoalView(goal) {
       state.goal = goal;
       if (!goal) {
-        currTitleText.textContent = 'Curriculum';
+        currTitleText.textContent = t('topbar.curriculum_fallback');
         return;
       }
       // Prefer the goal title; otherwise build a language-pair label
@@ -390,10 +498,15 @@
         var tgt = LANGUAGE_DISPLAY[goal.language] || goal.language;
         var src = LANGUAGE_DISPLAY[goal.source_language || 'english']
           || goal.source_language || 'English';
-        currTitleText.textContent = tgt + ' for ' + src + ' speakers';
+        currTitleText.textContent = t('topbar.title_pair_template',
+          { target: tgt, source: src });
       } else {
-        currTitleText.textContent = 'Curriculum';
+        currTitleText.textContent = t('topbar.curriculum_fallback');
       }
+      // Switching to a goal in a different source language updates
+      // the UI locale automatically so the learner sees prompts in
+      // their strongest language.
+      if (goal.source_language) setLocaleFromSource(goal.source_language);
     }
 
     function renderProgressStrip() {
@@ -421,7 +534,7 @@
         // No denominator at all — show just the count without a bar.
         progressStrip.hidden = false;
         progressLabel.innerHTML = '<b>' + (mod.title || 'Module') + '</b>';
-        progressCount.textContent = done + ' cards';
+        progressCount.textContent = t('progress.cards', { n: done });
         progressFill.style.width = '0%';
         return;
       }
@@ -437,7 +550,7 @@
       goalList.innerHTML = '';
       var goals = state.goals || [];
       if (!goals.length) {
-        var empty = el('div', null, 'No curriculums yet.');
+        var empty = el('div', null, t('drawer.none_yet'));
         empty.style.fontSize = '13px';
         empty.style.color = 'var(--ink-soft)';
         goalList.appendChild(empty);
@@ -452,7 +565,7 @@
         row.appendChild(head);
         if (g.status !== 'active') {
           var actions = el('div', 'goal-row-actions');
-          var actBtn = el('button', null, 'Activate');
+          var actBtn = el('button', null, t('drawer.activate'));
           actBtn.type = 'button';
           actBtn.addEventListener('click', function () { switchGoal(g.goal_id); });
           actions.appendChild(actBtn);
@@ -480,22 +593,38 @@
       var sources = Object.keys(LANGUAGE_DISPLAY).filter(function (s) {
         return s !== target;
       });
-      var radios = sources.map(function (s, i) {
-        return (
-          '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;cursor:pointer;margin-bottom:8px;">' +
-          '<input type="radio" name="srcLang" value="' + s + '" ' + (i === 0 ? 'checked' : '') + ' />' +
-          '<span>' + LANGUAGE_DISPLAY[s] + '</span>' +
-          '</label>'
-        );
-      }).join('');
-      mo.innerHTML =
-        '<h3>You picked ' + LANGUAGE_DISPLAY[target] + '.</h3>' +
-        '<p>Which language do you already speak well? The coach will use it for explanations and to translate from.</p>' +
-        radios +
-        '<div class="modal-actions">' +
-        '<button type="button" id="srcCancel">Back</button>' +
-        '<button type="button" class="primary" id="srcStart">Start</button>' +
-        '</div>';
+      var hh = document.createElement('h3');
+      hh.textContent = t('modal.source_pick_heading', {
+        target: LANGUAGE_DISPLAY[target],
+      });
+      var pp = document.createElement('p');
+      pp.textContent = t('modal.source_pick_blurb');
+      mo.appendChild(hh);
+      mo.appendChild(pp);
+      sources.forEach(function (s, i) {
+        var label = document.createElement('label');
+        label.className = 'source-radio';
+        var input = document.createElement('input');
+        input.type = 'radio'; input.name = 'srcLang'; input.value = s;
+        if (i === 0) input.checked = true;
+        var span = document.createElement('span');
+        span.textContent = LANGUAGE_DISPLAY[s];
+        label.appendChild(input);
+        label.appendChild(span);
+        mo.appendChild(label);
+      });
+      var actions = document.createElement('div');
+      actions.className = 'modal-actions';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button'; cancelBtn.id = 'srcCancel';
+      cancelBtn.textContent = t('modal.source_pick_back');
+      var startBtn = document.createElement('button');
+      startBtn.type = 'button'; startBtn.id = 'srcStart';
+      startBtn.className = 'primary';
+      startBtn.textContent = t('modal.source_pick_start');
+      actions.appendChild(cancelBtn);
+      actions.appendChild(startBtn);
+      mo.appendChild(actions);
       ov.appendChild(mo);
       modalRoot.appendChild(ov);
 
@@ -508,12 +637,20 @@
       ov.addEventListener('click', function (e) {
         if (e.target === ov) onCancel();
       });
-      mo.querySelector('#srcStart').addEventListener('click', function () {
+      mo.querySelector('#srcStart').addEventListener('click', async function () {
         var picked = mo.querySelector('input[name="srcLang"]:checked');
         if (!picked) return;
         state.pending_target = target;
         state.pending_source = picked.value;
         modalRoot.innerHTML = '';
+        // Swap UI locale to the picked source immediately so the
+        // intake bubbles + any subsequent error toasts render in the
+        // learner's strongest language. Awaited so startSession sees
+        // the freshly-loaded bundle.
+        var nextLocale = SOURCE_TO_LOCALE[picked.value];
+        if (nextLocale && nextLocale !== currentLocale) {
+          await loadLocale(nextLocale);
+        }
         startSession();
       });
     }
@@ -533,15 +670,14 @@
       opts = opts || {};
       var isInitial = !!opts.initial;   // first-curriculum / no-active-goal flow
       var heading = isInitial
-        ? 'What do you want to focus on?'
-        : 'New curriculum';
+        ? t('modal.new_initial_heading')
+        : t('modal.new_secondary_heading');
       var blurb = isInitial
-        ? "Tell me what you actually want to be able to do in Afrikaans. " +
-          "I'll write a plan around that and start the first lesson."
-        : "What do you want to focus on? Give it a short name; the model writes the plan around it.";
+        ? t('modal.new_initial_blurb')
+        : t('modal.new_secondary_blurb');
       var titlePlaceholder = isInitial
-        ? 'e.g. Job interview at SPAR'
-        : 'e.g. Interview at SPAR';
+        ? t('modal.focus_placeholder_initial')
+        : t('modal.focus_placeholder_secondary');
       var ov = el('div', 'modal-overlay');
       var mo = el('div', 'modal');
       var defTarget = (state.goal && state.goal.language) || 'afrikaans';
@@ -577,8 +713,7 @@
       ctxInput.id = 'newGoalContext';
       ctxInput.rows = 3;
       ctxInput.maxLength = 600;
-      ctxInput.placeholder =
-        'One sentence about why — the coach uses this to shape the cards.';
+      ctxInput.placeholder = t('modal.context_placeholder');
 
       var langOpts = Object.keys(LANGUAGE_DISPLAY).map(function (k) {
         return { value: k, label: LANGUAGE_DISPLAY[k] };
@@ -586,19 +721,19 @@
       var targetSel = makeSelect('newGoalTarget', langOpts, defTarget);
       var sourceSel = makeSelect('newGoalSource', langOpts, defSource);
       var levelSel = makeSelect('newGoalLevel', [
-        { value: 'beginner', label: 'Beginner' },
-        { value: 'elementary', label: 'Elementary' },
-        { value: 'intermediate', label: 'Intermediate' },
-        { value: 'advanced', label: 'Advanced' },
+        { value: 'beginner',     label: t('modal.level_beginner') },
+        { value: 'elementary',   label: t('modal.level_elementary') },
+        { value: 'intermediate', label: t('modal.level_intermediate') },
+        { value: 'advanced',     label: t('modal.level_advanced') },
       ], 'beginner');
 
       var pairRow = document.createElement('div');
-      pairRow.style.display = 'flex'; pairRow.style.gap = '10px';
-      var pairLeft = document.createElement('div'); pairLeft.style.flex = '1';
-      pairLeft.appendChild(makeLabel('newGoalTarget', 'Language to learn'));
+      pairRow.className = 'modal-pair-row';
+      var pairLeft = document.createElement('div');
+      pairLeft.appendChild(makeLabel('newGoalTarget', t('modal.target_label')));
       pairLeft.appendChild(targetSel);
-      var pairRight = document.createElement('div'); pairRight.style.flex = '1';
-      pairRight.appendChild(makeLabel('newGoalSource', 'From'));
+      var pairRight = document.createElement('div');
+      pairRight.appendChild(makeLabel('newGoalSource', t('modal.source_label')));
       pairRight.appendChild(sourceSel);
       pairRow.appendChild(pairLeft);
       pairRow.appendChild(pairRight);
@@ -607,22 +742,22 @@
       actions.className = 'modal-actions';
       var cancelBtn = document.createElement('button');
       cancelBtn.type = 'button'; cancelBtn.id = 'newGoalCancel';
-      cancelBtn.textContent = isInitial ? 'Back' : 'Cancel';
+      cancelBtn.textContent = isInitial ? t('modal.back') : t('modal.cancel');
       var createBtn = document.createElement('button');
       createBtn.type = 'button'; createBtn.id = 'newGoalCreate';
       createBtn.className = 'primary';
-      createBtn.textContent = isInitial ? 'Start' : 'Create';
+      createBtn.textContent = isInitial ? t('modal.start') : t('modal.create');
       actions.appendChild(cancelBtn);
       actions.appendChild(createBtn);
 
       mo.appendChild(hh);
       mo.appendChild(pp);
-      mo.appendChild(makeLabel('newGoalTitle', 'Focus'));
+      mo.appendChild(makeLabel('newGoalTitle', t('modal.focus_label')));
       mo.appendChild(titleInput);
       mo.appendChild(pairRow);
-      mo.appendChild(makeLabel('newGoalLevel', 'Your level'));
+      mo.appendChild(makeLabel('newGoalLevel', t('modal.level_label')));
       mo.appendChild(levelSel);
-      mo.appendChild(makeLabel('newGoalContext', 'Context (optional)'));
+      mo.appendChild(makeLabel('newGoalContext', t('modal.context_label')));
       mo.appendChild(ctxInput);
       mo.appendChild(actions);
 
@@ -643,7 +778,7 @@
         var ctx = ctxInput.value.trim();
         if (!title) { titleInput.focus(); return; }
         if (targetSel.value === sourceSel.value) {
-          showError("Pick a different source and target language.");
+          showError(t('modal.pick_different'));
           return;
         }
         createBtn.disabled = true;
@@ -670,7 +805,7 @@
           // + first lesson land immediately.
           await sendTurn(null);
         } catch (e) {
-          showError(e.message || 'Could not create curriculum.');
+          showError(e.message || t('errors.could_not_create_short'));
         } finally {
           createBtn.disabled = false;
         }
@@ -703,13 +838,15 @@
         renderCurriculumPanel();
         renderProgressStrip();
       } catch (e) {
-        showError(e.message || 'Could not switch curriculum.');
+        showError(e.message || t('errors.could_not_switch'));
       }
     }
 
     async function restartCurrentGoal() {
       if (!state.goal) return;
-      if (!confirm('This wipes the cards and chat history for "' + (state.goal.title || 'this curriculum') + '" — the plan stays. Continue?')) return;
+      if (!confirm(t('confirm.restart', {
+        title: state.goal.title || t('confirm.this_curriculum_fallback'),
+      }))) return;
       closeDrawer();
       try {
         await api('/goals/restart', {
@@ -728,13 +865,13 @@
         renderProgressStrip();
         await sendTurn(null);
       } catch (e) {
-        showError(e.message || 'Could not restart.');
+        showError(e.message || t('errors.could_not_restart'));
       }
     }
 
     async function archiveCurrentGoal() {
       if (!state.goal) return;
-      if (!confirm('Delete this curriculum? You can always start a new one.')) return;
+      if (!confirm(t('confirm.archive'))) return;
       closeDrawer();
       try {
         var resp = await api('/goals/archive', {
@@ -755,12 +892,12 @@
           await switchGoal(state.goals[0].goal_id);
         }
       } catch (e) {
-        showError(e.message || 'Could not delete curriculum.');
+        showError(e.message || t('errors.could_not_delete'));
       }
     }
 
     async function clearAllData() {
-      if (!confirm('This deletes everything we have stored about your learning. Continue?')) return;
+      if (!confirm(t('confirm.clear_all'))) return;
       try {
         if (state.learner_id) await api('/clear', { learner_id: state.learner_id });
       } catch (e) {}
@@ -819,7 +956,7 @@
         renderProgressStrip();
       } catch (e) {
         removeSkeleton(skel);
-        showError(e.message || 'Turn failed — try again.');
+        showError(e.message || t('errors.turn_failed'));
       } finally {
         state.busy = false;
         btnSend.disabled = !composer.value.trim();
@@ -859,7 +996,7 @@
           state.intake_field = null;
           appendMessage({
             kind: 'coach_text',
-            payload: { text: "Perfect. Putting your plan together now…" },
+            payload: { text: t('intake.putting_plan') },
           });
           // Create the goal explicitly with the language pair the user
           // picked on the landing topic-card click flow. Falls through
@@ -890,7 +1027,7 @@
               // error and bail.
               state.pending_target = null;
               state.pending_source = null;
-              showError("Could not create curriculum: " + (e.message || ''));
+              showError(t('errors.could_not_create', { detail: e.message || '' }));
               return;
             }
           }
@@ -903,7 +1040,7 @@
         }
       } catch (e) {
         removeSkeleton(skel);
-        showError(e.message || 'Could not save that.');
+        showError(e.message || t('errors.could_not_save'));
       }
     }
 
@@ -931,7 +1068,7 @@
           state.intake_field = s.next_intake_field;
           rerenderThread([]);
           appendIntakePrompt(
-            "Welcome — let's set you up. " + (s.next_intake_prompt || "")
+            t('intake.welcome_prefix') + (s.next_intake_prompt || "")
           );
         } else if (!s.active_goal) {
           // Intake done but no active curriculum — the learner either
@@ -952,7 +1089,7 @@
           rerenderThread(state.thread);
         }
       } catch (e) {
-        showError("Couldn't start: " + (e.message || ''));
+        showError(t('errors.could_not_start', { detail: e.message || '' }));
       }
     }
 
@@ -1039,6 +1176,11 @@
     btnRestart.addEventListener('click', restartCurrentGoal);
     btnArchive.addEventListener('click', archiveCurrentGoal);
     btnClear.addEventListener('click', clearAllData);
+
+    // Load the chosen locale BEFORE deciding whether to auto-enter
+    // via magic-link — startSession can render intake bubbles that
+    // need t() to be ready.
+    loadLocale(detectInitialLocale());
 
     // Magic-link arrival → auto-enter (they came from a specific link
     // and the landing would be confusing). Otherwise default to the

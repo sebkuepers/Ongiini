@@ -854,6 +854,15 @@
       resize: vertical;
     }
     .modal input:focus, .modal textarea:focus { border-color: var(--terracotta); }
+    .source-radio {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--rule); border-radius: 10px;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    .modal-pair-row { display: flex; gap: 10px; }
+    .modal-pair-row > div { flex: 1; }
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
     .modal-actions button {
       padding: 9px 18px;

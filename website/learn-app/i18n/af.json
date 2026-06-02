@@ -1,0 +1,117 @@
+{
+  "locale": "af",
+  "landing": {
+    "eyebrow": "Ongiini · prototipe",
+    "tagline": "'n Persoonlike KI-leerervaring, deur jou assistent gedryf.",
+    "pitch": "Vertel ons wat jy wil leer en hoekom. Die model skryf 'n kurrikulum net vir jou en leer dit dan met kaarte wat aanpas terwyl jy vorder. Verspreide herhaling laat dinge bly steek. Geen toepassing, geen registrasie, geen veelkeusige raaiwerk nie.",
+    "topics_eyebrow": "Kies 'n spoor",
+    "topics_h": "Tale",
+    "topic_afrikaans_desc": "Werkplek, onderhoude, skoonfamilie. Begin waar jy is.",
+    "topic_english_desc": "Formele skryfwerk, begrip, eksamenvoorbereiding.",
+    "topic_german_desc": "A1 tot B1. Vir alledaagse gebruik en basiese werksgesprekke.",
+    "topic_oshiwambo_desc": "Oshindonga & Oshikwanyama. Gekoppel aan ons oop datastel.",
+    "status_available": "Nou beskikbaar",
+    "status_coming_soon": "Binnekort",
+    "how_eyebrow": "Hoe dit werk",
+    "how_h": "Drie stappe, dan leer jy.",
+    "step1_label": "Stap 1",
+    "step1_title": "Vertel ons jou doel",
+    "step1_desc": "'n Paar vinnige vrae — jou vlak, wat jy probeer doen. In jou eie woorde.",
+    "step2_label": "Stap 2",
+    "step2_title": "KI bou jou kurrikulum",
+    "step2_desc": "Die model skryf 'n plan rondom jou doel. Modules, onderwerpe, lesse voor oefeninge.",
+    "step3_label": "Stap 3",
+    "step3_title": "Leer deur te gesels",
+    "step3_desc": "Lesse en oefeninge verskyn in die gesprek. Vra enige tyd vrae — die afrigter antwoord en bring jou terug.",
+    "cta_start": "Begin",
+    "closing_note": "Dit is 'n prototipe. Ons begin met drie tale — Afrikaans, Engels, Duits. Dieselfde enjin kan 'n taal leer, jou vir 'n onderhoud voorberei, of 'n ingewikkelde universiteitsvak deur gerigte herhaling indril. Meer spore is volgende."
+  },
+  "topbar": {
+    "main_site": "Hoofwerf",
+    "menu": "Spyskaart",
+    "curriculum_fallback": "Kurrikulum",
+    "title_pair_template": "{target} vir {source}-sprekers"
+  },
+  "drawer": {
+    "menu": "Spyskaart",
+    "my_curriculums": "My kurrikulums",
+    "none_yet": "Nog geen kurrikulums nie.",
+    "new_curriculum": "+ Nuwe kurrikulum",
+    "restart_this": "Begin hierdie kurrikulum oor",
+    "delete_this": "Verwyder hierdie kurrikulum",
+    "delete_all": "Verwyder al my data",
+    "main_site": "Hoofwerf",
+    "activate": "Aktiveer"
+  },
+  "composer": {
+    "placeholder": "Skryf vir Ongiini-afrigter…",
+    "legal_pre": "Deur dit te gebruik aanvaar jy ons",
+    "legal_terms": "Voorwaardes",
+    "legal_and": "en",
+    "legal_privacy": "Privaatheidsbeleid",
+    "send": "Stuur"
+  },
+  "card": {
+    "lesson_eyebrow": "Les",
+    "got_it": "Verstaan →",
+    "show_hint": "Wys wenk",
+    "awaiting": "wag vir jou antwoord",
+    "answered": "beantwoord"
+  },
+  "modal": {
+    "source_pick_heading": "Jy het {target} gekies.",
+    "source_pick_blurb": "Watter taal praat jy reeds goed? Die afrigter gebruik dit vir verduidelikings en om uit te vertaal.",
+    "source_pick_back": "Terug",
+    "source_pick_start": "Begin",
+    "new_initial_heading": "Waarop wil jy fokus?",
+    "new_initial_blurb": "Vertel my wat jy regtig wil kan doen. Ek skryf 'n plan daaroor en begin die eerste les.",
+    "new_secondary_heading": "Nuwe kurrikulum",
+    "new_secondary_blurb": "Waarop wil jy fokus? Gee dit 'n kort naam; die model skryf die plan rondom dit.",
+    "focus_label": "Fokus",
+    "focus_placeholder_initial": "bv. Werksonderhoud by SPAR",
+    "focus_placeholder_secondary": "bv. Onderhoud by SPAR",
+    "target_label": "Taal om te leer",
+    "source_label": "Vanaf",
+    "level_label": "Jou vlak",
+    "level_beginner": "Beginner",
+    "level_elementary": "Elementêr",
+    "level_intermediate": "Intermediêr",
+    "level_advanced": "Gevorderd",
+    "context_label": "Konteks (opsioneel)",
+    "context_placeholder": "Een sin oor hoekom — die afrigter gebruik dit om die kaarte te vorm.",
+    "back": "Terug",
+    "cancel": "Kanselleer",
+    "start": "Begin",
+    "create": "Skep",
+    "pick_different": "Kies 'n ander bron- en teikentaal."
+  },
+  "panel": {
+    "summary_pending": "Jou plan word nog saamgestel."
+  },
+  "progress": {
+    "cards": "{n} kaarte",
+    "cards_pct": "{n} kaarte · {pct}% reg",
+    "fresh_start": "vars begin",
+    "split_template": "{seen} kaarte · {pct}% reg · boks {box}"
+  },
+  "intake": {
+    "welcome_prefix": "Welkom — kom ons stel jou op. ",
+    "putting_plan": "Wonderlik. Ek stel nou jou plan saam…"
+  },
+  "errors": {
+    "could_not_start": "Kon nie begin nie: {detail}",
+    "could_not_save": "Kon nie dit stoor nie.",
+    "turn_failed": "Beurt het misluk — probeer weer.",
+    "could_not_switch": "Kon nie kurrikulum wissel nie.",
+    "could_not_restart": "Kon nie oorbegin nie.",
+    "could_not_delete": "Kon nie kurrikulum verwyder nie.",
+    "could_not_create": "Kon nie kurrikulum skep nie: {detail}",
+    "could_not_create_short": "Kon nie kurrikulum skep nie."
+  },
+  "confirm": {
+    "restart": "Dit vee die kaarte en geskiedenis vir \"{title}\" uit — die plan bly. Gaan voort?",
+    "this_curriculum_fallback": "hierdie kurrikulum",
+    "archive": "Verwyder hierdie kurrikulum? Jy kan altyd 'n nuwe begin.",
+    "clear_all": "Dit vee alles uit wat ons oor jou leer gestoor het. Gaan voort?"
+  }
+}
