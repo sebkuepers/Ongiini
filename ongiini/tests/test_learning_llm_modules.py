@@ -391,7 +391,10 @@ async def test_generate_card_returns_validated_payload(temp_db):
 async def test_generate_card_raises_on_unknown_card_type(temp_db):
     learner_id = _learner_with_intake(temp_db)
     ctx = ctx_mod.build_learner_context(learner_id)
-    bad = json.dumps({"card_type": "multiple_choice", "prompt_text": "?"})
+    # ``multiple_choice`` used to be a "bad" type here but is now a
+    # real card type post-Phase-2-variety. Use a genuinely unknown
+    # card_type instead.
+    bad = json.dumps({"card_type": "klingon_card", "prompt_text": "?"})
     fm = FakeModel(response=bad)
     with pytest.raises(llm.ModelOutputError, match="card_type"):
         await cards_mod.generate_card(ctx, model=fm, skill_content=SKILL_REF)

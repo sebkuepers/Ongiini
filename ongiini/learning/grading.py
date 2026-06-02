@@ -19,7 +19,19 @@ from typing import Any
 from owela import Model
 
 from .context import LearnerContext
-from .db import RATINGS
+from .db import (
+    CARD_CLOZE,
+    CARD_DIALOGUE,
+    CARD_GRAMMAR,
+    CARD_MULTIPLE_CHOICE,
+    CARD_PRODUCTION,
+    CARD_PROVERB,
+    CARD_REORDER,
+    CARD_TRANSLATION,
+    CARD_VOCAB,
+    EXERCISE_CARD_TYPES,
+    RATINGS,
+)
 from .llm import INJECTION_GUARD_LINE, ModelOutputError, ask_for_json, tag_learner_input
 
 log = logging.getLogger("ongiini.learning.grading")
@@ -53,6 +65,75 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
+_TYPE_RUBRICS: dict[str, str] = {
+    CARD_VOCAB: (
+        "Vocab: meaning-equivalent answer is 'correct'. Minor spelling "
+        "drift on a clear meaning is 'correct' (note the canonical "
+        "form). Wrong word entirely is 'wrong'."
+    ),
+    CARD_TRANSLATION: (
+        "Translation: meaning preservation is what matters. Word order "
+        "and minor article slips are 'correct' if intelligible. A "
+        "wrong tense that changes the meaning is 'partial'. "
+        "Untranslated / wrong-language is 'wrong'."
+    ),
+    CARD_PRODUCTION: (
+        "Production: graded against the rubric in reference_answer. "
+        "Free-form output that meets the rubric's intent is 'correct'. "
+        "Misses one element but otherwise solid is 'partial'."
+    ),
+    CARD_CLOZE: (
+        "Cloze: the answer is the missing word(s). Exact match "
+        "(case-insensitive) is 'correct'. A clear typo on the right "
+        "word is 'correct' (note the canonical form). Different "
+        "word that doesn't fit the slot is 'wrong'."
+    ),
+    CARD_REORDER: (
+        "Reorder: the answer should be the same tokens in the "
+        "reference_answer order (case-insensitive, tolerant of "
+        "spacing + punctuation). One-token transposition is "
+        "'partial'. Major reordering or missing tokens is 'wrong'."
+    ),
+    CARD_MULTIPLE_CHOICE: (
+        "Multiple choice: the learner submits the LABEL of their "
+        "pick (A / B / C / D). Exact label match → 'correct'. Any "
+        "other label → 'wrong' (no 'partial' for MC). Feedback must "
+        "explain why the chosen distractor was wrong AND why the "
+        "right one is right, using the option's 'explanation' field."
+    ),
+    CARD_GRAMMAR: (
+        "Grammar: the transformation has to be correct. The right "
+        "verb form with one minor word-order issue → 'partial'. "
+        "Wrong tense / mood / person → 'wrong'. Be strict on the "
+        "exact morphology being drilled; that's the whole point."
+    ),
+    CARD_PROVERB: (
+        "Proverb: the canonical idiom is the reference. Exact match "
+        "(modulo capitalisation / punctuation) → 'correct'. A close "
+        "variant that means the same thing → 'partial'. Unrelated "
+        "saying → 'wrong'."
+    ),
+    CARD_DIALOGUE: (
+        "Dialogue: a contextually appropriate reply that respects "
+        "register + speaker → 'correct' even if phrased differently "
+        "from reference_answer. Right intent, wrong register (e.g. "
+        "informal where formal is needed) → 'partial'. Off-topic or "
+        "wrong-language → 'wrong'."
+    ),
+}
+
+# Safety net: any exercise card type MUST have a dedicated rubric. The
+# previous shape used a silent vocab fallback on missing-key — exactly
+# the silent-quality-loss pattern we want to avoid. Run at import so a
+# typo or a new card_type without a matching rubric is caught at
+# startup rather than at grade-time.
+_MISSING = set(EXERCISE_CARD_TYPES) - set(_TYPE_RUBRICS)
+assert not _MISSING, (
+    f"_TYPE_RUBRICS is missing entries for exercise card types: {_MISSING}"
+)
+del _MISSING
+
+
 def _build_user_prompt(
     ctx: LearnerContext,
     *,
@@ -61,15 +142,51 @@ def _build_user_prompt(
     hint_used: bool,
 ) -> str:
     p = ctx.profile or {}
+    ct = card.get("card_type") or CARD_VOCAB
+    rubric_line = _TYPE_RUBRICS.get(ct)
+    if rubric_line is None:
+        # Unknown card_type at grade time — log loudly rather than
+        # silently scoring with the wrong rubric, then fall back to
+        # vocab. The startup assert means this can only fire if the
+        # card_type comes from outside CARD_TYPES (e.g. a bug in the
+        # validator path or a stored card from a future version).
+        log.warning("grading: no rubric for card_type=%r, falling back to vocab", ct)
+        rubric_line = _TYPE_RUBRICS[CARD_VOCAB]
+    # Surface the per-type structural extras the rubric depends on:
+    # multiple_choice options + their explanations, dialogue turns,
+    # grammar source sentence, reorder tokens.
+    extras: list[str] = []
+    if ct == CARD_MULTIPLE_CHOICE:
+        opts = card.get("options") or []
+        if isinstance(opts, list):
+            for o in opts:
+                if not isinstance(o, dict):
+                    continue
+                expl = o.get("explanation") or "(no explanation)"
+                extras.append(
+                    f"  option {o.get('label')}: {o.get('text')!r} — {expl}"
+                )
+    elif ct == CARD_DIALOGUE:
+        for t in card.get("turns") or []:
+            if isinstance(t, dict):
+                extras.append(f"  {t.get('speaker')}: {t.get('text')}")
+    elif ct == CARD_GRAMMAR:
+        extras.append(f"  source_sentence: {card.get('source_sentence')}")
+    elif ct == CARD_REORDER:
+        tokens = card.get("tokens") or []
+        extras.append(f"  tokens: {tokens}")
+    extras_block = ("\nCARD EXTRAS:\n" + "\n".join(extras)) if extras else ""
     return (
         "LEARNER:\n"
         f"  level: {p.get('current_level') or 'beginner'}\n"
         f"  focus: {tag_learner_input(ctx.goal_title or ctx.goal_context or p.get('objective'))}\n"
         "\nCARD:\n"
-        f"  card_type: {card.get('card_type')}\n"
+        f"  card_type: {ct}\n"
         f"  prompt_text: {card.get('prompt_text')}\n"
         f"  reference_answer: {card.get('reference_answer') or '(none)'}\n"
-        f"  hint_used: {hint_used}\n"
+        f"  hint_used: {hint_used}"
+        f"{extras_block}\n"
+        f"\nRUBRIC FOR THIS CARD TYPE:\n  {rubric_line}\n"
         "\nLEARNER'S ANSWER:\n"
         f"  {tag_learner_input(user_answer)}\n"
         "\nTASK: Grade the answer. Output JSON only — { rating, feedback }. "
