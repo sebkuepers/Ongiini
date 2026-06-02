@@ -1920,6 +1920,14 @@
       const dx = wc.totals_deltas || {};
       wrap.appendChild(tile('Sessions', fmtInt.format(t.sessions || 0), 'Browser tabs · UUID v4', 'people', dx.sessions));
       wrap.appendChild(tile('Messages', fmtInt.format(t.messages || 0), 'User turns sent', 'people', dx.messages));
+      // Average turns per session — drop into the people column so the
+      // 3×2 grid fills cleanly. Computed client-side: messages/sessions
+      // rounded to one decimal; falls back to '—' when there are no
+      // sessions yet (avoid Infinity/NaN in the tile value).
+      const avgTurns = (t.sessions || 0) > 0
+        ? (t.messages / t.sessions).toFixed(1)
+        : '—';
+      wrap.appendChild(tile('Avg turns / session', avgTurns, 'How deep a session goes', 'people'));
       wrap.appendChild(tile('Tokens generated', fmtCompact.format(t.tokens_out_total || 0), 'In the AI replies', 'compute'));
       wrap.appendChild(tile('Images', fmtInt.format(t.images || 0), 'Photos attached', 'activity'));
       wrap.appendChild(tile('Tool-call turns', fmtInt.format(t.tool_call_turns || 0), 'Turns where a tool fired', 'activity'));
