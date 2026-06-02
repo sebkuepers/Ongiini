@@ -475,6 +475,12 @@
     #webChatSection .stat-kpis { margin-top: 18px; }
     #webChatSection .stat-chart-row { margin-top: 18px; }
     #webChatSection .stat-perf { margin-top: 12px; }
+    /* The .stat-section-note has margin-top: -8px globally so it tucks
+       under an h2. In the perf-row intro position it follows a
+       .stat-chart-row instead, and the negative margin makes it sit
+       flush against the chart cards above. Pull it back to the
+       in-section 18px rhythm. */
+    #webChatSection .stat-chart-row + .stat-section-note { margin-top: 18px; }
     /* And the section that FOLLOWS web chat: the global h2 margin-top
        of 56px feels disproportionately large after the now-tight
        internal rhythm above. Match the in-section ~18px gap so the
