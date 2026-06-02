@@ -107,26 +107,42 @@
       overflow-y: auto;
     }
     .welcome {
-      padding: 24px 0 8px;
-      border-bottom: 1px solid var(--rule);
+      padding: 32px 0 18px;
       margin-bottom: 14px;
+      text-align: center;
     }
-    .welcome h1 {
-      font-family: 'Instrument Serif', serif;
+    .welcome-mark {
+      font-family: 'Instrument Serif', serif; font-style: italic;
       font-weight: 400;
-      font-size: clamp(26px, 4vw, 36px);
-      margin: 0 0 8px;
-      line-height: 1.1;
-    }
-    .welcome p {
-      color: var(--ink-soft);
+      font-size: clamp(72px, 22vw, 180px);
+      line-height: 0.86; letter-spacing: -0.035em;
+      color: var(--ink);
       margin: 0;
-      font-size: 15px;
-      max-width: 56ch;
+    }
+    .welcome-mark .dot { color: var(--terracotta); font-style: normal; }
+    /* Visually-hidden but readable to screen readers and search engines.
+       The hero shows just the wordmark; the descriptive sentence stays
+       in the H1 semantically for a11y + SEO. */
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important; height: 1px !important;
+      padding: 0 !important; margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+    .welcome p.tagline {
+      color: var(--ink-soft);
+      margin: 18px auto 0;
+      font-size: clamp(15px, 2.1vw, 17px);
+      line-height: 1.5;
+      max-width: 48ch;
     }
     .suggestions {
       display: flex; flex-wrap: wrap; gap: 8px;
-      margin-top: 16px;
+      margin-top: 22px;
+      justify-content: center;
     }
     .chip {
       padding: 8px 14px;
@@ -297,8 +313,7 @@
 
     @media (max-width: 600px) {
       main.chat { padding: 14px 14px 8px; }
-      .welcome h1 { font-size: 22px; }
-      .welcome p { font-size: 14px; }
+      .welcome { padding: 18px 0 12px; }
     }
   </style>
 </head>
@@ -325,13 +340,14 @@
 
   <main class="chat" id="chat">
     <section class="welcome" id="welcome">
-      <h1>
-        <span data-en>Ongiini! Ask me anything.</span>
-        <span data-af>Ongiini! Vra my enigiets.</span>
+      <h1 class="welcome-mark" aria-label="Ongiini">
+        Ongiini<span class="dot">.</span>
+        <span class="sr-only" data-en>Ask me anything.</span>
+        <span class="sr-only" data-af>Vra my enigiets.</span>
       </h1>
-      <p>
-        <span data-en>This is a quick browser test — no app, no login. School, farming, health, contracts, daily life. I'll do my best. Memory only lasts for this session.</span>
-        <span data-af>Dit is 'n kort blaaier-toets — geen app, geen aanmelding. Skool, boerdery, gesondheid, kontrakte, alledaagse lewe. Ek doen my bes. Geheue duur net vir hierdie sessie.</span>
+      <p class="tagline">
+        <span data-en>A quick browser test — no app, no login. School, farming, health, contracts, daily life. I'll do my best. Memory only lasts for this session.</span>
+        <span data-af>'n Kort blaaier-toets — geen app, geen aanmelding. Skool, boerdery, gesondheid, kontrakte, alledaagse lewe. Ek doen my bes. Geheue duur net vir hierdie sessie.</span>
       </p>
       <div class="suggestions" id="suggestions">
         <button class="chip" data-suggest data-en="i">Explain photosynthesis simply</button>
