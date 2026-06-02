@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <title>Ongiini Learn — Smart, personal Afrikaans</title>
-  <meta name="description" content="A smart, personal Afrikaans coach in your browser. No app, no signup. Adapts to your goal — job interview, in-laws, daily life. Starting with Afrikaans; more topics and languages coming." />
+  <title>Ongiini Learn — A personalised AI learning experience</title>
+  <meta name="description" content="A personalised AI learning experience powered by your AI assistant. Starting with Afrikaans; more languages and topics coming. No app, no signup." />
   <meta name="theme-color" content="#e8dfcd" />
   <link rel="icon" href="https://ongiini.ai/assets/ongiini-icon-192-v2.png" />
   <link rel="apple-touch-icon" href="https://ongiini.ai/assets/ongiini-icon-192-v2.png" />
@@ -37,7 +37,7 @@
       }
     }
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; height: 100%; }
+    html, body { margin: 0; padding: 0; }
     body {
       background: var(--sand);
       color: var(--ink);
@@ -82,49 +82,231 @@
     .icon-btn:hover { background: var(--bone-deep); color: var(--ink); }
     .icon-btn svg { width: 16px; height: 16px; }
 
-    /* Main */
     main {
       flex: 1;
-      display: flex; flex-direction: column;
-      max-width: 760px;
       width: 100%;
+    }
+    .wrap {
+      max-width: 1080px;
       margin: 0 auto;
-      padding: 18px 18px 32px;
+      padding: 0 24px;
     }
 
-    /* Hero (cold start) */
-    #hero {
-      display: flex; flex-direction: column;
-      align-items: center; text-align: center;
-      padding: 32px 8px 18px;
-      gap: 22px;
+    /* ── Hero ─────────────────────────────────────────────── */
+    .hero {
+      padding: 64px 0 36px;
+      text-align: center;
     }
-    .hero-mark {
+    .hero-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 6px;
+    }
+    .hero-wordmark {
       font-family: 'Instrument Serif', serif; font-style: italic;
       font-weight: 400;
-      font-size: clamp(56px, 16vw, 120px);
-      line-height: 0.9; letter-spacing: -0.03em;
-      color: var(--ink); margin: 0;
+      font-size: clamp(56px, 12vw, 120px);
+      line-height: 0.86; letter-spacing: -0.035em;
+      color: var(--ink);
+      margin: 0;
     }
-    .hero-mark .dot { color: var(--terracotta); font-style: normal; }
-    .hero-sub {
+    .hero-wordmark .small {
+      font-size: 0.5em; font-style: italic;
+      color: var(--ink-soft);
+      letter-spacing: -0.02em;
+      display: inline-block;
+      transform: translateY(-0.35em);
+      margin-right: 0.05em;
+    }
+    .hero-wordmark .dot { color: var(--terracotta); font-style: normal; }
+    .hero-tag {
+      margin: 22px auto 0;
       font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: clamp(20px, 3.6vw, 28px); line-height: 1.25;
-      color: var(--ink-soft); max-width: 28ch; margin: 0;
+      font-size: clamp(20px, 3.2vw, 28px); line-height: 1.3;
+      color: var(--ink-soft);
+      max-width: 32ch;
     }
-    .hero-pitch { max-width: 48ch; color: var(--ink); font-size: 16px; line-height: 1.55; margin: 0; }
-    .hero-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; max-width: 48ch; }
-    .hero-list li {
-      display: flex; align-items: flex-start; gap: 10px;
-      font-size: 15px; color: var(--ink); text-align: left;
+    .hero-pitch {
+      max-width: 56ch; margin: 22px auto 0;
+      font-size: 16px; line-height: 1.6;
+      color: var(--ink);
     }
-    .hero-list li::before {
-      content: "→"; color: var(--terracotta); font-weight: 500;
+
+    /* ── Topic cards ──────────────────────────────────────── */
+    .section {
+      padding: 36px 0 8px;
+    }
+    .section-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px; letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin-bottom: 12px;
+    }
+    .section-h2 {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(28px, 4.5vw, 40px);
+      line-height: 1.1;
+      margin: 0 0 24px;
+      color: var(--ink);
+    }
+    .topic-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+    }
+    .topic-card {
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 22px;
+      padding: 22px 22px 18px;
+      display: flex; flex-direction: column;
+      gap: 10px;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 200ms cubic-bezier(.4,.1,.3,1),
+                  box-shadow 200ms, border-color 200ms;
+      position: relative;
+      min-height: 170px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .topic-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 18px 32px -20px rgba(0,0,0,0.18);
+      border-color: var(--terracotta-light);
+    }
+    .topic-card[disabled],
+    .topic-card[aria-disabled="true"] {
+      cursor: not-allowed; opacity: 0.55;
+    }
+    .topic-card[disabled]:hover,
+    .topic-card[aria-disabled="true"]:hover {
+      transform: none; box-shadow: none; border-color: var(--rule);
+    }
+    .topic-flag {
+      font-size: 32px;
+      line-height: 1;
+      user-select: none;
+    }
+    .topic-name {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 26px; line-height: 1.1;
+      color: var(--ink);
+      margin: 0;
+    }
+    .topic-status {
+      margin-top: auto;
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px; letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .topic-card[data-status="active"] .topic-status {
+      color: var(--terracotta-deep);
+    }
+    .topic-arrow {
+      position: absolute;
+      bottom: 18px; right: 22px;
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      background: var(--terracotta);
+      color: var(--bone);
+      font-size: 14px;
+    }
+    .topic-card[aria-disabled="true"] .topic-arrow { display: none; }
+
+    /* ── How it works ─────────────────────────────────────── */
+    .how {
+      padding: 56px 0 36px;
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+    .step {
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 22px;
+      padding: 22px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .step-num {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--terracotta-deep);
+    }
+    .step-title {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 22px; line-height: 1.2;
+      margin: 0;
+      color: var(--ink);
+    }
+    .step-desc {
+      font-size: 14px; line-height: 1.55; color: var(--ink-soft);
+      margin: 0;
+    }
+    .step-mock {
+      margin-top: 8px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .mock-label {
+      font-family: 'Geist Mono', monospace;
+      font-size: 9.5px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--terracotta-deep);
+      margin-bottom: 6px;
+    }
+    .mock-prompt {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 16px; line-height: 1.3;
+      color: var(--ink);
+    }
+    .mock-list {
+      list-style: none; padding: 0; margin: 6px 0 0;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .mock-list li {
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--rule);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mock-list li:last-child { border-bottom: 0; }
+    .mock-list li::before {
+      content: ""; width: 14px; height: 14px;
+      border-radius: 4px;
+      background: var(--terracotta-light);
       flex-shrink: 0;
     }
-    .hero-cta {
+    .mock-list li.done::before { background: var(--teal); }
+    .mock-feedback {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(126, 168, 119, 0.18);
+      border: 1px solid rgba(126, 168, 119, 0.4);
+      font-size: 12.5px;
+      color: var(--ink);
+      line-height: 1.4;
+    }
+
+    /* ── Closing CTA ──────────────────────────────────────── */
+    .closing {
+      padding: 36px 0 64px;
+      text-align: center;
+    }
+    .closing-cta {
       display: inline-flex; align-items: center; gap: 10px;
-      padding: 16px 26px;
+      padding: 16px 28px;
       border-radius: 999px;
       background: var(--terracotta);
       color: var(--bone);
@@ -133,30 +315,26 @@
       box-shadow: 0 3px 12px rgba(196, 108, 63, 0.25);
       transition: transform 160ms cubic-bezier(.6,.1,.3,1);
     }
-    .hero-cta:hover { transform: translateY(-1px); }
-    .hero-roadmap {
-      margin-top: 14px;
-      padding: 14px 18px;
-      background: var(--bone);
-      border: 1px solid var(--rule);
-      border-radius: 12px;
-      color: var(--ink-soft);
-      font-size: 14px;
-      max-width: 56ch;
+    .closing-cta:hover { transform: translateY(-1px); }
+    .closing-note {
+      max-width: 56ch; margin: 18px auto 0;
+      font-size: 14px; color: var(--ink-soft);
+      line-height: 1.55;
     }
-    .hero-roadmap strong { color: var(--ink); font-weight: 500; }
+    .closing-note strong { color: var(--ink); font-weight: 500; }
 
-    /* Card area */
-    #card-area {
-      display: flex; flex-direction: column;
-      gap: 14px;
-      padding: 24px 0 14px;
+    /* ── Card area / composer (running learning experience) ─ */
+    #learn-app {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 18px 18px 32px;
     }
     .progress-strip {
       display: flex; align-items: center; justify-content: space-between;
-      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-family: 'Geist Mono', monospace;
       font-size: 11px; letter-spacing: 0.06em;
       color: var(--ink-soft);
+      margin-bottom: 14px;
     }
     .progress-strip .boxes { display: inline-flex; gap: 3px; align-items: end; height: 18px; }
     .progress-strip .boxes b {
@@ -170,7 +348,7 @@
     .progress-strip .boxes b[data-box="4"] { background: var(--teal-deep); }
     .progress-strip .boxes b[data-box="5"] { background: var(--ink); }
 
-    .card {
+    .card-live {
       background: var(--bone);
       border: 1px solid var(--rule);
       border-radius: 16px;
@@ -179,7 +357,7 @@
       box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 14px 30px -18px rgba(0,0,0,0.10);
     }
     .card-eyebrow {
-      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-family: 'Geist Mono', monospace;
       font-size: 10.5px; letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--terracotta-deep);
@@ -198,11 +376,11 @@
       border-radius: 0 8px 8px 0;
     }
 
-    /* Feedback */
     .feedback {
       padding: 16px 18px;
       border-radius: 14px;
       display: flex; flex-direction: column; gap: 10px;
+      margin-top: 14px;
     }
     .feedback--correct { background: rgba(126, 168, 119, 0.18); border: 1px solid rgba(126, 168, 119, 0.4); }
     .feedback--partial { background: rgba(212, 162, 131, 0.18); border: 1px solid var(--terracotta-light); }
@@ -214,7 +392,6 @@
     }
     .feedback-text { color: var(--ink); font-size: 16px; line-height: 1.5; }
 
-    /* Composer */
     .composer-wrap {
       background: var(--bone);
       border-top: 1px solid var(--rule);
@@ -248,36 +425,27 @@
       cursor: pointer; flex-shrink: 0;
     }
     .composer-actions .hint {
-      background: var(--bone);
-      color: var(--ink-soft);
+      background: var(--bone); color: var(--ink-soft);
       border: 1px solid var(--rule);
     }
     .composer-actions .hint:hover { background: var(--bone-deep); color: var(--ink); }
     .composer-actions .send {
-      background: var(--terracotta);
-      color: var(--bone);
+      background: var(--terracotta); color: var(--bone);
       box-shadow: 0 3px 12px rgba(196, 108, 63, 0.20);
     }
     .composer-actions .send:disabled {
-      background: var(--ink-faint);
-      box-shadow: none;
-      cursor: not-allowed;
+      background: var(--ink-faint); box-shadow: none; cursor: not-allowed;
     }
     .composer-actions svg { width: 20px; height: 20px; }
     .composer-legal {
-      max-width: 760px;
-      margin: 8px auto 0;
-      font-family: 'Geist Mono', ui-monospace, monospace;
+      max-width: 760px; margin: 8px auto 0;
+      font-family: 'Geist Mono', monospace;
       font-size: 10.5px; letter-spacing: 0.06em;
-      color: var(--ink-soft);
-      text-align: center;
+      color: var(--ink-soft); text-align: center;
     }
     .composer-legal a {
-      color: var(--terracotta-deep);
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      color: var(--terracotta-deep); text-decoration: underline; text-underline-offset: 2px;
     }
-
     .error-banner {
       max-width: 760px; margin: 8px auto 0;
       padding: 10px 14px;
@@ -290,15 +458,11 @@
     }
     .error-banner.is-visible { display: block; }
 
-    .nextcard-wrap {
-      display: flex; justify-content: center; padding: 4px 0 0;
-    }
+    .nextcard-wrap { display: flex; justify-content: center; padding: 4px 0 0; }
     .nextcard-btn {
       padding: 12px 22px;
-      border: 1px solid var(--ink);
-      border-radius: 999px;
-      background: transparent;
-      color: var(--ink);
+      border: 1px solid var(--ink); border-radius: 999px;
+      background: transparent; color: var(--ink);
       font-size: 15px; font-weight: 500;
       cursor: pointer;
       transition: background 120ms ease, color 120ms ease;
@@ -308,8 +472,11 @@
     [hidden] { display: none !important; }
 
     @media (max-width: 600px) {
-      main { padding: 14px 14px 24px; }
-      .card { padding: 18px 16px; }
+      .wrap { padding: 0 16px; }
+      .hero { padding: 36px 0 24px; }
+      .section { padding: 28px 0 8px; }
+      .how { padding: 36px 0 24px; }
+      .closing { padding: 28px 0 48px; }
     }
   </style>
 </head>
@@ -329,39 +496,130 @@
   </header>
 
   <main>
-    <section id="hero">
-      <h1 class="hero-mark">Learn<span class="dot">.</span></h1>
-      <p class="hero-sub">A personal Afrikaans coach. Adapting. In your browser.</p>
-      <p class="hero-pitch">
-        Tell me your goal — a job interview, your in-laws' dinner, exam prep —
-        and I'll put together a learning plan just for you. Real feedback on
-        every answer. Spaced repetition keeps things sticking. No app, no
-        signup, no multiple-choice gambling.
-      </p>
-      <ul class="hero-list">
-        <li><strong>Personal.</strong> Your plan is built from your goal, your level, your time.</li>
-        <li><strong>Smart feedback.</strong> Type your answer in your own words. The model grades it and tells you what's off.</li>
-        <li><strong>Adapts as you go.</strong> Stuck on something? It comes back sooner. Mastered it? It comes back less often.</li>
-        <li><strong>Remembered.</strong> Come back tomorrow and we pick up where we left off.</li>
-      </ul>
-      <button type="button" class="hero-cta" id="btnStart">
-        Get started
-        <span aria-hidden="true">→</span>
-      </button>
-      <div class="hero-roadmap">
-        <strong>Starting with Afrikaans.</strong> The same engine can teach a language, prep
-        you for an interview, or drill a complicated university subject through
-        targeted repetition. More topics and languages — and richer integrations
-        with what we know about you across Ongiini — are next.
-      </div>
-    </section>
+    <!-- ════════ LANDING (default view) ═══════════════════════ -->
+    <div id="landing">
+      <!-- Hero -->
+      <section class="hero wrap">
+        <p class="hero-eyebrow">Ongiini ·  prototype</p>
+        <h1 class="hero-wordmark">
+          <span class="small">Ongiini</span>Learn<span class="dot">.</span>
+        </h1>
+        <p class="hero-tag">A personalised AI learning experience, powered by your assistant.</p>
+        <p class="hero-pitch">
+          Tell us what you want to learn and why. The model writes a curriculum
+          just for you, then teaches it with cards that adapt as you go.
+          Spaced repetition keeps things sticking. No app, no signup, no
+          multiple-choice gambling.
+        </p>
+      </section>
 
-    <section id="card-area" hidden>
+      <!-- Topic selector -->
+      <section class="section wrap" aria-labelledby="topics-h">
+        <p class="section-eyebrow">Pick a track</p>
+        <h2 class="section-h2" id="topics-h">Languages</h2>
+        <div class="topic-grid">
+
+          <a class="topic-card" data-topic="afrikaans" data-status="active" href="#start" id="topic-afrikaans">
+            <span class="topic-flag" aria-hidden="true">🇿🇦</span>
+            <h3 class="topic-name">Afrikaans</h3>
+            <p class="step-desc">Workplace, interviews, in-laws. Start where you are.</p>
+            <span class="topic-status">Available now</span>
+            <span class="topic-arrow" aria-hidden="true">→</span>
+          </a>
+
+          <div class="topic-card" data-topic="oshiwambo" aria-disabled="true">
+            <span class="topic-flag" aria-hidden="true">🇳🇦</span>
+            <h3 class="topic-name">Oshiwambo</h3>
+            <p class="step-desc">Oshindonga &amp; Oshikwanyama. Tied to our open dataset.</p>
+            <span class="topic-status">Coming soon</span>
+          </div>
+
+          <div class="topic-card" data-topic="english" aria-disabled="true">
+            <span class="topic-flag" aria-hidden="true">🇬🇧</span>
+            <h3 class="topic-name">English</h3>
+            <p class="step-desc">Formal writing, comprehension, exam prep.</p>
+            <span class="topic-status">Coming soon</span>
+          </div>
+
+          <div class="topic-card" data-topic="german" aria-disabled="true">
+            <span class="topic-flag" aria-hidden="true">🇩🇪</span>
+            <h3 class="topic-name">German</h3>
+            <p class="step-desc">A1 to B1. For everyday use and basic work conversations.</p>
+            <span class="topic-status">Coming soon</span>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section class="how wrap" aria-labelledby="how-h">
+        <p class="section-eyebrow">How it works</p>
+        <h2 class="section-h2" id="how-h">Three steps, then you're learning.</h2>
+        <div class="steps">
+
+          <article class="step">
+            <span class="step-num">Step 1</span>
+            <h3 class="step-title">Tell us your goal</h3>
+            <p class="step-desc">A few quick questions — your level, what you're trying to do. In your own words.</p>
+            <div class="step-mock" aria-hidden="true">
+              <div class="mock-label">Intake</div>
+              <div class="mock-prompt">"What do you actually want to be able to do in Afrikaans?"</div>
+              <div style="margin-top:8px; font-family:'Geist Mono',monospace; font-size:12px; color:var(--ink-soft);">A job interview at SPAR in two weeks.</div>
+            </div>
+          </article>
+
+          <article class="step">
+            <span class="step-num">Step 2</span>
+            <h3 class="step-title">AI builds your curriculum</h3>
+            <p class="step-desc">The model writes a plan around your goal — what to teach first, where you need depth, how to keep it efficient.</p>
+            <div class="step-mock" aria-hidden="true">
+              <div class="mock-label">Your plan</div>
+              <ul class="mock-list">
+                <li class="done">Greetings &amp; introductions</li>
+                <li>Describing your experience</li>
+                <li>Common interview questions</li>
+                <li>Asking your own questions</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="step">
+            <span class="step-num">Step 3</span>
+            <h3 class="step-title">Learn with smart cards</h3>
+            <p class="step-desc">Vocab, translation, free-form production. Type your answer; the model grades it and tells you what's off. Stuck cards come back sooner.</p>
+            <div class="step-mock" aria-hidden="true">
+              <div class="mock-label">Vocab · box 1</div>
+              <div class="mock-prompt">How do you say "thank you very much" in Afrikaans?</div>
+              <div class="mock-feedback">Correct — "baie dankie". Now in box 2.</div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- Closing CTA -->
+      <section class="closing wrap">
+        <button type="button" class="closing-cta" id="btnStartClosing">
+          Start with Afrikaans
+          <span aria-hidden="true">→</span>
+        </button>
+        <p class="closing-note">
+          <strong>This is a prototype.</strong> Starting with Afrikaans because that's
+          what most users tell us they want first. The same engine can teach a language,
+          prep you for an interview, or drill a complicated university subject through
+          targeted repetition. More tracks — and richer integration with what we know
+          about you across Ongiini — are next.
+        </p>
+      </section>
+    </div>
+
+    <!-- ════════ LEARNING APP (post-start) ═══════════════════ -->
+    <div id="learn-app" hidden>
       <div class="progress-strip" id="progressStrip" hidden>
         <span id="progressText"></span>
         <span class="boxes" id="progressBoxes"></span>
       </div>
-      <div class="card" id="card">
+      <div class="card-live" id="card">
         <div class="card-eyebrow" id="cardEyebrow">Welcome</div>
         <div class="card-prompt" id="cardPrompt">Loading…</div>
         <div class="card-hint" id="cardHint" hidden></div>
@@ -374,7 +632,7 @@
         </div>
       </div>
       <div class="error-banner" id="errorBanner"></div>
-    </section>
+    </div>
   </main>
 
   <div class="composer-wrap" id="composerWrap" hidden>
@@ -402,25 +660,23 @@
 
   <script>
     (function () {
-      // Config + state
       var API_BASE = 'https://api.ongiini.ai/v1/learn';
       var LS_KEY = 'ongiini-learn:learner_id';
       var state = {
         learner_id: localStorage.getItem(LS_KEY) || null,
-        mode: 'hero',
+        mode: 'landing',
         intake_field: null,
         current_card: null,
         current_hint_shown: false,
         progress: { total_seen: 0, total_correct: 0, by_box: {} },
       };
 
-      // Magic-link arrival: ?t=<token> in URL.
       var urlParams = new URLSearchParams(window.location.search);
       var magicToken = urlParams.get('t');
 
       var $ = function (id) { return document.getElementById(id); };
-      var hero = $('hero');
-      var cardArea = $('card-area');
+      var landing = $('landing');
+      var learnApp = $('learn-app');
       var card = $('card');
       var cardEyebrow = $('cardEyebrow');
       var cardPrompt = $('cardPrompt');
@@ -432,9 +688,10 @@
       var answerInput = $('answerInput');
       var btnSend = $('btnSend');
       var btnHint = $('btnHint');
-      var btnStart = $('btnStart');
       var btnNextCard = $('btnNextCard');
       var btnClear = $('btnClear');
+      var btnStartClosing = $('btnStartClosing');
+      var topicAfrikaans = $('topic-afrikaans');
       var progressStrip = $('progressStrip');
       var progressText = $('progressText');
       var progressBoxes = $('progressBoxes');
@@ -461,15 +718,25 @@
         setTimeout(function () { errorBanner.classList.remove('is-visible'); }, 6000);
       }
 
+      function enterAppMode() {
+        landing.hidden = true;
+        learnApp.hidden = false;
+        composerWrap.hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function exitToLanding() {
+        landing.hidden = false;
+        learnApp.hidden = true;
+        composerWrap.hidden = true;
+      }
+
       function renderProgress() {
         progressText.textContent = state.progress.total_seen
           ? (state.progress.total_seen + ' cards · '
              + Math.round(100 * state.progress.total_correct / state.progress.total_seen)
              + '% right')
           : 'fresh start';
-        // Build all five box-bars as DOM nodes, then replaceChildren —
-        // avoids innerHTML and keeps the renderer XSS-safe even if
-        // future progress data adds string fields.
         var bars = [];
         for (var b = 1; b <= 5; b++) {
           var n = (state.progress.by_box || {})[b] || 0;
@@ -487,9 +754,7 @@
         state.mode = 'intake';
         state.intake_field = field;
         state.current_card = null;
-        hero.hidden = true;
-        cardArea.hidden = false;
-        composerWrap.hidden = false;
+        enterAppMode();
         feedback.hidden = true;
         card.hidden = false;
         cardEyebrow.textContent = 'Intake — ' + String(field).replace('_', ' ');
@@ -507,9 +772,7 @@
         state.intake_field = null;
         state.current_card = c;
         state.current_hint_shown = false;
-        hero.hidden = true;
-        cardArea.hidden = false;
-        composerWrap.hidden = false;
+        enterAppMode();
         feedback.hidden = true;
         card.hidden = false;
         cardEyebrow.textContent = String(c.card_type) + ' · box ' + (box || 1);
@@ -577,11 +840,9 @@
 
       async function loadNextCard() {
         try {
-          cardArea.hidden = false;
-          hero.hidden = true;
-          composerWrap.hidden = false;
-          card.hidden = false;
+          enterAppMode();
           feedback.hidden = true;
+          card.hidden = false;
           cardEyebrow.textContent = '…';
           cardPrompt.textContent = 'Thinking about what to ask next…';
           cardHint.hidden = true;
@@ -624,7 +885,12 @@
         }
       }
 
-      btnStart.addEventListener('click', startSession);
+      // Wire up
+      topicAfrikaans.addEventListener('click', function (e) {
+        e.preventDefault();
+        startSession();
+      });
+      btnStartClosing.addEventListener('click', startSession);
       btnNextCard.addEventListener('click', function () { loadNextCard(); });
       btnHint.addEventListener('click', function () {
         if (!state.current_card || !state.current_card.hint_text) return;
@@ -636,11 +902,8 @@
       btnSend.addEventListener('click', function () {
         var v = answerInput.value.trim();
         if (!v) return;
-        if (state.mode === 'intake') {
-          submitIntakeAnswer(v);
-        } else if (state.mode === 'card') {
-          submitAnswer(v);
-        }
+        if (state.mode === 'intake') submitIntakeAnswer(v);
+        else if (state.mode === 'card') submitAnswer(v);
       });
 
       answerInput.addEventListener('input', function () {
@@ -654,22 +917,25 @@
       });
 
       btnClear.addEventListener('click', async function () {
-        if (!state.learner_id) return;
+        if (!state.learner_id) {
+          // Nothing to delete yet — just bounce them back to landing.
+          exitToLanding();
+          return;
+        }
         if (!confirm("This deletes everything we have stored about your learning. Continue?")) return;
         try { await api('/clear', { learner_id: state.learner_id }); } catch (e) {}
         localStorage.removeItem(LS_KEY);
         state = {
-          learner_id: null, mode: 'hero', intake_field: null,
+          learner_id: null, mode: 'landing', intake_field: null,
           current_card: null, current_hint_shown: false,
           progress: { total_seen: 0, total_correct: 0, by_box: {} },
         };
-        cardArea.hidden = true;
-        composerWrap.hidden = true;
-        feedback.hidden = true;
         progressStrip.hidden = true;
-        hero.hidden = false;
+        feedback.hidden = true;
+        exitToLanding();
       });
 
+      // Magic-link arrival OR resume → skip the landing.
       if (magicToken || state.learner_id) {
         startSession();
       }
