@@ -37,7 +37,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from . import messages as _messages
 from . import store
+from .db import MSG_EXERCISE, MSG_LESSON
 
 log = logging.getLogger("ongiini.learning.context")
 
@@ -69,6 +71,16 @@ class LearnerContext:
     # prompt wants it to pick difficulty.
     progress: dict[str, object] | None = None
 
+    # The most recent lesson / exercise cards on this goal's thread,
+    # oldest first. The card-generation prompt uses this so the model
+    # can see "I just emitted a lesson on greetings — switch to a
+    # drill" rather than re-emitting another lesson on every "Got it
+    # →" tap (the Phase 2 bug: same lesson three times in a row
+    # because the model had nothing in context except the outline).
+    # Capped at 6 — enough to anchor decisions, small enough to keep
+    # prompt cost flat.
+    recent_cards: list[dict[str, object]] = field(default_factory=list)
+
 
 def build_learner_context(
     learner_id: str,
@@ -99,7 +111,28 @@ def build_learner_context(
     if profile and isinstance(profile.get("objective"), str):
         fallback_objective = str(profile.get("objective")) or None
 
-    progress = store.progress_for(learner_id) if learner_id else None
+    progress = (
+        store.progress_for(learner_id, goal_id=goal_id) if learner_id and goal_id
+        else (store.progress_for(learner_id) if learner_id else None)
+    )
+
+    recent_cards: list[dict[str, object]] = []
+    if learner_id and goal_id:
+        thread = _messages.list_for_goal(
+            learner_id=learner_id, goal_id=goal_id, limit=40,
+        )
+        for row in thread:
+            if row.get("kind") in (MSG_LESSON, MSG_EXERCISE):
+                p = row.get("payload") or {}
+                recent_cards.append({
+                    "kind": row["kind"],
+                    "card_type": p.get("card_type"),
+                    "title": p.get("title"),
+                    "prompt_text": p.get("prompt_text") or p.get("body"),
+                    "answered": bool(row.get("answered")),
+                })
+        # Keep only the tail so the prompt budget stays predictable.
+        recent_cards = recent_cards[-6:]
 
     return LearnerContext(
         learner_id=learner_id,
@@ -110,4 +143,5 @@ def build_learner_context(
         mem0_facts=[],          # Phase 2 — wire to mem0 search by objective
         curriculum_outline=outline,
         progress=progress,
+        recent_cards=recent_cards,
     )
