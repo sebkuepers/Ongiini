@@ -370,6 +370,69 @@ async def test_outline_design_failure_includes_error_meta(temp_db):
 # Classifier order — recent_pairs snapshotted BEFORE learner append
 # ============================================================
 
+def test_advance_module_when_attempted_hits_estimate(temp_db):
+    """The "10 / 6" bug: a module's status stayed in_progress forever
+    because nothing flipped it to completed once the learner finished
+    its estimated_cards. Lock in the auto-advance: when attempted >=
+    estimated_cards, the next not_started module gets promoted."""
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "First", "status": "in_progress",
+             "estimated_cards": 6},
+            {"id": "m2", "title": "Second", "status": "not_started",
+             "estimated_cards": 5},
+        ],
+    }
+    digest = {
+        "m1": {"exercises_attempted": 6, "exercises_emitted": 6, "lessons_given": 0,
+               "exercises_correct": 5, "cards_in_module": 6},
+    }
+    new_outline = coach._advance_module_if_complete(
+        goal_id="goal-1", outline=outline, digest=digest,
+    )
+    assert new_outline is not None
+    assert new_outline["modules"][0]["status"] == "completed"
+    assert new_outline["modules"][1]["status"] == "in_progress"
+
+
+def test_advance_module_when_emitted_overshoots(temp_db):
+    """Emit-overshoot path: model kept emitting cards without the
+    learner answering — at 1.5x estimate we promote anyway so the
+    learner isn't stuck drilling forever."""
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "First", "status": "in_progress",
+             "estimated_cards": 6},
+            {"id": "m2", "title": "Second", "status": "not_started",
+             "estimated_cards": 5},
+        ],
+    }
+    digest = {
+        "m1": {"exercises_attempted": 4, "exercises_emitted": 9, "lessons_given": 0},
+    }
+    new_outline = coach._advance_module_if_complete(
+        goal_id="goal-1", outline=outline, digest=digest,
+    )
+    assert new_outline is not None
+    assert new_outline["modules"][0]["status"] == "completed"
+
+
+def test_advance_module_no_op_when_under_target(temp_db):
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "First", "status": "in_progress",
+             "estimated_cards": 6},
+        ],
+    }
+    digest = {"m1": {"exercises_attempted": 3, "exercises_emitted": 3}}
+    assert coach._advance_module_if_complete(
+        goal_id="goal-1", outline=outline, digest=digest,
+    ) is None
+
+
 @pytest.mark.asyncio
 async def test_classifier_does_not_see_just_appended_learner_message(temp_db):
     """The just-appended learner_text would otherwise show up in

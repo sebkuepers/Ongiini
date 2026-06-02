@@ -456,6 +456,76 @@ def _emit_off_topic_redirect(
 
 
 # ──────────────────────────────────────────────────────────────────
+# Auto-advance modules when their target is hit
+# ──────────────────────────────────────────────────────────────────
+
+# When exercises_emitted overshoots the estimate by this factor we
+# advance even if attempted is still short — the model has clearly
+# moved past plan and continuing to drill the same module is worse
+# than acknowledging it's done.
+_OVERSHOOT_THRESHOLD = 1.5
+
+
+def _advance_module_if_complete(
+    *,
+    goal_id: str,
+    outline: dict[str, Any] | None,
+    digest: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """If the current in_progress module has hit its
+    ``estimated_cards`` target (or overshot it materially), mark it
+    ``completed`` and promote the next ``not_started`` module to
+    ``in_progress``. Persists + returns the new outline. Returns None
+    when no change is needed.
+
+    This is the fix for "10 / 6" — the model previously kept emitting
+    cards in the same module forever because the outline's
+    `modules[].status` was static after design time. Now the
+    progression is data-driven from the per-module digest.
+    """
+    if not outline:
+        return None
+    raw_modules = outline.get("modules")
+    if not isinstance(raw_modules, list) or not raw_modules:
+        return None
+    modules = [dict(m) if isinstance(m, dict) else m for m in raw_modules]
+
+    changed = False
+    for i, m in enumerate(modules):
+        if not isinstance(m, dict):
+            continue
+        if m.get("status") != "in_progress":
+            continue
+        mod_id = m.get("id")
+        if not isinstance(mod_id, str):
+            continue
+        est = m.get("estimated_cards")
+        if not isinstance(est, int) or est <= 0:
+            continue
+        d = digest.get(mod_id, {})
+        emitted = int(d.get("exercises_emitted", 0)) + int(d.get("lessons_given", 0))
+        attempted = int(d.get("exercises_attempted", 0))
+        if attempted < est and emitted < int(est * _OVERSHOOT_THRESHOLD):
+            continue
+        m["status"] = "completed"
+        changed = True
+        # Promote the next not_started module to in_progress.
+        for j in range(i + 1, len(modules)):
+            if isinstance(modules[j], dict) and modules[j].get("status") == "not_started":
+                modules[j]["status"] = "in_progress"
+                break
+        break
+
+    if not changed:
+        return None
+    new_outline = dict(outline)
+    new_outline["modules"] = modules
+    store.save_curriculum_outline(goal_id, new_outline)
+    log.info("coach: advanced module on goal %s", goal_id)
+    return new_outline
+
+
+# ──────────────────────────────────────────────────────────────────
 # Produce the next lesson or exercise card
 # ──────────────────────────────────────────────────────────────────
 
@@ -497,6 +567,18 @@ async def _produce_next_thing(
             new_messages.append(msg)
             return new_messages
         store.save_curriculum_outline(goal_id, outline)
+        ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal_id)
+
+    # Step 1b: auto-advance modules when their target is hit. This
+    # has to run BEFORE generate_card so the new card is anchored on
+    # the freshly-promoted in_progress module (otherwise the next
+    # card keeps drilling the now-completed one).
+    advanced = _advance_module_if_complete(
+        goal_id=goal_id,
+        outline=ctx.curriculum_outline,
+        digest=ctx.module_digest,
+    )
+    if advanced is not None:
         ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal_id)
 
     # Step 2: ask the model to author the next card. Could be a lesson
