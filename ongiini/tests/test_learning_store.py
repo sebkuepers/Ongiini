@@ -400,6 +400,51 @@ def test_progress_for_after_attempts(temp_db):
 # Phase 2: multi-curriculum helpers
 # ============================================================
 
+def test_create_new_goal_persists_language_pair_and_level(temp_db):
+    learner_id = store.create_anonymous_learner()
+    g = store.create_new_goal(
+        learner_id, title="berlin trip",
+        language="german", source_language="english",
+        current_level="elementary",
+    )
+    assert g["language"] == "german"
+    assert g["source_language"] == "english"
+    assert g["current_level"] == "elementary"
+    # Re-read confirms persistence.
+    listed = store.list_goals(learner_id)
+    assert listed[0]["language"] == "german"
+    assert listed[0]["source_language"] == "english"
+    assert listed[0]["current_level"] == "elementary"
+
+
+def test_create_new_goal_rejects_invalid_language_pair(temp_db):
+    """Validation happens at the store boundary so no junk reaches the
+    skill renderer or LLM prompt."""
+    learner_id = store.create_anonymous_learner()
+    with pytest.raises(ValueError, match="must differ"):
+        store.create_new_goal(
+            learner_id, title="x",
+            language="english", source_language="english",
+        )
+    with pytest.raises(ValueError, match="unsupported"):
+        store.create_new_goal(
+            learner_id, title="x",
+            language="klingon", source_language="english",
+        )
+
+
+def test_get_or_create_active_goal_persists_source_language(temp_db):
+    """The /turn auto-create path eventually pulls source from the
+    frontend's stored selection — lock in that the new kwarg goes to
+    disk."""
+    learner_id = store.create_anonymous_learner()
+    g = store.get_or_create_active_goal(
+        learner_id, language="afrikaans", source_language="german",
+    )
+    assert g["source_language"] == "german"
+    assert g["language"] == "afrikaans"
+
+
 def test_get_or_create_active_goal_persists_title_when_creating(temp_db):
     """The /turn handler passes profile.objective as title so the
     auto-created first curriculum shows up in the drawer with a real

@@ -37,10 +37,13 @@ from pydantic import BaseModel, Field
 from owela import Model
 
 from ..config import settings
+from typing import Callable
+
 from ..learning import coach as coach_mod
 from ..learning import (
     db, intake, intake_parser, messages as messages_mod, store, tokens,
 )
+from ..learning import skill_renderer as skill_renderer_mod
 
 log = logging.getLogger("ongiini.api.learn")
 
@@ -70,6 +73,18 @@ def _intake_prompt(field: str | None) -> str | None:
     if not field:
         return None
     return _INTAKE_PROMPTS.get(field)
+
+
+def _render_skill(
+    renderer: Callable[..., str], *, source: str, target: str,
+) -> str:
+    """Call the skill renderer, tolerating both positional-friendly
+    test stubs ``f(source, target)`` and the production keyword-only
+    ``render_skill_for_pair(*, source, target)``."""
+    try:
+        return renderer(source=source, target=target)
+    except TypeError:
+        return renderer(source, target)
 
 
 def _ensure_enabled() -> None:
@@ -109,7 +124,13 @@ class GoalInfo(BaseModel):
     goal_id: str
     title: str | None
     status: str
+    # ``language`` is the TARGET language the learner is studying.
+    # Kept as ``language`` (not ``target_language``) for back-compat
+    # with the existing frontend state machine. ``source_language`` is
+    # the new field — what the learner already speaks well.
     language: str
+    source_language: str = "english"
+    current_level: str | None = None
     context: str | None
     has_outline: bool
     archived_at: str | None
@@ -221,6 +242,13 @@ class GoalsNewRequest(BaseModel):
     learner_id: str = Field(..., max_length=128)
     title: str | None = Field(default=None, max_length=200)
     context: str | None = Field(default=None, max_length=2000)
+    # Language pair. Defaults preserve the prior Afrikaans-from-English
+    # behaviour so older frontends without the pair UI keep working.
+    # New frontends always send both — server validates the pair via
+    # skill_renderer.validate_language_pair inside store.create_new_goal.
+    language: str = Field(default="afrikaans", max_length=32)
+    source_language: str = Field(default="english", max_length=32)
+    current_level: str | None = Field(default=None, max_length=32)
     activate: bool = True
 
 
@@ -295,6 +323,8 @@ def _goal_info(row: dict[str, Any]) -> GoalInfo:
         title=row.get("title"),
         status=row["status"],
         language=row.get("language") or "afrikaans",
+        source_language=row.get("source_language") or "english",
+        current_level=row.get("current_level"),
         context=row.get("context"),
         has_outline=bool(has_outline),
         archived_at=row.get("archived_at"),
@@ -382,14 +412,23 @@ def _goal_payload_bundle(
 # Router factory
 # ──────────────────────────────────────────────────────────────────
 
-def build_router(*, model: Model, skill_content: str) -> APIRouter:
+def build_router(
+    *,
+    model: Model,
+    skill_renderer: Callable[[str, str], str] | None = None,
+) -> APIRouter:
     """Build a FastAPI router with the learning endpoints.
 
     ``model`` is the shared VLLMGemmaModel instance built once at
-    startup. ``skill_content`` is the rendered ``learning-afrikaans``
-    SKILL.md, loaded by the lifespan and passed in here so each call
-    doesn't re-read it.
+    startup. ``skill_renderer`` is a callable
+    ``(source_language, target_language) -> skill_text`` — invoked
+    per turn so the right per-pair skill markdown reaches the LLM.
+    Defaults to ``skill_renderer_mod.render_skill_for_pair`` which
+    reads from the bundled core template + per-language anchor files;
+    tests can pass a stub.
     """
+    if skill_renderer is None:
+        skill_renderer = skill_renderer_mod.render_skill_for_pair
     router = APIRouter()
 
     # ── /sessions ───────────────────────────────────────────────
@@ -602,12 +641,20 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
                     req.learner_id, title=title_seed,
                 )
 
+        # Render the per-pair skill once per turn from the goal row.
+        # Defaults exist on existing data via the backfill so this is
+        # always callable; the renderer also validates the pair.
+        skill_text = _render_skill(
+            skill_renderer,
+            source=goal.get("source_language") or "english",
+            target=goal.get("language") or "afrikaans",
+        )
         new_msgs = await coach_mod.run_turn(
             learner_id=req.learner_id,
             goal_id=goal["goal_id"],
             user_text=req.text,
             model=model,
-            skill_content=skill_content,
+            skill_content=skill_text,
         )
 
         # Re-read the goal so any side-effects (outline written, title
@@ -663,12 +710,22 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Learner not found.",
             )
-        new_goal = store.create_new_goal(
-            req.learner_id,
-            title=req.title,
-            context=req.context,
-            activate=req.activate,
-        )
+        try:
+            new_goal = store.create_new_goal(
+                req.learner_id,
+                title=req.title,
+                context=req.context,
+                language=req.language,
+                source_language=req.source_language,
+                current_level=req.current_level,
+                activate=req.activate,
+            )
+        except ValueError as exc:
+            # Unsupported language / same source-target collapses to 422.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            )
         return GoalsNewResponse(
             goal=_goal_info(new_goal),
             goals=[_goal_info(g) for g in store.list_goals(req.learner_id)],

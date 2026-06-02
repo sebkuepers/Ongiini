@@ -72,7 +72,7 @@ _FIELD_GUIDANCE: dict[str, str] = {
     ),
     "objective": (
         "FIELD: objective — a short description of what the learner "
-        "wants to be able to do in Afrikaans.\n"
+        "wants to be able to do in the language they're learning.\n"
         "Pass through near-verbatim. Trim only obvious padding "
         "('I want to ' → '', 'I would like to ' → ''). \n"
         "SHORT noun phrases are FINE and should be extracted as-is. "

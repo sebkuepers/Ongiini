@@ -62,9 +62,10 @@ def _build_system_prompt(skill_content: str) -> str:
     # MVP: re-embed the full SKILL.md per call. See curriculum.py for
     # the same comment — simplicity over per-call token cost.
     return (
-        "You are authoring ONE learning card for a specific Afrikaans "
-        "learner. Use the skill reference below to pick the right card "
-        f"type and the right difficulty. {INJECTION_GUARD_LINE} "
+        "You are authoring ONE learning card for a specific learner. "
+        "The skill reference below names their target + source "
+        "language pair and gives the card-type guidance + JSON shape. "
+        f"{INJECTION_GUARD_LINE} "
         "Emit ONLY the JSON object — no prose, no Markdown fences.\n\n"
         f"{skill_content}"
     )
