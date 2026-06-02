@@ -220,20 +220,23 @@
     .topic-card[aria-disabled="true"] .topic-arrow { display: none; }
 
     /* ── How it works ─────────────────────────────────────── */
+    /* No card containers on the steps — cards are reserved for
+       selectable learning tracks above. Steps are narrative content:
+       a left rule accent, vertical step number, plain title and copy,
+       and a small inset preview at the bottom that's visually
+       different from the topic cards (subtle, no rounded corners). */
     .how {
       padding: 56px 0 36px;
     }
     .steps {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 18px;
+      gap: 32px;
     }
     .step {
-      background: var(--bone);
-      border: 1px solid var(--rule);
-      border-radius: 22px;
-      padding: 22px;
-      display: flex; flex-direction: column; gap: 12px;
+      display: flex; flex-direction: column; gap: 10px;
+      padding-left: 18px;
+      border-left: 2px solid var(--terracotta-light);
     }
     .step-num {
       font-family: 'Geist Mono', monospace;
@@ -242,21 +245,26 @@
       color: var(--terracotta-deep);
     }
     .step-title {
-      font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: 22px; line-height: 1.2;
+      /* Geist sans-serif — matches the homepage's '01 / 02 / 03 try
+         asking' step titles and the 'Privacy', 'Open' etc. card
+         titles. Serif italic is reserved for the hero wordmark,
+         section h2 headings, and the topic card names. */
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 20px; line-height: 1.25; letter-spacing: -0.01em;
       margin: 0;
       color: var(--ink);
     }
     .step-desc {
-      font-size: 14px; line-height: 1.55; color: var(--ink-soft);
+      font-size: 14px; line-height: 1.6; color: var(--ink-soft);
       margin: 0;
     }
     .step-mock {
-      margin-top: 8px;
+      margin-top: 14px;
+      padding: 12px 14px;
       background: var(--bone-deep);
-      border: 1px solid var(--rule);
-      border-radius: 14px;
-      padding: 14px;
+      border-left: 2px solid var(--rule);
+      /* No rounded corners — visually distinct from the topic cards. */
     }
     .mock-label {
       font-family: 'Geist Mono', monospace;
@@ -266,8 +274,7 @@
       margin-bottom: 6px;
     }
     .mock-prompt {
-      font-family: 'Instrument Serif', serif; font-style: italic;
-      font-size: 16px; line-height: 1.3;
+      font-size: 14px; line-height: 1.4;
       color: var(--ink);
     }
     .mock-list {
@@ -282,18 +289,17 @@
     }
     .mock-list li:last-child { border-bottom: 0; }
     .mock-list li::before {
-      content: ""; width: 14px; height: 14px;
-      border-radius: 4px;
+      content: ""; width: 12px; height: 12px;
+      border-radius: 3px;
       background: var(--terracotta-light);
       flex-shrink: 0;
     }
     .mock-list li.done::before { background: var(--teal); }
     .mock-feedback {
       margin-top: 8px;
-      padding: 8px 10px;
-      border-radius: 8px;
+      padding: 6px 10px;
       background: rgba(126, 168, 119, 0.18);
-      border: 1px solid rgba(126, 168, 119, 0.4);
+      border-left: 2px solid rgba(126, 168, 119, 0.6);
       font-size: 12.5px;
       color: var(--ink);
       line-height: 1.4;
