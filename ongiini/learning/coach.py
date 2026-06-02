@@ -515,6 +515,14 @@ async def _produce_next_thing(
         return new_messages
 
     # Step 3: persist the card row + emit the matching message kind.
+    # module_id ties the card to a module in the outline so per-module
+    # progress can be counted; the LLM is asked to include it in the
+    # payload. Soft-required — if missing the card still saves (the
+    # store accepts None), it just won't count toward any module's
+    # progress bar.
+    module_id_val = card_payload.get("module_id")
+    if module_id_val is not None and not isinstance(module_id_val, str):
+        module_id_val = None
     card_id = store.save_card(
         goal_id,
         card_payload["card_type"],
@@ -522,6 +530,7 @@ async def _produce_next_thing(
         reference_answer=card_payload.get("reference_answer"),
         hint_text=card_payload.get("hint_text"),
         difficulty=card_payload.get("difficulty"),
+        module_id=module_id_val,
     )
 
     is_lesson = card_payload["card_type"] not in EXERCISE_CARD_TYPES

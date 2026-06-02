@@ -586,9 +586,15 @@ def save_card(
     reference_answer: str | None = None,
     hint_text: str | None = None,
     difficulty: int | None = None,
+    module_id: str | None = None,
 ) -> str:
     """Persist an LLM-generated card so SRS re-reviews surface the same
     prompt rather than re-rolling it. Returns the new card_id (UUID v4).
+
+    ``module_id`` ties this card back to one of the modules in the
+    curriculum outline. Optional for back-compat with cards authored
+    before module-tagging, but new cards should include it so per-
+    module progress counts work.
     """
     if not goal_id:
         raise ValueError("goal_id is required")
@@ -601,11 +607,64 @@ def save_card(
         c.execute(
             "INSERT INTO learning_cards (card_id, goal_id, card_type, "
             "prompt_text, reference_answer, hint_text, difficulty, "
-            "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "module_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (card_id, goal_id, card_type, prompt_text.strip(),
-             reference_answer, hint_text, difficulty, _now_iso()),
+             reference_answer, hint_text, difficulty, module_id,
+             _now_iso()),
         )
     return card_id
+
+
+def progress_for_modules(
+    learner_id: str,
+    goal_id: str,
+) -> dict[str, dict[str, Any]]:
+    """Per-module progress for one goal. Returns
+    ``{module_id: {"lessons_given": int, "exercises_emitted": int,
+                   "exercises_attempted": int, "exercises_correct": int,
+                   "cards_in_module": int}}``.
+
+    Counts only cards with a non-null ``module_id`` — older un-tagged
+    cards are excluded so the numbers match what the curriculum panel
+    UI claims to show. The breakdown distinguishes lessons (read +
+    acknowledged) from exercises (attempted + graded) so the API can
+    answer "Module 1: 5 / 8 cards" with the right semantics."""
+    from .db import CARD_LESSON, EXERCISE_CARD_TYPES
+    if not learner_id or not goal_id:
+        return {}
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT lc.module_id AS module_id, lc.card_type, "
+            "       COUNT(DISTINCT lc.card_id) AS n_cards, "
+            "       COALESCE(SUM(crs.total_seen), 0) AS attempts_seen, "
+            "       COALESCE(SUM(crs.total_correct), 0) AS attempts_correct "
+            "FROM learning_cards lc "
+            "LEFT JOIN card_review_state crs "
+            "       ON crs.card_id = lc.card_id AND crs.learner_id = ? "
+            "WHERE lc.goal_id = ? AND lc.module_id IS NOT NULL "
+            "GROUP BY lc.module_id, lc.card_type",
+            (learner_id, goal_id),
+        ).fetchall()
+    out: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        m = r["module_id"]
+        d = out.setdefault(m, {
+            "lessons_given": 0,
+            "exercises_emitted": 0,
+            "exercises_attempted": 0,
+            "exercises_correct": 0,
+            "cards_in_module": 0,
+        })
+        n = int(r["n_cards"] or 0)
+        d["cards_in_module"] += n
+        if r["card_type"] == CARD_LESSON:
+            d["lessons_given"] += n
+        elif r["card_type"] in EXERCISE_CARD_TYPES:
+            d["exercises_emitted"] += n
+            d["exercises_attempted"] += int(r["attempts_seen"] or 0)
+            d["exercises_correct"] += int(r["attempts_correct"] or 0)
+    return out
 
 
 def get_card(card_id: str) -> dict[str, Any] | None:

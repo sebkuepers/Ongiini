@@ -169,6 +169,23 @@ class TurnRequest(BaseModel):
     text: str | None = Field(default=None, max_length=4000)
 
 
+class ModuleProgress(BaseModel):
+    """Per-module progress for the slim bar under the topbar + per-
+    module badges in the curriculum panel."""
+    module_id: str
+    title: str | None = None
+    status: str | None = None
+    estimated_cards: int | None = None
+    # Counters from the join.
+    lessons_given: int = 0
+    exercises_emitted: int = 0
+    exercises_attempted: int = 0
+    exercises_correct: int = 0
+    # cards_in_module is exercises_emitted + lessons_given — convenience
+    # so the frontend can format "5 / 8" without doing the math.
+    cards_in_module: int = 0
+
+
 class TurnResponse(BaseModel):
     learner_id: str
     goal_id: str
@@ -176,6 +193,12 @@ class TurnResponse(BaseModel):
     progress: dict[str, Any]
     curriculum_outline: dict[str, Any] | None
     goal: GoalInfo
+    # Per-module rollups so the frontend can render the slim bar +
+    # the curriculum-panel badges. Ordered to match the outline.
+    module_progress: list[ModuleProgress] = []
+    # The module the learner is actively working on (status=='in_progress'
+    # in the outline). The slim bar reads this to know what to display.
+    active_module_id: str | None = None
 
 
 class GoalsRequest(BaseModel):
@@ -275,6 +298,53 @@ def _message_item(row: dict[str, Any]) -> MessageItem:
         answered=bool(row.get("answered")),
         created_at=row["created_at"],
     )
+
+
+def _module_progress_from_outline(
+    learner_id: str,
+    goal_id: str,
+    outline: dict[str, Any] | None,
+) -> tuple[list[ModuleProgress], str | None]:
+    """Build the per-module progress list ordered to match the outline
+    + identify the active module (status == 'in_progress'). Returns
+    ([], None) when there's no outline yet (intake just finished, the
+    first /turn is about to design the curriculum).
+
+    The denominator displayed to the learner is the outline's
+    ``estimated_cards`` — what the LLM said it'd take when it drew the
+    plan, so the learner's expectations match what they saw. The
+    frontend caps the visible bar at 100% if actual emissions exceed
+    the estimate."""
+    if not outline:
+        return [], None
+    digest = store.progress_for_modules(learner_id, goal_id)
+    out: list[ModuleProgress] = []
+    active: str | None = None
+    for m in outline.get("modules", []) or []:
+        if not isinstance(m, dict):
+            continue
+        mod_id = m.get("id")
+        if not isinstance(mod_id, str):
+            continue
+        d = digest.get(mod_id, {})
+        if m.get("status") == "in_progress" and active is None:
+            active = mod_id
+        out.append(ModuleProgress(
+            module_id=mod_id,
+            title=m.get("title") if isinstance(m.get("title"), str) else None,
+            status=m.get("status") if isinstance(m.get("status"), str) else None,
+            estimated_cards=(
+                int(m["estimated_cards"])
+                if isinstance(m.get("estimated_cards"), int)
+                else None
+            ),
+            lessons_given=int(d.get("lessons_given", 0)),
+            exercises_emitted=int(d.get("exercises_emitted", 0)),
+            exercises_attempted=int(d.get("exercises_attempted", 0)),
+            exercises_correct=int(d.get("exercises_correct", 0)),
+            cards_in_module=int(d.get("cards_in_module", 0)),
+        ))
+    return out, active
 
 
 def _goal_payload_bundle(
@@ -526,6 +596,9 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
         )
         progress = store.progress_for(req.learner_id, goal_id=goal["goal_id"])
         outline = store.get_curriculum_outline(goal["goal_id"])
+        mod_progress, active_mod_id = _module_progress_from_outline(
+            req.learner_id, goal["goal_id"], outline,
+        )
 
         return TurnResponse(
             learner_id=req.learner_id,
@@ -534,6 +607,8 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             progress=progress,
             curriculum_outline=outline,
             goal=_goal_info(fresh),
+            module_progress=mod_progress,
+            active_module_id=active_mod_id,
         )
 
     # ── /goals ──────────────────────────────────────────────────
