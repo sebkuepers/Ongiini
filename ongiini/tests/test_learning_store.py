@@ -242,7 +242,7 @@ def test_save_card_rejects_bad_type(temp_db):
     learner_id = store.create_anonymous_learner()
     goal = store.get_or_create_active_goal(learner_id)
     with pytest.raises(ValueError, match="card_type"):
-        store.save_card(goal["goal_id"], "multiple_choice", "x")
+        store.save_card(goal["goal_id"], "klingon_card", "x")
 
 
 def test_save_card_rejects_empty_prompt(temp_db):

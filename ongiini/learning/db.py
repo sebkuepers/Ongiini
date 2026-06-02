@@ -42,8 +42,28 @@ CARD_VOCAB = "vocab"
 CARD_TRANSLATION = "translation"
 CARD_PRODUCTION = "production"
 CARD_LESSON = "lesson"
-CARD_TYPES = (CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION, CARD_LESSON)
-EXERCISE_CARD_TYPES = (CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION)
+# Phase 2 card-variety expansion. Each is an EXERCISE type (goes
+# through grading + SRS + Leitner). All share `prompt_text` +
+# `reference_answer`; the per-type payload extras live alongside.
+# Frontend has a dedicated renderer per type; backend grading reads
+# card_type to pick the right rubric.
+CARD_CLOZE = "cloze"                # fill-in-the-blank
+CARD_REORDER = "reorder"            # arrange shuffled tokens
+CARD_MULTIPLE_CHOICE = "multiple_choice"   # pick option with explanations
+CARD_GRAMMAR = "grammar"            # transformation drill
+CARD_PROVERB = "proverb"            # idiom / saying with cultural note
+CARD_DIALOGUE = "dialogue"          # role-play completion
+
+CARD_TYPES = (
+    CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION, CARD_LESSON,
+    CARD_CLOZE, CARD_REORDER, CARD_MULTIPLE_CHOICE,
+    CARD_GRAMMAR, CARD_PROVERB, CARD_DIALOGUE,
+)
+EXERCISE_CARD_TYPES = (
+    CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION,
+    CARD_CLOZE, CARD_REORDER, CARD_MULTIPLE_CHOICE,
+    CARD_GRAMMAR, CARD_PROVERB, CARD_DIALOGUE,
+)
 
 
 # Message kinds for the learner_messages chat thread. The frontend

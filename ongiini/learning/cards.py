@@ -22,7 +22,10 @@ from typing import Any
 from owela import Model
 
 from .context import LearnerContext
-from .db import CARD_TYPES
+from .db import (
+    CARD_CLOZE, CARD_DIALOGUE, CARD_GRAMMAR, CARD_MULTIPLE_CHOICE,
+    CARD_PROVERB, CARD_REORDER, CARD_TYPES, EXERCISE_CARD_TYPES,
+)
 from .llm import INJECTION_GUARD_LINE, ModelOutputError, ask_for_json, tag_learner_input
 
 log = logging.getLogger("ongiini.learning.cards")
@@ -55,6 +58,117 @@ def _validate_card(payload: dict[str, Any]) -> None:
             raise ModelOutputError(
                 f"module_id must be a string; got "
                 f"{type(payload['module_id']).__name__}"
+            )
+
+    # All exercise types require a non-empty reference_answer the
+    # grader can score against. Lesson cards are exempt (they're
+    # acknowledged, not graded). Note: this tightened in Phase 2 —
+    # vocab/translation/production used to accept null reference_answer
+    # but the grader always needed *something* to score against, so
+    # the laxer contract was silently producing worse grading on
+    # malformed cards. For production cards the reference_answer is
+    # a free-form rubric, not a canonical string.
+    if ct in EXERCISE_CARD_TYPES:
+        ref = payload.get("reference_answer")
+        if not isinstance(ref, str) or not ref.strip():
+            raise ModelOutputError(
+                f"{ct} card requires a non-empty reference_answer"
+            )
+
+    # Per-type structural extras. These shape-checks live HERE rather
+    # than in a generic "extra payload" pass because the frontend
+    # renderer relies on the field being present and the right type;
+    # a missing or wrong-typed extra would render an empty card.
+    if ct == CARD_REORDER:
+        tokens = payload.get("tokens")
+        if not isinstance(tokens, list) or len(tokens) < 2:
+            raise ModelOutputError(
+                "reorder card requires a 'tokens' list of at least 2 strings"
+            )
+        if not all(isinstance(t, str) and t.strip() for t in tokens):
+            raise ModelOutputError(
+                "reorder 'tokens' must all be non-empty strings"
+            )
+    elif ct == CARD_MULTIPLE_CHOICE:
+        options = payload.get("options")
+        if not isinstance(options, list) or not (2 <= len(options) <= 4):
+            raise ModelOutputError(
+                "multiple_choice requires 2-4 options"
+            )
+        labels: set[str] = set()
+        for opt in options:
+            if not isinstance(opt, dict):
+                raise ModelOutputError(
+                    "multiple_choice option must be an object"
+                )
+            label = opt.get("label")
+            text = opt.get("text")
+            if not isinstance(label, str) or not label.strip():
+                raise ModelOutputError(
+                    "multiple_choice option needs a non-empty 'label'"
+                )
+            if not isinstance(text, str) or not text.strip():
+                raise ModelOutputError(
+                    "multiple_choice option needs non-empty 'text'"
+                )
+            if label in labels:
+                raise ModelOutputError(
+                    f"multiple_choice option labels must be unique; "
+                    f"saw {label!r} twice"
+                )
+            labels.add(label)
+            # explanation is optional but if present must be a string —
+            # frontend renders it post-grading.
+            if "explanation" in opt and not isinstance(opt["explanation"], str):
+                raise ModelOutputError(
+                    "multiple_choice 'explanation' must be a string"
+                )
+        # reference_answer must match one of the option labels so the
+        # grader and renderer can map "the right one" deterministically.
+        ref = payload.get("reference_answer")
+        if ref not in labels:
+            raise ModelOutputError(
+                "multiple_choice reference_answer must match one of "
+                "the option labels"
+            )
+    elif ct == CARD_GRAMMAR:
+        src = payload.get("source_sentence")
+        if not isinstance(src, str) or not src.strip():
+            raise ModelOutputError(
+                "grammar card requires non-empty 'source_sentence'"
+            )
+    elif ct == CARD_DIALOGUE:
+        turns = payload.get("turns")
+        if not isinstance(turns, list) or len(turns) < 2:
+            raise ModelOutputError(
+                "dialogue card requires 'turns' list of at least 2 entries"
+            )
+        for turn in turns:
+            if not isinstance(turn, dict):
+                raise ModelOutputError("dialogue turn must be an object")
+            if not isinstance(turn.get("speaker"), str) or not turn["speaker"].strip():
+                raise ModelOutputError(
+                    "dialogue turn requires non-empty 'speaker'"
+                )
+            if not isinstance(turn.get("text"), str):
+                raise ModelOutputError(
+                    "dialogue turn requires 'text' string (may be '___')"
+                )
+    elif ct == CARD_PROVERB:
+        # cultural_note is optional, but if present must be a string —
+        # frontend renders it after grading.
+        if "cultural_note" in payload and not isinstance(payload["cultural_note"], str):
+            raise ModelOutputError(
+                "proverb 'cultural_note' must be a string"
+            )
+    elif ct == CARD_CLOZE:
+        # The prompt_text MUST carry the blank placeholder so the
+        # frontend can render the input slot. Accept 3 or more
+        # underscores in a row — `___` is the canonical marker;
+        # any longer run still matches the substring check.
+        if "___" not in payload["prompt_text"]:
+            raise ModelOutputError(
+                "cloze prompt_text must contain '___' as the blank marker"
             )
 
 
