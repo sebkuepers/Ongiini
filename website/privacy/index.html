@@ -165,7 +165,7 @@
 
   <main>
     <h1>Privacy Policy</h1>
-    <p class="pol-lede">How Ongiini handles your data — last updated 21 May 2026</p>
+    <p class="pol-lede">How Ongiini handles your data — last updated 2 June 2026</p>
 
     <div class="pol-tldr">
       <p><strong>The short version.</strong> Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).</p>
@@ -199,8 +199,9 @@
 
     <h3>Community translation contributions (optional)</h3>
     <p>When you speak Oshiwambo (Oshindonga or Oshikwanyama) the assistant may invite you to translate one short English sentence into your dialect, to help build a free open dataset for future Oshiwambo AI tools. Each contribution you submit is stored as: the English source sentence, your translation, the dialect label, and a one-way salted hash of your phone number (not the number itself). Your translation is automatically scrubbed for personal-data patterns before being saved, the same way as any other message.</p>
-    <p><strong>Purpose:</strong> to collect parallel Oshiwambo–English translation pairs that are reviewed by a native-speaker on our team and then published as an open dataset that any Namibian, researcher, or organisation can use to make AI tools speak Oshiwambo properly.</p>
+    <p><strong>Purpose:</strong> to collect parallel Oshiwambo–English translation pairs that are reviewed by a native-speaker on our team and are intended to be published as an open dataset that any Namibian, researcher, or organisation can use to make AI tools speak Oshiwambo properly. The Common Intelligence Foundation reserves the right to choose the publication licence at the time of release.</p>
     <p><strong>Legal basis:</strong> Art. 6 (1) (a) GDPR — your explicit and informed consent. The invitation message explains, before you submit anything, that the contribution becomes a permanent part of the public-good dataset and cannot be retracted afterwards (similar to a Wikipedia edit). Submitting a translation is the act of consent. Art. 89 GDPR and § 27 BDSG ("Forschungsprivileg") additionally apply because the dataset constitutes scientific / community-infrastructure research output.</p>
+    <p><strong>Intellectual-property terms.</strong> The licence you grant to the Common Intelligence Foundation when you submit a translation — a broad, perpetual, irrevocable, sublicensable right to use, modify, distribute, and publish your contribution as part of the open dataset — is set out in <a href="/terms/">Section 10 of the Terms of Service</a>. Please read it before contributing.</p>
     <p><strong>Permanence — important.</strong> Unlike the rest of your data described in this Section 2, contributions are <strong>not</strong> erased by the "delete my data" command. The reason is the same one Wikipedia gives for not unwinding individual edits: removing past contributions would compromise a public resource that other people now depend on. You can stop contributing at any time, and a request to "delete my data" will still wipe your conversation history, your long-term memory, and your usage log — it just doesn't wipe submissions you made into the open dataset.</p>
 
     <h3>Service updates (occasional outbound messages)</h3>
@@ -221,11 +222,17 @@
     <p>The website does not set advertising cookies, does not load any analytics scripts, and uses your browser's <code>localStorage</code> only to remember your language preference (English / Afrikaans). This is technically necessary and does not require consent.</p>
     <p><strong>Legal basis:</strong> Art. 6 (1) (f) GDPR — legitimate interest in security and operability.</p>
 
+    <h3>Anonymous web chat (chat.ongiini.ai)</h3>
+    <p>The web-chat version of Ongiini at <a href="https://chat.ongiini.ai">chat.ongiini.ai</a> works <strong>without any account</strong>. When you open the page, your browser generates a random session identifier (a UUID v4) and stores it in your browser's <code>localStorage</code>. That identifier is never combined with your phone number, email, or any other personal data — we receive it back on each request only so the assistant can follow the same conversation across consecutive messages within one browsing session. The conversation history for that session lives <strong>only in the server's working memory</strong>, capped at a few hours of inactivity and automatically discarded after that; it is <strong>never written to disk, never copied into long-term memory ("mem0"), and never recorded in the usage log</strong>. Restarting our server, closing your browser tab, or clicking "Clear conversation" in the chat interface all remove the session immediately.</p>
+    <p>Photos you attach in the web chat are processed the same way as on WhatsApp: the assistant reads the image in memory to answer your question and discards the bytes afterwards. The image itself is not persisted.</p>
+    <p><strong>IP-based rate-limit.</strong> To prevent abuse of the open endpoint, we apply a sliding-window rate-limit per source IP address (read from the <code>CF-Connecting-IP</code> header set by Cloudflare). The limit state is kept only in working memory and is lost when the server restarts. Beyond rate-limiting, your source IP is not stored, logged on disk, or analysed.</p>
+    <p><strong>Legal basis:</strong> Art. 6 (1) (b) GDPR (performance of the service you requested by opening the chat) for the conversation flow itself, and Art. 6 (1) (f) GDPR (legitimate interest in keeping the open endpoint available and safe from abuse) for the IP-based rate-limit.</p>
+
     <h2>3. Who else sees your data (processors and third parties)</h2>
     <ul>
       <li><strong>Meta Platforms Inc. (WhatsApp)</strong> — to deliver messages between you and us via the WhatsApp Business API, Meta receives, processes and routes them. Meta retains messages in line with its own policies. We have a data-processing relationship with Meta but cannot control Meta's own processing of your data — that is governed by Meta's terms and privacy policy.</li>
       <li><strong>Tavily (Tavily Inc., a US-based provider)</strong> — used only when the assistant decides to perform a web search for your question. In that case, the assistant's search query (which may reference what you wrote) is sent to Tavily's API, and Tavily returns search results. Per Tavily's published <a href="https://www.tavily.com/privacy" target="_blank" rel="noopener noreferrer">privacy policy</a>, Tavily <em>may</em> use search queries to improve its own service. If you do not want your search queries to be used in this way, you can object directly to Tavily at <a href="mailto:support@tavily.com">support@tavily.com</a>. The exact processing location is governed by Tavily's own privacy practices.</li>
-      <li><strong>Cloudflare Inc.</strong> — hosts the website (ongiini.ai). Cloudflare does not have access to your WhatsApp conversation or any data on our local infrastructure.</li>
+      <li><strong>Cloudflare Inc.</strong> — hosts the website (ongiini.ai) and fronts the web-chat endpoint at chat.ongiini.ai together with the API at api.ongiini.ai. The <code>CF-Connecting-IP</code> header Cloudflare adds to each request is what we use for the chat rate-limit described in Section 2.8. Cloudflare does not have access to your WhatsApp conversation or any data on our local infrastructure.</li>
     </ul>
     <p>The AI model used (Google DeepMind's Gemma 4 26B) is an open-weight model that runs <em>locally</em> on hardware we operate. Google does not receive any of your data through the use of this model.</p>
     <p>Voice-note transcription is also performed locally by an open-source speech-to-text model (Whisper / faster-whisper). No third party receives the audio.</p>
@@ -250,6 +257,7 @@
       <li><strong>Usage log:</strong> stored indefinitely, but contains no message content.</li>
       <li><strong>Trace file:</strong> stored indefinitely. Structural signals only — no message content, no tool arguments, no tool results.</li>
       <li><strong>Cloudflare access logs for the website:</strong> retained by Cloudflare per its default retention (typically around 7–30 days).</li>
+      <li><strong>Anonymous web-chat sessions (chat.ongiini.ai):</strong> kept in the server's working memory only, evicted after approximately 6 hours of inactivity, or sooner when the in-memory capacity is reached (oldest-first eviction). Lost completely whenever the server restarts. Never written to disk.</li>
     </ul>
     <p>You can delete your conversation memory at any time by sending <em>"delete my data"</em> on WhatsApp (see Section 6).</p>
 
@@ -264,6 +272,7 @@
       <li><strong>Data portability</strong> (Art. 20) — receive an export of your data in a machine-readable format. Email us; we'll send you a JSON export of your mem0 facts and short-term memory.</li>
       <li><strong>Lodge a complaint</strong> with a supervisory authority. Since we are based in Berlin, the relevant authority is the <a href="https://www.datenschutz-berlin.de/" target="_blank" rel="noopener noreferrer">Berliner Beauftragte für Datenschutz und Informationsfreiheit</a>. You may also complain to the supervisory authority in the country where you live.</li>
     </ul>
+    <p><strong>Web chat (chat.ongiini.ai).</strong> The web chat has no separate "delete my data" command because there is nothing persistent to delete — see Section 2.8 for how the session-only data model works. Clicking "Clear conversation" in the chat interface clears the in-memory session immediately and wipes your local session identifier from your browser. Closing the browser tab and waiting a few hours has the same effect (the server-side session is dropped automatically after the inactivity window).</p>
 
     <h2>7. Research, analytics &amp; transparency reporting</h2>
     <p>Part of the Common Intelligence Foundation's mission is to understand how AI access changes the lives of underserved communities — and to share what we learn openly. To do that, we run aggregate analyses across the data we already store for service operation.</p>
@@ -312,7 +321,7 @@
     <p>If we change this policy materially, we will update the date at the top and, for substantial changes (e.g. new categories of processing, new processors, change of controller upon foundation registration), notify users via the WhatsApp service or on the website.</p>
 
     <div class="pol-foot">
-      Last updated: 21 May 2026. Effective immediately.
+      Last updated: 2 June 2026. Effective immediately.
     </div>
   </main>
 </body>
