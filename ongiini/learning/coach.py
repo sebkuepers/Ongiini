@@ -496,12 +496,29 @@ async def _produce_next_thing(
     # Step 2: ask the model to author the next card. Could be a lesson
     # or one of the three exercise types — SKILL.md teaches the model
     # when to use each.
-    try:
-        card_payload = await cards_mod.generate_card(
-            ctx, model=model, skill_content=skill_content,
-        )
-    except ModelOutputError as exc:
-        log.warning("coach: generate_card failed: %s", exc)
+    #
+    # generate_card occasionally trips on transient JSON-shape issues
+    # (the LLM emits a stray Markdown fence, drops a required key, or
+    # uses an unknown card_type). The card-generation prompt is long
+    # enough that re-rolling almost always succeeds. One retry costs
+    # us ~1s and turns a visible "I had trouble" coach bubble into a
+    # silent recovery.
+    card_payload = None
+    last_exc: ModelOutputError | None = None
+    for attempt in range(2):
+        try:
+            card_payload = await cards_mod.generate_card(
+                ctx, model=model, skill_content=skill_content,
+            )
+            last_exc = None
+            break
+        except ModelOutputError as exc:
+            last_exc = exc
+            if attempt == 0:
+                log.info("coach: generate_card transient fail, retrying: %s", exc)
+            else:
+                log.warning("coach: generate_card failed after retry: %s", exc)
+    if last_exc is not None or card_payload is None:
         msg = messages.append(
             learner_id=learner_id, goal_id=goal_id,
             kind=MSG_COACH_TEXT,
