@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-05-25. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-06-02. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Why Ongiini (vs ChatGPT)
 
@@ -26,7 +26,7 @@ Ads. Trackers. Data sales.
 
 Your messages don't train anyone else's AI. Never shared. Delete anytime.
 
-Model, code, language
+Models, code, datasets
 
 Full transparency. See what's under the hood. Anyone can contribute.
 
@@ -323,7 +323,7 @@ Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting gesko
 
 ## Privacy policy (full text)
 
-How Ongiini handles your data — last updated 21 May 2026
+How Ongiini handles your data — last updated 2 June 2026
 
 **The short version.** Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).
 
@@ -373,11 +373,23 @@ Across all your chats, the assistant extracts a small number of typed facts abou
 
 When you speak Oshiwambo (Oshindonga or Oshikwanyama) the assistant may invite you to translate one short English sentence into your dialect, to help build a free open dataset for future Oshiwambo AI tools. Each contribution you submit is stored as: the English source sentence, your translation, the dialect label, and a one-way salted hash of your phone number (not the number itself). Your translation is automatically scrubbed for personal-data patterns before being saved, the same way as any other message.
 
-**Purpose:** to collect parallel Oshiwambo–English translation pairs that are reviewed by a native-speaker on our team and then published as an open dataset that any Namibian, researcher, or organisation can use to make AI tools speak Oshiwambo properly.
+**Purpose:** to collect parallel Oshiwambo–English translation pairs that are reviewed by a native-speaker on our team and are intended to be published as an open dataset that any Namibian, researcher, or organisation can use to make AI tools speak Oshiwambo properly. The Common Intelligence Foundation reserves the right to choose the publication licence at the time of release.
 
 **Legal basis:** Art. 6 (1) (a) GDPR — your explicit and informed consent. The invitation message explains, before you submit anything, that the contribution becomes a permanent part of the public-good dataset and cannot be retracted afterwards (similar to a Wikipedia edit). Submitting a translation is the act of consent. Art. 89 GDPR and § 27 BDSG ("Forschungsprivileg") additionally apply because the dataset constitutes scientific / community-infrastructure research output.
 
+**Intellectual-property terms.** The licence you grant to the Common Intelligence Foundation when you submit a translation — a broad, perpetual, irrevocable, sublicensable right to use, modify, distribute, and publish your contribution as part of the open dataset — is set out in [Section 10 of the Terms of Service](/terms/). Please read it before contributing.
+
 **Permanence — important.** Unlike the rest of your data described in this Section 2, contributions are **not** erased by the "delete my data" command. The reason is the same one Wikipedia gives for not unwinding individual edits: removing past contributions would compromise a public resource that other people now depend on. You can stop contributing at any time, and a request to "delete my data" will still wipe your conversation history, your long-term memory, and your usage log — it just doesn't wipe submissions you made into the open dataset.
+
+#### Service updates (occasional outbound messages)
+
+From time to time we may send you a short WhatsApp message from Ongiini AI about a new capability, a service outage, or a way to help — for example, an invitation to contribute Oshiwambo translations. These messages are sent through a pre-approved WhatsApp message template; their content is short and is never personalised beyond a generic announcement.
+
+Reply **STOP** (or *unsubscribe*, *opt out*) at any time and we will permanently stop sending you these update messages. Your reply is recorded as a salted, one-way hash of your phone number in a separate opt-out store — we do not store the raw number for this purpose. Opting out does **not** delete your conversation history, your long-term memory, or your usage log; only the proactive outbound channel is switched off. You can still chat with the assistant normally afterwards.
+
+**Purpose:** to keep users informed about meaningful changes to the service they already use, and to invite participation where useful (e.g. the community translation project).
+
+**Legal basis:** Art. 6 (1) (f) GDPR — legitimate interest in keeping existing users informed about the service they have an active relationship with. The interest is proportionate because (a) messages are infrequent and tied to genuine service news, (b) we honour any opt-out immediately, and (c) the content is the same generic announcement for everyone, with no profiling and no personalisation beyond your phone number being the delivery address.
 
 #### Usage log
 
@@ -399,11 +411,21 @@ The website does not set advertising cookies, does not load any analytics script
 
 **Legal basis:** Art. 6 (1) (f) GDPR — legitimate interest in security and operability.
 
+#### Anonymous web chat (chat.ongiini.ai)
+
+The web-chat version of Ongiini at [chat.ongiini.ai](https://chat.ongiini.ai) works **without any account**. When you open the page, your browser generates a random session identifier (a UUID v4) and stores it in your browser's `localStorage`. That identifier is never combined with your phone number, email, or any other personal data — we receive it back on each request only so the assistant can follow the same conversation across consecutive messages within one browsing session. The conversation history for that session lives **only in the server's working memory**, capped at a few hours of inactivity and automatically discarded after that; it is **never written to disk, never copied into long-term memory ("mem0"), and never recorded in the usage log**. Restarting our server, closing your browser tab, or clicking "Clear conversation" in the chat interface all remove the session immediately.
+
+Photos you attach in the web chat are processed the same way as on WhatsApp: the assistant reads the image in memory to answer your question and discards the bytes afterwards. The image itself is not persisted.
+
+**IP-based rate-limit.** To prevent abuse of the open endpoint, we apply a sliding-window rate-limit per source IP address (read from the `CF-Connecting-IP` header set by Cloudflare). The limit state is kept only in working memory and is lost when the server restarts. Beyond rate-limiting, your source IP is not stored, logged on disk, or analysed.
+
+**Legal basis:** Art. 6 (1) (b) GDPR (performance of the service you requested by opening the chat) for the conversation flow itself, and Art. 6 (1) (f) GDPR (legitimate interest in keeping the open endpoint available and safe from abuse) for the IP-based rate-limit.
+
 ### 3. Who else sees your data (processors and third parties)
 
 - **Meta Platforms Inc. (WhatsApp)** — to deliver messages between you and us via the WhatsApp Business API, Meta receives, processes and routes them. Meta retains messages in line with its own policies. We have a data-processing relationship with Meta but cannot control Meta's own processing of your data — that is governed by Meta's terms and privacy policy.
 - **Tavily (Tavily Inc., a US-based provider)** — used only when the assistant decides to perform a web search for your question. In that case, the assistant's search query (which may reference what you wrote) is sent to Tavily's API, and Tavily returns search results. Per Tavily's published [privacy policy](https://www.tavily.com/privacy), Tavily *may* use search queries to improve its own service. If you do not want your search queries to be used in this way, you can object directly to Tavily at [support@tavily.com](mailto:support@tavily.com). The exact processing location is governed by Tavily's own privacy practices.
-- **Cloudflare Inc.** — hosts the website (ongiini.ai). Cloudflare does not have access to your WhatsApp conversation or any data on our local infrastructure.
+- **Cloudflare Inc.** — hosts the website (ongiini.ai) and fronts the web-chat endpoint at chat.ongiini.ai together with the API at api.ongiini.ai. The `CF-Connecting-IP` header Cloudflare adds to each request is what we use for the chat rate-limit described in Section 2.8. Cloudflare does not have access to your WhatsApp conversation or any data on our local infrastructure.
 
 The AI model used (Google DeepMind's Gemma 4 26B) is an open-weight model that runs *locally* on hardware we operate. Google does not receive any of your data through the use of this model.
 
@@ -433,6 +455,7 @@ The Ongiini computer itself, where short-term and long-term memory are stored, i
 - **Usage log:** stored indefinitely, but contains no message content.
 - **Trace file:** stored indefinitely. Structural signals only — no message content, no tool arguments, no tool results.
 - **Cloudflare access logs for the website:** retained by Cloudflare per its default retention (typically around 7–30 days).
+- **Anonymous web-chat sessions (chat.ongiini.ai):** kept in the server's working memory only, evicted after approximately 6 hours of inactivity, or sooner when the in-memory capacity is reached (oldest-first eviction). Lost completely whenever the server restarts. Never written to disk.
 
 You can delete your conversation memory at any time by sending *"delete my data"* on WhatsApp (see Section 6).
 
@@ -447,6 +470,8 @@ Under the GDPR, you have the right to:
 - **Objection** (Art. 21) — object to processing based on legitimate interest. Email us; you can also simply stop using the service.
 - **Data portability** (Art. 20) — receive an export of your data in a machine-readable format. Email us; we'll send you a JSON export of your mem0 facts and short-term memory.
 - **Lodge a complaint** with a supervisory authority. Since we are based in Berlin, the relevant authority is the [Berliner Beauftragte für Datenschutz und Informationsfreiheit](https://www.datenschutz-berlin.de/). You may also complain to the supervisory authority in the country where you live.
+
+**Web chat (chat.ongiini.ai).** The web chat has no separate "delete my data" command because there is nothing persistent to delete — see Section 2.8 for how the session-only data model works. Clicking "Clear conversation" in the chat interface clears the in-memory session immediately and wipes your local session identifier from your browser. Closing the browser tab and waiting a few hours has the same effect (the server-side session is dropped automatically after the inactivity window).
 
 ### 7. Research, analytics & transparency reporting
 
@@ -501,11 +526,11 @@ Conversation data is stored on a single computer operated by us, in Germany, beh
 
 If we change this policy materially, we will update the date at the top and, for substantial changes (e.g. new categories of processing, new processors, change of controller upon foundation registration), notify users via the WhatsApp service or on the website.
 
-Last updated: 21 May 2026. Effective immediately.
+Last updated: 2 June 2026. Effective immediately.
 
 ## Terms of service (full text)
 
-Plain-language rules for using Ongiini — last updated 21 May 2026
+Plain-language rules for using Ongiini — last updated 2 June 2026
 
 **The short version.** Ongiini is a free AI helper on WhatsApp. By messaging the Ongiini number, you accept these terms.
 
@@ -519,21 +544,21 @@ Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a **limited-risk 
 
 ### 1. Acceptance and scope
 
-These Terms of Service ("Terms") govern your use of Ongiini, an AI helper accessible via WhatsApp at the number published on [ongiini.ai](https://ongiini.ai) and described on that website ("the Service"). These Terms and the [Privacy Policy](/privacy/) are continuously available on this website. The WhatsApp Business profile of the Service links to this website, giving you the opportunity to review the Terms before initiating use. By sending a message to the Service, you confirm that you have had that opportunity and that you accept these Terms. If you do not accept them, do not use the Service.
+These Terms of Service ("Terms") govern your use of Ongiini, an AI assistant offered through two channels: **(a) WhatsApp**, at the number published on [ongiini.ai](https://ongiini.ai) (restricted to Namibian numbers, +264), and **(b) the anonymous web chat at [chat.ongiini.ai](https://chat.ongiini.ai)**, which is open globally and works without an account or sign-up (together, "the Service"). These Terms and the [Privacy Policy](/privacy/) are continuously available on this website. Both the WhatsApp Business profile and the web chat link to this website, giving you the opportunity to review the Terms before initiating use. By sending a message to the Service — whether on WhatsApp or in the web chat — you confirm that you have had that opportunity and that you accept these Terms. If you do not accept them, do not use the Service.
 
 The Service is operated by Sebastian Küpers (Hibiskusweg 17b, 13089 Berlin, Germany) as the first project of the [Common Intelligence Foundation](https://common-intelligence.org), currently being formally established as a non-profit foundation in Estonia. The Service is provided **free of charge** and is **not operated for profit**. Once the foundation is registered, it will become the operator; we will update these Terms accordingly and notify you of the change.
 
 ### 2. What the Service is
 
-Ongiini is an AI helper that receives your WhatsApp messages (text, photos, and voice notes), generates responses using an AI model, and replies in text. Voice notes are transcribed to text on our own computer using an open-source speech-to-text model; we do not send your audio to any third party. The Service is designed to help with everyday questions — for example school topics, farming questions, contract clauses, health information, government services, and similar.
+**WhatsApp channel.** The WhatsApp version of Ongiini receives your text messages, photos, and voice notes, generates responses using an AI model, and replies in text. Voice notes are transcribed to text on our own computer using an open-source speech-to-text model; we do not send your audio to any third party. WhatsApp access is restricted to phone numbers from Namibia (+264); the Service may decline to respond, or respond differently, based on country code or other technical signals. The Service is designed to help with everyday questions — for example school topics, farming questions, contract clauses, health information, government services, and similar.
+
+**Web-chat channel.** The web chat at [chat.ongiini.ai](https://chat.ongiini.ai) is an anonymous browser-based version of the same assistant. It accepts text and photos (voice notes are not supported on this channel yet). It is open globally — there is no country restriction. There is no login, account, or sign-up: each visit creates a fresh browser-side session identifier and the conversation lives only for the duration of that session (the full data model is described in the [Privacy Policy](/privacy/)). Because the channel is anonymous and open to anyone, a per-session token cap and a per-IP rate-limit apply instead of the monthly per-user allowance used on WhatsApp (see Section 4).
 
 The Service is **not a medical, legal, financial, psychological, or any other kind of professional service**, and it is **not operated by qualified professionals**. It is a computer program. See Section 6.
 
-Access is restricted to phone numbers from Namibia (+264). The Service may decline to respond, or respond differently, based on country code or other technical signals.
-
 ### 3. Eligibility
 
-You must be at least **16 years old** to use the Service. If you are between 16 and 18, you confirm that your use is permitted under the law of the country in which you live and, where required, by your parent or legal guardian.
+You must be at least **16 years old** to use the Service. This requirement applies equally to the WhatsApp channel and to the web chat at chat.ongiini.ai. If you are between 16 and 18, you confirm that your use is permitted under the law of the country in which you live and, where required, by your parent or legal guardian.
 
 By using the Service you confirm that you have the legal capacity to enter into these Terms.
 
@@ -541,7 +566,9 @@ By using the Service you confirm that you have the legal capacity to enter into 
 
 The Service is provided **free of charge**. There is no payment, no subscription, no commercial relationship. You acquire no entitlement to the Service being available, complete, accurate, or fit for any particular purpose. We may change, restrict, suspend or discontinue the Service in whole or in part at any time, with or without notice, and without compensation.
 
-Each user has a monthly allowance of free tokens (a measure of message length and conversation depth) as published on the website. We monitor usage and may, at our discretion, rate-limit or block any user whose usage materially exceeds normal individual use.
+**WhatsApp.** Each WhatsApp user has a monthly allowance of free tokens (a measure of message length and conversation depth) as published on the website. We monitor usage and may, at our discretion, rate-limit or block any user whose usage materially exceeds normal individual use.
+
+**Web chat.** Because the web chat at chat.ongiini.ai is anonymous and open to anyone, there is no per-user monthly allowance. Instead, a **per-session token cap** and a **per-IP rate-limit** apply. The exact numbers are configured server-side, may change without notice, and are deliberately tighter than the WhatsApp allowance because no per-user identity exists to apportion fair use against.
 
 Because the Service is provided free of charge as a gratuitous service, **no statutory right of withdrawal under § 312g of the German Civil Code (BGB) applies** — no fee-based distance contract is concluded. You may stop using the Service at any time and may delete your data at any time via the in-product commands described in the [Privacy Policy](/privacy/).
 
@@ -601,7 +628,9 @@ The Ongiini name, brand, website design, and code are owned by us (or, after reg
 
 The output that the Service generates in response to your messages is not subject to copyright by us. You may use it freely, subject to applicable law and these Terms. You acknowledge that AI-generated content may be similar or identical for different users and that we make no claim of originality on your behalf.
 
-You retain ownership of any content you submit to the Service. By submitting content, you grant us a non-exclusive, royalty-free, worldwide licence to process that content for the purpose of providing the Service, as described in our [Privacy Policy](/privacy/).
+You retain ownership of any content you submit to the Service. By submitting content, you grant us a non-exclusive, royalty-free, worldwide licence to process that content for the purpose of providing the Service, as described in our [Privacy Policy](/privacy/). This ordinary processing licence applies to your normal chat messages, photos, and (on WhatsApp) voice notes — the everyday questions you ask the assistant.
+
+**Community translation contributions.** Separately, when you choose to contribute an Oshiwambo translation through the assistant — an opt-in flow described in our [Privacy Policy](/privacy/) — you grant the Common Intelligence Foundation (and, until its formal establishment, the operator named in Section 1, acting on the foundation's behalf) a **perpetual, irrevocable, royalty-free, worldwide, transferable, and sublicensable licence** to use, reproduce, modify, adapt, combine with other contributions, distribute, publish, and create derivative works from your contribution, in any medium and for any purpose consistent with the foundation's non-profit mission — including publication as part of an open dataset under a licence of the foundation's choosing. You may also continue to use your own translation yourself. By submitting, you confirm that the translation is your own work and that you have the right to grant this licence. **This grant cannot be withdrawn** — the reason is explained in the Privacy Policy (a retracted contribution would compromise a public resource that other people now depend on). You retain authorship credit only collectively, as part of "Ongiini's Oshiwambo community"; the foundation does not attribute individual contributions by name.
 
 ### 11. Privacy
 
@@ -652,7 +681,7 @@ If any provision of these Terms is or becomes invalid or unenforceable, the vali
 
 For questions about these Terms or about the Service, please refer to the contact information in the [Imprint](/imprint/).
 
-Last updated: 21 May 2026. Effective immediately.
+Last updated: 2 June 2026. Effective immediately.
 
 ## Imprint (German § 5 DDG)
 
