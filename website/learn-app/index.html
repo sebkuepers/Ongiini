@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en" data-locale="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Ongiini Learn — Smart, personal Afrikaans</title>
+  <meta name="description" content="A smart, personal Afrikaans coach in your browser. No app, no signup. Adapts to your goal — job interview, in-laws, daily life. Starting with Afrikaans; more topics and languages coming." />
+  <meta name="theme-color" content="#e8dfcd" />
+  <link rel="icon" href="https://ongiini.ai/assets/ongiini-icon-192-v2.png" />
+  <link rel="apple-touch-icon" href="https://ongiini.ai/assets/ongiini-icon-192-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:       oklch(0.60 0.14 45);
+      --terracotta-deep:  oklch(0.48 0.13 40);
+      --terracotta-light: oklch(0.78 0.10 50);
+      --teal:        oklch(0.55 0.08 175);
+      --teal-deep:   oklch(0.42 0.09 175);
+      --rule:        oklch(0.85 0.018 70);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd;
+        --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+        --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --terracotta-light: #d4a283;
+        --teal: #5a8e8c; --teal-deep: #3f6e6c;
+        --rule: #d1c8b9;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--sand);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-underline-offset: 2px; }
+    button { font: inherit; color: inherit; }
+    img { max-width: 100%; display: block; border-radius: 8px; }
+
+    /* Topbar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--bone);
+      border-bottom: 1px solid var(--rule);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .brand { display: inline-flex; align-items: center; }
+    .brand img { width: 32px; height: 32px; border-radius: 7px; }
+    .topbar-actions { display: inline-flex; align-items: center; gap: 10px; }
+    .topbar-link {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      text-decoration: none;
+      padding: 6px 4px;
+    }
+    .topbar-link:hover { color: var(--terracotta-deep); }
+    .icon-btn {
+      width: 34px; height: 34px;
+      border: 1px solid var(--rule); border-radius: 999px; background: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ink-soft); cursor: pointer;
+    }
+    .icon-btn:hover { background: var(--bone-deep); color: var(--ink); }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    /* Main */
+    main {
+      flex: 1;
+      display: flex; flex-direction: column;
+      max-width: 760px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 18px 18px 32px;
+    }
+
+    /* Hero (cold start) */
+    #hero {
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      padding: 32px 8px 18px;
+      gap: 22px;
+    }
+    .hero-mark {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-weight: 400;
+      font-size: clamp(56px, 16vw, 120px);
+      line-height: 0.9; letter-spacing: -0.03em;
+      color: var(--ink); margin: 0;
+    }
+    .hero-mark .dot { color: var(--terracotta); font-style: normal; }
+    .hero-sub {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(20px, 3.6vw, 28px); line-height: 1.25;
+      color: var(--ink-soft); max-width: 28ch; margin: 0;
+    }
+    .hero-pitch { max-width: 48ch; color: var(--ink); font-size: 16px; line-height: 1.55; margin: 0; }
+    .hero-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; max-width: 48ch; }
+    .hero-list li {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 15px; color: var(--ink); text-align: left;
+    }
+    .hero-list li::before {
+      content: "→"; color: var(--terracotta); font-weight: 500;
+      flex-shrink: 0;
+    }
+    .hero-cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 16px 26px;
+      border-radius: 999px;
+      background: var(--terracotta);
+      color: var(--bone);
+      font-size: 17px; font-weight: 500; letter-spacing: -0.005em;
+      border: 0; cursor: pointer;
+      box-shadow: 0 3px 12px rgba(196, 108, 63, 0.25);
+      transition: transform 160ms cubic-bezier(.6,.1,.3,1);
+    }
+    .hero-cta:hover { transform: translateY(-1px); }
+    .hero-roadmap {
+      margin-top: 14px;
+      padding: 14px 18px;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      color: var(--ink-soft);
+      font-size: 14px;
+      max-width: 56ch;
+    }
+    .hero-roadmap strong { color: var(--ink); font-weight: 500; }
+
+    /* Card area */
+    #card-area {
+      display: flex; flex-direction: column;
+      gap: 14px;
+      padding: 24px 0 14px;
+    }
+    .progress-strip {
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-soft);
+    }
+    .progress-strip .boxes { display: inline-flex; gap: 3px; align-items: end; height: 18px; }
+    .progress-strip .boxes b {
+      display: inline-block;
+      width: 8px; background: var(--rule);
+      border-radius: 2px 2px 0 0;
+    }
+    .progress-strip .boxes b[data-box="1"] { background: var(--terracotta-light); }
+    .progress-strip .boxes b[data-box="2"] { background: var(--terracotta); }
+    .progress-strip .boxes b[data-box="3"] { background: var(--teal); }
+    .progress-strip .boxes b[data-box="4"] { background: var(--teal-deep); }
+    .progress-strip .boxes b[data-box="5"] { background: var(--ink); }
+
+    .card {
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 16px;
+      padding: 22px 22px;
+      display: flex; flex-direction: column; gap: 14px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 14px 30px -18px rgba(0,0,0,0.10);
+    }
+    .card-eyebrow {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--terracotta-deep);
+    }
+    .card-prompt {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: clamp(22px, 4vw, 30px); line-height: 1.25;
+      color: var(--ink);
+      white-space: pre-wrap;
+    }
+    .card-hint {
+      font-size: 14px; color: var(--ink-soft);
+      padding: 10px 12px;
+      background: var(--bone-deep);
+      border-left: 3px solid var(--terracotta-light);
+      border-radius: 0 8px 8px 0;
+    }
+
+    /* Feedback */
+    .feedback {
+      padding: 16px 18px;
+      border-radius: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .feedback--correct { background: rgba(126, 168, 119, 0.18); border: 1px solid rgba(126, 168, 119, 0.4); }
+    .feedback--partial { background: rgba(212, 162, 131, 0.18); border: 1px solid var(--terracotta-light); }
+    .feedback--wrong   { background: rgba(196, 108, 63, 0.12); border: 1px solid var(--terracotta-light); }
+    .feedback-rating {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .feedback-text { color: var(--ink); font-size: 16px; line-height: 1.5; }
+
+    /* Composer */
+    .composer-wrap {
+      background: var(--bone);
+      border-top: 1px solid var(--rule);
+      padding: 12px 18px 16px;
+      position: sticky; bottom: 0;
+    }
+    .composer {
+      max-width: 760px; margin: 0 auto;
+      display: flex; align-items: flex-end; gap: 10px;
+    }
+    .composer textarea {
+      flex: 1;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      color: var(--ink);
+      resize: none;
+      min-height: 46px;
+      max-height: 180px;
+      outline: none;
+      transition: border-color 120ms ease;
+    }
+    .composer textarea:focus { border-color: var(--terracotta); }
+    .composer-actions { display: inline-flex; gap: 8px; }
+    .composer-actions button {
+      width: 46px; height: 46px;
+      border-radius: 999px; border: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .composer-actions .hint {
+      background: var(--bone);
+      color: var(--ink-soft);
+      border: 1px solid var(--rule);
+    }
+    .composer-actions .hint:hover { background: var(--bone-deep); color: var(--ink); }
+    .composer-actions .send {
+      background: var(--terracotta);
+      color: var(--bone);
+      box-shadow: 0 3px 12px rgba(196, 108, 63, 0.20);
+    }
+    .composer-actions .send:disabled {
+      background: var(--ink-faint);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .composer-actions svg { width: 20px; height: 20px; }
+    .composer-legal {
+      max-width: 760px;
+      margin: 8px auto 0;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 10.5px; letter-spacing: 0.06em;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+    .composer-legal a {
+      color: var(--terracotta-deep);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .error-banner {
+      max-width: 760px; margin: 8px auto 0;
+      padding: 10px 14px;
+      background: rgba(196, 108, 63, 0.1);
+      border: 1px solid var(--terracotta-light);
+      border-radius: 8px;
+      color: var(--terracotta-deep);
+      font-size: 14px;
+      display: none;
+    }
+    .error-banner.is-visible { display: block; }
+
+    .nextcard-wrap {
+      display: flex; justify-content: center; padding: 4px 0 0;
+    }
+    .nextcard-btn {
+      padding: 12px 22px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      font-size: 15px; font-weight: 500;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .nextcard-btn:hover { background: var(--ink); color: var(--bone); }
+
+    [hidden] { display: none !important; }
+
+    @media (max-width: 600px) {
+      main { padding: 14px 14px 24px; }
+      .card { padding: 18px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Ongiini Learn">
+      <img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini" />
+    </a>
+    <div class="topbar-actions">
+      <a class="topbar-link" href="https://ongiini.ai/">Main site</a>
+      <button type="button" class="icon-btn" id="btnClear" title="Delete my data" aria-label="Delete my data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section id="hero">
+      <h1 class="hero-mark">Learn<span class="dot">.</span></h1>
+      <p class="hero-sub">A personal Afrikaans coach. Adapting. In your browser.</p>
+      <p class="hero-pitch">
+        Tell me your goal — a job interview, your in-laws' dinner, exam prep —
+        and I'll put together a learning plan just for you. Real feedback on
+        every answer. Spaced repetition keeps things sticking. No app, no
+        signup, no multiple-choice gambling.
+      </p>
+      <ul class="hero-list">
+        <li><strong>Personal.</strong> Your plan is built from your goal, your level, your time.</li>
+        <li><strong>Smart feedback.</strong> Type your answer in your own words. The model grades it and tells you what's off.</li>
+        <li><strong>Adapts as you go.</strong> Stuck on something? It comes back sooner. Mastered it? It comes back less often.</li>
+        <li><strong>Remembered.</strong> Come back tomorrow and we pick up where we left off.</li>
+      </ul>
+      <button type="button" class="hero-cta" id="btnStart">
+        Get started
+        <span aria-hidden="true">→</span>
+      </button>
+      <div class="hero-roadmap">
+        <strong>Starting with Afrikaans.</strong> The same engine can teach a language, prep
+        you for an interview, or drill a complicated university subject through
+        targeted repetition. More topics and languages — and richer integrations
+        with what we know about you across Ongiini — are next.
+      </div>
+    </section>
+
+    <section id="card-area" hidden>
+      <div class="progress-strip" id="progressStrip" hidden>
+        <span id="progressText"></span>
+        <span class="boxes" id="progressBoxes"></span>
+      </div>
+      <div class="card" id="card">
+        <div class="card-eyebrow" id="cardEyebrow">Welcome</div>
+        <div class="card-prompt" id="cardPrompt">Loading…</div>
+        <div class="card-hint" id="cardHint" hidden></div>
+      </div>
+      <div class="feedback" id="feedback" hidden>
+        <span class="feedback-rating" id="feedbackRating"></span>
+        <p class="feedback-text" id="feedbackText"></p>
+        <div class="nextcard-wrap">
+          <button type="button" class="nextcard-btn" id="btnNextCard">Next card →</button>
+        </div>
+      </div>
+      <div class="error-banner" id="errorBanner"></div>
+    </section>
+  </main>
+
+  <div class="composer-wrap" id="composerWrap" hidden>
+    <div class="composer">
+      <textarea id="answerInput" rows="1" placeholder="Type your answer…" aria-label="Answer"></textarea>
+      <div class="composer-actions">
+        <button type="button" class="hint" id="btnHint" title="Show hint" aria-label="Show hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 18h.01M9 21h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1.1 1.6L10 18h4l.4-2.5c.2-.6.6-1.2 1.1-1.6A6 6 0 0 0 12 3Z"/>
+          </svg>
+        </button>
+        <button type="button" class="send" id="btnSend" title="Send" aria-label="Send" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="composer-legal">
+      By using this you accept our
+      <a href="https://ongiini.ai/terms/">Terms</a> and
+      <a href="https://ongiini.ai/privacy/">Privacy Policy</a>.
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // Config + state
+      var API_BASE = 'https://api.ongiini.ai/v1/learn';
+      var LS_KEY = 'ongiini-learn:learner_id';
+      var state = {
+        learner_id: localStorage.getItem(LS_KEY) || null,
+        mode: 'hero',
+        intake_field: null,
+        current_card: null,
+        current_hint_shown: false,
+        progress: { total_seen: 0, total_correct: 0, by_box: {} },
+      };
+
+      // Magic-link arrival: ?t=<token> in URL.
+      var urlParams = new URLSearchParams(window.location.search);
+      var magicToken = urlParams.get('t');
+
+      var $ = function (id) { return document.getElementById(id); };
+      var hero = $('hero');
+      var cardArea = $('card-area');
+      var card = $('card');
+      var cardEyebrow = $('cardEyebrow');
+      var cardPrompt = $('cardPrompt');
+      var cardHint = $('cardHint');
+      var feedback = $('feedback');
+      var feedbackRating = $('feedbackRating');
+      var feedbackText = $('feedbackText');
+      var composerWrap = $('composerWrap');
+      var answerInput = $('answerInput');
+      var btnSend = $('btnSend');
+      var btnHint = $('btnHint');
+      var btnStart = $('btnStart');
+      var btnNextCard = $('btnNextCard');
+      var btnClear = $('btnClear');
+      var progressStrip = $('progressStrip');
+      var progressText = $('progressText');
+      var progressBoxes = $('progressBoxes');
+      var errorBanner = $('errorBanner');
+
+      async function api(path, body) {
+        var resp = await fetch(API_BASE + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'omit',
+          body: JSON.stringify(body || {}),
+        });
+        if (!resp.ok) {
+          var detail = '';
+          try { var j = await resp.json(); detail = j.detail || ''; } catch (e) {}
+          throw new Error(detail || ('HTTP ' + resp.status));
+        }
+        return resp.json();
+      }
+
+      function showError(msg) {
+        errorBanner.textContent = msg;
+        errorBanner.classList.add('is-visible');
+        setTimeout(function () { errorBanner.classList.remove('is-visible'); }, 6000);
+      }
+
+      function renderProgress() {
+        progressText.textContent = state.progress.total_seen
+          ? (state.progress.total_seen + ' cards · '
+             + Math.round(100 * state.progress.total_correct / state.progress.total_seen)
+             + '% right')
+          : 'fresh start';
+        // Build all five box-bars as DOM nodes, then replaceChildren —
+        // avoids innerHTML and keeps the renderer XSS-safe even if
+        // future progress data adds string fields.
+        var bars = [];
+        for (var b = 1; b <= 5; b++) {
+          var n = (state.progress.by_box || {})[b] || 0;
+          var bar = document.createElement('b');
+          bar.dataset.box = String(b);
+          bar.style.height = Math.max(3, Math.min(18, 3 + n * 3)) + 'px';
+          bar.title = 'Box ' + b + ': ' + n + ' cards';
+          bars.push(bar);
+        }
+        progressBoxes.replaceChildren.apply(progressBoxes, bars);
+        progressStrip.hidden = false;
+      }
+
+      function showIntakeCard(field, prompt) {
+        state.mode = 'intake';
+        state.intake_field = field;
+        state.current_card = null;
+        hero.hidden = true;
+        cardArea.hidden = false;
+        composerWrap.hidden = false;
+        feedback.hidden = true;
+        card.hidden = false;
+        cardEyebrow.textContent = 'Intake — ' + String(field).replace('_', ' ');
+        cardPrompt.textContent = String(prompt || '');
+        cardHint.hidden = true;
+        cardHint.textContent = '';
+        answerInput.value = '';
+        answerInput.placeholder = 'Type your answer…';
+        answerInput.focus();
+        btnHint.style.display = 'none';
+      }
+
+      function showCard(c, box) {
+        state.mode = 'card';
+        state.intake_field = null;
+        state.current_card = c;
+        state.current_hint_shown = false;
+        hero.hidden = true;
+        cardArea.hidden = false;
+        composerWrap.hidden = false;
+        feedback.hidden = true;
+        card.hidden = false;
+        cardEyebrow.textContent = String(c.card_type) + ' · box ' + (box || 1);
+        cardPrompt.textContent = String(c.prompt_text || '');
+        cardHint.hidden = true;
+        cardHint.textContent = String(c.hint_text || '');
+        answerInput.value = '';
+        answerInput.placeholder = 'Your answer in your own words…';
+        answerInput.focus();
+        btnHint.style.display = c.hint_text ? '' : 'none';
+        renderProgress();
+      }
+
+      function showFeedback(grade) {
+        state.mode = 'feedback';
+        card.hidden = true;
+        composerWrap.hidden = true;
+        feedback.hidden = false;
+        feedback.className = 'feedback feedback--' + String(grade.rating);
+        feedbackRating.textContent = String(grade.rating) + ' · now in box ' + grade.new_box;
+        feedbackText.textContent = String(grade.feedback || '');
+        state.progress = grade.progress || state.progress;
+        renderProgress();
+      }
+
+      async function startSession() {
+        try {
+          var body = {};
+          if (magicToken) body.token = magicToken;
+          if (state.learner_id) body.learner_id = state.learner_id;
+          var s = await api('/sessions', body);
+          state.learner_id = s.learner_id;
+          localStorage.setItem(LS_KEY, s.learner_id);
+          if (s.intake_complete) {
+            await loadNextCard();
+          } else {
+            showIntakeCard(s.next_intake_field, s.next_intake_prompt);
+          }
+        } catch (e) {
+          showError("Couldn't start: " + e.message);
+        }
+      }
+
+      async function submitIntakeAnswer(value) {
+        try {
+          var field = state.intake_field;
+          var resp = await api('/intake', {
+            learner_id: state.learner_id,
+            field: field,
+            value: value,
+          });
+          if (resp.validation_error) {
+            showError(resp.validation_error);
+            return;
+          }
+          if (resp.intake_complete) {
+            await loadNextCard();
+          } else {
+            showIntakeCard(resp.next_intake_field, resp.next_intake_prompt);
+          }
+        } catch (e) {
+          showError("Couldn't save that: " + e.message);
+        }
+      }
+
+      async function loadNextCard() {
+        try {
+          cardArea.hidden = false;
+          hero.hidden = true;
+          composerWrap.hidden = false;
+          card.hidden = false;
+          feedback.hidden = true;
+          cardEyebrow.textContent = '…';
+          cardPrompt.textContent = 'Thinking about what to ask next…';
+          cardHint.hidden = true;
+          cardHint.textContent = '';
+          answerInput.disabled = true;
+          btnSend.disabled = true;
+
+          var resp = await api('/next-card', { learner_id: state.learner_id });
+          state.progress = resp.progress || state.progress;
+          showCard({
+            card_id: resp.card_id,
+            card_type: resp.card_type,
+            prompt_text: resp.prompt_text,
+            hint_text: resp.hint_text,
+            difficulty: resp.difficulty,
+          }, resp.box);
+          answerInput.disabled = false;
+        } catch (e) {
+          showError("Couldn't fetch a card: " + e.message);
+          answerInput.disabled = false;
+        }
+      }
+
+      async function submitAnswer(answer) {
+        if (!state.current_card) return;
+        try {
+          btnSend.disabled = true;
+          answerInput.disabled = true;
+          cardEyebrow.textContent = 'grading…';
+          var grade = await api('/answer', {
+            learner_id: state.learner_id,
+            card_id: state.current_card.card_id,
+            answer: answer,
+            hint_used: state.current_hint_shown,
+          });
+          showFeedback(grade);
+        } catch (e) {
+          showError("Couldn't grade that: " + e.message);
+          answerInput.disabled = false;
+        }
+      }
+
+      btnStart.addEventListener('click', startSession);
+      btnNextCard.addEventListener('click', function () { loadNextCard(); });
+      btnHint.addEventListener('click', function () {
+        if (!state.current_card || !state.current_card.hint_text) return;
+        state.current_hint_shown = true;
+        cardHint.textContent = String(state.current_card.hint_text);
+        cardHint.hidden = false;
+      });
+
+      btnSend.addEventListener('click', function () {
+        var v = answerInput.value.trim();
+        if (!v) return;
+        if (state.mode === 'intake') {
+          submitIntakeAnswer(v);
+        } else if (state.mode === 'card') {
+          submitAnswer(v);
+        }
+      });
+
+      answerInput.addEventListener('input', function () {
+        btnSend.disabled = !answerInput.value.trim();
+      });
+      answerInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          btnSend.click();
+        }
+      });
+
+      btnClear.addEventListener('click', async function () {
+        if (!state.learner_id) return;
+        if (!confirm("This deletes everything we have stored about your learning. Continue?")) return;
+        try { await api('/clear', { learner_id: state.learner_id }); } catch (e) {}
+        localStorage.removeItem(LS_KEY);
+        state = {
+          learner_id: null, mode: 'hero', intake_field: null,
+          current_card: null, current_hint_shown: false,
+          progress: { total_seen: 0, total_correct: 0, by_box: {} },
+        };
+        cardArea.hidden = true;
+        composerWrap.hidden = true;
+        feedback.hidden = true;
+        progressStrip.hidden = true;
+        hero.hidden = false;
+      });
+
+      if (magicToken || state.learner_id) {
+        startSession();
+      }
+    })();
+  </script>
+</body>
+</html>
