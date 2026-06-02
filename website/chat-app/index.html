@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en" data-locale="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>Ongiini AI — Chat</title>
+  <meta name="description" content="Try Ongiini AI in your browser — no app, no login, no signup. Ask any question. Powered by Gemma 4 26B running on a single computer in our office." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#f5efe4" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="apple-touch-icon" href="/assets/ongiini-icon-192-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bone:           oklch(0.965 0.012 75);
+      --bone-deep:      oklch(0.945 0.018 75);
+      --sand:           oklch(0.92  0.025 70);
+      --ink:            oklch(0.20  0.018 50);
+      --ink-soft:       oklch(0.50  0.020 50);
+      --ink-faint:      oklch(0.68  0.020 50);
+      --terracotta:       oklch(0.60 0.14 45);
+      --terracotta-deep:  oklch(0.48 0.13 40);
+      --terracotta-light: oklch(0.78 0.10 50);
+      --rule:        oklch(0.85 0.018 70);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root {
+        --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd;
+        --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+        --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --terracotta-light: #d4a283;
+        --rule: #d1c8b9;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bone);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+    a { color: var(--terracotta-deep); text-decoration: underline; text-underline-offset: 2px; }
+    button { font: inherit; color: inherit; }
+    img { max-width: 100%; display: block; border-radius: 8px; }
+
+    [data-en], [data-af] { display: none; }
+    html[data-locale="en"] [data-en] { display: revert; }
+    html[data-locale="af"] [data-af] { display: revert; }
+    html[data-locale="en"] [data-en="i"], html[data-locale="af"] [data-af="i"] { display: inline; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--bone);
+      border-bottom: 1px solid var(--rule);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 10px; }
+    .brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .brand .brand-text {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+    .topbar-actions { display: inline-flex; align-items: center; gap: 10px; }
+    .lang-segment {
+      display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden;
+    }
+    .lang-segment button {
+      padding: 6px 12px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      background: none; border: 0; cursor: pointer;
+    }
+    .lang-segment button.is-active { background: var(--ink); color: var(--bone); }
+    .icon-btn {
+      width: 34px; height: 34px;
+      border: 1px solid var(--rule); border-radius: 999px; background: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ink-soft); cursor: pointer;
+    }
+    .icon-btn:hover { background: var(--bone-deep); color: var(--ink); }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    main.chat {
+      flex: 1;
+      display: flex; flex-direction: column;
+      max-width: 760px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 18px 18px 12px;
+      overflow-y: auto;
+    }
+    .welcome {
+      padding: 24px 0 8px;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 14px;
+    }
+    .welcome h1 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: clamp(26px, 4vw, 36px);
+      margin: 0 0 8px;
+      line-height: 1.1;
+    }
+    .welcome p {
+      color: var(--ink-soft);
+      margin: 0;
+      font-size: 15px;
+      max-width: 56ch;
+    }
+    .suggestions {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-top: 16px;
+    }
+    .chip {
+      padding: 8px 14px;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-size: 14px;
+      color: var(--ink);
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+    .chip:hover { background: var(--sand); }
+
+    .turns { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
+    .turn { display: flex; }
+    .turn--user { justify-content: flex-end; }
+    .bubble {
+      max-width: min(680px, 86%);
+      padding: 12px 16px;
+      border-radius: 14px;
+      line-height: 1.55;
+      font-size: 15px;
+      word-wrap: break-word;
+    }
+    .turn--user .bubble {
+      background: var(--terracotta);
+      color: var(--bone);
+      border-bottom-right-radius: 6px;
+    }
+    .turn--user .bubble a { color: var(--bone); }
+    .turn--bot .bubble {
+      background: var(--bone-deep);
+      color: var(--ink);
+      border-bottom-left-radius: 6px;
+    }
+    .bubble p:first-child { margin-top: 0; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble code {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      background: rgba(0,0,0,0.06);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+    .bubble pre {
+      background: var(--ink);
+      color: var(--bone);
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    .bubble pre code { background: none; padding: 0; color: inherit; }
+    .bubble ul, .bubble ol { margin: 6px 0 6px 22px; padding: 0; }
+    .bubble li { margin: 3px 0; }
+    .bubble img { margin-top: 4px; }
+    .typing {
+      display: inline-flex; gap: 4px; padding: 14px 18px;
+      background: var(--bone-deep);
+      border-radius: 14px; border-bottom-left-radius: 6px;
+    }
+    .typing span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--ink-soft);
+      animation: blink 1.2s ease-in-out infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+
+    .composer-wrap {
+      background: var(--bone);
+      border-top: 1px solid var(--rule);
+      padding: 12px 18px 18px;
+    }
+    .composer {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex; align-items: flex-end; gap: 10px;
+    }
+    .composer textarea {
+      flex: 1;
+      background: var(--bone-deep);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      color: var(--ink);
+      resize: none;
+      min-height: 46px;
+      max-height: 180px;
+      outline: none;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .composer textarea:focus {
+      border-color: var(--terracotta);
+      background: var(--bone);
+    }
+    .composer-actions { display: inline-flex; gap: 8px; }
+    .composer-actions button {
+      width: 46px; height: 46px;
+      border-radius: 999px; border: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .composer-actions .attach {
+      background: var(--bone-deep);
+      color: var(--ink-soft);
+      border: 1px solid var(--rule);
+    }
+    .composer-actions .attach:hover { background: var(--sand); color: var(--ink); }
+    .composer-actions .send {
+      background: var(--terracotta);
+      color: var(--bone);
+      box-shadow: 0 3px 12px rgba(196, 108, 63, 0.20);
+    }
+    .composer-actions .send:disabled {
+      background: var(--ink-faint);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .composer-actions svg { width: 20px; height: 20px; }
+    .image-preview {
+      max-width: 760px; margin: 0 auto 10px;
+      display: none; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: var(--bone-deep);
+      border-radius: 10px;
+      border: 1px solid var(--rule);
+    }
+    .image-preview.is-visible { display: flex; }
+    .image-preview img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
+    .image-preview .meta { flex: 1; font-size: 13px; color: var(--ink-soft); }
+    .image-preview .remove {
+      background: none; border: 0; cursor: pointer;
+      color: var(--ink-soft); padding: 6px 10px;
+      border-radius: 999px;
+    }
+    .image-preview .remove:hover { background: var(--sand); color: var(--ink); }
+
+    .footer-hint {
+      max-width: 760px; margin: 8px auto 0;
+      font-size: 11px;
+      color: var(--ink-faint);
+      text-align: center;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      letter-spacing: 0.08em;
+    }
+    .footer-hint a { color: var(--ink-faint); }
+    .footer-hint a:hover { color: var(--terracotta-deep); }
+
+    .error-banner {
+      max-width: 760px; margin: 8px auto;
+      padding: 10px 14px;
+      background: oklch(0.96 0.06 30);
+      border: 1px solid oklch(0.88 0.10 30);
+      border-radius: 10px;
+      color: var(--terracotta-deep);
+      font-size: 14px;
+      display: none;
+    }
+    @supports not (color: oklch(0 0 0)) {
+      .error-banner { background: #fceadc; border-color: #f0c7a5; }
+    }
+    .error-banner.is-visible { display: block; }
+
+    @media (max-width: 600px) {
+      main.chat { padding: 14px 14px 8px; }
+      .welcome h1 { font-size: 22px; }
+      .welcome p { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img src="/assets/ongiini-icon-192-v2.png" alt="Ongiini" />
+      <span class="brand-text">Ongiini AI</span>
+    </a>
+    <div class="topbar-actions">
+      <span class="lang-segment" role="group" aria-label="Language">
+        <button type="button" data-set-locale="en" class="is-active">EN</button>
+        <button type="button" data-set-locale="af">AF</button>
+      </span>
+      <button type="button" class="icon-btn" id="btnClear"
+              title="Clear conversation"
+              aria-label="Clear conversation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="chat" id="chat">
+    <section class="welcome" id="welcome">
+      <h1>
+        <span data-en>Ongiini! Ask me anything.</span>
+        <span data-af>Ongiini! Vra my enigiets.</span>
+      </h1>
+      <p>
+        <span data-en>This is a quick browser test — no app, no login. School, farming, health, contracts, daily life. I'll do my best. Memory only lasts for this session.</span>
+        <span data-af>Dit is 'n kort blaaier-toets — geen app, geen aanmelding. Skool, boerdery, gesondheid, kontrakte, alledaagse lewe. Ek doen my bes. Geheue duur net vir hierdie sessie.</span>
+      </p>
+      <div class="suggestions" id="suggestions">
+        <button class="chip" data-suggest data-en="i">Explain photosynthesis simply</button>
+        <button class="chip" data-suggest data-af="i">Verduidelik fotosintese eenvoudig</button>
+        <button class="chip" data-suggest data-en="i">Help me draft a CV</button>
+        <button class="chip" data-suggest data-af="i">Help my om 'n CV op te stel</button>
+        <button class="chip" data-suggest data-en="i">My maize leaves are yellow — why?</button>
+        <button class="chip" data-suggest data-af="i">My mielieblare is geel — hoekom?</button>
+      </div>
+    </section>
+    <div class="turns" id="turns"></div>
+    <div class="error-banner" id="errorBanner"></div>
+  </main>
+
+  <div class="image-preview" id="imagePreview">
+    <img id="imagePreviewImg" alt="" />
+    <div class="meta">
+      <div id="imagePreviewName">image.jpg</div>
+      <div id="imagePreviewSize">—</div>
+    </div>
+    <button type="button" class="remove" id="imageRemove" aria-label="Remove image">✕</button>
+  </div>
+
+  <div class="composer-wrap">
+    <div class="composer">
+      <textarea id="input" rows="1"
+                data-en="i" placeholder="Type a question…"
+                data-af="i" aria-label="Message"></textarea>
+      <div class="composer-actions">
+        <input type="file" id="imageFile" accept="image/*" capture="environment" style="display:none" />
+        <button type="button" class="attach" id="btnAttach" title="Attach image" aria-label="Attach image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M3 16l5-5 4 4 3-3 6 6"/>
+            <circle cx="8.5" cy="9.5" r="1.5"/>
+          </svg>
+        </button>
+        <button type="button" class="send" id="btnSend" title="Send" aria-label="Send" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="footer-hint">
+      <span data-en>Powered by Ongiini AI · <a href="/">ongiini.ai</a></span>
+      <span data-af>Aangedryf deur Ongiini AI · <a href="/">ongiini.ai</a></span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // ── language toggle ─────────────────────────────────────
+      var root = document.documentElement;
+      var segs = document.querySelectorAll('[data-set-locale]');
+      function setLocale(l) {
+        root.setAttribute('data-locale', l);
+        root.setAttribute('lang', l);
+        segs.forEach(function (s) {
+          s.classList.toggle('is-active', s.getAttribute('data-set-locale') === l);
+        });
+        try { localStorage.setItem('ongiini.locale', l); } catch (e) {}
+      }
+      segs.forEach(function (s) {
+        s.addEventListener('click', function () { setLocale(s.getAttribute('data-set-locale')); });
+      });
+      try {
+        var saved = localStorage.getItem('ongiini.locale');
+        if (saved === 'af' || saved === 'en') setLocale(saved);
+        else if (navigator.language && navigator.language.toLowerCase().indexOf('af') === 0) setLocale('af');
+      } catch (e) {}
+
+      // ── session id (UUID v4 in localStorage) ────────────────
+      function uuidV4() {
+        if (window.crypto && typeof crypto.randomUUID === 'function') {
+          return crypto.randomUUID();
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+          var r = (Math.random() * 16) | 0;
+          var v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      }
+      function getSessionId() {
+        try {
+          var sid = localStorage.getItem('ongiini.chat.session_id');
+          if (sid && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(sid)) {
+            return sid;
+          }
+        } catch (e) {}
+        var fresh = uuidV4();
+        try { localStorage.setItem('ongiini.chat.session_id', fresh); } catch (e) {}
+        return fresh;
+      }
+      var sessionId = getSessionId();
+
+      // ── API endpoint ───────────────────────────────────────
+      var API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+        ? 'http://localhost:8080/v1/chat'
+        : 'https://api.ongiini.ai/v1/chat';
+
+      // ── DOM refs ──────────────────────────────────────────
+      var turnsEl = document.getElementById('turns');
+      var welcomeEl = document.getElementById('welcome');
+      var inputEl = document.getElementById('input');
+      var sendBtn = document.getElementById('btnSend');
+      var attachBtn = document.getElementById('btnAttach');
+      var fileInput = document.getElementById('imageFile');
+      var clearBtn = document.getElementById('btnClear');
+      var errorEl = document.getElementById('errorBanner');
+      var previewEl = document.getElementById('imagePreview');
+      var previewImg = document.getElementById('imagePreviewImg');
+      var previewName = document.getElementById('imagePreviewName');
+      var previewSize = document.getElementById('imagePreviewSize');
+      var removeImgBtn = document.getElementById('imageRemove');
+
+      var attachedImageBase64 = null;
+
+      // ── safe markdown renderer ─────────────────────────────
+      // Security model: the bot's reply could contain prompt-injected
+      // HTML if it pulled from a malicious web_search result. We
+      // escape the entire input FIRST, then apply markdown transforms
+      // on the escaped string. The transforms inject only known-safe
+      // tags (<strong>, <em>, <a>, <code>, <pre>, etc.) — they never
+      // restore raw HTML from user content. URLs in <a href="..."> are
+      // additionally restricted to http(s) only — never javascript: or
+      // data: schemes.
+      function escapeHtml(s) {
+        return s
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+      function safeMdToHtml(rawSrc) {
+        if (!rawSrc) return '';
+        // 1. Escape the entire input upfront. Every subsequent
+        //    transform operates on the escaped string and can only
+        //    inject hardcoded tags — never untrusted HTML.
+        var src = escapeHtml(String(rawSrc));
+
+        // 2. Extract fenced code blocks ``` ``` BEFORE other
+        //    transforms so their content isn't mangled. Content is
+        //    already escape-safe from step 1; we just wrap in tags.
+        var codeBlocks = [];
+        src = src.replace(/```([\s\S]*?)```/g, function (_, body) {
+          codeBlocks.push('<pre><code>' + body.replace(/^\n/, '') + '</code></pre>');
+          return '\0CB' + (codeBlocks.length - 1) + '\0';
+        });
+
+        // 3. Inline code `…` — content already escaped, just wrap.
+        var inlineCodes = [];
+        src = src.replace(/`([^`\n]+)`/g, function (_, body) {
+          inlineCodes.push('<code>' + body + '</code>');
+          return '\0IC' + (inlineCodes.length - 1) + '\0';
+        });
+
+        // 4. Headings (atx). Collapsed to h3/h4 so the page hierarchy
+        //    isn't broken by model-emitted h1s.
+        src = src.replace(/^######\s+(.+)$/gm, '<h4>$1</h4>');
+        src = src.replace(/^#####\s+(.+)$/gm, '<h4>$1</h4>');
+        src = src.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+        src = src.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+        src = src.replace(/^##\s+(.+)$/gm, '<h3>$1</h3>');
+        src = src.replace(/^#\s+(.+)$/gm, '<h2>$1</h2>');
+
+        // 5. Bold + italic. The captured group is already escaped, so
+        //    even if the model wrote "**<script>...**" the inner is
+        //    safe.
+        src = src.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+        src = src.replace(/(?<![\w*])\*([^*\n]+?)\*(?![\w*])/g, '<em>$1</em>');
+
+        // 6. Markdown links [text](url). The URL is already escaped
+        //    (so any quotes are encoded), AND we additionally restrict
+        //    the scheme to http/https — never javascript: or data:.
+        src = src.replace(
+          /\[([^\]\n]+?)\]\((https?:\/\/[^\s)]+)\)/g,
+          function (_, text, url) {
+            // url is already html-escaped from step 1. Validate scheme
+            // again on the unescaped form just in case.
+            var raw = url.replace(/&amp;/g, '&');
+            if (!/^https?:\/\//i.test(raw)) return text;
+            return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+          }
+        );
+
+        // 7. Auto-link bare URLs (also restricted to http/https). The
+        //    URL is captured from the escape-safe string.
+        src = src.replace(
+          /(^|[\s(])(https?:\/\/[^\s<>"]+)/g,
+          function (_, lead, url) {
+            var raw = url.replace(/&amp;/g, '&');
+            if (!/^https?:\/\//i.test(raw)) return lead + url;
+            return lead + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+          }
+        );
+
+        // 8. Lists. Walk line by line and group consecutive list items
+        //    into a single ul/ol. Skip lines we've already converted.
+        var lines = src.split('\n');
+        var out = [];
+        var i = 0;
+        function classifyLine(line) {
+          var ul = line.match(/^[ \t]*[-*][ \t]+(.+)$/);
+          if (ul) return { type: 'ul', text: ul[1] };
+          var ol = line.match(/^[ \t]*\d+\.[ \t]+(.+)$/);
+          if (ol) return { type: 'ol', text: ol[1] };
+          return null;
+        }
+        while (i < lines.length) {
+          var info = classifyLine(lines[i]);
+          if (info) {
+            var type = info.type;
+            var items = [];
+            while (i < lines.length) {
+              var inner = classifyLine(lines[i]);
+              if (inner && inner.type === type) {
+                items.push('<li>' + inner.text + '</li>');
+                i++;
+              } else {
+                break;
+              }
+            }
+            out.push('<' + type + '>' + items.join('') + '</' + type + '>');
+          } else {
+            out.push(lines[i]);
+            i++;
+          }
+        }
+        src = out.join('\n');
+
+        // 9. Paragraphs. Split on blank lines; wrap raw blocks in <p>.
+        var blocks = src.split(/\n{2,}/).map(function (b) {
+          var t = b.trim();
+          if (!t) return '';
+          if (/^<(h\d|ul|ol|pre|table|blockquote|div)/.test(t)) return t;
+          return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
+        });
+        var html = blocks.join('\n');
+
+        // 10. Restore placeholders.
+        html = html.replace(/\0IC(\d+)\0/g, function (_, idx) {
+          return inlineCodes[Number(idx)] || '';
+        });
+        html = html.replace(/\0CB(\d+)\0/g, function (_, idx) {
+          return codeBlocks[Number(idx)] || '';
+        });
+        return html;
+      }
+
+      // ── rendering helpers ────────────────────────────────
+      function appendUserTurn(text, imageDataUrl) {
+        welcomeEl.style.display = 'none';
+        var div = document.createElement('div');
+        div.className = 'turn turn--user';
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        if (imageDataUrl) {
+          var img = document.createElement('img');
+          img.src = imageDataUrl;
+          img.alt = '';
+          bubble.appendChild(img);
+        }
+        if (text) {
+          var p = document.createElement('div');
+          p.style.marginTop = imageDataUrl ? '6px' : '0';
+          // textContent is safe — user content never goes through
+          // innerHTML.
+          p.textContent = text;
+          bubble.appendChild(p);
+        }
+        div.appendChild(bubble);
+        turnsEl.appendChild(div);
+        scrollToBottom();
+      }
+      function appendBotTurn(markdown) {
+        var div = document.createElement('div');
+        div.className = 'turn turn--bot';
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        // safeMdToHtml escapes the entire input upfront then applies
+        // markdown transforms that inject only hardcoded tags — see
+        // the security model comment on the function.
+        bubble.innerHTML = safeMdToHtml(markdown);
+        div.appendChild(bubble);
+        turnsEl.appendChild(div);
+        scrollToBottom();
+      }
+      function appendTyping() {
+        var div = document.createElement('div');
+        div.className = 'turn turn--bot';
+        var t = document.createElement('div');
+        t.className = 'typing';
+        // Construct the dots with textContent / appendChild — no
+        // innerHTML needed for static markup.
+        for (var i = 0; i < 3; i++) {
+          var dot = document.createElement('span');
+          t.appendChild(dot);
+        }
+        div.appendChild(t);
+        turnsEl.appendChild(div);
+        scrollToBottom();
+        return div;
+      }
+      function scrollToBottom() {
+        var chatEl = document.getElementById('chat');
+        requestAnimationFrame(function () {
+          chatEl.scrollTop = chatEl.scrollHeight;
+        });
+      }
+      function showError(msg) {
+        // textContent — never inject server messages as HTML.
+        errorEl.textContent = msg;
+        errorEl.classList.add('is-visible');
+        setTimeout(function () { errorEl.classList.remove('is-visible'); }, 6000);
+      }
+
+      // ── composer behaviour ───────────────────────────────
+      function updateSendState() {
+        var hasText = inputEl.value.trim().length > 0;
+        var hasImage = attachedImageBase64 !== null;
+        sendBtn.disabled = !(hasText || hasImage);
+      }
+      inputEl.addEventListener('input', function () {
+        inputEl.style.height = 'auto';
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 180) + 'px';
+        updateSendState();
+      });
+      inputEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          send();
+        }
+      });
+      document.querySelectorAll('[data-suggest]').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          inputEl.value = chip.textContent;
+          updateSendState();
+          inputEl.focus();
+        });
+      });
+
+      // ── image upload ─────────────────────────────────────
+      attachBtn.addEventListener('click', function () { fileInput.click(); });
+      fileInput.addEventListener('change', function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          showError('That doesn\'t look like an image.');
+          return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+          showError('Image is too big — try one under 8 MB.');
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var dataUrl = reader.result;
+          var b64 = String(dataUrl).split(',', 2)[1] || '';
+          attachedImageBase64 = b64;
+          previewImg.src = dataUrl;
+          previewName.textContent = file.name;
+          previewSize.textContent = Math.round(file.size / 1024) + ' KB';
+          previewEl.classList.add('is-visible');
+          updateSendState();
+        };
+        reader.readAsDataURL(file);
+      });
+      removeImgBtn.addEventListener('click', function () {
+        attachedImageBase64 = null;
+        fileInput.value = '';
+        previewEl.classList.remove('is-visible');
+        updateSendState();
+      });
+
+      // ── send ──────────────────────────────────────────────
+      sendBtn.addEventListener('click', send);
+
+      async function send() {
+        var text = inputEl.value.trim();
+        var hasImage = attachedImageBase64 !== null;
+        if (!text && !hasImage) return;
+
+        var dataUrl = hasImage ? ('data:image/jpeg;base64,' + attachedImageBase64) : null;
+        appendUserTurn(text, dataUrl);
+        var imageForPayload = attachedImageBase64;
+        inputEl.value = '';
+        inputEl.style.height = 'auto';
+        attachedImageBase64 = null;
+        fileInput.value = '';
+        previewEl.classList.remove('is-visible');
+        updateSendState();
+        sendBtn.disabled = true;
+
+        var typingEl = appendTyping();
+
+        var payload = {
+          session_id: sessionId,
+          text: text || '',
+          image_b64: imageForPayload,
+        };
+
+        try {
+          var resp = await fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            credentials: 'omit',
+          });
+          if (!resp.ok) {
+            var err = null;
+            try { err = await resp.json(); } catch (e) {}
+            var msg = (err && err.detail) ? err.detail : ('Something went wrong (HTTP ' + resp.status + ').');
+            turnsEl.removeChild(typingEl);
+            showError(msg);
+            return;
+          }
+          var data = await resp.json();
+          turnsEl.removeChild(typingEl);
+          appendBotTurn(data.reply || '');
+        } catch (e) {
+          turnsEl.removeChild(typingEl);
+          showError('Couldn\'t reach the server. Check your connection and try again.');
+        } finally {
+          updateSendState();
+          inputEl.focus();
+        }
+      }
+
+      // ── clear conversation ──────────────────────────────
+      clearBtn.addEventListener('click', async function () {
+        if (turnsEl.children.length === 0) return;
+        var confirmed = confirm('Clear this conversation? It can\'t be undone.');
+        if (!confirmed) return;
+        var endpoint = API.replace('/v1/chat', '/v1/chat/clear');
+        try {
+          await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId }),
+            credentials: 'omit',
+          });
+        } catch (e) { /* soft-fail */ }
+        try { localStorage.removeItem('ongiini.chat.session_id'); } catch (e) {}
+        sessionId = getSessionId();
+        turnsEl.innerHTML = '';
+        welcomeEl.style.display = '';
+      });
+    })();
+  </script>
+</body>
+</html>

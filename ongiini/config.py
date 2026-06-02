@@ -131,6 +131,45 @@ class Settings:
     # of pseudonymisation). Generate once with `openssl rand -hex 32`.
     contributions_hash_salt: str = os.getenv("CONTRIBUTIONS_HASH_SALT", "")
 
+    # ─── chat.ongiini.ai ──────────────────────────────────────────
+    # Anonymous web chat endpoint settings. The chat path is intentionally
+    # stricter than WhatsApp (smaller token cap, IP rate limit, no
+    # per-user identity) because there's no msisdn-based accountability.
+    # Kill-switch lets us disable the endpoint at runtime without
+    # rebuilding the container — when False, /v1/chat returns 503.
+    chat_enabled: bool = (
+        os.getenv("ONGIINI_CHAT_ENABLED", "true").lower() in ("1", "true", "yes")
+    )
+    # Idle TTL for in-process sessions. Default 6h matches a typical
+    # browser-tab lifetime; anything older gets evicted on next access
+    # so a server restart isn't strictly required to reclaim memory.
+    chat_session_ttl_min: int = int(os.getenv("ONGIINI_CHAT_SESSION_TTL_MIN", "360"))
+    # LRU cap on the in-process SessionStore. At ~100 turns per session
+    # × 200 chars per turn × 10,000 sessions ≈ 200 MB worst case before
+    # the LRU starts evicting. Tune down if RSS becomes an issue.
+    chat_max_sessions: int = int(os.getenv("ONGIINI_CHAT_MAX_SESSIONS", "10000"))
+    # Per-session token cap. ~50k tokens ≈ 25 conversations; well below
+    # WhatsApp's 1M monthly so anonymous sessions can't burn unbounded
+    # vLLM time. When reached, /v1/chat returns 429 with a "session
+    # full, refresh to start a fresh one" message.
+    chat_session_token_cap: int = int(os.getenv("ONGIINI_CHAT_SESSION_TOKEN_CAP", "50000"))
+    # Per-IP sliding-window rate limit. Conservative default because
+    # the endpoint is publicly POSTable; first-line of defence behind
+    # Cloudflare's WAF/Bot Management.
+    chat_ip_rate_limit_per_hour: int = int(
+        os.getenv("ONGIINI_CHAT_IP_RATE_LIMIT_PER_HOUR", "30")
+    )
+    # CORS allowlist for the chat endpoint. The webhook's CORS is GET-
+    # only and locked to ongiini.ai — chat needs POST from a different
+    # subdomain. Comma-separated origin list in the env var. localhost
+    # added by default so devs can hit the endpoint from a local UI.
+    chat_allowed_origins: list[str] = [
+        o.strip() for o in os.getenv(
+            "ONGIINI_CHAT_ALLOWED_ORIGINS",
+            "https://chat.ongiini.ai,http://localhost:8080,http://localhost:5173",
+        ).split(",") if o.strip()
+    ]
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)

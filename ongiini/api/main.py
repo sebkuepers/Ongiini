@@ -18,8 +18,8 @@ from .. import audio, contributions, instrument, pii, ratelimit
 from ..broadcast import opt_outs as broadcast_opt_outs
 from ..config import settings
 from ..filters import InvalidMsisdn, is_allowed, normalize
-from ..memory import long_term as mem, short_term as memory
-from ..runtime import build_agent
+from ..memory import SessionStore, long_term as mem, short_term as memory
+from ..runtime import build_shared_components, build_whatsapp_runtime
 from ..stats import analyses as stats_analyses
 from ..stats.api import router as stats_router
 from ..summary import maybe_summarize
@@ -32,11 +32,13 @@ from ..whatsapp import (
     send_text,
     verify_signature,
 )
+from .chat import build_router as build_chat_router
 
 # Single per-process Owela agent. Built lazily in lifespan so the
 # embedded mem0/qdrant + whisper warmup logs land before this prints
 # "runtime ready".
 agent = None    # set during lifespan startup
+chat_session_store = None    # SessionStore — set during lifespan startup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -83,10 +85,57 @@ async def lifespan(app: FastAPI):
             "broadcast opt-outs warmup failed; STOP keyword + broadcast "
             "exclusion will be unavailable"
         )
-    # Build the Owela Runtime + Agent once. The Runtime captures every
-    # Ongiini-specific choice (model, transport, tools, policies, hooks)
-    # and is reused for every inbound message — no per-request rebuild.
-    agent = build_agent()
+    # Build all transport-agnostic Owela components ONCE here, then
+    # compose into:
+    #   - one WhatsApp Runtime (singleton, used for every webhook turn)
+    #   - the chat router (which builds per-request Runtimes via
+    #     build_chat_runtime with this same `shared` reference, so we
+    #     don't pay the vLLM-client / classifier / planner construction
+    #     cost twice)
+    from owela import Agent
+    shared = build_shared_components()
+    agent = Agent(build_whatsapp_runtime(shared))
+
+    # Singleton SessionStore for the chat endpoint. Bounded by the
+    # max_sessions config (LRU eviction) so memory stays predictable
+    # under load. The store is process-local — no Redis, no disk —
+    # matching the "browser session only" promise.
+    global chat_session_store
+    chat_session_store = SessionStore(
+        max_sessions=settings.chat_max_sessions,
+        ttl_minutes=settings.chat_session_ttl_min,
+    )
+
+    # Mount the chat endpoint as a sub-app on /v1 so its CORSMiddleware
+    # only applies to those routes — the parent app's CORS stays
+    # GET-locked to ongiini.ai (no POST/OPTIONS leakage onto /whatsapp
+    # webhook, /api/stats, etc). Done inside lifespan so the sub-app
+    # picks up startup-built singletons (shared components + session
+    # store + sanitiser + image resizer).
+    if settings.chat_enabled:
+        chat_sub = FastAPI(title="Ongiini Chat", openapi_url=None)
+        chat_sub.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.chat_allowed_origins,
+            allow_methods=["POST", "OPTIONS"],
+            allow_headers=["*"],
+            allow_credentials=False,
+        )
+        # build_chat_router returns an APIRouter with no prefix; the
+        # sub-app is mounted at "/v1" so chat routes resolve as
+        # /v1/chat and /v1/chat/clear at the parent app's path layer.
+        chat_sub.include_router(
+            build_chat_router(
+                store=chat_session_store,
+                shared=shared,
+                pii_sanitiser=pii.sanitize,
+                resize_image=_resize_for_gemma4,
+            )
+        )
+        app.mount("/v1", chat_sub)
+        log.info("chat endpoint enabled at /v1/chat (sub-app with scoped CORS)")
+    else:
+        log.info("chat endpoint DISABLED via ONGIINI_CHAT_ENABLED=false")
     # Kick off the LLM-driven qualitative-analysis loop (topics, roles).
     # Runs in the background; never blocks message handling. Pauses
     # between passes; one-shot failures are caught inside.
@@ -121,8 +170,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ongiini Webhook", lifespan=lifespan)
 
-# Allow the public website (which may live on Cloudflare Pages) to poll
-# /status from the browser. GET only, no credentials.
+# Allow the public website (Cloudflare Pages) to poll /status from
+# the browser. GET only, no credentials. Locked to the ongiini.ai
+# subdomain — webhook and admin endpoints must NEVER accept
+# cross-origin mutating requests.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -192,6 +243,15 @@ _GEMMA4_MIN_W = 336
 _GEMMA4_MIN_H = 192
 _GEMMA4_MAX_DIM = 896
 
+# Decompression-bomb cap on inbound images. PIL allocates buffers
+# based on the declared dimensions in the file header — a malicious
+# upload can claim gigapixel dims and OOM the process during .convert().
+# 50 megapixels comfortably covers any legitimate phone-camera shot
+# (modern phones top out around 48 MP); anything bigger gets refused
+# with a DecompressionBombError that _resize_for_gemma4 catches.
+_IMAGE_MAX_PIXELS = 50_000_000
+Image.MAX_IMAGE_PIXELS = _IMAGE_MAX_PIXELS
+
 
 # Words / phrases in EN + AF that signal the user wants to do an
 # ADMIN action against their own data — deletion, memory inspection, or
@@ -220,10 +280,25 @@ def _resize_for_gemma4(image_bytes: bytes) -> bytes:
     Returns the original bytes unchanged if PIL can't open them — the
     caller will pass them downstream where vLLM may or may not cope.
     Never raises.
+
+    Decompression-bomb guard: a malicious upload can declare absurd
+    dimensions in the header (gigapixels) and crash PIL with an
+    OutOfMemory or runaway CPU before the resize ever runs. Set a
+    hard cap on pixel count via Image.MAX_IMAGE_PIXELS so PIL refuses
+    to load anything past it. The cap is generous enough for any
+    legitimate phone-camera shot (24 MP ~= 24 million pixels) but
+    well under the gigabyte-allocation threshold.
     """
+    # MAX_IMAGE_PIXELS is set at module level (see _IMAGE_MAX_PIXELS) so
+    # the guard applies on every PIL.Image.open invocation in the
+    # process — including the WhatsApp media path and the chat upload
+    # path.
     try:
         img = Image.open(io.BytesIO(image_bytes))
         img = img.convert("RGB")   # Gemma 4 rejects palette / 1-bit PNGs
+    except Image.DecompressionBombError:
+        log.warning("inbound image exceeded MAX_IMAGE_PIXELS; rejecting")
+        return image_bytes
     except Exception:
         log.warning("PIL couldn't open inbound image; passing through raw")
         return image_bytes

@@ -14,5 +14,15 @@ reach behind the provider abstraction.
 """
 
 from .provider import OngiiniMemoryProvider
+from .session_memory import (
+    SessionMemoryProvider,
+    SessionState,
+    SessionStore,
+)
 
-__all__ = ["OngiiniMemoryProvider"]
+__all__ = [
+    "OngiiniMemoryProvider",
+    "SessionMemoryProvider",
+    "SessionState",
+    "SessionStore",
+]
