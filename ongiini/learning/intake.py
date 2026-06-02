@@ -1,71 +1,90 @@
-"""Intake state machine for the learn.ongiini.ai onboarding flow.
+"""Intake capture spec for the learn.ongiini.ai onboarding.
 
-Sebastian asked for explicit structured intake even when we already
-have mem0 context — name, age, current Afrikaans level, and the
-specific objective the learner is trying to reach. The reason: a
-real conversation with a learner means knowing their actual goal, in
-their own words, captured cleanly enough to drive card generation.
+**This module is deliberately minimal.** It does NOT script the
+conversation. The LLM conducts the intake — it decides how to ask,
+whether to ask a follow-up, how to react to whatever the learner
+volunteers, whether to weave context from prior mem0 facts. This is
+the central value proposition of the learning surface: extremely
+smart, personalised conversation, not a fixed-question form.
 
-This module is pure-Python state-machine logic. No DB access. The
-learner row's ``intake_step`` column is the persistent cursor; this
-module answers two questions per turn:
+What lives here:
 
-  1. Given the current step, what should the AI ask next? — `prompt_for`
-  2. Given an answer at the current step, is it valid? — `validate`
+  * The **target schema** — which fields the intake is trying to
+    capture (name, age, level, objective).
+  * **Field-level validators** — once the LLM extracts a value from a
+    user's free-text reply, this module says "is the value's SHAPE
+    OK" (e.g. age is an int between bounds, level is one of the
+    canonical strings). Validators answer "is this storable", not
+    "is this what the user really meant" — that's the LLM's job.
+  * A ``missing_fields(profile)`` query — given the current profile
+    state, which fields are still null. The API surfaces this list
+    to the LLM each turn so it knows what still needs capturing.
+  * ``is_complete(profile)`` — terminal check.
 
-The DB layer applies the validated value to ``learner_profiles`` and
-moves the cursor to the next step. The grading + card generator
-modules read the completed profile from the DB; they don't talk to
-this module.
+What does NOT live here:
 
-State sequence:
+  * Prompt text for the user (the LLM writes those).
+  * A linear step sequence (the LLM may capture two fields in one
+    answer, may double back to clarify level after objective, may
+    skip a field a magic-link arrival already pre-filled).
+  * Conversational follow-ups, encouragement, transitions.
 
-    start  ─►  name  ─►  age  ─►  level  ─►  objective  ─►  done
-
-``start`` is the marker before the first prompt — it lets the API
-distinguish "we haven't asked anything yet" from "we just asked
-name". Useful when a magic-link arrival pre-fills name/age — the
-learner may land directly at ``level`` or even ``objective``.
+The deterministic line: shape-validation + persistence; everything
+else flows through the LLM.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-
-from .db import (
-    INTAKE_START, INTAKE_NAME, INTAKE_AGE, INTAKE_LEVEL,
-    INTAKE_OBJECTIVE, INTAKE_DONE,
-)
+from typing import Mapping
 
 
-# Linear progression. ``next_step()`` advances by index lookup.
-STEP_SEQUENCE = (
-    INTAKE_START, INTAKE_NAME, INTAKE_AGE, INTAKE_LEVEL,
-    INTAKE_OBJECTIVE, INTAKE_DONE,
-)
+# ──────────────────────────────────────────────────────────────────
+# Target fields — the schema the intake is trying to fill.
+# ──────────────────────────────────────────────────────────────────
+
+FIELD_NAME = "name"
+FIELD_AGE = "age"
+FIELD_LEVEL = "current_level"
+FIELD_OBJECTIVE = "objective"
+
+# Listed in the order the LLM is encouraged (but not forced) to capture
+# them in. Used as the default "where to start" hint when nothing is
+# captured yet; the LLM is free to reorder based on what the learner
+# volunteers.
+INTAKE_FIELDS = (FIELD_NAME, FIELD_AGE, FIELD_LEVEL, FIELD_OBJECTIVE)
 
 
-# Valid level values. Anything else is rejected at validate time.
+# Canonical level values. Lowercase. The LLM is told these are the
+# allowed values; the validator below will accept reasonable variants
+# but always normalises to canonical.
 VALID_LEVELS = ("beginner", "elementary", "intermediate", "advanced")
 
 
-# Bounds for free-text inputs. Length caps prevent obvious abuse and
-# keep the prompts that include these values (card generation later)
-# from blowing up the model's context.
+# Bounds — defensive, not pedagogical. The validators reject obvious
+# garbage (negative age, name with control chars). They do NOT enforce
+# "right answer" — that's a content question the LLM owns.
 MIN_NAME_LEN = 1
 MAX_NAME_LEN = 40
-MIN_AGE = 12         # 16+ is the ToS requirement, but the intake
-                     # asks before the user is identified, so we leave
-                     # a small buffer for younger users to be redirected
-                     # by an upstream check rather than blocked here.
+MIN_AGE = 12
 MAX_AGE = 120
 MIN_OBJECTIVE_LEN = 3
 MAX_OBJECTIVE_LEN = 200
 
 
+# ──────────────────────────────────────────────────────────────────
+# Validation result type
+# ──────────────────────────────────────────────────────────────────
+
 @dataclass(frozen=True)
 class ValidationResult:
-    """The validated value plus, on failure, a human-readable reason."""
+    """The validated, NORMALISED value (or a reason for rejection).
+
+    On ok=True, ``value`` is the form to persist (e.g. "Beginner" →
+    "beginner"). On ok=False, ``reason`` is plain-text the API can
+    surface back to the LLM, which then explains the issue to the
+    learner in its own voice.
+    """
     ok: bool
     value: object | None = None
     reason: str | None = None
@@ -79,149 +98,138 @@ class ValidationResult:
         return cls(ok=False, reason=reason)
 
 
-def next_step(current: str) -> str:
-    """Return the next step name after ``current``.
-
-    Clamps to ``done`` so callers can't walk past the end of the
-    sequence. Unknown step strings (corrupt stored value) default to
-    ``name`` — the start of the first real question — so a learner is
-    never stuck.
-    """
-    if current not in STEP_SEQUENCE:
-        return INTAKE_NAME
-    idx = STEP_SEQUENCE.index(current)
-    return STEP_SEQUENCE[min(idx + 1, len(STEP_SEQUENCE) - 1)]
-
-
-def is_done(step: str) -> bool:
-    return step == INTAKE_DONE
-
-
 # ──────────────────────────────────────────────────────────────────
-# What to ask next
+# Field validators (shape only — never semantic)
 # ──────────────────────────────────────────────────────────────────
 
-# Each step gets one prompt the API surfaces to the frontend.
-# Conversational, friendly — matches the rest of Ongiini's voice.
-_PROMPTS = {
-    INTAKE_START: "Welcome! Ready to put together a quick learning plan? Tap start.",
-    INTAKE_NAME: "First — what should I call you?",
-    INTAKE_AGE: "And how old are you? (Just to pitch examples at the right level.)",
-    INTAKE_LEVEL: (
-        "Where would you say your Afrikaans is today? "
-        "Pick one: beginner, elementary, intermediate, advanced."
-    ),
-    INTAKE_OBJECTIVE: (
-        "Last one — what do you actually want to be able to do in Afrikaans? "
-        "A job interview, talking to in-laws, helping the kids with homework, "
-        "something else? In one sentence."
-    ),
-    INTAKE_DONE: "All set — let's start.",
-}
-
-
-def prompt_for(step: str) -> str:
-    """The conversational prompt the API surfaces for this step.
-
-    Unknown step strings get the ``name`` prompt — same recovery rule
-    as ``next_step``.
-    """
-    return _PROMPTS.get(step, _PROMPTS[INTAKE_NAME])
-
-
-# ──────────────────────────────────────────────────────────────────
-# Validation
-# ──────────────────────────────────────────────────────────────────
-
-# Reject only obvious junk: control chars, common shell / web punctuation,
-# and digits (digits in a name are almost always a typo). Everything else
-# is fair game — Namibian names use diacritics, apostrophes, hyphens,
-# dots (initials like "M.K."), and characters from Khoekhoegowab and
-# other languages that an ASCII-only regex would refuse. The length
-# bounds below catch the abuse cases regex can't.
+# Reject only obvious junk: digits, control chars, common web
+# punctuation. Namibian names include diacritics, apostrophes,
+# hyphens, dots ("M.K. Shilongo"), and characters from Khoekhoegowab
+# and other languages, so an ASCII-only allowlist would reject real
+# users. Length bounds catch abuse cases the regex can't.
 _NAME_REJECT_RE = re.compile(r"[\d<>{}\[\]@#$%^&*()=+|\\;:\"?!]")
 
 
-def _validate_name(value: str) -> ValidationResult:
-    v = (value or "").strip()
+def _validate_name(value: object) -> ValidationResult:
+    if not isinstance(value, str):
+        return ValidationResult.bad("name must be a string")
+    v = value.strip()
     if len(v) < MIN_NAME_LEN:
-        return ValidationResult.bad("Please give me at least one character.")
+        return ValidationResult.bad("name is empty")
     if len(v) > MAX_NAME_LEN:
-        return ValidationResult.bad(f"That's pretty long — keep it under {MAX_NAME_LEN} characters.")
-    # Reject control characters (covers \n, \t, null bytes, etc.).
+        return ValidationResult.bad(f"name longer than {MAX_NAME_LEN} characters")
     if any(ord(ch) < 0x20 for ch in v):
-        return ValidationResult.bad("That looks like it has control characters — try again?")
+        return ValidationResult.bad("name contains control characters")
     if _NAME_REJECT_RE.search(v):
-        return ValidationResult.bad("Names can't contain digits or web symbols — try again?")
+        return ValidationResult.bad("name contains digits or web punctuation")
     return ValidationResult.good(v)
 
 
 def _validate_age(value: object) -> ValidationResult:
-    # Accept int or numeric string. Reject "I'm twenty" — keep MVP simple.
+    # bool is a subclass of int — reject explicitly so True can't sneak through.
     if isinstance(value, bool):
-        # bool is a subclass of int; explicitly reject so True/False can't
-        # sneak through.
-        return ValidationResult.bad("Send a number for your age.")
+        return ValidationResult.bad("age must be a number")
     if isinstance(value, int):
         age = value
     elif isinstance(value, str):
         v = value.strip()
         if not v.isdigit():
-            return ValidationResult.bad("Send a number for your age (e.g. 24).")
+            return ValidationResult.bad("age must be a positive integer")
         age = int(v)
     else:
-        return ValidationResult.bad("Send a number for your age (e.g. 24).")
-
+        return ValidationResult.bad("age must be a number")
     if not (MIN_AGE <= age <= MAX_AGE):
         return ValidationResult.bad(
-            f"That doesn't look right — give me an age between {MIN_AGE} and {MAX_AGE}."
+            f"age must be between {MIN_AGE} and {MAX_AGE}"
         )
     return ValidationResult.good(age)
 
 
-def _validate_level(value: str) -> ValidationResult:
-    v = (value or "").strip().lower()
+def _validate_level(value: object) -> ValidationResult:
+    if not isinstance(value, str):
+        return ValidationResult.bad("level must be a string")
+    v = value.strip().lower()
     if v in VALID_LEVELS:
         return ValidationResult.good(v)
-    # Tolerate the frontend's button label coming back capitalised.
+    # Accept prefix matches of >=3 chars so the LLM can pass back "beg"
+    # or the user's free-text "I think I'm intermediate-ish" stripped
+    # down to a recognisable token.
     for label in VALID_LEVELS:
         if label.startswith(v) and len(v) >= 3:
             return ValidationResult.good(label)
     return ValidationResult.bad(
-        "Pick one of: " + ", ".join(VALID_LEVELS) + "."
+        "level must be one of: " + ", ".join(VALID_LEVELS)
     )
 
 
-def _validate_objective(value: str) -> ValidationResult:
-    v = (value or "").strip()
+def _validate_objective(value: object) -> ValidationResult:
+    if not isinstance(value, str):
+        return ValidationResult.bad("objective must be a string")
+    v = value.strip()
     if len(v) < MIN_OBJECTIVE_LEN:
-        return ValidationResult.bad("Tell me a bit more — even one sentence works.")
+        return ValidationResult.bad("objective too short")
     if len(v) > MAX_OBJECTIVE_LEN:
-        return ValidationResult.bad(
-            f"Got it — could you trim that to under {MAX_OBJECTIVE_LEN} characters?"
-        )
+        return ValidationResult.bad(f"objective longer than {MAX_OBJECTIVE_LEN} characters")
     return ValidationResult.good(v)
 
 
 _VALIDATORS = {
-    INTAKE_NAME: _validate_name,
-    INTAKE_AGE: _validate_age,
-    INTAKE_LEVEL: _validate_level,
-    INTAKE_OBJECTIVE: _validate_objective,
+    FIELD_NAME: _validate_name,
+    FIELD_AGE: _validate_age,
+    FIELD_LEVEL: _validate_level,
+    FIELD_OBJECTIVE: _validate_objective,
 }
 
 
-def validate(step: str, value: object) -> ValidationResult:
-    """Validate the user's answer for the given step.
+def validate_field(field: str, value: object) -> ValidationResult:
+    """Validate a candidate value for a named field.
 
-    ``start`` and ``done`` aren't user-answerable — calling validate
-    on them is a programming error. We return a 'bad' result with a
-    descriptive reason so the API surfaces something sane rather than
-    crashing.
+    ``field`` must be one of ``INTAKE_FIELDS``. Returns a
+    ValidationResult — ``ok=True`` with the canonical/normalised value
+    to persist, or ``ok=False`` with a short machine-readable reason
+    the LLM can paraphrase to the learner.
+
+    This is the only deterministic step in the intake loop. Everything
+    else — the question, the follow-up, the encouragement — is the
+    LLM's.
     """
-    validator = _VALIDATORS.get(step)
+    validator = _VALIDATORS.get(field)
     if validator is None:
-        return ValidationResult.bad(
-            f"Step '{step}' doesn't take a user answer."
-        )
+        return ValidationResult.bad(f"unknown field: {field}")
     return validator(value)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Profile-state queries
+# ──────────────────────────────────────────────────────────────────
+
+def missing_fields(profile: Mapping[str, object] | None) -> list[str]:
+    """Return the intake fields still null/missing on this profile.
+
+    The LLM uses this every turn to decide what to talk about next —
+    not as a forced sequence, but as an awareness of what's still
+    needed. Order matches ``INTAKE_FIELDS`` so a caller iterating
+    deterministically still gets a stable order.
+
+    A profile of ``None`` (learner with no row yet) returns all fields.
+    """
+    if not profile:
+        return list(INTAKE_FIELDS)
+    missing = []
+    for field in INTAKE_FIELDS:
+        v = profile.get(field)
+        # Treat empty string the same as null — captured-but-empty is
+        # not captured.
+        if v is None or (isinstance(v, str) and not v.strip()):
+            missing.append(field)
+    return missing
+
+
+def is_complete(profile: Mapping[str, object] | None) -> bool:
+    """True iff every intake field is captured.
+
+    The API uses this to decide whether to surface the intake mode
+    or the learning-card mode to the frontend. The LLM doesn't have
+    to be consulted to answer "is the form done?".
+    """
+    return len(missing_fields(profile)) == 0

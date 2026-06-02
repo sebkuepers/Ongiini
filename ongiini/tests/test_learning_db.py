@@ -54,6 +54,16 @@ def test_warmup_is_idempotent(temp_db):
     assert len(names) == len(set(names))
 
 
+def test_learning_goals_has_outline_columns(temp_db):
+    """The LLM-authored curriculum outline lives on learning_goals as
+    JSON. Lock the columns down so a future schema refactor can't drop
+    them without breaking this test."""
+    with db._conn() as c:
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(learning_goals)")}
+    assert "curriculum_outline" in cols
+    assert "outline_updated_at" in cols
+
+
 def test_indexes_created(temp_db):
     with db._conn() as c:
         idx = {
@@ -83,8 +93,8 @@ def _insert_full_learner_tree(c, learner_id="learner-a"):
     now = db._now_iso()
     c.execute(
         "INSERT INTO learners (learner_id, identity_type, created_at, "
-        "last_active_at, intake_step) VALUES (?, ?, ?, ?, ?)",
-        (learner_id, db.IDENTITY_ANONYMOUS, now, now, db.INTAKE_DONE),
+        "last_active_at) VALUES (?, ?, ?, ?)",
+        (learner_id, db.IDENTITY_ANONYMOUS, now, now),
     )
     c.execute(
         "INSERT INTO learner_profiles (learner_id, name, age, current_level, "
