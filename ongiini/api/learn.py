@@ -193,6 +193,12 @@ class TurnResponse(BaseModel):
     progress: dict[str, Any]
     curriculum_outline: dict[str, Any] | None
     goal: GoalInfo
+    # The learner's full non-archived goals list, refreshed every turn
+    # so the drawer's "My curriculums" stays in sync. Without this the
+    # drawer is stuck at whatever was last returned by /sessions /
+    # /goals/new / /goals/activate — the auto-created goal that /turn
+    # spawned on intake completion was invisible there.
+    goals: list[GoalInfo] = []
     # Per-module rollups so the frontend can render the slim bar +
     # the curriculum-panel badges. Ordered to match the outline.
     module_progress: list[ModuleProgress] = []
@@ -234,6 +240,13 @@ class GoalsActivateResponse(BaseModel):
     thread: list[MessageItem]
     progress: dict[str, Any]
     curriculum_outline: dict[str, Any] | None
+    # Mirrors TurnResponse so the frontend can drop in the slim
+    # progress bar + curriculum-panel badges for the newly-activated
+    # goal without waiting for the first /turn. Without these the bar
+    # showed the previous goal's data until something triggered a
+    # /turn refresh.
+    module_progress: list[ModuleProgress] = []
+    active_module_id: str | None = None
 
 
 class GoalsRestartRequest(BaseModel):
@@ -577,7 +590,17 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             if active:
                 goal = active
             else:
-                goal = store.get_or_create_active_goal(req.learner_id)
+                # First /turn after intake — auto-create a goal AND
+                # seed its title from the learner's stated objective.
+                # Without this the new goal lands in the drawer as
+                # "Untitled curriculum" because /turn was the only
+                # creation path that didn't accept a title.
+                title_seed: str | None = None
+                if profile and isinstance(profile.get("objective"), str):
+                    title_seed = str(profile.get("objective"))
+                goal = store.get_or_create_active_goal(
+                    req.learner_id, title=title_seed,
+                )
 
         new_msgs = await coach_mod.run_turn(
             learner_id=req.learner_id,
@@ -600,6 +623,12 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             req.learner_id, goal["goal_id"], outline,
         )
 
+        # Refresh the drawer's goal list every turn — without this,
+        # auto-creation of the first goal (via the fallback above)
+        # never gets surfaced to the drawer until the user explicitly
+        # creates or switches a goal.
+        goals_list = [_goal_info(g) for g in store.list_goals(req.learner_id)]
+
         return TurnResponse(
             learner_id=req.learner_id,
             goal_id=goal["goal_id"],
@@ -607,6 +636,7 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
             progress=progress,
             curriculum_outline=outline,
             goal=_goal_info(fresh),
+            goals=goals_list,
             module_progress=mod_progress,
             active_module_id=active_mod_id,
         )
@@ -663,12 +693,17 @@ def build_router(*, model: Model, skill_content: str) -> APIRouter:
         goal_info, thread, progress, outline = _goal_payload_bundle(
             req.learner_id, activated,
         )
+        mod_progress, active_mod_id = _module_progress_from_outline(
+            req.learner_id, activated["goal_id"], outline,
+        )
         return GoalsActivateResponse(
             goal=goal_info,
             goals=[_goal_info(g) for g in store.list_goals(req.learner_id)],
             thread=thread,
             progress=progress,
             curriculum_outline=outline,
+            module_progress=mod_progress,
+            active_module_id=active_mod_id,
         )
 
     # ── /goals/restart ──────────────────────────────────────────

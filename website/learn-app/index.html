@@ -1621,8 +1621,18 @@
         state.curriculum_outline = resp.curriculum_outline || null;
         state.progress = resp.progress || state.progress;
         state.thread = resp.thread || [];
+        // Reset module-scoped state from the PREVIOUS goal before
+        // applying the new one. Without this the slim bar kept
+        // showing the previous curriculum's module + counter even
+        // after switching, and lingering active_card_id could mark a
+        // stale exercise from the prior goal as active during the
+        // re-render.
+        state.module_progress = resp.module_progress || [];
+        state.active_module_id = resp.active_module_id || null;
+        state.active_card_id = null;
         rerenderThread(state.thread);
         renderCurriculumPanel();
+        renderProgressStrip();
       } catch (e) {
         showError(e.message || 'Could not switch curriculum.');
       }
@@ -1640,8 +1650,13 @@
         state.thread = [];
         state.progress = { total_seen: 0, total_correct: 0, by_box: {} };
         state.active_card_id = null;
+        // The outline is preserved across restart but progress is
+        // wiped — drop module counts to zero too so the slim bar +
+        // panel badges match what the user sees.
+        state.module_progress = [];
         rerenderThread([]);
         renderCurriculumPanel();
+        renderProgressStrip();
         await sendTurn(null);
       } catch (e) {
         showError(e.message || 'Could not restart.');
@@ -1708,6 +1723,10 @@
         removeSkeleton(skel);
         state.progress = resp.progress || state.progress;
         state.curriculum_outline = resp.curriculum_outline || state.curriculum_outline;
+        // Refresh the drawer's goals list each turn — otherwise the
+        // first auto-created curriculum stays invisible until the user
+        // manually creates or switches a goal.
+        if (resp.goals) state.goals = resp.goals;
         state.module_progress = resp.module_progress || [];
         state.active_module_id = resp.active_module_id || state.active_module_id;
         if (resp.goal) setActiveGoalView(resp.goal);

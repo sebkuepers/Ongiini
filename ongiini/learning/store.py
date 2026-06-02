@@ -234,6 +234,7 @@ def get_or_create_active_goal(
     *,
     language: str = "afrikaans",
     context: str | None = None,
+    title: str | None = None,
 ) -> dict[str, Any]:
     """Return the active goal row for this learner, creating one if
     none exists. MVP: one active goal per learner. Returns dict-shape
@@ -247,11 +248,18 @@ def get_or_create_active_goal(
 
     Free-text ``context`` (the learning objective the magic link
     carried) is PII-scrubbed before storage, same as profile.objective.
-    """
+
+    ``title`` is applied ONLY when this call creates a new goal — never
+    relabels an existing active goal. The /turn handler passes the
+    learner's intake `profile.objective` here so the auto-created goal
+    shows up in the drawer with a meaningful name ("job interview at
+    SPAR") rather than "Untitled curriculum"."""
     if not learner_id:
         raise ValueError("learner_id is required")
     if isinstance(context, str):
         context = pii.sanitize(context)
+    if isinstance(title, str):
+        title = pii.sanitize(title).strip()[:80] or None
     with _conn() as c:
         c.execute("BEGIN IMMEDIATE")
         try:
@@ -266,8 +274,9 @@ def get_or_create_active_goal(
             goal_id = str(uuid4())
             c.execute(
                 "INSERT INTO learning_goals (goal_id, learner_id, language, "
-                "context, status, created_at) VALUES (?, ?, ?, ?, 'active', ?)",
-                (goal_id, learner_id, language, context, _now_iso()),
+                "context, status, title, created_at) "
+                "VALUES (?, ?, ?, ?, 'active', ?, ?)",
+                (goal_id, learner_id, language, context, title, _now_iso()),
             )
             row = c.execute(
                 "SELECT * FROM learning_goals WHERE goal_id = ?",
