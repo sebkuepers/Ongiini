@@ -68,7 +68,8 @@
       "multiple_choice": "auswählen",
       "grammar": "Grammatik",
       "proverb": "Redewendung",
-      "dialogue": "Dialog"
+      "dialogue": "Dialog",
+      "story": "Geschichte"
     },
     "lesson": {
       "prev": "← Zurück",
@@ -88,6 +89,11 @@
     "dialogue": {
       "slot_label": "Lücke ausfüllen",
       "submit": "Antworten abschicken"
+    },
+    "story": {
+      "input_placeholder": "Deine Antwort (auf Deutsch oder Englisch)",
+      "submit": "Antworten abschicken",
+      "tap_hint": "Tippe auf einen Satz, um die Übersetzung zu sehen"
     }
   },
   "modal": {

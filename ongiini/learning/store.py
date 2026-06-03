@@ -41,6 +41,7 @@ from .db import (
     RATING_CORRECT,
     RATING_PARTIAL,
     RATING_WRONG,
+    SRS_EXCLUDED_CARD_TYPES,
     _conn,
     _now_iso,
 )
@@ -672,7 +673,7 @@ def progress_for_modules(
     a topic that hasn't been taught yet. Cards with a NULL ``topic_id``
     contribute to the module-level counts but not to the per-topic
     breakdown."""
-    from .db import CARD_LESSON, EXERCISE_CARD_TYPES
+    from .db import CARD_LESSON, CARD_STORY, EXERCISE_CARD_TYPES
     if not learner_id or not goal_id:
         return {}
     with _conn() as c:
@@ -697,6 +698,7 @@ def progress_for_modules(
             "exercises_emitted": 0,
             "exercises_attempted": 0,
             "exercises_correct": 0,
+            "stories_emitted": 0,
             "cards_in_module": 0,
             "topics_taught": {},
             "topics_drilled": {},
@@ -708,6 +710,19 @@ def progress_for_modules(
             d["lessons_given"] += n
             if topic:
                 d["topics_taught"][topic] = d["topics_taught"].get(topic, 0) + n
+        elif r["card_type"] == CARD_STORY:
+            # Track stories separately so the selector can emit
+            # exactly ONE per module (after the first lesson, before
+            # the drills). Stories also count toward exercises_emitted
+            # so the step-2 module-advance backstop still trips on
+            # large modules, but the selector reads stories_emitted
+            # directly to gate the story phase.
+            d["stories_emitted"] += n
+            d["exercises_emitted"] += n
+            d["exercises_attempted"] += int(r["attempts_seen"] or 0)
+            d["exercises_correct"] += int(r["attempts_correct"] or 0)
+            # Don't fold stories into topics_drilled — they're input
+            # exposure, not drill quota.
         elif r["card_type"] in EXERCISE_CARD_TYPES:
             d["exercises_emitted"] += n
             d["exercises_attempted"] += int(r["attempts_seen"] or 0)
@@ -838,10 +853,19 @@ def next_due_cards(
     # also resurface via SRS replay. The earlier hard-coded
     # ('vocab', 'translation', 'production') silently excluded
     # everything added in the card-variety round.
-    from .db import EXERCISE_CARD_TYPES
-    placeholders = ",".join("?" for _ in EXERCISE_CARD_TYPES)
+    # Stories are graded (they have comprehension questions) but they
+    # are NOT spaced-repetition material — re-reading the same story
+    # isn't retrieval practice; it's stale input. Subtract them from
+    # the IN list here so even a "wrong" comprehension answer doesn't
+    # cause the story to resurface days later.
+    from .db import EXERCISE_CARD_TYPES, SRS_EXCLUDED_CARD_TYPES
+    srs_types = tuple(
+        ct for ct in EXERCISE_CARD_TYPES
+        if ct not in SRS_EXCLUDED_CARD_TYPES
+    )
+    placeholders = ",".join("?" for _ in srs_types)
     sql += f" AND lc.card_type IN ({placeholders})"
-    params.extend(EXERCISE_CARD_TYPES)
+    params.extend(srs_types)
     sql += " ORDER BY crs.next_due_at ASC LIMIT ?"
     params.append(limit)
     with _conn() as c:
@@ -905,6 +929,16 @@ def record_attempt(
     now_iso = _now_iso()
     now_dt = datetime.now(timezone.utc)
 
+    # Skip the SRS Leitner update for excluded card types (stories).
+    # The attempt still gets logged so analytics + feedback work, but
+    # we don't write to card_review_state — stories aren't retrieval
+    # practice, so a "wrong" comprehension answer shouldn't resurface
+    # the story days later.
+    card_row = get_card(card_id)
+    skip_srs = bool(card_row) and (
+        card_row.get("card_type") in SRS_EXCLUDED_CARD_TYPES
+    )
+
     # All three statements (insert attempt → read SRS state → upsert)
     # must run as one atomic unit. Without BEGIN IMMEDIATE, two
     # concurrent attempts for the same (learner, card) can both read
@@ -923,34 +957,44 @@ def record_attempt(
                  ai_feedback, rating, 1 if hint_used else 0, now_iso),
             )
 
-            row = c.execute(
-                "SELECT box, total_seen, total_correct FROM card_review_state "
-                "WHERE learner_id = ? AND card_id = ?",
-                (learner_id, card_id),
-            ).fetchone()
+            if skip_srs:
+                # Story (or other SRS-excluded) — attempt is logged
+                # above for analytics, but card_review_state stays
+                # untouched. The return shape preserves the keys the
+                # API echoes back; box/next_due are None for stories.
+                new_box = None  # type: ignore[assignment]
+                new_due = None  # type: ignore[assignment]
+                new_seen = 1
+                new_correct = 1 if correct else 0
+            else:
+                row = c.execute(
+                    "SELECT box, total_seen, total_correct FROM card_review_state "
+                    "WHERE learner_id = ? AND card_id = ?",
+                    (learner_id, card_id),
+                ).fetchone()
 
-            prior_box = row["box"] if row else srs.MIN_BOX
-            prior_seen = row["total_seen"] if row else 0
-            prior_correct = row["total_correct"] if row else 0
+                prior_box = row["box"] if row else srs.MIN_BOX
+                prior_seen = row["total_seen"] if row else 0
+                prior_correct = row["total_correct"] if row else 0
 
-            new_box = srs.promote(prior_box, correct=correct)
-            new_due = srs.next_due_at(new_box, now_dt)
-            new_seen = prior_seen + 1
-            new_correct = prior_correct + (1 if correct else 0)
+                new_box = srs.promote(prior_box, correct=correct)
+                new_due = srs.next_due_at(new_box, now_dt)
+                new_seen = prior_seen + 1
+                new_correct = prior_correct + (1 if correct else 0)
 
-            c.execute(
-                "INSERT INTO card_review_state (learner_id, card_id, box, "
-                "next_due_at, last_seen_at, total_seen, total_correct) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(learner_id, card_id) DO UPDATE SET "
-                "box = excluded.box, "
-                "next_due_at = excluded.next_due_at, "
-                "last_seen_at = excluded.last_seen_at, "
-                "total_seen = excluded.total_seen, "
-                "total_correct = excluded.total_correct",
-                (learner_id, card_id, new_box, new_due, now_iso,
-                 new_seen, new_correct),
-            )
+                c.execute(
+                    "INSERT INTO card_review_state (learner_id, card_id, box, "
+                    "next_due_at, last_seen_at, total_seen, total_correct) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(learner_id, card_id) DO UPDATE SET "
+                    "box = excluded.box, "
+                    "next_due_at = excluded.next_due_at, "
+                    "last_seen_at = excluded.last_seen_at, "
+                    "total_seen = excluded.total_seen, "
+                    "total_correct = excluded.total_correct",
+                    (learner_id, card_id, new_box, new_due, now_iso,
+                     new_seen, new_correct),
+                )
             c.execute("COMMIT")
         except Exception:
             try:

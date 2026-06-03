@@ -26,8 +26,8 @@ from . import store
 from .context import LearnerContext
 from .db import (
     CARD_CLOZE, CARD_DIALOGUE, CARD_GRAMMAR, CARD_LESSON,
-    CARD_MULTIPLE_CHOICE, CARD_PROVERB, CARD_REORDER, CARD_TYPES,
-    EXERCISE_CARD_TYPES,
+    CARD_MULTIPLE_CHOICE, CARD_PROVERB, CARD_REORDER, CARD_STORY,
+    CARD_TYPES, EXERCISE_CARD_TYPES,
 )
 from .llm import INJECTION_GUARD_LINE, ModelOutputError, ask_for_json, tag_learner_input
 
@@ -142,6 +142,130 @@ def _validate_lesson_steps(steps: Any) -> None:
                     )
 
 
+# Story card shape constants. A story is 4-8 short paragraphs of
+# comprehensible input followed by 1-3 lenient comprehension
+# questions. The paragraph count keeps the read short enough to feel
+# bite-sized but long enough to give the target structure 4-6
+# repetitions (per Krashen i+1 + repetition-for-acquisition).
+STORY_PARAGRAPHS_MIN = 4
+STORY_PARAGRAPHS_MAX = 8
+STORY_QUESTIONS_MIN = 1
+STORY_QUESTIONS_MAX = 3
+
+
+def _validate_story_payload(payload: dict[str, Any]) -> None:
+    """Validate the story card shape and synthesise ``prompt_text`` +
+    ``reference_answer`` so the rest of the persistence + grading
+    pipeline (which expects single strings) keeps working.
+
+    Story shape:
+
+    ```json
+    {
+      "card_type": "story",
+      "title": "At the bakery (Beim Bäcker)",
+      "paragraphs": [
+        {"target": "Sebastian geht in die Bäckerei.",
+         "gloss":  "(Sebastian goes into the bakery.)"},
+        ...
+      ],
+      "comprehension_questions": [
+        {"prompt": "Where does Sebastian go?",
+         "answer": "to the bakery"},
+        ...
+      ]
+    }
+    ```
+
+    Each paragraph carries a target-language sentence + the mandatory
+    inline source-language gloss; the gloss-blank-leak rule applies
+    here too — a `___` inside the gloss is rejected.
+    """
+    paragraphs = payload.get("paragraphs")
+    if not isinstance(paragraphs, list):
+        raise ModelOutputError(
+            "story card must include 'paragraphs' as a list"
+        )
+    if not (STORY_PARAGRAPHS_MIN <= len(paragraphs) <= STORY_PARAGRAPHS_MAX):
+        raise ModelOutputError(
+            f"story 'paragraphs' must have {STORY_PARAGRAPHS_MIN}-"
+            f"{STORY_PARAGRAPHS_MAX} entries; got {len(paragraphs)}"
+        )
+    target_lines: list[str] = []
+    for idx, para in enumerate(paragraphs):
+        if not isinstance(para, dict):
+            raise ModelOutputError(
+                f"story paragraph {idx} must be an object"
+            )
+        target = para.get("target")
+        gloss = para.get("gloss")
+        if not isinstance(target, str) or not target.strip():
+            raise ModelOutputError(
+                f"story paragraph {idx} requires non-empty 'target' "
+                "string in <<TARGET_LANGUAGE>>"
+            )
+        if not isinstance(gloss, str) or not gloss.strip():
+            raise ModelOutputError(
+                f"story paragraph {idx} requires non-empty 'gloss' "
+                "string in <<SOURCE_LANGUAGE>>"
+            )
+        if _gloss_contains_blank(gloss):
+            raise ModelOutputError(
+                f"story paragraph {idx} gloss contains '___' — the "
+                "gloss must be the full source-language translation, "
+                "not a fill-in-the-blank"
+            )
+        target_lines.append(target.strip())
+
+    questions = payload.get("comprehension_questions")
+    if not isinstance(questions, list):
+        raise ModelOutputError(
+            "story card must include 'comprehension_questions' as a list"
+        )
+    if not (STORY_QUESTIONS_MIN <= len(questions) <= STORY_QUESTIONS_MAX):
+        raise ModelOutputError(
+            f"story 'comprehension_questions' must have "
+            f"{STORY_QUESTIONS_MIN}-{STORY_QUESTIONS_MAX} entries; "
+            f"got {len(questions)}"
+        )
+    answers: list[str] = []
+    for idx, q in enumerate(questions):
+        if not isinstance(q, dict):
+            raise ModelOutputError(
+                f"story comprehension question {idx} must be an object"
+            )
+        prompt = q.get("prompt")
+        answer = q.get("answer")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ModelOutputError(
+                f"story comprehension question {idx} requires "
+                "non-empty 'prompt'"
+            )
+        if not isinstance(answer, str) or not answer.strip():
+            raise ModelOutputError(
+                f"story comprehension question {idx} requires "
+                "non-empty 'answer'"
+            )
+        answers.append(answer.strip())
+
+    # Title is optional but recommended; the frontend uses it as the
+    # story header.
+    if "title" in payload and not isinstance(payload["title"], str):
+        raise ModelOutputError(
+            "story 'title' must be a string when present"
+        )
+
+    # Synthesise prompt_text from the first paragraph (used by the SRS
+    # picker's prompt_text lookups + by message rendering as a thumb
+    # summary) and reference_answer from the pipe-joined comprehension
+    # answers (used by the grader and the message-shape contract that
+    # exercise cards carry a single reference_answer string).
+    payload["prompt_text"] = (
+        payload.get("title") or target_lines[0][:160]
+    )
+    payload["reference_answer"] = " | ".join(answers)
+
+
 def _validate_card(payload: dict[str, Any]) -> None:
     if "error" in payload:
         raise ModelOutputError(f"model declined: {payload['error']}")
@@ -175,6 +299,13 @@ def _validate_card(payload: dict[str, Any]) -> None:
                 "entries — concept / example / contrast / quick_check)"
             )
         _validate_lesson_steps(steps)
+    elif ct == CARD_STORY:
+        # Stories carry content in paragraphs[] + comprehension_questions[],
+        # not prompt_text/reference_answer. Validated separately;
+        # prompt_text + reference_answer are synthesised so the rest of
+        # the persistence + grading pipeline (which expects strings) keeps
+        # working transparently.
+        _validate_story_payload(payload)
     else:
         if "prompt_text" not in payload:
             raise ModelOutputError(
@@ -207,9 +338,13 @@ def _validate_card(payload: dict[str, Any]) -> None:
     # Dialogue cards synthesise ``reference_answer`` from per-turn
     # ``answer`` fields further down — they're allowed to omit a
     # top-level reference_answer because each blank carries its own
-    # canonical fill on the turn it belongs to. Every other exercise
-    # type still requires the single-string reference_answer here.
-    if ct in EXERCISE_CARD_TYPES and ct != CARD_DIALOGUE:
+    # canonical fill on the turn it belongs to. Stories synthesise
+    # ``reference_answer`` from their comprehension_questions during
+    # _validate_story_payload (one canonical answer per question,
+    # pipe-joined). Every other exercise type still requires the
+    # single-string reference_answer here.
+    if (ct in EXERCISE_CARD_TYPES
+            and ct != CARD_DIALOGUE and ct != CARD_STORY):
         ref = payload.get("reference_answer")
         if not isinstance(ref, str) or not ref.strip():
             raise ModelOutputError(

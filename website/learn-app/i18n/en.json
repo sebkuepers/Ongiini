@@ -68,7 +68,8 @@
       "multiple_choice": "pick one",
       "grammar": "grammar drill",
       "proverb": "proverb",
-      "dialogue": "dialogue"
+      "dialogue": "dialogue",
+      "story": "story"
     },
     "lesson": {
       "prev": "← Back",
@@ -88,6 +89,11 @@
     "dialogue": {
       "slot_label": "Fill in the blank",
       "submit": "Submit answers"
+    },
+    "story": {
+      "input_placeholder": "Your answer (in either language)",
+      "submit": "Submit answers",
+      "tap_hint": "Tap a sentence to reveal the translation"
     }
   },
   "modal": {

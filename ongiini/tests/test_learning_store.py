@@ -836,3 +836,77 @@ def test_recent_module_prompts_empty_on_missing_id(temp_db):
     blowing up under a runtime path that doesn't have one yet."""
     assert store.recent_module_prompts("", "m1") == []
     assert store.recent_module_prompts("g1", "") == []
+
+
+def test_story_card_does_not_enter_srs_queue(temp_db):
+    """Stories are graded comprehension cards but they MUST NOT come
+    back via SRS replay — re-reading the same story isn't retrieval
+    practice; it's stale input. Confirm both the SRS queue and the
+    record_attempt path treat stories as out-of-band."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    gid = goal["goal_id"]
+    story_id = store.save_card(
+        gid, db.CARD_STORY, "At the bakery",
+        reference_answer="to the bakery",
+        module_id="m1", topic_id="t1",
+    )
+    # Even after a "wrong" rating, the story stays OUT of the SRS
+    # queue. (A wrong vocab card would surface again within days.)
+    out = store.record_attempt(
+        learner_id=learner_id, card_id=story_id,
+        user_answer="I don't know", ai_feedback="No worries",
+        rating=db.RATING_WRONG,
+    )
+    # Skip-SRS shape: new_box/next_due_at are None for stories so the
+    # caller can tell that no Leitner state was written.
+    assert out["new_box"] is None
+    assert out["next_due_at"] is None
+    # SRS queue is empty for this learner — the story did not enter.
+    due = store.next_due_cards(learner_id, goal_id=gid)
+    assert due == []
+
+
+def test_record_attempt_returns_null_box_for_story(temp_db):
+    """The coach reads ``new_box`` to decide whether to emit a
+    progress chip; stories must return ``new_box=None`` so that
+    branch can short-circuit. Confirms the SRS-skip contract is
+    visible to callers, not just inside the store."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    card_id = store.save_card(
+        goal["goal_id"], db.CARD_STORY, "summary",
+        reference_answer="x",
+        module_id="m1", topic_id="t1",
+    )
+    out = store.record_attempt(
+        learner_id=learner_id, card_id=card_id,
+        user_answer="something", ai_feedback="ok",
+        rating=db.RATING_CORRECT,
+    )
+    assert out["new_box"] is None
+    assert out["next_due_at"] is None
+    # total_seen/total_correct still set so callers that aggregate
+    # have meaningful numbers (1 attempt seen, 1 correct on this one).
+    assert out["total_seen"] == 1
+    assert out["total_correct"] == 1
+
+
+def test_record_attempt_non_story_card_returns_real_box(temp_db):
+    """Regression guard — making sure the skip-SRS branch I added
+    doesn't accidentally also skip non-story cards. A vocab card
+    must still get a real new_box and next_due_at."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    card_id = store.save_card(
+        goal["goal_id"], db.CARD_VOCAB, "say thanks",
+        reference_answer="dankie",
+        module_id="m1", topic_id="t1",
+    )
+    out = store.record_attempt(
+        learner_id=learner_id, card_id=card_id,
+        user_answer="dankie", ai_feedback="yes",
+        rating=db.RATING_CORRECT,
+    )
+    assert out["new_box"] is not None
+    assert out["next_due_at"] is not None

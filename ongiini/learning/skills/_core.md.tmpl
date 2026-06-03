@@ -327,6 +327,70 @@ both and types the transformation. Use grammar cards for tense
 shifts, mood changes, person changes, voice (active ↔ passive). Be
 strict on grading: this is the morphology drill.
 
+### Story card — comprehensible input (read 4-8 short paragraphs)
+
+```json
+{
+  "card_type": "story",
+  "title": "At the bakery (Beim Bäcker)",
+  "paragraphs": [
+    {"target": "Sebastian geht in die Bäckerei.",
+     "gloss":  "(Sebastian goes into the bakery.)"},
+    {"target": "Die Bäckerin sagt: 'Guten Tag! Was möchten Sie?'",
+     "gloss":  "(The baker says: 'Good day! What would you like?')"},
+    {"target": "'Guten Tag. Ich möchte ein Brötchen.'",
+     "gloss":  "('Good day. I would like a roll.')"},
+    {"target": "Sebastian bezahlt und sagt: 'Vielen Dank!'",
+     "gloss":  "(Sebastian pays and says: 'Thank you very much!')"}
+  ],
+  "comprehension_questions": [
+    {"prompt": "Where does Sebastian go?",
+     "answer": "to the bakery"},
+    {"prompt": "What does Sebastian order?",
+     "answer": "a roll (ein Brötchen)"}
+  ]
+}
+```
+
+Story cards are the comprehensible-input (Krashen i+1) track. The
+learner reads 4-8 short <<TARGET_LANGUAGE>> paragraphs that they
+understand ~80-95% of, with the inline source-language gloss spelling
+out anything new. The point is **input exposure**, not retrieval
+practice. Then 1-3 lenient comprehension questions confirm the gist
+landed; the grader scores them generously (any in-language answer
+that captures the meaning is `correct`).
+
+**Authoring rules — load-bearing:**
+
+- **Use only vocabulary the learner already has** in the active
+  module + prior modules + the lesson the story follows. Introduce at
+  most 2-3 new words across the whole story, glossed inline. A story
+  that throws ten unknown words at the learner stops being
+  comprehensible input.
+- **Re-use the module's target structure 4-6 times** across the
+  paragraphs. If module 1 is teaching present-tense `sein`/`haben`,
+  the story should have 4-6 sentences using `sein` and `haben` in
+  present tense in different turns. This is the repetition that
+  drives acquisition (TPRS).
+- **Anchor the story to the learner's stated focus.** A learner
+  whose focus is "Travel to Germany" gets stories set at the airport,
+  hotel, train station, restaurant — NOT a generic farmyard. The
+  selector binds the story to the module's first lesson topic, so
+  re-use that topic's situational anchor.
+- **Every paragraph carries an inline gloss** in parentheses on its
+  own — the gloss is the FULL source-language translation, not a
+  fill-in-the-blank. `___` inside a story gloss is a fatal error.
+- **Comprehension questions test gist, not vocabulary recall**.
+  "Where does Sebastian go?" is good. "How do you say 'bakery' in
+  German?" is bad — that's a vocab card, not a comprehension question.
+- **Answers can be in either language**. The grader's rubric accepts
+  the answer in <<SOURCE_LANGUAGE>> OR <<TARGET_LANGUAGE>>. Write the
+  canonical `answer` in <<SOURCE_LANGUAGE>> for clarity but let the
+  learner answer in either.
+
+Do NOT include `prompt_text` or `reference_answer` on stories — the
+backend synthesises both from the title + the per-question answers.
+
 ### Proverb card — idiom or saying with cultural anchoring
 
 ```json
@@ -710,6 +774,16 @@ gaps on items 1–4):
      reference_answer order; no missing words.
    - **proverb**: canonical idiom in reference_answer;
      cultural_note (if present) is accurate.
+   - **story**: 4-8 paragraphs each with a non-empty `target` (in
+     <<TARGET_LANGUAGE>>) + a full `gloss` (in <<SOURCE_LANGUAGE>>,
+     never containing `___`); 1-3 lenient comprehension questions
+     each with a `prompt` + `answer`. Critic ALSO checks that ≥90%
+     of the story's <<TARGET_LANGUAGE>> vocabulary appears in the
+     lesson the story follows or in earlier modules — at most 2-3
+     new words allowed across the whole story (otherwise it stops
+     being comprehensible input). The story should reuse the
+     module's target structure (e.g. present-tense sein/haben) 4-6
+     times across the paragraphs.
    - **vocab / production**: reference_answer is correct,
      idiomatic, and natural.
    - **translation**: the prompt_text contains ONLY the source

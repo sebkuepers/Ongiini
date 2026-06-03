@@ -288,14 +288,19 @@ async def _handle_answer(
     new_messages.append(feedback_msg)
 
     # Progress chip — small "now in box N · X cards · Y% right" stamp.
-    progress_payload = store.progress_for(learner_id)
-    progress_payload["new_box"] = attempt["new_box"]
-    progress_msg = messages.append(
-        learner_id=learner_id, goal_id=goal_id,
-        kind=MSG_PROGRESS, payload=progress_payload,
-        card_id=card["card_id"],
-    )
-    new_messages.append(progress_msg)
+    # SRS-excluded cards (stories) have no Leitner state to display —
+    # ``attempt["new_box"]`` is None for them. Skip the chip rather
+    # than render "box null"; the feedback bubble is the meaningful
+    # signal for a comprehensible-input card.
+    if attempt.get("new_box") is not None:
+        progress_payload = store.progress_for(learner_id)
+        progress_payload["new_box"] = attempt["new_box"]
+        progress_msg = messages.append(
+            learner_id=learner_id, goal_id=goal_id,
+            kind=MSG_PROGRESS, payload=progress_payload,
+            card_id=card["card_id"],
+        )
+        new_messages.append(progress_msg)
 
     # And the next thing — lesson or exercise — so the learner has
     # something to do without an extra click. ``exclude_card_id`` is
@@ -708,6 +713,9 @@ def _persist_and_emit_lesson(
 
 _EXERCISE_EXTRA_KEYS = (
     "options", "tokens", "turns", "source_sentence", "cultural_note",
+    # Story extras — `paragraphs` is the read content, `title` is the
+    # header, `comprehension_questions` is what the learner answers.
+    "paragraphs", "title", "comprehension_questions",
 )
 
 

@@ -53,17 +53,33 @@ CARD_MULTIPLE_CHOICE = "multiple_choice"   # pick option with explanations
 CARD_GRAMMAR = "grammar"            # transformation drill
 CARD_PROVERB = "proverb"            # idiom / saying with cultural note
 CARD_DIALOGUE = "dialogue"          # role-play completion
+# Comprehensible-input track. A story is 4-8 short
+# <<TARGET_LANGUAGE>> paragraphs the learner reads (with inline glosses)
+# followed by 1-3 lenient comprehension questions. Stories are graded
+# but DO NOT enter the SRS queue — they're input exposure, not retrieval
+# practice. Always brand-new content; never recycled. The selector emits
+# one per module after the first lesson and before the drills, so every
+# subsequent drill in the module has the story's vocabulary + structures
+# as fresh prior input.
+CARD_STORY = "story"
 
 CARD_TYPES = (
     CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION, CARD_LESSON,
     CARD_CLOZE, CARD_REORDER, CARD_MULTIPLE_CHOICE,
-    CARD_GRAMMAR, CARD_PROVERB, CARD_DIALOGUE,
+    CARD_GRAMMAR, CARD_PROVERB, CARD_DIALOGUE, CARD_STORY,
 )
+# Cards that go through the normal grading + SRS Leitner pipeline.
+# Stories are graded but excluded — see SRS_EXCLUDED_CARD_TYPES below.
 EXERCISE_CARD_TYPES = (
     CARD_VOCAB, CARD_TRANSLATION, CARD_PRODUCTION,
     CARD_CLOZE, CARD_REORDER, CARD_MULTIPLE_CHOICE,
-    CARD_GRAMMAR, CARD_PROVERB, CARD_DIALOGUE,
+    CARD_GRAMMAR, CARD_PROVERB, CARD_DIALOGUE, CARD_STORY,
 )
+# Card types whose attempts MUST NOT enter the SRS replay queue.
+# Stories: always-new content; re-reading a story isn't retrieval
+# practice. The grader still runs (so the learner gets feedback), but
+# ``store.next_due_cards`` skips them.
+SRS_EXCLUDED_CARD_TYPES = (CARD_STORY,)
 
 
 # Message kinds for the learner_messages chat thread. The frontend

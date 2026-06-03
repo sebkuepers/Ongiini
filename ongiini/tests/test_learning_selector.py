@@ -94,14 +94,17 @@ def test_teach_skips_already_taught_topics_in_order():
 # Drill phase
 # ──────────────────────────────────────────────────────────────────
 
-def test_drill_phase_starts_when_all_lessons_taught():
+def test_drill_phase_starts_when_all_lessons_taught_and_story_done():
     """Once every lesson topic in the module has at least
-    TARGET_LESSONS_PER_TOPIC lessons, drill begins on the first
-    practice topic."""
+    TARGET_LESSONS_PER_TOPIC lessons AND the module's single story has
+    been emitted, drill begins on the first practice topic. The
+    ``stories_emitted: 1`` is what bypasses the new story phase that
+    fires between teach and drill."""
     outline = _outline([_module()])
     digest = {"mod-1": {
         "topics_taught": {"l1": 1, "l2": 1},
         "topics_drilled": {},
+        "stories_emitted": 1,
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.phase == "drill"
@@ -195,7 +198,9 @@ def test_recycle_picks_taught_lesson_topic_with_fewest_drills():
     selector recycles: drill a taught lesson topic. Tie-break is
     outline order; pick the topic with the fewest recycled drills
     so the recycling spaces evenly. The recycle cap is now the
-    same as TARGET_DRILLS_PER_PRACTICE_TOPIC (was 2× before)."""
+    same as TARGET_DRILLS_PER_PRACTICE_TOPIC (was 2× before).
+    ``stories_emitted: 1`` skips the new story phase that fires
+    between teach and drill."""
     outline = _outline([_module()])
     digest = {"mod-1": {
         "topics_taught": {"l1": 1, "l2": 1},
@@ -205,6 +210,7 @@ def test_recycle_picks_taught_lesson_topic_with_fewest_drills():
             # Neither lesson topic has been recycled yet; pick l1 by
             # outline order tie-break.
         },
+        "stories_emitted": 1,
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.phase == "recycle"
@@ -217,7 +223,8 @@ def test_recycle_picks_taught_lesson_topic_with_fewest_drills():
 
 def test_advance_first_when_module_fully_drilled_and_recycled():
     """When even recycling has hit its cap, the selector tells the
-    coach to advance the module."""
+    coach to advance the module. ``stories_emitted: 1`` skips the
+    new story phase."""
     outline = _outline([_module()])
     cap = selector.TARGET_DRILLS_PER_PRACTICE_TOPIC
     digest = {"mod-1": {
@@ -228,10 +235,72 @@ def test_advance_first_when_module_fully_drilled_and_recycled():
             "l1": cap,
             "l2": cap,
         },
+        "stories_emitted": 1,
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.advance_first is True
     assert sel.card_type is None
+
+
+# ──────────────────────────────────────────────────────────────────
+# Story phase — comprehensible input (Track A)
+# ──────────────────────────────────────────────────────────────────
+
+def test_story_phase_fires_after_first_lesson_topic_taught():
+    """The comprehensible-input track: once the first lesson topic is
+    taught, the next selector emission is a STORY card — NOT a drill.
+    This is the load-bearing pacing change for Track A."""
+    from ongiini.learning.db import CARD_STORY
+    outline = _outline([_module()])
+    digest = {"mod-1": {
+        # First lesson topic taught; second one not yet.
+        "topics_taught": {"l1": 1},
+        "topics_drilled": {},
+        "stories_emitted": 0,
+    }}
+    sel = selector.select_next_card(outline=outline, module_digest=digest)
+    # NOTE: with l2 still untaught the teach phase wins over story —
+    # story only fires once every lesson topic has at least one lesson.
+    assert sel.phase == "teach"
+    assert sel.topic_id == "l2"
+
+    # Now teach l2 too; story should fire next.
+    digest["mod-1"]["topics_taught"] = {"l1": 1, "l2": 1}
+    sel = selector.select_next_card(outline=outline, module_digest=digest)
+    assert sel.phase == "story"
+    assert sel.card_type == CARD_STORY
+    # Story binds to the first lesson topic (situational anchor).
+    assert sel.topic_id == "l1"
+
+
+def test_story_phase_emits_exactly_once_per_module():
+    """After the story has been emitted (stories_emitted: 1), the
+    selector advances to drill — never a second story in the same
+    module."""
+    from ongiini.learning.db import CARD_VOCAB
+    outline = _outline([_module()])
+    digest = {"mod-1": {
+        "topics_taught": {"l1": 1, "l2": 1},
+        "topics_drilled": {},
+        "stories_emitted": 1,
+    }}
+    sel = selector.select_next_card(outline=outline, module_digest=digest)
+    assert sel.phase == "drill"
+    assert sel.card_type == CARD_VOCAB
+
+
+def test_story_phase_skipped_when_module_has_no_lesson_topics():
+    """A module with only practice topics has no anchor for a story
+    (no lesson taught yet for the story to ground in). Skip story,
+    go straight to drill."""
+    from ongiini.learning.db import CARD_VOCAB
+    outline = _outline([_module(lesson_topics=0, practice_topics=2)])
+    digest = {"mod-1": {
+        "topics_taught": {}, "topics_drilled": {}, "stories_emitted": 0,
+    }}
+    sel = selector.select_next_card(outline=outline, module_digest=digest)
+    assert sel.phase == "drill"
+    assert sel.card_type == CARD_VOCAB
 
 
 def test_graduation_when_no_in_progress_module():

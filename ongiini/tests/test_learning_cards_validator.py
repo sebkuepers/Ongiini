@@ -532,3 +532,133 @@ def test_dialogue_rejected_when_turn_gloss_has_blank():
                 {"speaker": "B", "text": "Dort drüben."},
             ],
         ))
+
+
+# ──────────────────────────────────────────────────────────────────
+# Story card (Track A — comprehensible input)
+# ──────────────────────────────────────────────────────────────────
+
+def _good_story_paragraphs(n: int = 4) -> list[dict]:
+    return [
+        {
+            "target": f"German target sentence {i}.",
+            "gloss":  f"(English gloss {i}.)",
+        }
+        for i in range(n)
+    ]
+
+
+def _good_story_questions(n: int = 2) -> list[dict]:
+    return [
+        {"prompt": f"Q{i}?", "answer": f"answer {i}"}
+        for i in range(n)
+    ]
+
+
+def test_story_card_requires_paragraphs_list():
+    with pytest.raises(ModelOutputError, match="paragraphs"):
+        _validate_card({"card_type": "story"})
+
+
+def test_story_card_rejects_too_few_paragraphs():
+    with pytest.raises(ModelOutputError, match="4-8 entries"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": _good_story_paragraphs(2),
+            "comprehension_questions": _good_story_questions(),
+        })
+
+
+def test_story_card_rejects_too_many_paragraphs():
+    with pytest.raises(ModelOutputError, match="4-8 entries"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": _good_story_paragraphs(9),
+            "comprehension_questions": _good_story_questions(),
+        })
+
+
+def test_story_paragraph_requires_target_and_gloss():
+    with pytest.raises(ModelOutputError, match="'target'"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": [
+                {"gloss": "(only the gloss.)"},
+                *_good_story_paragraphs(3),
+            ],
+            "comprehension_questions": _good_story_questions(),
+        })
+    with pytest.raises(ModelOutputError, match="'gloss'"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": [
+                {"target": "Only target."},
+                *_good_story_paragraphs(3),
+            ],
+            "comprehension_questions": _good_story_questions(),
+        })
+
+
+def test_story_paragraph_gloss_rejects_blank_marker():
+    """The gloss must be the FULL source-language translation, never
+    a fill-in-the-blank — same posture as the dialogue card."""
+    bad_paragraphs = [
+        {"target": "Wo ist ___ Bahnhof?",
+         "gloss":  "(Where is ___ station?)"},
+        *_good_story_paragraphs(3),
+    ]
+    with pytest.raises(ModelOutputError, match="'___'"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": bad_paragraphs,
+            "comprehension_questions": _good_story_questions(),
+        })
+
+
+def test_story_requires_at_least_one_comprehension_question():
+    with pytest.raises(ModelOutputError, match="comprehension_questions"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": _good_story_paragraphs(),
+        })
+
+
+def test_story_rejects_too_many_comprehension_questions():
+    with pytest.raises(ModelOutputError, match="1-3 entries"):
+        _validate_card({
+            "card_type": "story",
+            "paragraphs": _good_story_paragraphs(),
+            "comprehension_questions": _good_story_questions(4),
+        })
+
+
+def test_story_happy_path_synthesises_prompt_text_and_reference_answer():
+    """The store + grader expect single strings for prompt_text and
+    reference_answer; the validator synthesises both so the rest of
+    the pipeline can stay unchanged."""
+    payload = {
+        "card_type": "story",
+        "title": "At the bakery",
+        "paragraphs": _good_story_paragraphs(),
+        "comprehension_questions": _good_story_questions(2),
+    }
+    _validate_card(payload)
+    # Title becomes prompt_text (short stamp on persistence side).
+    assert payload["prompt_text"] == "At the bakery"
+    # Comprehension answers concatenate, pipe-separated.
+    assert payload["reference_answer"] == "answer 0 | answer 1"
+
+
+def test_story_synthesises_prompt_text_from_first_target_when_title_missing():
+    """Title is optional. When absent, the synthesised prompt_text
+    falls back to the first paragraph's target (truncated to 160)."""
+    paragraphs = _good_story_paragraphs()
+    payload = {
+        "card_type": "story",
+        "paragraphs": paragraphs,
+        "comprehension_questions": _good_story_questions(1),
+    }
+    _validate_card(payload)
+    assert payload["prompt_text"] == paragraphs[0]["target"][:160]
+    # Title field never injected.
+    assert "title" not in payload or not payload.get("title")

@@ -34,6 +34,7 @@ from .db import (
     CARD_GRAMMAR,
     CARD_LESSON,
     CARD_MULTIPLE_CHOICE,
+    CARD_STORY,
     CARD_TRANSLATION,
     CARD_VOCAB,
 )
@@ -178,11 +179,17 @@ def select_next_card(
       1. **graduation** — no in-progress module left
       2. **teach** — first lesson topic with fewer than
          TARGET_LESSONS_PER_TOPIC taught lessons
-      3. **drill** — first practice topic with fewer than
+      3. **story** — exactly ONE comprehensible-input story per
+         module, served once the first lesson topic is taught and
+         BEFORE the drills begin. Stories give the learner prior
+         exposure to the module's target vocabulary + structures so
+         subsequent drills are recall, not cold introduction. The
+         story is bound to the first lesson topic by topic_id.
+      4. **drill** — first practice topic with fewer than
          TARGET_DRILLS_PER_PRACTICE_TOPIC drills
-      4. **recycle** — drill a taught lesson topic with the fewest
+      5. **recycle** — drill a taught lesson topic with the fewest
          drills (spaced recycling)
-      5. **advance_first** — nothing to do in this module, ask the
+      6. **advance_first** — nothing to do in this module, ask the
          caller to advance and re-select
 
     SRS replay is NOT in this function — the coach handles it
@@ -222,7 +229,27 @@ def select_next_card(
                 phase="teach",
             )
 
-    # Phase 3 — drill: first practice topic that hasn't hit its drill quota.
+    # Phase 3 — story: ONE comprehensible-input story per module,
+    # served after at least the first lesson topic is taught (so the
+    # story has prerequisite vocabulary the learner already saw) and
+    # BEFORE the drills (so every following drill is recall against
+    # fresh prior input, not cold introduction). The story is bound
+    # to the first lesson topic — it grounds in the module's first
+    # situational anchor. Skip if the module has no lesson topics at
+    # all (selector falls through to drill).
+    stories_emitted = int(digest.get("stories_emitted", 0) or 0)
+    if lessons and stories_emitted < 1:
+        anchor = lessons[0]
+        return CardSelection(
+            card_type=CARD_STORY,
+            module_id=mod_id,
+            module_title=mod_title,
+            topic_id=anchor["id"],
+            topic_title=anchor.get("title") or anchor["id"],
+            phase="story",
+        )
+
+    # Phase 4 — drill: first practice topic that hasn't hit its drill quota.
     for t in practices:
         tid = t["id"]
         if int(drilled.get(tid, 0)) < TARGET_DRILLS_PER_PRACTICE_TOPIC:
