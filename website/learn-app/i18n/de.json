@@ -45,11 +45,21 @@
   },
   "composer": {
     "placeholder": "Schreib an Ongiini-Coach…",
+    "chat_placeholder": "Antworte in deiner Zielsprache…",
     "legal_pre": "Mit der Nutzung akzeptierst du unsere",
     "legal_terms": "Bedingungen",
     "legal_and": "und",
     "legal_privacy": "Datenschutzrichtlinie",
     "send": "Senden"
+  },
+  "mode": {
+    "cards": "Karten",
+    "chat": "Chat"
+  },
+  "chat": {
+    "notes_eyebrow": "Notizen aus diesem Austausch",
+    "corrections_label": "Korrekturen",
+    "new_words_label": "Neue Wörter"
   },
   "card": {
     "lesson_eyebrow": "Lektion",

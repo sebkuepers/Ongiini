@@ -91,9 +91,20 @@ MSG_LESSON = "lesson"
 MSG_EXERCISE = "exercise"
 MSG_FEEDBACK = "feedback"
 MSG_PROGRESS = "progress"
+# Track C — Conversation mode. A second surface on the same goal:
+# the learner chats with the coach IN TARGET LANGUAGE at their
+# level; the coach replies in target language and surfaces a small
+# notes block (corrections + new vocabulary) at end-of-turn. These
+# message kinds live on the same learner_messages table so the chat
+# rehydrates from the goal, but the cards renderer ignores them
+# (filters MSG_LESSON / MSG_EXERCISE / etc.).
+MSG_CHAT_LEARNER = "chat_learner"   # learner turn in target language
+MSG_CHAT_COACH = "chat_coach"       # coach reply in target language
+MSG_CHAT_NOTES = "chat_notes"       # end-of-turn corrections + new words
 MESSAGE_KINDS = (
     MSG_COACH_TEXT, MSG_LEARNER_TEXT, MSG_LESSON, MSG_EXERCISE,
     MSG_FEEDBACK, MSG_PROGRESS,
+    MSG_CHAT_LEARNER, MSG_CHAT_COACH, MSG_CHAT_NOTES,
 )
 
 # Attempt ratings — set by the grading layer (model output). 'partial'

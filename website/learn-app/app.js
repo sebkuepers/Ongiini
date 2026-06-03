@@ -19,6 +19,11 @@
       module_progress: [],                 // per-module rollup from /turn
       active_module_id: null,
       busy: false,                         // /turn in flight
+      // 'cards' is the original drilled-learning surface; 'chat' is
+      // the Track C target-language conversation surface that posts
+      // to /chat instead of /turn and renders only MSG_CHAT_*
+      // messages in the thread.
+      mode: 'cards',                       // 'cards' | 'chat'
       // Pending language pair selected from a topic card before
       // creating a goal — flushed into /goals/new when intake finishes
       // or when the user creates a goal from the drawer.
@@ -146,6 +151,9 @@
     var topbar = $('topbar');
     var currTitleBtn = $('currTitleBtn');
     var currTitleText = $('currTitleText');
+    var modeToggle = $('modeToggle');
+    var modeBtnCards = $('modeBtnCards');
+    var modeBtnChat = $('modeBtnChat');
     var btnMenu = $('btnMenu');
     var mainSiteLink = $('mainSiteLink');
     var landing = $('landing');
@@ -212,6 +220,9 @@
       btnMenu.hidden = false;
       mainSiteLink.hidden = true;
       currTitleBtn.hidden = false;
+      // Mode toggle becomes visible once the learner is on a real
+      // curriculum — intake / landing have no chat surface yet.
+      if (modeToggle) modeToggle.hidden = false;
       window.scrollTo(0, 0);
     }
 
@@ -225,6 +236,7 @@
       btnMenu.hidden = true;
       mainSiteLink.hidden = false;
       currTitleBtn.hidden = true;
+      if (modeToggle) modeToggle.hidden = true;
       progressStrip.hidden = true;
       closeCurriculumPanel();
       thread.innerHTML = '';
@@ -815,6 +827,88 @@
       return chip;
     }
 
+    function renderChatLearner(msg) {
+      // Chat mode (Track C) — learner's target-language turn. Same
+      // bubble styling as the cards-mode learner bubble but tagged
+      // so a future skin can distinguish them.
+      var wrap = el('div', 'msg msg--learner msg--chat');
+      var bubble = el('div', 'bubble',
+        String((msg.payload && msg.payload.text) || ''));
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function renderChatCoach(msg) {
+      // Coach's target-language reply. The Notes block (corrections
+      // + new words) renders as a separate MSG_CHAT_NOTES message
+      // appended right after this one.
+      var wrap = el('div', 'msg msg--coach msg--chat');
+      var bubble = el('div', 'bubble',
+        String((msg.payload && msg.payload.reply) || ''));
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function renderChatNotes(msg) {
+      // The "Notes from this exchange" block — 0-3 corrections +
+      // 0-3 new high-frequency words, glanceable. Empty notes never
+      // reach the renderer (the API doesn't emit them) but we
+      // defend anyway.
+      var p = msg.payload || {};
+      var corrections = Array.isArray(p.corrections) ? p.corrections : [];
+      var newWords = Array.isArray(p.new_words) ? p.new_words : [];
+      if (!corrections.length && !newWords.length) return null;
+      var wrap = el('div', 'msg msg--chat-notes');
+      var card = el('div', 'chat-notes-card');
+      card.appendChild(el('div', 'chat-notes-eyebrow',
+        t('chat.notes_eyebrow')));
+      if (corrections.length) {
+        card.appendChild(el('div', 'chat-notes-section-h',
+          t('chat.corrections_label')));
+        var ul = el('ul', 'chat-notes-list');
+        corrections.forEach(function (c) {
+          if (!c || typeof c !== 'object') return;
+          var li = el('li', 'chat-notes-item');
+          var line = el('div', 'chat-notes-pair');
+          var del = el('span', 'chat-notes-strike',
+            String(c.learner || ''));
+          var arrow = el('span', 'chat-notes-arrow', ' → ');
+          var ins = el('span', 'chat-notes-correct',
+            String(c.correct || ''));
+          line.appendChild(del);
+          line.appendChild(arrow);
+          line.appendChild(ins);
+          li.appendChild(line);
+          if (c.note) {
+            li.appendChild(el('div', 'chat-notes-note', String(c.note)));
+          }
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+      }
+      if (newWords.length) {
+        card.appendChild(el('div', 'chat-notes-section-h',
+          t('chat.new_words_label')));
+        var wl = el('ul', 'chat-notes-list');
+        newWords.forEach(function (w) {
+          if (!w || typeof w !== 'object') return;
+          var li = el('li', 'chat-notes-item chat-notes-word');
+          var word = el('span', 'chat-notes-word-target',
+            String(w.word || ''));
+          var sep = el('span', 'chat-notes-arrow', ' — ');
+          var meaning = el('span', 'chat-notes-word-meaning',
+            String(w.meaning || ''));
+          li.appendChild(word);
+          li.appendChild(sep);
+          li.appendChild(meaning);
+          wl.appendChild(li);
+        });
+        card.appendChild(wl);
+      }
+      wrap.appendChild(card);
+      return wrap;
+    }
+
     function renderMessage(msg) {
       switch (msg.kind) {
         case 'coach_text':   return renderCoachText(msg);
@@ -823,6 +917,9 @@
         case 'exercise':     return renderExercise(msg);
         case 'feedback':     return renderFeedback(msg);
         case 'progress':     return renderProgress(msg);
+        case 'chat_learner': return renderChatLearner(msg);
+        case 'chat_coach':   return renderChatCoach(msg);
+        case 'chat_notes':   return renderChatNotes(msg);
         default:             return null;
       }
     }
@@ -1411,6 +1508,15 @@
     // ── Turn dispatch ──────────────────────────────────────
     async function sendTurn(text, opts) {
       if (state.busy) return;
+      // In chat mode, route to the conversation endpoint. /chat
+      // requires non-empty text (it's the learner speaking in target
+      // language) — a null-text "what's next" doesn't apply, so we
+      // gate that case here.
+      if (state.mode === 'chat') {
+        var trimmed = (text || '').trim();
+        if (!trimmed) return;
+        return sendChat(trimmed);
+      }
       state.busy = true;
       btnSend.disabled = true;
       composer.disabled = true;
@@ -1455,6 +1561,91 @@
         composer.disabled = false;
         composer.focus();
       }
+    }
+
+    // Chat-mode dispatch — Track C. Posts to /chat, persists the
+    // three returned messages (learner / coach / notes) into the
+    // thread, and renders them. Mirrors sendTurn's busy-state +
+    // optimistic-echo dance but doesn't touch progress / curriculum.
+    async function sendChat(text) {
+      state.busy = true;
+      btnSend.disabled = true;
+      composer.disabled = true;
+      // Optimistic echo: render the learner bubble immediately so
+      // the conversation feels snappy. Mark it as chat_learner so
+      // the renderer picks the right styling.
+      appendMessage({ kind: 'chat_learner', payload: { text: text } });
+      var skel = appendSkeleton();
+      try {
+        var body = { learner_id: state.learner_id, text: text };
+        if (state.goal && state.goal.goal_id) body.goal_id = state.goal.goal_id;
+        var resp = await api('/chat', body);
+        removeSkeleton(skel);
+        var skipFirstEcho = true;
+        (resp.messages || []).forEach(function (m) {
+          state.thread.push(m);
+          // The first message in the response is the persisted
+          // learner turn — we already rendered it optimistically;
+          // skip the server echo so the bubble doesn't appear twice.
+          if (skipFirstEcho && m.kind === 'chat_learner') {
+            skipFirstEcho = false;
+            return;
+          }
+          appendMessage(m);
+        });
+      } catch (e) {
+        removeSkeleton(skel);
+        showError(e.message || t('errors.turn_failed'));
+      } finally {
+        state.busy = false;
+        btnSend.disabled = !composer.value.trim();
+        composer.disabled = false;
+        composer.focus();
+      }
+    }
+
+    function setMode(mode) {
+      if (mode !== 'cards' && mode !== 'chat') return;
+      if (state.mode === mode) return;
+      // Hold the toggle while a turn is in flight — switching mid-
+      // flight would land the in-flight response in the wrong DOM
+      // (rebuilt for the new mode) and leak state.busy across modes.
+      if (state.busy) return;
+      state.mode = mode;
+      if (modeBtnCards && modeBtnChat) {
+        modeBtnCards.classList.toggle('is-active', mode === 'cards');
+        modeBtnChat.classList.toggle('is-active', mode === 'chat');
+        modeBtnCards.setAttribute('aria-selected', mode === 'cards');
+        modeBtnChat.setAttribute('aria-selected', mode === 'chat');
+      }
+      // Update the composer placeholder so it's obvious whether
+      // typing posts a card answer or a chat turn.
+      composer.placeholder = mode === 'chat'
+        ? t('composer.chat_placeholder')
+        : t('composer.placeholder');
+      // Re-render the thread filtered by mode. Cards mode hides the
+      // chat messages and vice versa so the surface stays coherent.
+      // Chat-mode coach_text is shown ONLY when it's an error message
+      // emitted by /chat (tagged via payload.meta.error === 'chat_*');
+      // cards-mode coach_text (off-topic redirects, transitions,
+      // intake) would otherwise leak into the chat thread on reload.
+      thread.innerHTML = '';
+      state.thread.forEach(function (m) {
+        var isChatKind = (m.kind === 'chat_learner' ||
+                          m.kind === 'chat_coach' ||
+                          m.kind === 'chat_notes');
+        var isChatError = (
+          m.kind === 'coach_text'
+          && m.payload && m.payload.meta
+          && typeof m.payload.meta.error === 'string'
+          && m.payload.meta.error.indexOf('chat_') === 0
+        );
+        if (mode === 'chat') {
+          if (isChatKind || isChatError) appendMessage(m);
+        } else {
+          if (!isChatKind && !isChatError) appendMessage(m);
+        }
+      });
     }
 
     async function sendIntakeAnswer(value) {
@@ -1795,6 +1986,13 @@
     currTitleBtn.addEventListener('click', function () {
       if (currPanel.hidden) openCurriculumPanel();
       else closeCurriculumPanel();
+    });
+
+    if (modeBtnCards) modeBtnCards.addEventListener('click', function () {
+      setMode('cards');
+    });
+    if (modeBtnChat) modeBtnChat.addEventListener('click', function () {
+      setMode('chat');
     });
 
     btnMenu.addEventListener('click', openDrawer);

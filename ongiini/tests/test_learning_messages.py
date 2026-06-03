@@ -346,3 +346,59 @@ def test_recent_text_pairs_excludes_non_text(temp_db):
     kinds = [m["kind"] for m in out]
     assert db.MSG_LESSON not in kinds
     assert kinds == [db.MSG_COACH_TEXT, db.MSG_LEARNER_TEXT]
+
+
+def test_append_scrub_chat_learner_text(temp_db):
+    """Track C PII regression — the conversation-mode learner turn
+    payload's ``text`` field must be scrubbed before INSERT, same
+    rule as the cards-mode MSG_LEARNER_TEXT."""
+    learner_id, goal_id = _setup(temp_db)
+    row = messages.append(
+        learner_id=learner_id, goal_id=goal_id,
+        kind=db.MSG_CHAT_LEARNER,
+        payload={"text": "Hallo, meine E-Mail ist test@example.com"},
+    )
+    text = row["payload"]["text"]
+    assert "test@example.com" not in text
+    assert "[REDACTED:email]" in text
+
+
+def test_append_scrub_chat_coach_reply(temp_db):
+    """Defence-in-depth: the coach's TARGET-language reply can echo
+    back learner-pasted PII (the system prompt literally tells the
+    coach to quote the learner). Scrubbed before INSERT."""
+    learner_id, goal_id = _setup(temp_db)
+    row = messages.append(
+        learner_id=learner_id, goal_id=goal_id,
+        kind=db.MSG_CHAT_COACH,
+        payload={"reply": "Deine E-Mail (test@example.com) ist notiert."},
+    )
+    assert "test@example.com" not in row["payload"]["reply"]
+    assert "[REDACTED:email]" in row["payload"]["reply"]
+
+
+def test_append_scrub_chat_notes_corrections_and_new_words(temp_db):
+    """The notes block contains the LLM's verbatim echo of the
+    learner's phrase in corrections[].learner — exactly the surface
+    where PII would leak through. Walks both list-of-dict fields."""
+    learner_id, goal_id = _setup(temp_db)
+    row = messages.append(
+        learner_id=learner_id, goal_id=goal_id,
+        kind=db.MSG_CHAT_NOTES,
+        payload={
+            "corrections": [
+                {"learner": "ich heisse jane@example.com",
+                 "correct": "ich heiße Jane",
+                 "note":    "the email isn't a name"},
+            ],
+            "new_words": [
+                {"word": "der Name", "meaning": "the name"},
+            ],
+        },
+    )
+    corr = row["payload"]["corrections"][0]
+    assert "jane@example.com" not in corr["learner"]
+    assert "[REDACTED:email]" in corr["learner"]
+    # Other fields scrubbed too even though they're PII-free here.
+    assert corr["correct"] == "ich heiße Jane"
+    assert corr["note"] == "the email isn't a name"

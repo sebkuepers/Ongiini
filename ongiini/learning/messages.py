@@ -38,6 +38,9 @@ from uuid import uuid4
 from .. import pii
 from .db import (
     MESSAGE_KINDS,
+    MSG_CHAT_COACH,
+    MSG_CHAT_LEARNER,
+    MSG_CHAT_NOTES,
     MSG_COACH_TEXT,
     MSG_EXERCISE,
     MSG_FEEDBACK,
@@ -64,6 +67,16 @@ _TEXT_FIELDS_BY_KIND: dict[str, tuple[str, ...]] = {
     MSG_EXERCISE:        ("prompt_text", "hint_text"),
     MSG_FEEDBACK:        ("feedback",),
     # MSG_PROGRESS has no free-text fields — it's just counts.
+    # Chat-mode messages (Track C). Each kind has different fields:
+    #   chat_learner: the learner's typed target-language turn.
+    #   chat_coach:   the coach's TARGET-language reply (which CAN
+    #                 echo learner-pasted PII it just heard — the
+    #                 critic prompt explicitly quotes it back, so
+    #                 defence-in-depth scrub applies).
+    #   chat_notes:   structured corrections + new_words; handled by
+    #                 the dedicated branch in _sanitise_payload below.
+    MSG_CHAT_LEARNER:    ("text",),
+    MSG_CHAT_COACH:      ("reply",),
 }
 
 
@@ -82,6 +95,39 @@ def _sanitise_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
             pii.sanitize(x) if isinstance(x, str) else x
             for x in out["examples"]
         ]
+    # Chat-mode notes block — corrections is a list of
+    # {learner, correct, note} dicts (where `learner` is the LLM's
+    # verbatim echo of the learner's phrase, so it can absolutely
+    # carry PII); new_words is a list of {word, meaning} dicts
+    # (less risky but still scrubbed for symmetry). Walk both
+    # in-place, same posture as the lesson steps branch below.
+    if kind == MSG_CHAT_NOTES:
+        if isinstance(out.get("corrections"), list):
+            scrubbed_corrections: list[Any] = []
+            for entry in out["corrections"]:
+                if not isinstance(entry, dict):
+                    scrubbed_corrections.append(entry)
+                    continue
+                e = dict(entry)
+                for field in ("learner", "correct", "note"):
+                    v = e.get(field)
+                    if isinstance(v, str):
+                        e[field] = pii.sanitize(v)
+                scrubbed_corrections.append(e)
+            out["corrections"] = scrubbed_corrections
+        if isinstance(out.get("new_words"), list):
+            scrubbed_words: list[Any] = []
+            for entry in out["new_words"]:
+                if not isinstance(entry, dict):
+                    scrubbed_words.append(entry)
+                    continue
+                e = dict(entry)
+                for field in ("word", "meaning"):
+                    v = e.get(field)
+                    if isinstance(v, str):
+                        e[field] = pii.sanitize(v)
+                scrubbed_words.append(e)
+            out["new_words"] = scrubbed_words
     # Multi-step lesson cards (steps[]): each step has its own
     # free-text fields. Scrub them all in place so PII can't leak
     # through the new payload shape.

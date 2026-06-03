@@ -45,11 +45,21 @@
   },
   "composer": {
     "placeholder": "Skryf vir Ongiini-afrigter…",
+    "chat_placeholder": "Antwoord in jou doeltaal…",
     "legal_pre": "Deur dit te gebruik aanvaar jy ons",
     "legal_terms": "Voorwaardes",
     "legal_and": "en",
     "legal_privacy": "Privaatheidsbeleid",
     "send": "Stuur"
+  },
+  "mode": {
+    "cards": "Kaarte",
+    "chat": "Gesels"
+  },
+  "chat": {
+    "notes_eyebrow": "Notas uit hierdie gesprek",
+    "corrections_label": "Regstellings",
+    "new_words_label": "Nuwe woorde"
   },
   "card": {
     "lesson_eyebrow": "Les",
