@@ -53,6 +53,46 @@ def _validate_grading(payload: dict[str, Any]) -> None:
         )
     if not isinstance(payload["feedback"], str) or not payload["feedback"].strip():
         raise ModelOutputError("grading feedback must be a non-empty string")
+    # Normalise error_tags — best-effort, soft-fail. The field is
+    # advisory (drives adaptive curriculum design) so a model that
+    # omits it shouldn't break the turn. Coerce missing/non-list to
+    # empty list; trim entries; whitelist against the fixed vocabulary
+    # in _ERROR_TAG_VOCAB so an invented tag carrying free-form text
+    # (e.g. "sebastian_name_error" surfacing PII) can't slip through
+    # into downstream prompts; cap to 4 to bound storage.
+    raw = payload.get("error_tags")
+    if raw is None or not isinstance(raw, list):
+        payload["error_tags"] = []
+        return
+    tags: list[str] = []
+    for entry in raw[:4]:
+        if not isinstance(entry, str):
+            continue
+        normalised = entry.strip().lower()
+        if normalised in _ERROR_TAG_VOCAB:
+            tags.append(normalised)
+    payload["error_tags"] = tags
+
+
+# Closed vocabulary the grader is asked to pick from. Any other tag
+# is dropped at validation time — the trade-off is "lose a tag we
+# didn't plan for" vs "let an LLM hallucinated label leak into
+# every downstream prompt that reads error_patterns". The latter is
+# worse; the former is recoverable (we add the tag here and ship).
+_ERROR_TAG_VOCAB: frozenset[str] = frozenset({
+    "gender_error",
+    "case_error",
+    "verb_conjugation",
+    "tense_error",
+    "word_order",
+    "preposition_choice",
+    "vocabulary_gap",
+    "register_mismatch",
+    "spelling_typo",
+    "capitalisation",
+    "pluralisation",
+    "other",
+})
 
 
 def _build_system_prompt(skill_content: str) -> str:
@@ -249,13 +289,34 @@ def _build_user_prompt(
         f"\nRUBRIC FOR THIS CARD TYPE:\n  {rubric_line}\n"
         "\nLEARNER'S ANSWER:\n"
         f"  {tag_learner_input(user_answer)}\n"
-        "\nTASK: Grade the answer. Output JSON only — { rating, feedback }. "
+        "\nTASK: Grade the answer. Output JSON only — "
+        "{ rating, feedback, error_tags }. "
         "Feedback must be 1–3 sentences and directly usable. For 'correct', "
         "confirm and show the canonical form if their spelling drifted. For "
         "'partial', name the specific gap. For 'wrong', give the right "
         "answer in one breath without shaming. Don't lecture; the learner "
         "will see many more cards on this pattern. A blank or 'I don't know' "
-        "answer is 'wrong' — give the right answer and a one-line nudge."
+        "answer is 'wrong' — give the right answer and a one-line nudge. "
+        "\n\nerror_tags is a list of 0-2 short category labels from the "
+        "fixed vocabulary below describing what KIND of mistake the "
+        "learner made. Empty list when the answer is 'correct'. Use 1-2 "
+        "tags when 'partial' or 'wrong'. Don't invent new labels — pick "
+        "from this set:\n"
+        "  - 'gender_error'        — wrong noun gender (der/die/das, le/la, …)\n"
+        "  - 'case_error'          — wrong case marking on article / noun\n"
+        "  - 'verb_conjugation'    — wrong person/number on a verb\n"
+        "  - 'tense_error'         — wrong tense for the context\n"
+        "  - 'word_order'          — verb in wrong position / sentence shape\n"
+        "  - 'preposition_choice'  — wrong preposition for the verb / phrase\n"
+        "  - 'vocabulary_gap'      — didn't know the target word\n"
+        "  - 'register_mismatch'   — formal/informal pronoun or tone error\n"
+        "  - 'spelling_typo'       — clear typo on otherwise correct word\n"
+        "  - 'capitalisation'      — wrong casing (German noun caps, etc.)\n"
+        "  - 'pluralisation'       — wrong plural form\n"
+        "  - 'other'               — none of the above fit\n"
+        "These tags feed adaptive curriculum design — they let the next "
+        "module target the learner's actual weaknesses rather than a "
+        "generic plan."
     )
 
 

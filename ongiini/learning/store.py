@@ -892,6 +892,85 @@ def next_due_cards(
     return out
 
 
+def error_pattern_summary(
+    learner_id: str,
+    *,
+    goal_id: str | None = None,
+    since_attempt_count: int = 30,
+    top_n: int = 5,
+) -> list[dict[str, Any]]:
+    """Return the top error categories for this learner, sorted by
+    count descending.
+
+    Drives the adaptive-curriculum part of Track D: the curriculum
+    designer + card author both surface these so the next module
+    can target the learner's actual weaknesses (e.g. "12 gender
+    errors in the last 30 attempts → next module covers noun
+    gender").
+
+    ``since_attempt_count`` keeps the window recent — old errors
+    from before the learner improved shouldn't drag the profile.
+    Defaults to the last 30 attempts which is roughly 2-3 modules of
+    drill, the same scale the curriculum designer plans at.
+
+    ``goal_id`` scopes to one curriculum if set (so errors from a
+    separate German goal don't pollute the French one). Returns
+    ``[{tag, count}, ...]`` capped at ``top_n``."""
+    if not learner_id:
+        return []
+    with _conn() as c:
+        # Pull the recent-window slice of attempts and their tag JSON.
+        # Filtering on rating != correct cuts the working set by
+        # ~80% on a typical learner profile (most attempts succeed).
+        sql = (
+            "SELECT a.error_tags_json "
+            "FROM card_attempts a "
+        )
+        params: list[Any] = []
+        if goal_id:
+            sql += (
+                "JOIN learning_cards c ON c.card_id = a.card_id "
+                "WHERE a.learner_id = ? AND c.goal_id = ? "
+            )
+            params.extend([learner_id, goal_id])
+        else:
+            sql += "WHERE a.learner_id = ? "
+            params.append(learner_id)
+        # Filter to RATING_WRONG only. Including 'partial' would keep
+        # a learner who's making *some* progress on a category — but
+        # still missing — stuck in the count window forever (partial
+        # attempts don't drop out the way 'wrong' does as the learner
+        # improves), causing the curriculum designer to keep adding
+        # remedial modules. Wrong-only gives a cleaner signal that
+        # rolls off naturally as the learner stops making the
+        # mistake.
+        sql += (
+            "AND a.rating = ? "
+            "AND a.error_tags_json IS NOT NULL "
+            "ORDER BY a.attempted_at DESC LIMIT ?"
+        )
+        params.extend([RATING_WRONG, max(1, int(since_attempt_count))])
+        rows = c.execute(sql, params).fetchall()
+    counts: dict[str, int] = {}
+    for r in rows:
+        try:
+            tags = json.loads(r["error_tags_json"] or "[]")
+        except Exception:                                       # noqa: BLE001
+            continue
+        if not isinstance(tags, list):
+            continue
+        for t in tags:
+            if isinstance(t, str) and t.strip():
+                key = t.strip().lower()
+                counts[key] = counts.get(key, 0) + 1
+    ordered = sorted(
+        counts.items(),
+        # Count DESC, then tag alpha for deterministic tie-break.
+        key=lambda kv: (-kv[1], kv[0]),
+    )
+    return [{"tag": t, "count": n} for t, n in ordered[:max(1, int(top_n))]]
+
+
 # ──────────────────────────────────────────────────────────────────
 # Attempts (the PII boundary)
 # ──────────────────────────────────────────────────────────────────
@@ -904,12 +983,20 @@ def record_attempt(
     ai_feedback: str,
     rating: str,
     hint_used: bool = False,
+    error_tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Record a graded attempt and advance the Leitner state.
 
     PII contract: ``user_answer`` is sanitised via ``pii.sanitize``
     before INSERT. Callers can't bypass this — same enforcement
     pattern contributions.py uses.
+
+    ``error_tags`` is a list of 0-4 short category labels from the
+    grader's fixed vocabulary (``gender_error``, ``verb_conjugation``,
+    ``word_order``, …) describing what KIND of mistake the learner
+    made. Persisted as JSON on the attempt row; aggregated by
+    :func:`error_pattern_summary` to drive adaptive curriculum
+    design.
 
     The Leitner promotion treats 'correct' and 'partial' as success
     (forward motion in MVP). Only 'wrong' demotes to box 1. The card
@@ -949,12 +1036,28 @@ def record_attempt(
         c.execute("BEGIN IMMEDIATE")
         try:
             attempt_id = str(uuid4())
+            # Normalise the error_tags list to a JSON string for
+            # storage; the grader has already trimmed + capped, but
+            # we also accept a missing/empty list defensively here
+            # so older callers that don't yet pass error_tags don't
+            # crash on the INSERT.
+            tags_for_storage: list[str] = []
+            if isinstance(error_tags, list):
+                for t in error_tags[:4]:
+                    if isinstance(t, str) and t.strip():
+                        tags_for_storage.append(t.strip().lower()[:40])
+            tags_json = (
+                json.dumps(tags_for_storage, ensure_ascii=False)
+                if tags_for_storage else None
+            )
             c.execute(
                 "INSERT INTO card_attempts (attempt_id, card_id, learner_id, "
-                "user_answer, ai_feedback, rating, hint_used, attempted_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "user_answer, ai_feedback, rating, hint_used, attempted_at, "
+                "error_tags_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (attempt_id, card_id, learner_id, sanitised_answer,
-                 ai_feedback, rating, 1 if hint_used else 0, now_iso),
+                 ai_feedback, rating, 1 if hint_used else 0, now_iso,
+                 tags_json),
             )
 
             if skip_srs:

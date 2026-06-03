@@ -98,8 +98,8 @@ def test_drill_phase_starts_when_all_lessons_taught_and_story_done():
     """Once every lesson topic in the module has at least
     TARGET_LESSONS_PER_TOPIC lessons AND the module's single story has
     been emitted, drill begins on the first practice topic. The
-    ``stories_emitted: 1`` is what bypasses the new story phase that
-    fires between teach and drill."""
+    rotation now starts at slot 0 which is RECOGNITION
+    (multiple_choice) — the input→output gradient from Track E."""
     outline = _outline([_module()])
     digest = {"mod-1": {
         "topics_taught": {"l1": 1, "l2": 1},
@@ -108,50 +108,48 @@ def test_drill_phase_starts_when_all_lessons_taught_and_story_done():
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.phase == "drill"
-    assert sel.card_type == CARD_VOCAB   # first in rotation
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[0]
     assert sel.topic_id == "p1"
 
 
-def test_drill_first_exercise_per_topic_is_vocab():
-    """The 0th drill of a topic uses the first card_type in the
-    rotation (vocab)."""
+def test_drill_first_exercise_per_topic_is_recognition():
+    """The 0th drill of a module uses the first card_type in the
+    rotation. Track E makes that recognition (multiple_choice)."""
     outline = _outline([_module(lesson_topics=0, practice_topics=2)])
     digest = {"mod-1": {"topics_taught": {}, "topics_drilled": {}}}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
-    assert sel.card_type == CARD_VOCAB
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[0]
+    # Documented intent: first drill is recognition, not production.
+    assert sel.card_type == CARD_MULTIPLE_CHOICE
 
 
-def test_drill_second_exercise_in_module_is_cloze():
-    """The 1st drill in the module uses the second card_type in the
-    rotation (cloze) — proving the round-robin. The rotation index is
-    the module-level total of drills, not per-topic."""
+def test_drill_second_exercise_in_module_is_next_in_rotation():
+    """The 1st drill in the module uses rotation slot 1 — proving the
+    round-robin. The rotation index is the module-level total of
+    drills, not per-topic."""
     outline = _outline([_module(lesson_topics=0, practice_topics=2)])
     digest = {"mod-1": {
         "topics_taught": {},
         "topics_drilled": {"p1": 1},
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
-    # p1 still has headroom (TARGET=2), and the module already has 1
-    # drill, so the picker returns cloze (rotation slot 1).
     assert sel.topic_id == "p1"
-    assert sel.card_type == CARD_CLOZE
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[1]
 
 
 def test_drill_rotates_per_module_not_per_topic():
     """Per-module rotation: drilling 4 practice topics in a row
-    should cycle through 4 different card_types, not return vocab
-    every time. Each new topic gets the NEXT type in the rotation."""
+    should cycle through 4 different card_types, not return the
+    first type every time. Each new topic gets the NEXT type in
+    the rotation."""
     outline = _outline([_module(lesson_topics=0, practice_topics=4)])
-    # First drill in a fresh module — module total = 0 → vocab.
+    rot = selector.EXERCISE_TYPE_ROTATION
     sel = selector.select_next_card(
         outline=outline,
         module_digest={"mod-1": {"topics_taught": {}, "topics_drilled": {}}},
     )
-    assert sel.topic_id == "p1" and sel.card_type == CARD_VOCAB
+    assert sel.topic_id == "p1" and sel.card_type == rot[0]
 
-    # After p1 hits its quota (2 drills), the 3rd drill in the
-    # module goes to p2 — and the rotation index is 2, so it's
-    # translation (NOT vocab again).
     sel = selector.select_next_card(
         outline=outline,
         module_digest={"mod-1": {
@@ -160,9 +158,8 @@ def test_drill_rotates_per_module_not_per_topic():
         }},
     )
     assert sel.topic_id == "p2"
-    assert sel.card_type == CARD_TRANSLATION   # rotation slot 2
+    assert sel.card_type == rot[2]   # rotation slot 2
 
-    # After p2 also done, module total = 4 → rotation slot 4 = grammar.
     sel = selector.select_next_card(
         outline=outline,
         module_digest={"mod-1": {
@@ -171,14 +168,12 @@ def test_drill_rotates_per_module_not_per_topic():
         }},
     )
     assert sel.topic_id == "p3"
-    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[4]   # grammar
+    assert sel.card_type == rot[4]
 
 
 def test_drill_advances_to_next_practice_topic_after_quota():
-    """When p1's drill quota is met, drill moves to p2. Under the
-    per-module rotation, p2's first drill is NOT vocab again — the
-    rotation index is the module-level total (here: 2), so the third
-    drill in the module is translation."""
+    """When p1's drill quota is met, drill moves to p2. Per-module
+    rotation means p2's first drill is rotation[2], not rotation[0]."""
     outline = _outline([_module(lesson_topics=0, practice_topics=2)])
     digest = {"mod-1": {
         "topics_taught": {},
@@ -186,7 +181,7 @@ def test_drill_advances_to_next_practice_topic_after_quota():
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.topic_id == "p2"
-    assert sel.card_type == CARD_TRANSLATION   # rotation index = 2
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[2]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -277,7 +272,6 @@ def test_story_phase_emits_exactly_once_per_module():
     """After the story has been emitted (stories_emitted: 1), the
     selector advances to drill — never a second story in the same
     module."""
-    from ongiini.learning.db import CARD_VOCAB
     outline = _outline([_module()])
     digest = {"mod-1": {
         "topics_taught": {"l1": 1, "l2": 1},
@@ -286,21 +280,21 @@ def test_story_phase_emits_exactly_once_per_module():
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.phase == "drill"
-    assert sel.card_type == CARD_VOCAB
+    # First drill is rotation[0] — see Track E pedagogical sequencing.
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[0]
 
 
 def test_story_phase_skipped_when_module_has_no_lesson_topics():
     """A module with only practice topics has no anchor for a story
     (no lesson taught yet for the story to ground in). Skip story,
     go straight to drill."""
-    from ongiini.learning.db import CARD_VOCAB
     outline = _outline([_module(lesson_topics=0, practice_topics=2)])
     digest = {"mod-1": {
         "topics_taught": {}, "topics_drilled": {}, "stories_emitted": 0,
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.phase == "drill"
-    assert sel.card_type == CARD_VOCAB
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[0]
 
 
 def test_graduation_when_no_in_progress_module():
@@ -324,12 +318,13 @@ def test_graduation_when_outline_missing():
 # Card_type rotation
 # ──────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("count,expected", [
-    (0, CARD_VOCAB),
-    (1, CARD_CLOZE),
-    (2, CARD_TRANSLATION),
-    (3, CARD_MULTIPLE_CHOICE),
-    (len(selector.EXERCISE_TYPE_ROTATION), CARD_VOCAB),   # wraps round
-])
-def test_pick_exercise_type_round_robin(count, expected):
+@pytest.mark.parametrize("count", [0, 1, 2, 3, len(selector.EXERCISE_TYPE_ROTATION)])
+def test_pick_exercise_type_round_robin(count):
+    """Round-robin against the canonical rotation tuple. The
+    pedagogically-ordered (Track E) rotation reads:
+    multiple_choice → vocab → cloze → translation → grammar → dialogue
+    then wraps. Asserting against indices keeps the test stable when
+    we tune the order again."""
+    rot = selector.EXERCISE_TYPE_ROTATION
+    expected = rot[count % len(rot)]
     assert selector.pick_exercise_type(count) == expected

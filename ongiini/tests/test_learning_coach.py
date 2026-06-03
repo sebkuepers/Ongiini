@@ -280,13 +280,31 @@ async def test_selector_drives_lesson_lesson_exercise_sequence(temp_db):
     messages.claim_exercise(story_msg["message_id"])
 
     # Turn 4 — story done; selector finally picks an exercise drill.
-    fm = FakeModel(responses=[_EXERCISE, _CRITIC_READY])
+    # First drill in the rotation is the RECOGNITION slot (Track E),
+    # which is multiple_choice — so the queued response needs the
+    # MC shape (options + reference_answer matching one label).
+    from ongiini.learning import selector
+    first_slot = selector.EXERCISE_TYPE_ROTATION[0]
+    assert first_slot == db.CARD_MULTIPLE_CHOICE, (
+        "this test assumes the rotation opens on multiple_choice — "
+        "if the rotation order changes, update the queued FakeModel "
+        "response shape too."
+    )
+    mc_payload = json.dumps({
+        "prompt_text": "Pick the formal greeting:",
+        "reference_answer": "A",
+        "options": [
+            {"label": "A", "text": "Guten Tag"},
+            {"label": "B", "text": "Tschüss"},
+        ],
+    })
+    fm = FakeModel(responses=[mc_payload, _CRITIC_READY])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
     )
     assert out[-1]["kind"] == db.MSG_EXERCISE
-    assert out[-1]["payload"].get("card_type") == "vocab"   # first in rotation
+    assert out[-1]["payload"].get("card_type") == first_slot
 
 
 @pytest.mark.asyncio

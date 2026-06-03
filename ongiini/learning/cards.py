@@ -634,12 +634,35 @@ def _build_content_brief(
                     "cards: recent prompt lookup failed; continuing "
                     "without variation context. error=%s", exc,
                 )
+    # Surface the learner's recent error pattern so a noun-rich vocab
+    # card prefers nouns the learner keeps getting wrong, a grammar
+    # card targets the conjugation they keep slipping on, etc. Top 5
+    # tags only; empty when the learner is fresh.
+    err_block = ""
+    if ctx.error_patterns:
+        parts = [
+            f"{e.get('tag')}×{e.get('count')}"
+            for e in ctx.error_patterns
+            if (
+                isinstance(e, dict)
+                and isinstance(e.get("tag"), str)
+                and e.get("tag")
+                and e.get("count") is not None
+            )
+        ]
+        if parts:
+            err_block = (
+                "\nLEARNER'S RECENT ERROR PROFILE (target these "
+                "weaknesses where the card_type allows):\n"
+                f"  {', '.join(parts)}\n"
+            )
     return (
         "LEARNER:\n"
         f"  name: {tag_learner_input(p.get('name'))}\n"
         f"  level: {p.get('current_level') or 'beginner'}\n"
         f"  focus: {tag_learner_input(ctx.goal_title or ctx.goal_context or p.get('objective'))}\n"
-        "\nCARD TO AUTHOR (selected by the coach — these are FIXED, "
+        + err_block
+        + "\nCARD TO AUTHOR (selected by the coach — these are FIXED, "
         "you don't pick them, you produce content for them):\n"
         f"  card_type: {card_type}\n"
         f"  module: {tag_learner_input(module_title)} (id: {module_id})\n"

@@ -57,14 +57,28 @@ TARGET_LESSONS_PER_TOPIC = 1
 TARGET_DRILLS_PER_PRACTICE_TOPIC = 2
 
 # Round-robin rotation for exercise card_type variety. The n-th drill
-# on a topic picks rotation[n % len(rotation)]. The order is designed
-# so the first drill is the easiest (vocab) and the last is the hardest
-# (dialogue) — readable on inspection.
+# on the in-progress MODULE (across all its practice topics) picks
+# rotation[n % len(rotation)]. The order follows the SLA
+# input→output gradient (Track E — pedagogical sequencing):
+#
+#   1. multiple_choice  — RECOGNITION (pick from options)
+#   2. vocab            — controlled RECALL (single word/phrase)
+#   3. cloze            — controlled PRODUCTION (single load-bearing slot)
+#   4. translation      — guided PRODUCTION (full sentence, scaffolded)
+#   5. grammar          — controlled PRODUCTION (morphology transformation)
+#   6. dialogue         — free PRODUCTION (situational, multi-slot)
+#
+# So a learner's first drill on a new topic is the lowest-stakes
+# recognition; by the time they hit dialogue they've already seen
+# the pattern in three lighter forms. This is consistent with
+# Krashen + Swain (input first, output ramped). Empirically, this
+# also feels less abrupt than the prior "vocab → cloze → translation"
+# opener which threw production at the learner from card 1.
 EXERCISE_TYPE_ROTATION: tuple[str, ...] = (
+    CARD_MULTIPLE_CHOICE,
     CARD_VOCAB,
     CARD_CLOZE,
     CARD_TRANSLATION,
-    CARD_MULTIPLE_CHOICE,
     CARD_GRAMMAR,
     CARD_DIALOGUE,
 )

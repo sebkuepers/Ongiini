@@ -271,11 +271,15 @@ async def _handle_answer(
         new_messages.append(msg)
         return new_messages
 
-    # Persist the attempt + advance Leitner state.
+    # Persist the attempt + advance Leitner state. ``error_tags``
+    # come from the grader's structured output (Track D) — the
+    # category labels feed the adaptive-curriculum surface in
+    # ``store.error_pattern_summary``.
     attempt = store.record_attempt(
         learner_id=learner_id, card_id=card["card_id"],
         user_answer=user_text, ai_feedback=grade["feedback"],
         rating=grade["rating"], hint_used=False,
+        error_tags=grade.get("error_tags") or [],
     )
 
     # Feedback message — the coloured callout in the thread.

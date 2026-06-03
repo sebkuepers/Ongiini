@@ -322,6 +322,23 @@ def warmup() -> None:
         if "extras_json" not in card_cols:
             c.execute("ALTER TABLE learning_cards ADD COLUMN extras_json TEXT")
 
+        # error_tags_json on card_attempts — Track D: error-pattern
+        # tracking. The grader tags each non-correct attempt with 0-2
+        # short category labels (gender_error, verb_conjugation,
+        # word_order, etc.); store.error_pattern_summary aggregates
+        # them per (learner, goal) so the curriculum designer + card
+        # author can target the learner's actual weaknesses rather
+        # than a generic plan. Nullable for the same back-compat
+        # reason as the card columns above.
+        attempt_cols = {
+            r["name"]
+            for r in c.execute("PRAGMA table_info(card_attempts)").fetchall()
+        }
+        if "error_tags_json" not in attempt_cols:
+            c.execute(
+                "ALTER TABLE card_attempts ADD COLUMN error_tags_json TEXT"
+            )
+
     log.info("learning sqlite warmed at %s", _db_path())
 
 
