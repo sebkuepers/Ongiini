@@ -865,6 +865,44 @@ async def _produce_next_thing(
         else:
             lesson_payload["body"] = persist_prompt_text
             lesson_payload["examples"] = card_payload.get("examples") or []
+        # Defence: a lesson card with neither valid steps NOR a body
+        # would render as an empty carousel on the frontend (the bug
+        # Sebastian hit). Surface this in the logs with the raw card
+        # payload so we can see what the model emitted, and inject a
+        # synthesised body so the learner sees SOMETHING rather than
+        # a blank card.
+        has_steps_content = (
+            isinstance(lesson_payload.get("steps"), list)
+            and lesson_payload["steps"]
+            and any(
+                isinstance(s, dict)
+                and (
+                    (isinstance(s.get("body"), str) and s["body"].strip())
+                    or s.get("kind") == "quick_check"
+                )
+                for s in lesson_payload["steps"]
+            )
+        )
+        has_body_content = (
+            isinstance(lesson_payload.get("body"), str)
+            and lesson_payload["body"].strip()
+        )
+        if not has_steps_content and not has_body_content:
+            log.warning(
+                "coach: lesson payload would render empty — synthesising "
+                "fallback body from title. raw_card_payload_keys=%s "
+                "title=%r persist_prompt_text=%r",
+                list(card_payload.keys()),
+                card_payload.get("title"),
+                persist_prompt_text,
+            )
+            lesson_payload.pop("steps", None)
+            lesson_payload["body"] = (
+                card_payload.get("title")
+                or persist_prompt_text
+                or "(lesson content missing)"
+            )
+            lesson_payload["examples"] = []
         msg = messages.append(
             learner_id=learner_id, goal_id=goal_id,
             kind=MSG_LESSON,

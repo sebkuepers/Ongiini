@@ -272,7 +272,17 @@
           examples: Array.isArray(p.examples) ? p.examples : [],
         }];
       }
-      if (!steps || !steps.length) steps = [{ kind: 'concept', body: '' }];
+      // Defence: if neither steps nor body arrived, render the title
+      // as a single-step body so the learner sees SOMETHING instead
+      // of an empty carousel with a Got it button (the bug Sebastian
+      // hit). The backend now also synthesises a fallback body when
+      // it detects this shape — both layers fail safe.
+      if (!steps || !steps.length) {
+        steps = [{
+          kind: 'concept',
+          body: String(p.title || '(lesson content missing)'),
+        }];
+      }
 
       var current = 0;
 
