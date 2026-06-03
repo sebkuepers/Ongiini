@@ -144,12 +144,22 @@ def _topics_by_kind(
     return lessons, practices
 
 
-def pick_exercise_type(topic_drilled_count: int) -> str:
-    """Round-robin pick from ``EXERCISE_TYPE_ROTATION``. The n-th
-    drill on a topic gets rotation[n % len(rotation)]. Pure function
-    so the same state always gives the same answer."""
+def pick_exercise_type(module_drilled_total: int) -> str:
+    """Round-robin pick from ``EXERCISE_TYPE_ROTATION`` indexed by the
+    total number of exercises already emitted in the in-progress
+    MODULE — not per-topic.
+
+    Why per-module: keying per-topic meant every new topic restarted
+    at slot 0 (vocab), which made entire modules feel vocab-heavy
+    because the second slot (cloze) was the only other type that
+    fired within the default drill quota. Per-module rotation cycles
+    through translation / multiple_choice / grammar / dialogue across
+    the practice topics within one module, even if each topic only
+    gets 2 drills.
+
+    Pure function so the same state always gives the same answer."""
     rot = EXERCISE_TYPE_ROTATION
-    return rot[max(0, topic_drilled_count) % len(rot)]
+    return rot[max(0, module_drilled_total) % len(rot)]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -194,6 +204,10 @@ def select_next_card(
     digest = module_digest.get(mod_id, {}) if module_digest else {}
     taught: dict[str, int] = digest.get("topics_taught") or {}
     drilled: dict[str, int] = digest.get("topics_drilled") or {}
+    # Module-level rotation index: total exercises emitted in this
+    # module so far. Drives card_type variety so the user doesn't see
+    # vocab on every new practice topic in a row.
+    module_drilled_total = sum(int(v or 0) for v in drilled.values())
 
     # Phase 2 — teach: first lesson topic that hasn't hit its lesson quota.
     for t in lessons:
@@ -213,7 +227,7 @@ def select_next_card(
         tid = t["id"]
         if int(drilled.get(tid, 0)) < TARGET_DRILLS_PER_PRACTICE_TOPIC:
             return CardSelection(
-                card_type=pick_exercise_type(int(drilled.get(tid, 0))),
+                card_type=pick_exercise_type(module_drilled_total),
                 module_id=mod_id,
                 module_title=mod_title,
                 topic_id=tid,
@@ -235,7 +249,7 @@ def select_next_card(
         # already been drilled a lot, advance instead of looping.
         if count < TARGET_DRILLS_PER_PRACTICE_TOPIC * 2:
             return CardSelection(
-                card_type=pick_exercise_type(count),
+                card_type=pick_exercise_type(module_drilled_total),
                 module_id=mod_id,
                 module_title=mod_title,
                 topic_id=t["id"],

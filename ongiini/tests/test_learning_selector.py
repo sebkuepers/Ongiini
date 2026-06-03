@@ -118,23 +118,64 @@ def test_drill_first_exercise_per_topic_is_vocab():
     assert sel.card_type == CARD_VOCAB
 
 
-def test_drill_second_exercise_per_topic_is_cloze():
-    """The 1st drill of a topic uses the second card_type in the
-    rotation (cloze) — proving the round-robin."""
+def test_drill_second_exercise_in_module_is_cloze():
+    """The 1st drill in the module uses the second card_type in the
+    rotation (cloze) — proving the round-robin. The rotation index is
+    the module-level total of drills, not per-topic."""
     outline = _outline([_module(lesson_topics=0, practice_topics=2)])
     digest = {"mod-1": {
         "topics_taught": {},
         "topics_drilled": {"p1": 1},
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
-    # p1 still has headroom (TARGET=2), but with 1 drill done the
-    # picker returns cloze, not vocab.
+    # p1 still has headroom (TARGET=2), and the module already has 1
+    # drill, so the picker returns cloze (rotation slot 1).
     assert sel.topic_id == "p1"
     assert sel.card_type == CARD_CLOZE
 
 
+def test_drill_rotates_per_module_not_per_topic():
+    """Per-module rotation: drilling 4 practice topics in a row
+    should cycle through 4 different card_types, not return vocab
+    every time. Each new topic gets the NEXT type in the rotation."""
+    outline = _outline([_module(lesson_topics=0, practice_topics=4)])
+    # First drill in a fresh module — module total = 0 → vocab.
+    sel = selector.select_next_card(
+        outline=outline,
+        module_digest={"mod-1": {"topics_taught": {}, "topics_drilled": {}}},
+    )
+    assert sel.topic_id == "p1" and sel.card_type == CARD_VOCAB
+
+    # After p1 hits its quota (2 drills), the 3rd drill in the
+    # module goes to p2 — and the rotation index is 2, so it's
+    # translation (NOT vocab again).
+    sel = selector.select_next_card(
+        outline=outline,
+        module_digest={"mod-1": {
+            "topics_taught": {},
+            "topics_drilled": {"p1": 2},
+        }},
+    )
+    assert sel.topic_id == "p2"
+    assert sel.card_type == CARD_TRANSLATION   # rotation slot 2
+
+    # After p2 also done, module total = 4 → rotation slot 4 = grammar.
+    sel = selector.select_next_card(
+        outline=outline,
+        module_digest={"mod-1": {
+            "topics_taught": {},
+            "topics_drilled": {"p1": 2, "p2": 2},
+        }},
+    )
+    assert sel.topic_id == "p3"
+    assert sel.card_type == selector.EXERCISE_TYPE_ROTATION[4]   # grammar
+
+
 def test_drill_advances_to_next_practice_topic_after_quota():
-    """When p1's drill quota is met, drill moves to p2."""
+    """When p1's drill quota is met, drill moves to p2. Under the
+    per-module rotation, p2's first drill is NOT vocab again — the
+    rotation index is the module-level total (here: 2), so the third
+    drill in the module is translation."""
     outline = _outline([_module(lesson_topics=0, practice_topics=2)])
     digest = {"mod-1": {
         "topics_taught": {},
@@ -142,7 +183,7 @@ def test_drill_advances_to_next_practice_topic_after_quota():
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.topic_id == "p2"
-    assert sel.card_type == CARD_VOCAB   # first drill on p2
+    assert sel.card_type == CARD_TRANSLATION   # rotation index = 2
 
 
 # ──────────────────────────────────────────────────────────────────
