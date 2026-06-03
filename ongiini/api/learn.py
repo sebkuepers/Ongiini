@@ -73,9 +73,11 @@ _INTAKE_PROMPTS_TEMPLATE = {
         "elementary, intermediate, or advanced?"
     ),
     intake.FIELD_OBJECTIVE: (
-        "Last one — what do you actually want to be able to do in "
-        "{target}? A job interview, talking to colleagues, helping "
-        "the kids with homework? In one sentence."
+        "Last one — what do you want to focus on for {target}? A "
+        "situation you're preparing for (a job interview, talking to "
+        "colleagues, your in-laws) OR a specific topic you want to "
+        "nail (past tenses, modal verbs, restaurant vocabulary). One "
+        "sentence."
     ),
 }
 

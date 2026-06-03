@@ -309,6 +309,39 @@ def test_intake_completion_flips_flag(temp_db):
     assert r.json()["intake_complete"] is True
 
 
+def test_intake_objective_prompt_invites_both_situation_and_topic(temp_db):
+    """The intake prompt was rephrased to invite both situational
+    framing ('job interview') AND specific-topic framing ('past
+    tenses', 'modal verbs'). Lock in the new phrasing so a future
+    edit that drops the topic-focus invitation regresses loudly."""
+    client = _client()
+    s = client.post("/v1/learn/sessions", json={
+        "target_language": "german",
+    }).json()
+    # Walk to the objective step.
+    for field_name, raw in [
+        ("name", "Sebastian"),
+        ("age", "35"),
+        ("current_level", "beginner"),
+    ]:
+        r = client.post(
+            "/v1/learn/intake",
+            json={"learner_id": s["learner_id"], "field": field_name,
+                  "value": raw, "target_language": "german"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+    # Last hop's response carries the objective prompt for the
+    # frontend to render. Confirm the new wording invites both
+    # framings — situational AND topic.
+    prompt = body["next_intake_prompt"]
+    assert "situation" in prompt.lower()
+    assert "topic" in prompt.lower()
+    # The previous "what do you actually want to be able to do" wording
+    # is gone — would over-bias toward situational framing.
+    assert "actually want to be able to do" not in prompt.lower()
+
+
 # ============================================================
 # /turn — the chat-first entry point
 # ============================================================
