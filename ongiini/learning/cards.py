@@ -21,6 +21,7 @@ from typing import Any
 
 from owela import Model
 
+from . import store
 from .context import LearnerContext
 from .db import (
     CARD_CLOZE, CARD_DIALOGUE, CARD_GRAMMAR, CARD_LESSON,
@@ -167,7 +168,12 @@ def _validate_card(payload: dict[str, Any]) -> None:
     # the laxer contract was silently producing worse grading on
     # malformed cards. For production cards the reference_answer is
     # a free-form rubric, not a canonical string.
-    if ct in EXERCISE_CARD_TYPES:
+    # Dialogue cards synthesise ``reference_answer`` from per-turn
+    # ``answer`` fields further down — they're allowed to omit a
+    # top-level reference_answer because each blank carries its own
+    # canonical fill on the turn it belongs to. Every other exercise
+    # type still requires the single-string reference_answer here.
+    if ct in EXERCISE_CARD_TYPES and ct != CARD_DIALOGUE:
         ref = payload.get("reference_answer")
         if not isinstance(ref, str) or not ref.strip():
             raise ModelOutputError(
@@ -242,6 +248,13 @@ def _validate_card(payload: dict[str, Any]) -> None:
             raise ModelOutputError(
                 "dialogue card requires 'turns' list of at least 2 entries"
             )
+        # Multi-slot answers: each turn that contains '___' MUST carry
+        # an 'answer' string with the canonical fill. The frontend
+        # renders one input per blank, the grader compares each. The
+        # composite reference_answer is synthesised from these so older
+        # storage paths (SRS replay, history) keep working.
+        slot_answers: list[str] = []
+        any_blank = False
         for turn in turns:
             if not isinstance(turn, dict):
                 raise ModelOutputError("dialogue turn must be an object")
@@ -249,10 +262,42 @@ def _validate_card(payload: dict[str, Any]) -> None:
                 raise ModelOutputError(
                     "dialogue turn requires non-empty 'speaker'"
                 )
-            if not isinstance(turn.get("text"), str):
+            text = turn.get("text")
+            if not isinstance(text, str):
                 raise ModelOutputError(
                     "dialogue turn requires 'text' string (may be '___')"
                 )
+            if "___" in text:
+                any_blank = True
+                ans = turn.get("answer")
+                if not isinstance(ans, str) or not ans.strip():
+                    raise ModelOutputError(
+                        "dialogue turn containing '___' requires a "
+                        "non-empty 'answer' string with the canonical "
+                        "fill for that blank"
+                    )
+                # Number of blanks per turn must equal what the renderer
+                # will draw. Multi-blank single-turn is allowed if the
+                # model emits a pipe-joined 'answer' with the same count.
+                blanks = text.count("___")
+                ans_parts = [p.strip() for p in ans.split("|")]
+                if blanks > 1 and len(ans_parts) != blanks:
+                    raise ModelOutputError(
+                        f"dialogue turn has {blanks} blanks but 'answer' "
+                        f"has {len(ans_parts)} pipe-separated parts — "
+                        f"emit one per blank in order"
+                    )
+                slot_answers.extend(ans_parts if blanks > 1 else [ans.strip()])
+        if not any_blank:
+            raise ModelOutputError(
+                "dialogue card requires at least one turn with '___' as "
+                "the slot the learner fills"
+            )
+        # Synthesise the composite reference_answer so the rest of the
+        # storage / grading pipeline (which expects a single string)
+        # keeps working transparently. The pipe is the slot delimiter
+        # the grader expects.
+        payload["reference_answer"] = " | ".join(slot_answers)
     elif ct == CARD_PROVERB:
         # cultural_note is optional, but if present must be a string —
         # frontend renders it after grading.
@@ -284,6 +329,29 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
+def _format_recent_topic_drills(
+    recent: list[dict[str, Any]],
+) -> str:
+    """Render the recent-on-this-topic drills as a short list the
+    author or critic can scan. Empty string when there's nothing to
+    surface (fresh topic). Trims long prompts so a paragraph-length
+    dialogue doesn't blow the brief."""
+    if not recent:
+        return ""
+    lines = ["RECENT DRILLS ON THIS TOPIC (do NOT reuse the same example "
+             "sentence — pick a different one):"]
+    for r in recent:
+        ct = r.get("card_type") or "?"
+        pt = (r.get("prompt_text") or "").strip().replace("\n", " ")
+        ra = (r.get("reference_answer") or "").strip().replace("\n", " ")
+        if len(pt) > 180:
+            pt = pt[:177] + "…"
+        if len(ra) > 80:
+            ra = ra[:77] + "…"
+        lines.append(f"  - {ct}: \"{pt}\" → \"{ra}\"")
+    return "\n".join(lines) + "\n"
+
+
 def _build_content_brief(
     ctx: LearnerContext,
     *,
@@ -296,8 +364,12 @@ def _build_content_brief(
     """Tight prompt: the SELECTOR has already decided card_type +
     module + topic. The model's only job is to write the content.
 
-    No outline JSON, no module digest, no pacing rules, no recent
-    cards — none of those decisions are the model's anymore."""
+    For exercise cards we also surface the last few drills already
+    emitted on the SAME topic so the author picks a different example
+    sentence instead of re-using the canonical one across every
+    card_type in the rotation (the "Ich trinke einen Kaffee" bug).
+    Lessons skip this — their content is the topic itself, not an
+    example sentence."""
     p = ctx.profile or {}
     if card_type == CARD_LESSON:
         content_brief = (
@@ -309,6 +381,7 @@ def _build_content_brief(
             "DO NOT include card_type, module_id, topic_id, or "
             "prompt_text — the coach attaches scaffolding."
         )
+        recent_block = ""
     else:
         content_brief = (
             f"Produce a {card_type} EXERCISE card drilling this topic. "
@@ -318,6 +391,18 @@ def _build_content_brief(
             "Output JSON. DO NOT include card_type, module_id, or "
             "topic_id — the coach attaches scaffolding."
         )
+        recent_block = ""
+        if ctx.goal_id:
+            try:
+                recent = store.recent_topic_prompts(ctx.goal_id, topic_id, limit=4)
+                recent_block = _format_recent_topic_drills(recent)
+            except Exception as exc:                            # noqa: BLE001
+                # Variation guidance is best-effort — a failure to read
+                # recent prompts must NOT block authoring.
+                log.warning(
+                    "cards: recent_topic_prompts lookup failed; continuing "
+                    "without variation context. error=%s", exc,
+                )
     return (
         "LEARNER:\n"
         f"  name: {tag_learner_input(p.get('name'))}\n"
@@ -328,7 +413,8 @@ def _build_content_brief(
         f"  card_type: {card_type}\n"
         f"  module: {tag_learner_input(module_title)} (id: {module_id})\n"
         f"  topic:  {tag_learner_input(topic_title)} (id: {topic_id})\n"
-        f"\n{content_brief}"
+        + (f"\n{recent_block}" if recent_block else "")
+        + f"\n{content_brief}"
     )
 
 
@@ -438,6 +524,7 @@ async def generate_card_content_with_review(
             model=model, skill_content=skill_content,
             card_type=card_type,
             module_title=module_title,
+            topic_id=topic_id,
             topic_title=topic_title,
         )
     except Exception as exc:                                # noqa: BLE001

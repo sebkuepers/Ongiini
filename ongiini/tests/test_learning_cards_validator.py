@@ -361,7 +361,6 @@ def test_dialogue_requires_turns_list():
         _validate_card(_good(
             "dialogue",
             prompt_text="Complete:",
-            reference_answer="something",
         ))
 
 
@@ -375,7 +374,6 @@ def test_dialogue_each_turn_needs_speaker_and_text():
                 {"speaker": "A", "text": "Hello"},
                 {"text": "no speaker"},
             ],
-            reference_answer="x",
         ))
     with pytest.raises(ModelOutputError, match="text"):
         _validate_card(_good(
@@ -385,20 +383,71 @@ def test_dialogue_each_turn_needs_speaker_and_text():
                 {"speaker": "A", "text": "Hello"},
                 {"speaker": "B"},   # missing text
             ],
-            reference_answer="x",
+        ))
+
+
+def test_dialogue_requires_at_least_one_blank():
+    """A dialogue with no '___' anywhere has nothing to drill — fatal."""
+    with pytest.raises(ModelOutputError, match="___"):
+        _validate_card(_good(
+            "dialogue",
+            prompt_text="Read the dialogue:",
+            turns=[
+                {"speaker": "A", "text": "Hello!"},
+                {"speaker": "B", "text": "Hi!"},
+            ],
+        ))
+
+
+def test_dialogue_blank_turn_requires_answer():
+    """Every turn containing '___' MUST carry a non-empty 'answer'."""
+    with pytest.raises(ModelOutputError, match="answer"):
+        _validate_card(_good(
+            "dialogue",
+            prompt_text="Complete:",
+            turns=[
+                {"speaker": "A", "text": "Hallo! ___ Sie bereit?"},
+                {"speaker": "B", "text": "Ja, ich bin bereit."},
+            ],
+        ))
+
+
+def test_dialogue_multi_blank_turn_requires_pipe_separated_answer():
+    """Two blanks in one turn need a pipe-separated answer with matching count."""
+    with pytest.raises(ModelOutputError, match="blanks"):
+        _validate_card(_good(
+            "dialogue",
+            prompt_text="Complete:",
+            turns=[
+                {"speaker": "A", "text": "Ich ___ einen Kaffee, ___ Sie auch?",
+                 "answer": "trinke"},   # only 1 part for 2 blanks
+                {"speaker": "B", "text": "Ja."},
+            ],
         ))
 
 
 def test_dialogue_happy_path():
-    _validate_card(_good(
+    """New-shape happy path: per-turn 'answer' fields, synthesised
+    composite reference_answer in pipe-separated form. Glosses must
+    NOT contain '___' (the gloss is read-only context — the blank
+    lives only in the target-language line so the renderer doesn't
+    paint a second input that has no matching answer)."""
+    payload = _good(
         "dialogue",
         prompt_text="Complete your line:",
         turns=[
-            {"speaker": "Interviewer", "text": "Erzählen Sie etwas."},
-            {"speaker": "You", "text": "___"},
+            {"speaker": "Interviewer",
+             "text": "Erzählen Sie etwas. (Tell us something.)"},
+            {"speaker": "You",
+             "text": "Mein Name ___ Sebastian. (My name is Sebastian.)",
+             "answer": "ist"},
+            {"speaker": "Interviewer",
+             "text": "Und ___ alt sind Sie? (And how old are you?)",
+             "answer": "wie"},
         ],
-        reference_answer="Mein Name ist Sebastian.",
-    ))
+    )
+    _validate_card(payload)
+    assert payload["reference_answer"] == "ist | wie"
 
 
 # ──────────────────────────────────────────────────────────────────

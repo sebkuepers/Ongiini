@@ -755,3 +755,47 @@ def test_save_card_persists_topic_id(temp_db):
     assert row.get("module_id") == "mod-1"
     assert row.get("topic_id") == "t-greetings"
 
+
+
+def test_recent_topic_prompts_returns_oldest_first_excluding_lessons(temp_db):
+    """The variation helper feeds the card author + critic with the
+    last few drills on the same topic so they can avoid recycling the
+    same example sentence. Lessons are filtered out (they don't have
+    a comparable prompt_text); results come back oldest-first so the
+    brief reads as a timeline."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    gid = goal["goal_id"]
+    # Plant cards in known order: lesson (excluded), then 3 drills.
+    store.save_card(gid, db.CARD_LESSON, "lesson body",
+                    module_id="m1", topic_id="t1")
+    store.save_card(gid, db.CARD_VOCAB,
+                    "Translate to German: 'I drink a coffee.'",
+                    reference_answer="Ich trinke einen Kaffee.",
+                    module_id="m1", topic_id="t1")
+    store.save_card(gid, db.CARD_CLOZE,
+                    "Ich ___ einen Kaffee. (I ___ a coffee.)",
+                    reference_answer="trinke",
+                    module_id="m1", topic_id="t1")
+    store.save_card(gid, db.CARD_TRANSLATION,
+                    "Translate to German: 'I drink a coffee.'",
+                    reference_answer="Ich trinke einen Kaffee.",
+                    module_id="m1", topic_id="t1")
+    # A card on a DIFFERENT topic must NOT leak in.
+    store.save_card(gid, db.CARD_VOCAB, "other-topic prompt",
+                    reference_answer="x",
+                    module_id="m1", topic_id="t2")
+
+    out = store.recent_topic_prompts(gid, "t1", limit=4)
+    assert [r["card_type"] for r in out] == ["vocab", "cloze", "translation"]
+    # Lesson and the t2 card must be absent.
+    assert all(r["card_type"] != db.CARD_LESSON for r in out)
+    assert all("other-topic" not in (r["prompt_text"] or "") for r in out)
+
+
+def test_recent_topic_prompts_empty_on_missing_goal_or_topic(temp_db):
+    """Defensive: a None / blank goal_id or topic_id returns [], not
+    a query error. The author and critic call this on every exercise
+    card; one bad value should not crash a turn."""
+    assert store.recent_topic_prompts("", "t1") == []
+    assert store.recent_topic_prompts("g1", "") == []

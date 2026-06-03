@@ -717,6 +717,45 @@ def progress_for_modules(
     return out
 
 
+def recent_topic_prompts(
+    goal_id: str,
+    topic_id: str,
+    *,
+    limit: int = 4,
+) -> list[dict[str, Any]]:
+    """Return the most recent ``limit`` cards drilled on this topic
+    within this goal, oldest first.
+
+    Powers the variation rule for card authoring: the author and the
+    critic both need to see "this topic already had a vocab card with
+    sentence X and a cloze card with sentence X" so the next drill
+    picks a DIFFERENT example sentence. Without this signal Gemma
+    happily emits 'Ich trinke einen Kaffee' three turns in a row
+    across vocab → cloze → translation.
+
+    Returns ``[{card_type, prompt_text, reference_answer}, ...]``.
+    Lessons (which don't have a prompt_text) are excluded so the
+    list only contains comparable drill prompts. Empty when no prior
+    cards exist on this topic.
+    """
+    if not goal_id or not topic_id:
+        return []
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT card_type, prompt_text, reference_answer "
+            "FROM learning_cards "
+            "WHERE goal_id = ? AND topic_id = ? "
+            "AND card_type != 'lesson' "
+            # Tie-break on rowid so cards inserted within the same
+            # second (common in tests + tight production loops) come
+            # back in insertion order rather than at SQLite's whim.
+            "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (goal_id, topic_id, max(1, int(limit))),
+        ).fetchall()
+    # DB returns newest first; flip so the brief reads oldest → newest.
+    return [dict(r) for r in reversed(rows)]
+
+
 def get_card(card_id: str) -> dict[str, Any] | None:
     if not card_id:
         return None

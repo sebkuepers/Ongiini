@@ -32,6 +32,7 @@ from typing import Any
 
 from owela import Model
 
+from . import store
 from .context import LearnerContext
 from .llm import INJECTION_GUARD_LINE, ModelOutputError, ask_for_json, tag_learner_input
 
@@ -90,19 +91,60 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
+def _format_recent_topic_drills(recent: list[dict[str, Any]]) -> str:
+    """Render the recent drills on the same topic so the critic can
+    flag duplication (the "third card with 'Ich trinke einen Kaffee'"
+    case). Returns "" when there's nothing to surface."""
+    if not recent:
+        return ""
+    lines = [
+        "RECENT DRILLS ON THE SAME TOPIC (the under-review card SHOULD NOT "
+        "duplicate any of these example sentences — flag as an issue if it "
+        "reuses the same sentence):",
+    ]
+    for r in recent:
+        ct = r.get("card_type") or "?"
+        pt = (r.get("prompt_text") or "").strip().replace("\n", " ")
+        ra = (r.get("reference_answer") or "").strip().replace("\n", " ")
+        if len(pt) > 180:
+            pt = pt[:177] + "…"
+        if len(ra) > 80:
+            ra = ra[:77] + "…"
+        lines.append(f"  - {ct}: \"{pt}\" → \"{ra}\"")
+    return "\n".join(lines)
+
+
 def _build_user_prompt(
     ctx: LearnerContext,
     payload: dict[str, Any],
     *,
     card_type: str,
     module_title: str,
+    topic_id: str,
     topic_title: str,
 ) -> str:
     """Render the card + the learner context + the selector's pick so
-    the critic can score against the same evidence the author saw."""
+    the critic can score against the same evidence the author saw.
+
+    When ``ctx.goal_id`` + ``topic_id`` resolve to prior drills on the
+    same topic, those are surfaced too so the critic can fail a card
+    that reuses the same example sentence — Sebastian's "vocab →
+    cloze → translation all on 'Ich trinke einen Kaffee'" bug."""
     import json as _json
     p = ctx.profile or {}
     card_json = _json.dumps(payload, indent=2, ensure_ascii=False)
+
+    recent_block = ""
+    if ctx.goal_id and topic_id:
+        try:
+            recent = store.recent_topic_prompts(ctx.goal_id, topic_id, limit=4)
+            recent_block = _format_recent_topic_drills(recent)
+        except Exception as exc:                            # noqa: BLE001
+            log.warning(
+                "card_critic: recent_topic_prompts lookup failed; "
+                "scoring without variation context. error=%s", exc,
+            )
+
     parts = [
         "LEARNER CONTEXT:",
         f"  name: {tag_learner_input(p.get('name'))}",
@@ -117,6 +159,11 @@ def _build_user_prompt(
         "  payload:",
         card_json,
         "",
+    ]
+    if recent_block:
+        parts.append(recent_block)
+        parts.append("")
+    parts.extend([
         "TASK: Review the card against the CARD REVIEW CHECKLIST in "
         "the skill reference above. Return JSON:",
         '  {"ready": bool, "score": 1-10,',
@@ -126,7 +173,7 @@ def _build_user_prompt(
         "Rules:",
         " - ready=true ONLY if the card meets ALL checklist items "
         "well enough to ship — no fatal gaps in level, gloss "
-        "completeness, or type-specific shape.",
+        "completeness, type-specific shape, or variation.",
         " - issues MUST be specific + actionable. \"Step 2 body "
         "has no gloss — add '(Good day…)' after the German sentence\" "
         "is good. \"Could be better\" is useless.",
@@ -134,7 +181,7 @@ def _build_user_prompt(
         " - Each entry under 30 words.",
         " - score is a sanity check (1=unusable, 10=excellent); the "
         "orchestrator reads ready first.",
-    ]
+    ])
     return "\n".join(parts)
 
 
@@ -207,11 +254,15 @@ async def critique_card(
     skill_content: str,
     card_type: str,
     module_title: str,
+    topic_id: str,
     topic_title: str,
 ) -> CardCritiqueResult:
     """Score a card payload against the Card review checklist. Never
     raises — model errors degrade to ``ready=True, score=0`` so the
-    orchestrator keeps moving (with a logged warning)."""
+    orchestrator keeps moving (with a logged warning).
+
+    ``topic_id`` lets the critic also see prior drills on the same
+    topic so it can fail a card that reuses a recent example sentence."""
     try:
         result = await ask_for_json(
             system_prompt=_build_system_prompt(skill_content),
@@ -219,6 +270,7 @@ async def critique_card(
                 ctx, payload,
                 card_type=card_type,
                 module_title=module_title,
+                topic_id=topic_id,
                 topic_title=topic_title,
             ),
             model=model,

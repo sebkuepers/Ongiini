@@ -496,17 +496,90 @@
         wrap.appendChild(src);
       }
       if (ct === 'dialogue' && Array.isArray(p.turns) && p.turns.length) {
+        // Multi-slot dialogue: each "___" in a turn's text becomes its
+        // own inline <input>. Non-blank text segments render as plain
+        // spans. When the card is active we collect all input values
+        // on submit, pipe-join them in turn-blank order, and send as
+        // the learner's answer (the grader expects pipe-separated
+        // multi-slot answers per the dialogue rubric).
         var convo = el('div', 'card-dialogue-turns');
+        var dialogueInputs = [];
         p.turns.forEach(function (turnObj) {
           if (!turnObj || typeof turnObj !== 'object') return;
           var spk = String(turnObj.speaker || '');
           var txt = String(turnObj.text || '');
           var bubble = el('div', 'dialogue-bubble');
           if (spk) bubble.appendChild(el('div', 'dialogue-speaker', spk));
-          bubble.appendChild(el('div', 'dialogue-line', txt));
+          var lineWrap = el('div', 'dialogue-line');
+          // Split on the blank marker. Even indices are plain text,
+          // odd indices are where inputs go.
+          var segments = txt.split('___');
+          segments.forEach(function (seg, idx) {
+            if (seg) lineWrap.appendChild(document.createTextNode(seg));
+            if (idx < segments.length - 1) {
+              if (isActive) {
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'dialogue-input';
+                input.autocomplete = 'off';
+                input.autocapitalize = 'off';
+                input.spellcheck = false;
+                input.setAttribute('aria-label', t('card.dialogue.slot_label'));
+                dialogueInputs.push(input);
+                lineWrap.appendChild(input);
+              } else {
+                // After grading the card becomes inert — show the
+                // blank as a faint placeholder rather than a live
+                // input so the user sees the original shape but
+                // can't re-submit.
+                var ph = el('span', 'dialogue-input-static', '___');
+                lineWrap.appendChild(ph);
+              }
+            }
+          });
+          bubble.appendChild(lineWrap);
           convo.appendChild(bubble);
         });
         wrap.appendChild(convo);
+        if (isActive && dialogueInputs.length) {
+          var submitWrap = el('div', 'card-dialogue-submit');
+          var submitBtn = document.createElement('button');
+          submitBtn.type = 'button';
+          submitBtn.className = 'dialogue-submit-btn';
+          submitBtn.textContent = t('card.dialogue.submit');
+          submitBtn.disabled = true;
+          var updateSubmitState = function () {
+            // Require something in every slot before enabling — empty
+            // pipes "Sind | | Haben | habe" grade as wrong without
+            // giving the learner useful feedback.
+            var anyEmpty = dialogueInputs.some(function (inp) {
+              return !inp.value.trim();
+            });
+            submitBtn.disabled = anyEmpty || state.busy;
+          };
+          dialogueInputs.forEach(function (inp) {
+            inp.addEventListener('input', updateSubmitState);
+            inp.addEventListener('keydown', function (ev) {
+              if (ev.key === 'Enter') {
+                ev.preventDefault();
+                if (!submitBtn.disabled) submitBtn.click();
+              }
+            });
+          });
+          submitBtn.addEventListener('click', function () {
+            if (state.busy) return;
+            var answers = dialogueInputs.map(function (inp) {
+              return inp.value.trim();
+            });
+            var joined = answers.join(' | ');
+            dialogueInputs.forEach(function (inp) { inp.disabled = true; });
+            submitBtn.disabled = true;
+            appendMessage({ kind: 'learner_text', payload: { text: joined } });
+            sendTurn(joined, { optimisticLearnerText: true });
+          });
+          submitWrap.appendChild(submitBtn);
+          wrap.appendChild(submitWrap);
+        }
       }
 
       if (p.prompt_text) wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
