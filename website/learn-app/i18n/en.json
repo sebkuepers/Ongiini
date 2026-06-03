@@ -116,6 +116,9 @@
   "panel": {
     "summary_pending": "Your plan is still being put together."
   },
+  "coach": {
+    "module_advance": "Done with {previous}. Next up: {next}."
+  },
   "progress": {
     "cards": "{n} cards",
     "cards_pct": "{n} cards · {pct}% right",

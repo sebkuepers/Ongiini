@@ -246,8 +246,11 @@ def select_next_card(
         )
         t, count = ranked[0]
         # Only recycle if there's HEADROOM — if every taught topic has
-        # already been drilled a lot, advance instead of looping.
-        if count < TARGET_DRILLS_PER_PRACTICE_TOPIC * 2:
+        # already been drilled to the same target as practice topics,
+        # advance instead of piling on more. Earlier this cap was
+        # 2× TARGET_DRILLS_PER_PRACTICE_TOPIC which made modules feel
+        # over-drilled (10 cards before advancing in the German smoke).
+        if count < TARGET_DRILLS_PER_PRACTICE_TOPIC:
             return CardSelection(
                 card_type=pick_exercise_type(module_drilled_total),
                 module_id=mod_id,

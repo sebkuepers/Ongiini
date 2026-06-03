@@ -193,21 +193,22 @@ def test_drill_advances_to_next_practice_topic_after_quota():
 def test_recycle_picks_taught_lesson_topic_with_fewest_drills():
     """When all practice topics have hit their drill quota, the
     selector recycles: drill a taught lesson topic. Tie-break is
-    outline order; absent ties, pick the one with the fewest drills
-    so the recycling spaces evenly."""
+    outline order; pick the topic with the fewest recycled drills
+    so the recycling spaces evenly. The recycle cap is now the
+    same as TARGET_DRILLS_PER_PRACTICE_TOPIC (was 2× before)."""
     outline = _outline([_module()])
     digest = {"mod-1": {
         "topics_taught": {"l1": 1, "l2": 1},
         "topics_drilled": {
             "p1": selector.TARGET_DRILLS_PER_PRACTICE_TOPIC,
             "p2": selector.TARGET_DRILLS_PER_PRACTICE_TOPIC,
-            "l1": 1,   # already recycled once
-            # l2 not yet recycled
+            # Neither lesson topic has been recycled yet; pick l1 by
+            # outline order tie-break.
         },
     }}
     sel = selector.select_next_card(outline=outline, module_digest=digest)
     assert sel.phase == "recycle"
-    assert sel.topic_id == "l2"   # fewer recycled drills than l1
+    assert sel.topic_id == "l1"
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -215,10 +216,10 @@ def test_recycle_picks_taught_lesson_topic_with_fewest_drills():
 # ──────────────────────────────────────────────────────────────────
 
 def test_advance_first_when_module_fully_drilled_and_recycled():
-    """When even recycling has hit a cap, the selector tells the
+    """When even recycling has hit its cap, the selector tells the
     coach to advance the module."""
     outline = _outline([_module()])
-    cap = selector.TARGET_DRILLS_PER_PRACTICE_TOPIC * 2
+    cap = selector.TARGET_DRILLS_PER_PRACTICE_TOPIC
     digest = {"mod-1": {
         "topics_taught": {"l1": 1, "l2": 1},
         "topics_drilled": {

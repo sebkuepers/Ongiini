@@ -240,10 +240,30 @@
 
     function renderCoachText(msg) {
       var wrap = el('div', 'msg msg--coach');
-      if (msg.payload && msg.payload.meta && msg.payload.meta.error) {
+      var p = msg.payload || {};
+      if (p.meta && p.meta.error) {
         wrap.classList.add('has-error');
       }
-      var bubble = el('div', 'bubble', String((msg.payload && msg.payload.text) || ''));
+      // Structured coach messages (kind set) get rendered via i18n
+      // templates so the bubble localizes for the learner's UI. The
+      // server still sends English text as a fallback for older clients
+      // AND for the case where the bundle is missing the key — t()
+      // returns the key itself on a miss, which would otherwise paint
+      // the literal "coach.module_advance" string into the bubble.
+      var rendered = '';
+      if (p.kind === 'module_advance' && p.previous_title && p.new_title) {
+        var key = 'coach.module_advance';
+        rendered = t(key, {
+          previous: p.previous_title,
+          next: p.new_title,
+        });
+        if (rendered === key) {
+          rendered = String(p.text || '');
+        }
+      } else {
+        rendered = String(p.text || '');
+      }
+      var bubble = el('div', 'bubble', rendered);
       wrap.appendChild(bubble);
       return wrap;
     }
