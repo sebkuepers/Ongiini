@@ -1,0 +1,24 @@
+# Cloudflare Pages headers for learn.ongiini.ai
+#
+# The default cache-control on Pages is `public, max-age=14400`
+# (4 hours) for static assets. That bit Sebastian on the carousel
+# deploy: his browser served a 4-hour-old app.js so the new
+# multi-step lesson renderer never ran. Drop the cache for HTML to
+# zero (must-revalidate every load) and put a short window on the
+# bundled JS/CSS — combined with the ?v=… query-string busters in
+# index.html, this means deploys take effect immediately.
+
+/*
+  Cache-Control: public, max-age=60, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/app.js
+  Cache-Control: public, max-age=60, must-revalidate
+
+/app.css
+  Cache-Control: public, max-age=60, must-revalidate
+
+/i18n/*.json
+  Cache-Control: public, max-age=60, must-revalidate
