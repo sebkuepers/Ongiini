@@ -127,7 +127,7 @@
   },
   "intake": {
     "welcome_prefix": "Welkom — kom ons stel jou op. ",
-    "putting_plan": "Wonderlik. Ek stel nou jou plan saam…",
+    "putting_plan": "Wonderlik. Ek stel nou jou plan saam… Dit kan 2-3 minute neem — moet asseblief nie die venster toemaak nie.",
     "welcome_back_short": "Welkom terug.",
     "focus_prompt_template": "Waarop wil jy dié keer vir {target} fokus?"
   },

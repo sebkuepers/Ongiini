@@ -127,7 +127,7 @@
   },
   "intake": {
     "welcome_prefix": "Welcome — let's set you up. ",
-    "putting_plan": "Perfect. Putting your plan together now…",
+    "putting_plan": "Perfect. Putting your plan together now… This can take 2-3 minutes — please don't close the window.",
     "welcome_back_short": "Welcome back.",
     "focus_prompt_template": "What do you want to focus on for {target} this time?"
   },
