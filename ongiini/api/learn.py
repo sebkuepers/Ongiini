@@ -51,28 +51,46 @@ log = logging.getLogger("ongiini.api.learn")
 # ──────────────────────────────────────────────────────────────────
 # Friendly default intake prompts — the API surfaces these to the
 # frontend for the four fixed fields. The LLM owns everything AFTER
-# intake.
+# intake. The level + objective prompts reference the TARGET language
+# the learner picked on the landing page; if no target is known yet
+# (cold magic-link arrival), they fall back to a neutral phrasing.
 # ──────────────────────────────────────────────────────────────────
 
-_INTAKE_PROMPTS = {
-    intake.FIELD_NAME: "Welcome! What should I call you?",
+# Display names for the {target} placeholder — keys are the lowercase
+# canonical language values used in the goal record.
+_TARGET_DISPLAY = {
+    "afrikaans": "Afrikaans",
+    "english": "English",
+    "german": "German",
+    "oshiwambo": "Oshiwambo",
+}
+
+_INTAKE_PROMPTS_TEMPLATE = {
+    intake.FIELD_NAME: "What should I call you?",
     intake.FIELD_AGE: "How old are you? (Just so I pitch examples at the right level.)",
     intake.FIELD_LEVEL: (
-        "Where would you say your Afrikaans is today — beginner, "
+        "Where would you say your {target} is today — beginner, "
         "elementary, intermediate, or advanced?"
     ),
     intake.FIELD_OBJECTIVE: (
         "Last one — what do you actually want to be able to do in "
-        "Afrikaans? A job interview, talking to in-laws, helping the "
-        "kids with homework? In one sentence."
+        "{target}? A job interview, talking to colleagues, helping "
+        "the kids with homework? In one sentence."
     ),
 }
 
 
-def _intake_prompt(field: str | None) -> str | None:
+def _intake_prompt(field: str | None, target_language: str | None = None) -> str | None:
     if not field:
         return None
-    return _INTAKE_PROMPTS.get(field)
+    raw = _INTAKE_PROMPTS_TEMPLATE.get(field)
+    if raw is None:
+        return None
+    if "{target}" not in raw:
+        return raw
+    target = (target_language or "").strip().lower()
+    display = _TARGET_DISPLAY.get(target) or "the language you want to learn"
+    return raw.replace("{target}", display)
 
 
 def _ensure_enabled() -> None:
@@ -106,6 +124,12 @@ class SessionRequest(BaseModel):
     """POST /v1/learn/sessions body."""
     learner_id: str | None = Field(default=None, max_length=128)
     token: str | None = Field(default=None, max_length=4096)
+    # The target language the learner just picked on the landing page,
+    # before any goal exists. Used to phrase intake prompts in terms of
+    # the right language ("Where would you say your German is today")
+    # instead of always falling back to Afrikaans. Optional — magic-link
+    # arrivals and cold resumes may not have it.
+    target_language: str | None = Field(default=None, max_length=32)
 
 
 class GoalInfo(BaseModel):
@@ -151,6 +175,10 @@ class IntakeRequest(BaseModel):
     learner_id: str = Field(..., max_length=128)
     field: str = Field(..., max_length=32)
     value: Any
+    # Pending target language picked on the landing page so the NEXT
+    # intake prompt (after the parsed answer is saved) references the
+    # right language. Mirrors SessionRequest.target_language.
+    target_language: str | None = Field(default=None, max_length=32)
 
 
 class IntakeResponse(BaseModel):
@@ -481,11 +509,19 @@ def build_router(
             progress = store.progress_for(learner_id)
             outline = None
 
+        # Prefer the active goal's target language (resume flow); fall
+        # back to whatever the landing page passed (pending pick); the
+        # template defaults to a neutral phrasing if neither is set.
+        prompt_target = (
+            (goal_info.language if goal_info else None)
+            or req.target_language
+        )
+
         return SessionResponse(
             learner_id=learner_id,
             intake_complete=complete,
             next_intake_field=next_field,
-            next_intake_prompt=_intake_prompt(next_field),
+            next_intake_prompt=_intake_prompt(next_field, prompt_target),
             profile=profile,
             goals=goals_list,
             active_goal=goal_info,
@@ -521,7 +557,7 @@ def build_router(
                 return IntakeResponse(
                     intake_complete=False,
                     next_intake_field=req.field,
-                    next_intake_prompt=_intake_prompt(req.field),
+                    next_intake_prompt=_intake_prompt(req.field, req.target_language),
                     clarify_text=parser_result[intake_parser.CLARIFY_KEY],
                     profile=profile,
                 )
@@ -537,7 +573,7 @@ def build_router(
             return IntakeResponse(
                 intake_complete=False,
                 next_intake_field=req.field,
-                next_intake_prompt=_intake_prompt(req.field),
+                next_intake_prompt=_intake_prompt(req.field, req.target_language),
                 clarify_text="Sorry — could you say that another way?",
                 validation_error=result.reason,
                 profile=profile,
@@ -567,7 +603,7 @@ def build_router(
         return IntakeResponse(
             intake_complete=False,
             next_intake_field=next_field,
-            next_intake_prompt=_intake_prompt(next_field),
+            next_intake_prompt=_intake_prompt(next_field, req.target_language),
             profile=profile,
         )
 

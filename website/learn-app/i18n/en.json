@@ -2,7 +2,7 @@
   "locale": "en",
   "landing": {
     "eyebrow": "Ongiini · prototype",
-    "tagline": "A personalised AI learning experience, powered by your assistant.",
+    "tagline": "A personalised AI learning experience.",
     "pitch": "Tell us what you want to learn and why. The model writes a curriculum just for you, then teaches it with cards that adapt as you go. Spaced repetition keeps things sticking. No app, no signup, no multiple-choice gambling.",
     "topics_eyebrow": "Pick a track",
     "topics_h": "Languages",

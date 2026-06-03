@@ -1120,6 +1120,9 @@
       try {
         var resp = await api('/intake', {
           learner_id: state.learner_id, field: field, value: value,
+          // Carry the pending target so the NEXT prompt asks about
+          // the picked language ("Where would you say your German…").
+          target_language: state.pending_target || null,
         });
         removeSkeleton(skel);
         // The LLM intermediary either extracted a value (advance) OR
@@ -1299,6 +1302,10 @@
         var body = {};
         if (magicToken) body.token = magicToken;
         if (state.learner_id) body.learner_id = state.learner_id;
+        // Pass the pending target so the backend can phrase intake
+        // prompts ("Where would you say your German is today") in the
+        // right language instead of always falling back to Afrikaans.
+        if (state.pending_target) body.target_language = state.pending_target;
         var s = await api('/sessions', body);
         state.learner_id = s.learner_id;
         localStorage.setItem(LS_KEY, s.learner_id);
@@ -1366,7 +1373,17 @@
       onTopicCardClick('german');
     });
     btnStartClosing.addEventListener('click', function () {
-      onTopicCardClick('afrikaans');
+      // Scroll back to the language picker rather than silently
+      // defaulting to Afrikaans — the closing CTA doesn't know which
+      // language the visitor wants. Letting them pick keeps the
+      // "Get started" promise honest.
+      var topicsSection = document.getElementById('topics-section');
+      if (topicsSection && topicsSection.scrollIntoView) {
+        topicsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        // Fallback for environments without smooth scroll support.
+        window.location.hash = '#topics-section';
+      }
     });
 
     composer.addEventListener('input', function () {
