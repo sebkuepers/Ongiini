@@ -91,17 +91,17 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
-def _format_recent_topic_drills(recent: list[dict[str, Any]]) -> str:
-    """Render the recent drills on the same topic so the critic can
-    flag duplication (the "third card with 'Ich trinke einen Kaffee'"
-    case). Returns "" when there's nothing to surface."""
+def _format_recent_drills_for_critic(
+    recent: list[dict[str, Any]],
+    *,
+    header: str,
+) -> str:
+    """Same shape as the author's version but with a "FLAG AS ISSUE"
+    framing — the critic should fail a card that duplicates any of
+    these example sentences. Returns "" when nothing to surface."""
     if not recent:
         return ""
-    lines = [
-        "RECENT DRILLS ON THE SAME TOPIC (the under-review card SHOULD NOT "
-        "duplicate any of these example sentences — flag as an issue if it "
-        "reuses the same sentence):",
-    ]
+    lines = [header]
     for r in recent:
         ct = r.get("card_type") or "?"
         pt = (r.get("prompt_text") or "").strip().replace("\n", " ")
@@ -114,11 +114,39 @@ def _format_recent_topic_drills(recent: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _format_recent_topic_drills(recent: list[dict[str, Any]]) -> str:
+    """Per-topic critic header — Sebastian's "vocab → cloze →
+    translation all on 'Ich trinke einen Kaffee'" case."""
+    return _format_recent_drills_for_critic(
+        recent,
+        header=(
+            "RECENT DRILLS ON THE SAME TOPIC (the under-review card "
+            "SHOULD NOT duplicate any of these example sentences — "
+            "flag as an issue if it reuses the same sentence):"
+        ),
+    )
+
+
+def _format_recent_module_drills(recent: list[dict[str, Any]]) -> str:
+    """Per-module critic header — Sebastian's "Vielen Dank vocab card
+    twice in module 1 on different topics" case. Wider lens catches
+    cross-topic duplication that the per-topic block can't see."""
+    return _format_recent_drills_for_critic(
+        recent,
+        header=(
+            "RECENT DRILLS IN THIS MODULE (across topics — the "
+            "under-review card MUST NOT duplicate any of these "
+            "example sentences. Flag duplicates as a fatal gap):"
+        ),
+    )
+
+
 def _build_user_prompt(
     ctx: LearnerContext,
     payload: dict[str, Any],
     *,
     card_type: str,
+    module_id: str,
     module_title: str,
     topic_id: str,
     topic_title: str,
@@ -126,22 +154,42 @@ def _build_user_prompt(
     """Render the card + the learner context + the selector's pick so
     the critic can score against the same evidence the author saw.
 
-    When ``ctx.goal_id`` + ``topic_id`` resolve to prior drills on the
-    same topic, those are surfaced too so the critic can fail a card
-    that reuses the same example sentence — Sebastian's "vocab →
-    cloze → translation all on 'Ich trinke einen Kaffee'" bug."""
+    Surfaces both the per-topic and per-module recent-drill blocks so
+    the critic can fail a card that duplicates an earlier example
+    sentence either on the same topic ("Ich trinke einen Kaffee"
+    three turns in a row) or across topics in one module ("Vielen
+    Dank" twice in module 1)."""
     import json as _json
     p = ctx.profile or {}
     card_json = _json.dumps(payload, indent=2, ensure_ascii=False)
 
     recent_block = ""
-    if ctx.goal_id and topic_id:
+    if ctx.goal_id:
         try:
-            recent = store.recent_topic_prompts(ctx.goal_id, topic_id, limit=4)
-            recent_block = _format_recent_topic_drills(recent)
+            topic_recent = (
+                store.recent_topic_prompts(ctx.goal_id, topic_id, limit=4)
+                if topic_id else []
+            )
+            module_recent = (
+                store.recent_module_prompts(ctx.goal_id, module_id, limit=8)
+                if module_id else []
+            )
+            topic_keys = {
+                (r.get("card_type"), r.get("prompt_text"))
+                for r in topic_recent
+            }
+            module_only = [
+                r for r in module_recent
+                if (r.get("card_type"), r.get("prompt_text")) not in topic_keys
+            ]
+            topic_block = _format_recent_topic_drills(topic_recent)
+            module_block = _format_recent_module_drills(module_only)
+            recent_block = "\n\n".join(
+                b for b in (topic_block, module_block) if b
+            )
         except Exception as exc:                            # noqa: BLE001
             log.warning(
-                "card_critic: recent_topic_prompts lookup failed; "
+                "card_critic: recent prompt lookup failed; "
                 "scoring without variation context. error=%s", exc,
             )
 
@@ -253,6 +301,7 @@ async def critique_card(
     model: Model,
     skill_content: str,
     card_type: str,
+    module_id: str,
     module_title: str,
     topic_id: str,
     topic_title: str,
@@ -261,14 +310,16 @@ async def critique_card(
     raises — model errors degrade to ``ready=True, score=0`` so the
     orchestrator keeps moving (with a logged warning).
 
-    ``topic_id`` lets the critic also see prior drills on the same
-    topic so it can fail a card that reuses a recent example sentence."""
+    ``module_id`` + ``topic_id`` let the critic see prior drills at
+    two granularities so it can fail cards that duplicate example
+    sentences either on the same topic or anywhere in the module."""
     try:
         result = await ask_for_json(
             system_prompt=_build_system_prompt(skill_content),
             user_prompt=_build_user_prompt(
                 ctx, payload,
                 card_type=card_type,
+                module_id=module_id,
                 module_title=module_title,
                 topic_id=topic_id,
                 topic_title=topic_title,

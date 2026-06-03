@@ -75,6 +75,7 @@ def _critique(ctx, fm, **overrides):
         "model": fm,
         "skill_content": "SKILL",
         "card_type": "lesson",
+        "module_id": "m1",
         "module_title": "Greetings",
         "topic_id": "t1",
         "topic_title": "Hello",

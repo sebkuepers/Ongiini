@@ -799,3 +799,40 @@ def test_recent_topic_prompts_empty_on_missing_goal_or_topic(temp_db):
     card; one bad value should not crash a turn."""
     assert store.recent_topic_prompts("", "t1") == []
     assert store.recent_topic_prompts("g1", "") == []
+
+
+def test_recent_module_prompts_spans_all_topics_in_module(temp_db):
+    """The module-level variation helper sees drills across EVERY topic
+    in the module, not just the active one. Powers the per-module
+    variation gate that catches Sebastian's 'Vielen Dank vocab card
+    twice in module 1 on different topics' bug."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    gid = goal["goal_id"]
+    store.save_card(gid, db.CARD_LESSON, "lesson body",
+                    module_id="m1", topic_id="t1")
+    store.save_card(gid, db.CARD_VOCAB, "vocab on t1",
+                    reference_answer="x", module_id="m1", topic_id="t1")
+    store.save_card(gid, db.CARD_VOCAB, "vocab on t2",
+                    reference_answer="x", module_id="m1", topic_id="t2")
+    store.save_card(gid, db.CARD_CLOZE, "cloze on t3 ___",
+                    reference_answer="x", module_id="m1", topic_id="t3")
+    # A drill in a DIFFERENT module must NOT leak in.
+    store.save_card(gid, db.CARD_VOCAB, "wrong-module drill",
+                    reference_answer="x", module_id="m2", topic_id="t1")
+
+    out = store.recent_module_prompts(gid, "m1", limit=10)
+    prompts = {r["prompt_text"] for r in out}
+    assert "vocab on t1" in prompts
+    assert "vocab on t2" in prompts
+    assert "cloze on t3 ___" in prompts
+    assert "wrong-module drill" not in prompts
+    # Lessons are excluded — same posture as the per-topic helper.
+    assert "lesson body" not in prompts
+
+
+def test_recent_module_prompts_empty_on_missing_id(temp_db):
+    """Defensive: blank goal_id or module_id returns [] rather than
+    blowing up under a runtime path that doesn't have one yet."""
+    assert store.recent_module_prompts("", "m1") == []
+    assert store.recent_module_prompts("g1", "") == []

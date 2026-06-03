@@ -195,6 +195,16 @@ final step moves the conversation along. No grading, no SRS impact.
   `hint`. It is NOT graded, NOT scored, doesn't enter the SRS — it's
   a low-stakes self-check that lets the learner test their
   understanding before the real exercises start.
+  **The quick_check prompt tests USAGE in context, not metalinguistic
+  jargon.** "If you are traveling by bus, which noun do you use?" is
+  bad — it asks the learner to think in grammar terms (*"a noun"*)
+  instead of producing the language. Better forms:
+  `"Complete: 'Ich fahre mit dem ___'"` (complete a real sentence)
+  or `"How would you say 'Where is the bus stop?' in <<TARGET_LANGUAGE>>?"`
+  (translate a useful phrase) or `"You're at a hotel — how do you greet
+  the receptionist?"` (situational). Never ask "which article" /
+  "which case" / "which tense" as the surface question; ask for the
+  resulting sentence instead.
 - Each step's `body` is **1–3 short sentences**. No walls of text.
   If you have more to say, split across steps. The carousel makes
   this cheap.
@@ -647,16 +657,38 @@ Output shape:
 ```
 
 Checklist (score against each — `ready: true` requires no fatal
-gaps on items 1–3):
+gaps on items 1–4):
 
-1. **Level appropriateness** — content matches the learner's
-   `current_level` per the CEFR calibration above. A beginner
-   getting subjunctive mood or compound tense is a fatal gap.
-2. **Gloss completeness** — every <<TARGET_LANGUAGE>> sentence in
-   lesson step bodies / examples / dialogue context carries an
-   inline <<SOURCE_LANGUAGE>> gloss per the gloss rule. Missing
-   glosses for a beginner-level card is a fatal gap.
-3. **Type-specific shape**:
+1. **Level appropriateness — content AND source sentences.** Content
+   must match the learner's `current_level` per the CEFR calibration
+   above. A beginner getting subjunctive mood or compound tense is a
+   fatal gap. **This rule binds the source sentence too**: a grammar
+   card asking an A0/A1 learner to transform `"Der Bus fuhr."`
+   (Präteritum) into present tense is a fatal gap because the learner
+   doesn't know Präteritum yet — they cannot decode the source.
+   Source sentences MUST use only grammar the learner already has at
+   their level.
+2. **Gloss completeness AND gloss shape.** Every <<TARGET_LANGUAGE>>
+   sentence in lesson step bodies / examples / dialogue context
+   carries an inline <<SOURCE_LANGUAGE>> gloss per the gloss rule.
+   Missing glosses for a beginner-level card is a fatal gap. **The
+   gloss MUST NOT contain `___`** — a blank in the gloss creates a
+   phantom input that confuses the learner about what they're being
+   asked to fill in. `"where is ___ station? (where is ___ station)"`
+   is a fatal gap; the gloss should be `"(Excuse me, where is the
+   station?)"` with the missing piece fully spelled out in source.
+3. **Native-speaker authenticity** — every <<TARGET_LANGUAGE>>
+   sentence (prompt, source, reference_answer, dialogue turn, lesson
+   example) must be something a native <<TARGET_LANGUAGE>> speaker
+   would actually say in the situation. Grammatically possible isn't
+   enough. `"Haben Sie Hilfe?"` to ask if someone needs help is a
+   fatal gap — the natural form is `"Brauchen Sie Hilfe?"` or
+   `"Kann ich Ihnen helfen?"`. `"Hallo, wie geht es Ihnen?"` mixes
+   an informal greeting with a formal pronoun — register-incoherent,
+   fatal gap. If a drill rule (e.g. "use only sein/haben") forces
+   unnatural sentences, pick a different example that fits both the
+   rule AND natural usage — don't bend the language.
+4. **Type-specific shape**:
    - **lesson**: 2–5 steps, kinds make pedagogical sense
      (`concept` usually leads; `quick_check` last if present),
      quick_check `answer` is correct and clearly maps to the
@@ -687,12 +719,14 @@ gaps on items 1–3):
      `"Translate to German: 'I drink a coffee.' (Ich trinke einen
      Kaffee.)"` is a FATAL gap — the card no longer tests
      translation, it just asks for confirmation.
-4. **Cultural / contextual anchoring** — content fits the learner's
+5. **Cultural / contextual anchoring** — content fits the learner's
    stated focus, not generic textbook scenarios.
-5. **Variation across recent drills** — if a `RECENT DRILLS ON THE
-   SAME TOPIC` block is shown in the user prompt, the under-review
-   card MUST use a DIFFERENT example sentence than any listed. A
-   third card in a row hitting "Ich trinke einen Kaffee" is a fatal
+6. **Variation across recent drills** — if a `RECENT DRILLS ON THE
+   SAME TOPIC` or `RECENT DRILLS IN THIS MODULE` block is shown in
+   the user prompt, the under-review card MUST use a DIFFERENT
+   example sentence than any listed. A third card in a row hitting
+   "Ich trinke einen Kaffee", or the same vocab card ("Thank you very
+   much" → "Vielen Dank") appearing twice in one module, is a fatal
    gap even if each card-type's shape is correct. Variety is what
    makes the drill rotation useful.
 

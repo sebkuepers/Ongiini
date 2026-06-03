@@ -17,6 +17,7 @@ explicit instruction. We don't constrain it from the backend.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from owela import Model
@@ -31,6 +32,28 @@ from .db import (
 from .llm import INJECTION_GUARD_LINE, ModelOutputError, ask_for_json, tag_learner_input
 
 log = logging.getLogger("ongiini.learning.cards")
+
+
+# Matches any parenthesised substring on a single line. Used to enforce
+# the "no `___` inside a gloss" rule across all exercise types — the
+# inline source-language gloss is read-only context, and a blank inside
+# it creates a phantom input slot with no corresponding answer.
+_GLOSS_PARENS_RE = re.compile(r"\(([^)]*)\)")
+
+
+def _gloss_contains_blank(text: str) -> bool:
+    """Return True if any ``(...)`` substring inside ``text`` contains
+    a ``___`` blank marker. The inline gloss must show the missing
+    piece spelled out in source-language so the learner reads it as
+    read-only context; a blank in the gloss is a fatal authoring
+    error and we reject the card before it reaches the frontend
+    renderer (which would either ignore it or paint a phantom input)."""
+    if not isinstance(text, str) or "___" not in text or "(" not in text:
+        return False
+    for match in _GLOSS_PARENS_RE.finditer(text):
+        if "___" in match.group(1):
+            return True
+    return False
 
 
 # Always required, regardless of card_type or shape variant.
@@ -159,6 +182,19 @@ def _validate_card(payload: dict[str, Any]) -> None:
             )
         if not isinstance(payload["prompt_text"], str) or not payload["prompt_text"].strip():
             raise ModelOutputError("card prompt_text must be a non-empty string")
+        # Reject any blank marker leaked into the inline gloss. The
+        # gloss is read-only context — a `___` inside `(...)` either
+        # paints a phantom input slot on the frontend or confuses the
+        # learner about what they're being asked to fill in (Sebastian
+        # saw `"Excuse me, where is ___ station?"` and typed `ist`
+        # because the English implied a verb-shaped gap).
+        if _gloss_contains_blank(payload["prompt_text"]):
+            raise ModelOutputError(
+                "card prompt_text has a '___' blank inside a "
+                "parenthesised gloss — the gloss must spell out the "
+                "missing piece in source-language so the learner "
+                "reads it as read-only context"
+            )
 
     # All exercise types require a non-empty reference_answer the
     # grader can score against. Lesson cards are exempt (they're
@@ -242,6 +278,12 @@ def _validate_card(payload: dict[str, Any]) -> None:
             raise ModelOutputError(
                 "grammar card requires non-empty 'source_sentence'"
             )
+        if _gloss_contains_blank(src):
+            raise ModelOutputError(
+                "grammar card source_sentence has '___' inside a "
+                "parenthesised gloss — the gloss must spell out the "
+                "source-language equivalent of the full target sentence"
+            )
     elif ct == CARD_DIALOGUE:
         turns = payload.get("turns")
         if not isinstance(turns, list) or len(turns) < 2:
@@ -266,6 +308,17 @@ def _validate_card(payload: dict[str, Any]) -> None:
             if not isinstance(text, str):
                 raise ModelOutputError(
                     "dialogue turn requires 'text' string (may be '___')"
+                )
+            # Reject blank markers leaked into the gloss. The
+            # frontend's split-on-`___` renderer would paint a
+            # phantom input inside the parenthesised source-language
+            # gloss with no matching answer slot. Catch here before
+            # it ever reaches the renderer.
+            if _gloss_contains_blank(text):
+                raise ModelOutputError(
+                    "dialogue turn text has '___' inside a "
+                    "parenthesised gloss — the gloss must show the "
+                    "missing piece spelled out in source-language"
                 )
             if "___" in text:
                 any_blank = True
@@ -329,17 +382,18 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
-def _format_recent_topic_drills(
+def _format_recent_drills(
     recent: list[dict[str, Any]],
+    *,
+    header: str,
 ) -> str:
-    """Render the recent-on-this-topic drills as a short list the
-    author or critic can scan. Empty string when there's nothing to
-    surface (fresh topic). Trims long prompts so a paragraph-length
-    dialogue doesn't blow the brief."""
+    """Render a list of recent drills with the given header. Used for
+    both the per-topic and per-module variation visibility — same
+    shape, different scope, same "don't repeat the example sentence"
+    instruction. Empty string when there's nothing to surface."""
     if not recent:
         return ""
-    lines = ["RECENT DRILLS ON THIS TOPIC (do NOT reuse the same example "
-             "sentence — pick a different one):"]
+    lines = [header]
     for r in recent:
         ct = r.get("card_type") or "?"
         pt = (r.get("prompt_text") or "").strip().replace("\n", " ")
@@ -350,6 +404,29 @@ def _format_recent_topic_drills(
             ra = ra[:77] + "…"
         lines.append(f"  - {ct}: \"{pt}\" → \"{ra}\"")
     return "\n".join(lines) + "\n"
+
+
+def _format_recent_topic_drills(recent: list[dict[str, Any]]) -> str:
+    """Per-topic header — the strictest variation gate: same topic
+    means the author was just here on the previous card_type slot."""
+    return _format_recent_drills(
+        recent,
+        header=("RECENT DRILLS ON THIS TOPIC (do NOT reuse the same "
+                "example sentence — pick a different one):"),
+    )
+
+
+def _format_recent_module_drills(recent: list[dict[str, Any]]) -> str:
+    """Per-module header — the wider lens. Catches duplicates that
+    cross topics within one module ("Thank you very much → Vielen
+    Dank" showing up twice in module 1 even though the topics
+    differed)."""
+    return _format_recent_drills(
+        recent,
+        header=("RECENT DRILLS IN THIS MODULE (across topics — do NOT "
+                "duplicate any of these example sentences in your "
+                "new card):"),
+    )
 
 
 def _build_content_brief(
@@ -394,13 +471,32 @@ def _build_content_brief(
         recent_block = ""
         if ctx.goal_id:
             try:
-                recent = store.recent_topic_prompts(ctx.goal_id, topic_id, limit=4)
-                recent_block = _format_recent_topic_drills(recent)
+                topic_recent = store.recent_topic_prompts(
+                    ctx.goal_id, topic_id, limit=4,
+                )
+                module_recent = store.recent_module_prompts(
+                    ctx.goal_id, module_id, limit=8,
+                )
+                # Dedup the module list against the topic list — the
+                # same drills will appear in both queries since the
+                # topic is inside the module. Keep only module-level
+                # drills the topic block doesn't already surface.
+                topic_keys = {
+                    (r.get("card_type"), r.get("prompt_text"))
+                    for r in topic_recent
+                }
+                module_only = [
+                    r for r in module_recent
+                    if (r.get("card_type"), r.get("prompt_text")) not in topic_keys
+                ]
+                topic_block = _format_recent_topic_drills(topic_recent)
+                module_block = _format_recent_module_drills(module_only)
+                recent_block = topic_block + module_block
             except Exception as exc:                            # noqa: BLE001
                 # Variation guidance is best-effort — a failure to read
                 # recent prompts must NOT block authoring.
                 log.warning(
-                    "cards: recent_topic_prompts lookup failed; continuing "
+                    "cards: recent prompt lookup failed; continuing "
                     "without variation context. error=%s", exc,
                 )
     return (
@@ -523,6 +619,7 @@ async def generate_card_content_with_review(
             ctx, payload,
             model=model, skill_content=skill_content,
             card_type=card_type,
+            module_id=module_id,
             module_title=module_title,
             topic_id=topic_id,
             topic_title=topic_title,
