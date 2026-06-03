@@ -27,6 +27,7 @@ from .db import (
     CARD_PRODUCTION,
     CARD_PROVERB,
     CARD_REORDER,
+    CARD_STORY,
     CARD_TRANSLATION,
     CARD_VOCAB,
     EXERCISE_CARD_TYPES,
@@ -122,6 +123,22 @@ _TYPE_RUBRICS: dict[str, str] = {
         "variant that means the same thing → 'partial'. Unrelated "
         "saying → 'wrong'."
     ),
+    CARD_STORY: (
+        "Story: graded comprehension of a short reading. Reference "
+        "answers are pipe-separated ('|') in question order. The "
+        "learner's submission arrives in the same shape. Score "
+        "**LENIENTLY** — this is comprehensible-input, not retrieval "
+        "practice. ANY answer in either <<TARGET_LANGUAGE>> or "
+        "<<SOURCE_LANGUAGE>> that captures the gist of the reference "
+        "is 'correct'. Synonyms, paraphrases, partial answers that "
+        "show the learner understood the gist are 'correct'. Only "
+        "score 'partial' if the learner clearly misread one of the "
+        "questions; 'wrong' if the response is unrelated to the "
+        "story. Feedback must be encouraging — point out what the "
+        "learner caught and only briefly note any miss. The point of "
+        "stories is to build confidence with new input, not to gate "
+        "progress on perfect recall."
+    ),
     CARD_DIALOGUE: (
         "Dialogue: a multi-slot fill-in across the conversation. The "
         "reference_answer is the canonical answers for each blank, "
@@ -192,6 +209,27 @@ def _build_user_prompt(
             ans = t.get("answer")
             ans_tail = f"  [answer: {ans!r}]" if isinstance(ans, str) and ans.strip() else ""
             extras.append(f"  {t.get('speaker')}: {t.get('text')}{ans_tail}")
+    elif ct == CARD_STORY:
+        # Show the grader the actual story so it can judge
+        # comprehension leniently — the rubric assumes the grader has
+        # read what the learner read. Then surface each question + its
+        # canonical answer so the slot-by-slot match works.
+        title = card.get("title")
+        if isinstance(title, str) and title.strip():
+            extras.append(f"  story title: {title}")
+        for i, p in enumerate(card.get("paragraphs") or []):
+            if not isinstance(p, dict):
+                continue
+            extras.append(
+                f"  paragraph {i+1}: {p.get('target')} {p.get('gloss')}"
+            )
+        for i, q in enumerate(card.get("comprehension_questions") or []):
+            if not isinstance(q, dict):
+                continue
+            extras.append(
+                f"  question {i+1}: {q.get('prompt')!r} "
+                f"[canonical answer: {q.get('answer')!r}]"
+            )
     elif ct == CARD_GRAMMAR:
         extras.append(f"  source_sentence: {card.get('source_sentence')}")
     elif ct == CARD_REORDER:

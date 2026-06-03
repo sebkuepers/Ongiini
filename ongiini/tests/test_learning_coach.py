@@ -84,6 +84,26 @@ _LESSON = json.dumps({
 # shape, so each card emission needs ONE critic response queued
 # right after the design response.
 _CRITIC_READY = json.dumps({"ready": True, "score": 9, "issues": []})
+# Story content payload — 4 paragraphs + 1 comprehension question, the
+# bare minimum the validator accepts. Used for tests that walk through
+# the story phase that now fires between teach and drill.
+_STORY = json.dumps({
+    "title": "At the bakery",
+    "paragraphs": [
+        {"target": "Sebastian geht in die Bäckerei.",
+         "gloss": "(Sebastian goes into the bakery.)"},
+        {"target": "Die Bäckerin sagt 'Guten Tag'.",
+         "gloss": "(The baker says 'Good day'.)"},
+        {"target": "Sebastian möchte ein Brötchen.",
+         "gloss": "(Sebastian would like a roll.)"},
+        {"target": "Er bezahlt und sagt 'Vielen Dank'.",
+         "gloss": "(He pays and says 'Thanks'.)"},
+    ],
+    "comprehension_questions": [
+        {"prompt": "Where does Sebastian go?",
+         "answer": "to the bakery"},
+    ],
+})
 
 
 def _setup(temp_db):
@@ -243,8 +263,23 @@ async def test_selector_drives_lesson_lesson_exercise_sequence(temp_db):
     )
     assert out[-1]["kind"] == db.MSG_LESSON
 
-    # Turn 3 — both lesson topics taught. Selector picks EXERCISE
-    # for the practice topic p1.
+    # Turn 3 — both lesson topics taught. The selector now emits the
+    # module's ONE story (comprehensible input) before any drills.
+    fm = FakeModel(responses=[_STORY, _CRITIC_READY])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    story_msg = out[-1]
+    assert story_msg["kind"] == db.MSG_EXERCISE
+    assert story_msg["payload"].get("card_type") == "story"
+
+    # Claim the story so turn 4 isn't blocked by an unanswered active
+    # exercise. In production the learner submits comprehension
+    # answers; here we short-circuit straight to "answered".
+    messages.claim_exercise(story_msg["message_id"])
+
+    # Turn 4 — story done; selector finally picks an exercise drill.
     fm = FakeModel(responses=[_EXERCISE, _CRITIC_READY])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
@@ -767,6 +802,13 @@ async def test_advance_first_branch_force_advances_under_estimate(temp_db):
                     module_id="m1", topic_id="m1-l1")
     store.save_card(goal_id, db.CARD_LESSON, "lesson body 2",
                     module_id="m1", topic_id="m1-l2")
+    # Story (comprehensible-input phase) must be planted too — the
+    # selector now emits one per module after the first lesson and
+    # BEFORE the drills. Without this, the selector would pick story
+    # at step 4 instead of advance_first.
+    store.save_card(goal_id, db.CARD_STORY, "At the bakery",
+                    reference_answer="to the bakery",
+                    module_id="m1", topic_id="m1-l1")
     store.save_card(goal_id, db.CARD_VOCAB, "drill p1 1",
                     reference_answer="x", module_id="m1", topic_id="m1-p1")
     store.save_card(goal_id, db.CARD_CLOZE, "p1 ___ drill 2",

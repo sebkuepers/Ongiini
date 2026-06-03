@@ -495,6 +495,97 @@
         src.appendChild(el('p', 'card-source-text', String(p.source_sentence)));
         wrap.appendChild(src);
       }
+      if (ct === 'story' && Array.isArray(p.paragraphs) && p.paragraphs.length) {
+        // Story card — comprehensible input (Track A). Render each
+        // paragraph as the target sentence with the gloss revealed
+        // on tap (so the learner reads the target first, then
+        // confirms with the source-language gloss only if they need
+        // it). Then 1-3 comprehension questions with one input
+        // each; on submit we pipe-join answers and ship through the
+        // standard exercise grading path.
+        if (p.title) {
+          wrap.appendChild(el('div', 'card-story-title', String(p.title)));
+        }
+        var storyWrap = el('div', 'card-story-paragraphs');
+        p.paragraphs.forEach(function (para) {
+          if (!para || typeof para !== 'object') return;
+          var paraEl = el('div', 'story-paragraph');
+          var target = el('p', 'story-target', String(para.target || ''));
+          paraEl.appendChild(target);
+          var gloss = String(para.gloss || '').trim();
+          if (gloss) {
+            var glossEl = el('p', 'story-gloss is-hidden', gloss);
+            paraEl.appendChild(glossEl);
+            // Tap the target line to reveal the gloss. Tap again to
+            // hide. Keeps the read primary, source as fallback.
+            target.classList.add('is-tappable');
+            target.addEventListener('click', function () {
+              glossEl.classList.toggle('is-hidden');
+            });
+          }
+          storyWrap.appendChild(paraEl);
+        });
+        wrap.appendChild(storyWrap);
+        // Comprehension inputs. Each question gets its own input;
+        // submit pipe-joins like the dialogue card.
+        if (Array.isArray(p.comprehension_questions) && p.comprehension_questions.length) {
+          var qWrap = el('div', 'card-story-questions');
+          var storyInputs = [];
+          p.comprehension_questions.forEach(function (q, idx) {
+            if (!q || typeof q !== 'object') return;
+            var qBlock = el('div', 'story-question');
+            qBlock.appendChild(el('p', 'story-q-prompt', String(q.prompt || '')));
+            if (isActive) {
+              var inp = document.createElement('input');
+              inp.type = 'text';
+              inp.className = 'story-q-input';
+              inp.autocomplete = 'off';
+              inp.spellcheck = false;
+              inp.placeholder = t('card.story.input_placeholder');
+              storyInputs.push(inp);
+              qBlock.appendChild(inp);
+            } else {
+              qBlock.appendChild(el('p', 'story-q-answered', '✓'));
+            }
+            qWrap.appendChild(qBlock);
+          });
+          wrap.appendChild(qWrap);
+          if (isActive && storyInputs.length) {
+            var sSubmitWrap = el('div', 'card-story-submit');
+            var sBtn = document.createElement('button');
+            sBtn.type = 'button';
+            sBtn.className = 'story-submit-btn';
+            sBtn.textContent = t('card.story.submit');
+            sBtn.disabled = true;
+            var updateStoryBtn = function () {
+              var anyEmpty = storyInputs.some(function (i) {
+                return !i.value.trim();
+              });
+              sBtn.disabled = anyEmpty || state.busy;
+            };
+            storyInputs.forEach(function (i) {
+              i.addEventListener('input', updateStoryBtn);
+              i.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter') {
+                  ev.preventDefault();
+                  if (!sBtn.disabled) sBtn.click();
+                }
+              });
+            });
+            sBtn.addEventListener('click', function () {
+              if (state.busy) return;
+              var answers = storyInputs.map(function (i) { return i.value.trim(); });
+              var joined = answers.join(' | ');
+              storyInputs.forEach(function (i) { i.disabled = true; });
+              sBtn.disabled = true;
+              appendMessage({ kind: 'learner_text', payload: { text: joined } });
+              sendTurn(joined, { optimisticLearnerText: true });
+            });
+            sSubmitWrap.appendChild(sBtn);
+            wrap.appendChild(sSubmitWrap);
+          }
+        }
+      }
       if (ct === 'dialogue' && Array.isArray(p.turns) && p.turns.length) {
         // Multi-slot dialogue: each "___" in a turn's text becomes its
         // own inline <input>. Non-blank text segments render as plain
@@ -582,7 +673,12 @@
         }
       }
 
-      if (p.prompt_text) wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
+      // Story cards render the title + paragraphs in their own
+      // block above; the synthesised prompt_text would be a redundant
+      // copy of the title.
+      if (p.prompt_text && ct !== 'story') {
+        wrap.appendChild(el('p', 'exercise-prompt', String(p.prompt_text)));
+      }
 
       // Per-type structural extras AFTER the prompt: multiple-choice
       // options become click-to-answer buttons; reorder shows a

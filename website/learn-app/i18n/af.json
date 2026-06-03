@@ -68,7 +68,8 @@
       "multiple_choice": "kies een",
       "grammar": "grammatika",
       "proverb": "spreekwoord",
-      "dialogue": "gesprek"
+      "dialogue": "gesprek",
+      "story": "storie"
     },
     "lesson": {
       "prev": "← Terug",
@@ -88,6 +89,11 @@
     "dialogue": {
       "slot_label": "Vul die spasie in",
       "submit": "Stuur antwoorde"
+    },
+    "story": {
+      "input_placeholder": "Jou antwoord (in enige taal)",
+      "submit": "Stuur antwoorde",
+      "tap_hint": "Tik op 'n sin om die vertaling te sien"
     }
   },
   "modal": {
