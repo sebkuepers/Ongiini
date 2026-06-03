@@ -260,24 +260,173 @@
       var wrap = el('div', 'lesson-card');
       wrap.appendChild(el('div', 'lesson-eyebrow', t('card.lesson_eyebrow')));
       if (p.title) wrap.appendChild(el('h3', 'lesson-title', String(p.title)));
-      if (p.body) {
-        var body = el('div', 'lesson-body');
-        body.textContent = String(p.body);
-        wrap.appendChild(body);
+
+      // Build the step array. New shape: payload.steps[]. Legacy
+      // shape: payload.body + payload.examples — wrap into a
+      // single concept step so the carousel still works.
+      var steps = Array.isArray(p.steps) && p.steps.length ? p.steps : null;
+      if (!steps && p.body) {
+        steps = [{
+          kind: 'concept',
+          body: String(p.body),
+          examples: Array.isArray(p.examples) ? p.examples : [],
+        }];
       }
-      if (Array.isArray(p.examples) && p.examples.length) {
-        var ul = el('ul', 'lesson-examples');
-        p.examples.forEach(function (ex) {
-          ul.appendChild(el('li', null, String(ex)));
-        });
-        wrap.appendChild(ul);
+      if (!steps || !steps.length) steps = [{ kind: 'concept', body: '' }];
+
+      var current = 0;
+
+      function renderStepBody(stepIdx) {
+        var step = steps[stepIdx] || {};
+        var pane = el('div', 'lesson-step');
+        pane.dataset.kind = String(step.kind || 'concept');
+        if (step.kind === 'quick_check') {
+          // The bridge step — no grading, just a prompt + reveal.
+          var qcEyebrow = el('div', 'lesson-step-eyebrow',
+            t('card.lesson.quick_check_eyebrow'));
+          pane.appendChild(qcEyebrow);
+          if (step.prompt) {
+            pane.appendChild(el('p', 'lesson-step-body lesson-qc-prompt',
+              String(step.prompt)));
+          }
+          var reveal = el('div', 'lesson-qc-reveal');
+          var revealBtn = document.createElement('button');
+          revealBtn.type = 'button';
+          revealBtn.className = 'lesson-qc-reveal-btn';
+          revealBtn.textContent = t('card.lesson.reveal_answer');
+          var answerBlock = el('div', 'lesson-qc-answer');
+          answerBlock.hidden = true;
+          if (step.answer) {
+            answerBlock.appendChild(el('p', 'lesson-qc-answer-text',
+              String(step.answer)));
+          }
+          if (step.hint) {
+            answerBlock.appendChild(el('p', 'lesson-qc-hint',
+              String(step.hint)));
+          }
+          revealBtn.addEventListener('click', function () {
+            answerBlock.hidden = false;
+            revealBtn.hidden = true;
+          });
+          reveal.appendChild(revealBtn);
+          reveal.appendChild(answerBlock);
+          pane.appendChild(reveal);
+        } else {
+          if (step.body) {
+            pane.appendChild(el('p', 'lesson-step-body',
+              String(step.body)));
+          }
+          if (Array.isArray(step.examples) && step.examples.length) {
+            var ul = el('ul', 'lesson-examples');
+            step.examples.forEach(function (ex) {
+              ul.appendChild(el('li', null, String(ex)));
+            });
+            pane.appendChild(ul);
+          }
+        }
+        return pane;
       }
+
+      var stage = el('div', 'lesson-stage');
+      var stagePane = renderStepBody(current);
+      stage.appendChild(stagePane);
+      wrap.appendChild(stage);
+
+      // Progress dots — only shown when there's more than one step.
+      var dotsRow = null;
+      if (steps.length > 1) {
+        dotsRow = el('div', 'lesson-dots');
+        for (var i = 0; i < steps.length; i++) {
+          var dot = document.createElement('span');
+          dot.className = 'lesson-dot';
+          dot.dataset.idx = String(i);
+          if (i === current) dot.classList.add('lesson-dot-active');
+          dotsRow.appendChild(dot);
+        }
+        wrap.appendChild(dotsRow);
+      }
+
       var action = el('div', 'lesson-action');
-      var btn = el('button', null, t('card.got_it'));
-      btn.type = 'button';
-      btn.addEventListener('click', function () { sendTurn(null); });
-      action.appendChild(btn);
+      var prevBtn = document.createElement('button');
+      prevBtn.type = 'button';
+      prevBtn.className = 'lesson-prev';
+      prevBtn.textContent = t('card.lesson.prev');
+      var nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.className = 'lesson-next';
+
+      function updateChrome() {
+        prevBtn.disabled = (current === 0);
+        prevBtn.hidden = (steps.length <= 1);
+        var isLast = (current === steps.length - 1);
+        nextBtn.textContent = isLast ? t('card.got_it') : t('card.lesson.next');
+        nextBtn.classList.toggle('lesson-got-it', isLast);
+        if (dotsRow) {
+          var ds = dotsRow.querySelectorAll('.lesson-dot');
+          for (var i = 0; i < ds.length; i++) {
+            ds[i].classList.toggle('lesson-dot-active', i === current);
+          }
+        }
+      }
+
+      function goTo(idx) {
+        if (idx < 0 || idx >= steps.length || idx === current) return;
+        current = idx;
+        stage.innerHTML = '';
+        stage.appendChild(renderStepBody(current));
+        updateChrome();
+      }
+
+      prevBtn.addEventListener('click', function () { goTo(current - 1); });
+      nextBtn.addEventListener('click', function () {
+        if (current === steps.length - 1) {
+          // Last step — fire the same single-payload turn the old
+          // "Got it →" did. Disable both buttons so a rapid double-tap
+          // can't send two turns.
+          if (state.busy) return;
+          prevBtn.disabled = true;
+          nextBtn.disabled = true;
+          sendTurn(null);
+        } else {
+          goTo(current + 1);
+        }
+      });
+      action.appendChild(prevBtn);
+      action.appendChild(nextBtn);
       wrap.appendChild(action);
+
+      // Swipe gesture on the stage. ~40px threshold avoids accidental
+      // page-scroll triggering. We only care about horizontal swipes.
+      var touchStartX = null;
+      var touchStartY = null;
+      stage.addEventListener('touchstart', function (ev) {
+        if (!ev.touches || !ev.touches.length) return;
+        touchStartX = ev.touches[0].clientX;
+        touchStartY = ev.touches[0].clientY;
+      }, { passive: true });
+      stage.addEventListener('touchend', function (ev) {
+        if (touchStartX === null) return;
+        var endX = (ev.changedTouches && ev.changedTouches.length)
+          ? ev.changedTouches[0].clientX : touchStartX;
+        var endY = (ev.changedTouches && ev.changedTouches.length)
+          ? ev.changedTouches[0].clientY : touchStartY;
+        var dx = endX - touchStartX;
+        var dy = endY - touchStartY;
+        touchStartX = null;
+        touchStartY = null;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        if (dx < 0) goTo(current + 1);
+        else goTo(current - 1);
+      }, { passive: true });
+
+      // Keyboard arrows when the carousel has focus.
+      wrap.tabIndex = -1;
+      wrap.addEventListener('keydown', function (ev) {
+        if (ev.key === 'ArrowRight') { ev.preventDefault(); goTo(current + 1); }
+        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); goTo(current - 1); }
+      });
+
+      updateChrome();
       return wrap;
     }
 

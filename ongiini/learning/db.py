@@ -278,6 +278,20 @@ def warmup() -> None:
             "ON learning_cards(goal_id, module_id)"
         )
 
+        # topic_id on learning_cards — drives topic-aware teach-then-
+        # test pacing. Each new card is tagged with the topic_id it
+        # teaches (lesson) or drills (exercise); the module digest
+        # rolls these into per-topic counts so the prompt can enforce
+        # "no exercises on untaught topics". Nullable for the same
+        # back-compat reason as module_id.
+        card_cols = {r["name"] for r in c.execute("PRAGMA table_info(learning_cards)").fetchall()}
+        if "topic_id" not in card_cols:
+            c.execute("ALTER TABLE learning_cards ADD COLUMN topic_id TEXT")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cards_goal_module_topic "
+            "ON learning_cards(goal_id, module_id, topic_id)"
+        )
+
     log.info("learning sqlite warmed at %s", _db_path())
 
 

@@ -70,6 +70,12 @@
       "proverb": "proverb",
       "dialogue": "dialogue"
     },
+    "lesson": {
+      "prev": "← Back",
+      "next": "Next →",
+      "reveal_answer": "Reveal answer",
+      "quick_check_eyebrow": "Quick check"
+    },
     "grammar": {
       "source_label": "Transform this"
     },

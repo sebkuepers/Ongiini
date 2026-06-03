@@ -70,6 +70,12 @@
       "proverb": "spreekwoord",
       "dialogue": "gesprek"
     },
+    "lesson": {
+      "prev": "← Terug",
+      "next": "Volgende →",
+      "reveal_answer": "Wys antwoord",
+      "quick_check_eyebrow": "Vinnige toets"
+    },
     "grammar": {
       "source_label": "Skryf dit oor"
     },

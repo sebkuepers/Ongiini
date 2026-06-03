@@ -531,6 +531,101 @@ def _advance_module_if_complete(
 
 
 # ──────────────────────────────────────────────────────────────────
+# Topic-aware pacing — guard against exercises on untaught topics
+# ──────────────────────────────────────────────────────────────────
+
+def _topic_pacing_violation(
+    *,
+    card_payload: dict[str, Any],
+    outline: dict[str, Any] | None,
+    module_digest: dict[str, dict[str, Any]],
+) -> str | None:
+    """Returns a short reason string describing why the just-generated
+    card violates the teach-then-test pacing rule, or None when the
+    card is fine to ship.
+
+    The rule, restated:
+      * Find the in_progress module from the outline.
+      * Compute lesson_topic_ids (kind=="lesson") and
+        practice_topic_ids (kind=="practice") from its topics list.
+      * Compute taught_topic_ids = set(digest.topics_taught) ∩
+        lesson_topic_ids.
+      * If untaught lesson topics exist AND the card is an exercise,
+        the card is invalid — the teach-step is missing.
+      * If the card is an exercise AND its topic_id is neither
+        taught nor a practice topic, the card is invalid —
+        unrecognised topic for this module.
+
+    Lessons are always allowed (they ARE the teach step). Cards
+    missing module_id / topic_id are NOT flagged here — they get the
+    existing soft-required logging and skip the per-topic digest.
+    Permissive on outline shape: unfamiliar outlines (no topics list,
+    no in_progress module) skip the check rather than blocking.
+    """
+    ct = card_payload.get("card_type")
+    if ct not in EXERCISE_CARD_TYPES:
+        return None
+    if not outline:
+        return None
+    raw_modules = outline.get("modules")
+    if not isinstance(raw_modules, list):
+        return None
+    in_progress = None
+    for m in raw_modules:
+        if isinstance(m, dict) and m.get("status") == "in_progress":
+            in_progress = m
+            break
+    if not in_progress:
+        return None
+    mod_id = in_progress.get("id")
+    if not isinstance(mod_id, str):
+        return None
+    topics = in_progress.get("topics")
+    if not isinstance(topics, list) or not topics:
+        return None
+    lesson_topic_ids: list[str] = []
+    practice_topic_ids: set[str] = set()
+    for t in topics:
+        if not isinstance(t, dict):
+            continue
+        tid = t.get("id")
+        kind = t.get("kind")
+        if not isinstance(tid, str):
+            continue
+        if kind == "lesson":
+            lesson_topic_ids.append(tid)
+        elif kind == "practice":
+            practice_topic_ids.add(tid)
+    if not lesson_topic_ids and not practice_topic_ids:
+        return None  # outline doesn't declare topic kinds — skip
+    digest_entry = module_digest.get(mod_id, {})
+    taught_keys = set((digest_entry.get("topics_taught") or {}).keys())
+    taught_lesson_topics = taught_keys & set(lesson_topic_ids)
+    untaught_lesson_topics = [
+        t for t in lesson_topic_ids if t not in taught_lesson_topics
+    ]
+    if untaught_lesson_topics:
+        return (
+            f"There are untaught lesson topics in the in-progress "
+            f"module {mod_id!r}: {untaught_lesson_topics}. The next card "
+            "MUST be a lesson card targeting the first one."
+        )
+    # All lesson topics taught — exercise must target a known topic.
+    card_topic = card_payload.get("topic_id")
+    if not isinstance(card_topic, str) or not card_topic.strip():
+        return None  # soft-required; let the missing-tag path log it
+    valid_exercise_topics = taught_lesson_topics | practice_topic_ids
+    if card_topic not in valid_exercise_topics:
+        return (
+            f"Exercise targets topic {card_topic!r} which is neither a "
+            f"taught lesson topic ({sorted(taught_lesson_topics)}) nor "
+            f"a declared practice topic ({sorted(practice_topic_ids)}) "
+            f"in module {mod_id!r}."
+        )
+    return None
+
+
+# ──────────────────────────────────────────────────────────────────
 # Produce the next lesson or exercise card
 # ──────────────────────────────────────────────────────────────────
 
@@ -666,36 +761,114 @@ async def _produce_next_thing(
         new_messages.append(msg)
         return new_messages
 
+    # Step 2b: topic-aware pacing guard. If the model emitted an
+    # exercise targeting an untaught topic (the bug Sebastian hit on
+    # first-card day), retry ONCE with the violation reason appended
+    # to the user prompt. If the retry still violates, ship anyway
+    # with a WARNING so we can see how often this hits in production.
+    violation = _topic_pacing_violation(
+        card_payload=card_payload,
+        outline=ctx.curriculum_outline,
+        module_digest=ctx.module_digest,
+    )
+    if violation:
+        log.info(
+            "coach: topic pacing violation, retrying once: %s",
+            violation,
+        )
+        try:
+            retry_payload = await cards_mod.generate_card(
+                ctx, model=model, skill_content=skill_content,
+                steering_note=(
+                    "The previous attempt violated the teach-then-test "
+                    "pacing rule: "
+                    f"{violation} Re-author the card following the "
+                    "topic-aware pacing rules from the TASK section."
+                ),
+            )
+        except ModelOutputError as exc:
+            log.warning(
+                "coach: pacing-retry failed; shipping the original "
+                "card. error=%s violation=%s", exc, violation,
+            )
+            retry_payload = None
+        if retry_payload is not None:
+            second_violation = _topic_pacing_violation(
+                card_payload=retry_payload,
+                outline=ctx.curriculum_outline,
+                module_digest=ctx.module_digest,
+            )
+            if second_violation:
+                log.warning(
+                    "coach: pacing-retry still violates; shipping anyway. "
+                    "first=%s second=%s", violation, second_violation,
+                )
+            card_payload = retry_payload
+
     # Step 3: persist the card row + emit the matching message kind.
     # module_id ties the card to a module in the outline so per-module
-    # progress can be counted; the LLM is asked to include it in the
-    # payload. Soft-required — if missing the card still saves (the
-    # store accepts None), it just won't count toward any module's
-    # progress bar.
+    # progress can be counted; topic_id ties it to a specific topic
+    # for the teach-then-test pacing rule. Both are soft-required —
+    # if missing the card still saves (the store accepts None), they
+    # just won't count toward the per-module / per-topic digest.
     module_id_val = card_payload.get("module_id")
     if module_id_val is not None and not isinstance(module_id_val, str):
         module_id_val = None
+    topic_id_val = card_payload.get("topic_id")
+    if topic_id_val is not None and not isinstance(topic_id_val, str):
+        topic_id_val = None
+
+    is_lesson = card_payload["card_type"] not in EXERCISE_CARD_TYPES
+    # For new multi-step lesson cards, prompt_text may be empty (the
+    # body content lives in steps[]). The DB requires NOT NULL, so
+    # synthesise a stable summary from title or the first step's body.
+    raw_prompt_text = card_payload.get("prompt_text")
+    if not isinstance(raw_prompt_text, str) or not raw_prompt_text.strip():
+        if is_lesson:
+            steps = card_payload.get("steps") or []
+            first_body = ""
+            if isinstance(steps, list) and steps and isinstance(steps[0], dict):
+                first_body = str(steps[0].get("body") or "")
+            raw_prompt_text = (
+                card_payload.get("title")
+                or first_body
+                or "(lesson)"
+            )[:200]
+        else:
+            raw_prompt_text = "(card)"
+    persist_prompt_text = str(raw_prompt_text).strip() or "(card)"
+
     card_id = store.save_card(
         goal_id,
         card_payload["card_type"],
-        card_payload["prompt_text"],
+        persist_prompt_text,
         reference_answer=card_payload.get("reference_answer"),
         hint_text=card_payload.get("hint_text"),
         difficulty=card_payload.get("difficulty"),
         module_id=module_id_val,
+        topic_id=topic_id_val,
     )
 
-    is_lesson = card_payload["card_type"] not in EXERCISE_CARD_TYPES
     if is_lesson:
+        # Two payload shapes coexist:
+        #   * NEW: steps[] from the model — the frontend renders a
+        #     swipeable carousel.
+        #   * LEGACY: single body text (today's lesson card) — the
+        #     frontend falls back to the old single-block render.
+        # We pass through whatever shape arrived.
+        lesson_payload: dict[str, Any] = {
+            "title": card_payload.get("title") or persist_prompt_text[:60],
+        }
+        steps = card_payload.get("steps")
+        if isinstance(steps, list) and steps:
+            lesson_payload["steps"] = steps
+        else:
+            lesson_payload["body"] = persist_prompt_text
+            lesson_payload["examples"] = card_payload.get("examples") or []
         msg = messages.append(
             learner_id=learner_id, goal_id=goal_id,
             kind=MSG_LESSON,
-            payload={
-                "title": card_payload.get("title")
-                         or card_payload.get("prompt_text", "")[:60],
-                "body": card_payload["prompt_text"],
-                "examples": card_payload.get("examples") or [],
-            },
+            payload=lesson_payload,
             card_id=card_id,
         )
     else:

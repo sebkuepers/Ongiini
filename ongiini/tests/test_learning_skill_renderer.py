@@ -37,13 +37,13 @@ def test_render_includes_target_anchor_content():
 
 
 def test_render_swaps_source_in_lesson_card_shape():
-    """The lesson card JSON shape references SOURCE_LANGUAGE for
-    `prompt_text` (lesson body language) — confirm the right name
-    appears in that section regardless of target."""
+    """The lesson card JSON shape references SOURCE_LANGUAGE for the
+    teach-step body language — confirm the right name appears in that
+    section regardless of target."""
     out = sr.render_skill_for_pair(source="german", target="afrikaans")
-    # 'sentences of plain teaching, written in German' appears in the
-    # lesson shape doc.
-    assert "written in German" in out
+    # The concept step body says "short sentences in German" after
+    # placeholder substitution.
+    assert "sentences in German" in out
 
 
 def test_unsupported_source_raises():
