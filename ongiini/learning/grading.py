@@ -114,11 +114,16 @@ _TYPE_RUBRICS: dict[str, str] = {
         "saying → 'wrong'."
     ),
     CARD_DIALOGUE: (
-        "Dialogue: a contextually appropriate reply that respects "
-        "register + speaker → 'correct' even if phrased differently "
-        "from reference_answer. Right intent, wrong register (e.g. "
-        "informal where formal is needed) → 'partial'. Off-topic or "
-        "wrong-language → 'wrong'."
+        "Dialogue: a multi-slot fill-in across the conversation. The "
+        "reference_answer is the canonical answers for each blank, "
+        "pipe-separated ('|') in turn-blank order. The learner's "
+        "answer arrives in the same pipe-separated shape, one entry "
+        "per blank. Compare slot-by-slot (case-insensitive, tolerant "
+        "of minor typos): all slots correct → 'correct'; one or two "
+        "slots wrong → 'partial'; majority wrong / wrong-language → "
+        "'wrong'. Feedback names which slot was wrong and what the "
+        "right form was. If the learner submitted fewer slots than "
+        "expected, score what they sent and note the missing ones."
     ),
 }
 
@@ -167,9 +172,17 @@ def _build_user_prompt(
                     f"  option {o.get('label')}: {o.get('text')!r} — {expl}"
                 )
     elif ct == CARD_DIALOGUE:
+        # Surface each turn with its expected answer when present so
+        # the grader can name which slot was wrong in the feedback —
+        # the rubric above grades pipe-separated multi-slot answers,
+        # but without the per-turn map the LLM can't tell the learner
+        # WHICH blank they got wrong.
         for t in card.get("turns") or []:
-            if isinstance(t, dict):
-                extras.append(f"  {t.get('speaker')}: {t.get('text')}")
+            if not isinstance(t, dict):
+                continue
+            ans = t.get("answer")
+            ans_tail = f"  [answer: {ans!r}]" if isinstance(ans, str) and ans.strip() else ""
+            extras.append(f"  {t.get('speaker')}: {t.get('text')}{ans_tail}")
     elif ct == CARD_GRAMMAR:
         extras.append(f"  source_sentence: {card.get('source_sentence')}")
     elif ct == CARD_REORDER:

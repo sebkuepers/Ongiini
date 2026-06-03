@@ -84,6 +84,10 @@
     },
     "proverb": {
       "cultural_label": "Kulturelle Notiz"
+    },
+    "dialogue": {
+      "slot_label": "Lücke ausfüllen",
+      "submit": "Antworten abschicken"
     }
   },
   "modal": {

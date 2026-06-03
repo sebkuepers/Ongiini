@@ -84,6 +84,10 @@
     },
     "proverb": {
       "cultural_label": "Cultural note"
+    },
+    "dialogue": {
+      "slot_label": "Fill in the blank",
+      "submit": "Submit answers"
     }
   },
   "modal": {
