@@ -56,6 +56,188 @@ def test_lesson_card_does_not_require_reference_answer():
 
 
 # ──────────────────────────────────────────────────────────────────
+# Multi-step lesson card (carousel shape)
+# ──────────────────────────────────────────────────────────────────
+
+def _good_steps(quick_check: bool = True) -> list[dict]:
+    steps: list[dict] = [
+        {"kind": "concept", "body": "Concept introduction sentence."},
+        {"kind": "example", "body": "Concrete example sentence.",
+         "examples": ["Hier ist ein Beispiel."]},
+        {"kind": "contrast", "body": "Contrast with the opposite case."},
+    ]
+    if quick_check:
+        steps.append({
+            "kind": "quick_check",
+            "prompt": "Which form fits a formal greeting?",
+            "answer": "Guten Tag.",
+            "hint": "Used in shops, hotels, offices.",
+        })
+    return steps
+
+
+def test_stepped_lesson_validates_without_prompt_text():
+    """The new shape carries content in steps[] — prompt_text is
+    optional (synthesised on the persistence side)."""
+    _validate_card({
+        "card_type": "lesson",
+        "title": "Formal vs Informal Greetings",
+        "module_id": "m1",
+        "topic_id": "t1",
+        "steps": _good_steps(),
+    })
+
+
+def test_stepped_lesson_rejects_both_shapes_at_once():
+    """The validator should reject a lesson card that carries both
+    `steps` AND `prompt_text` (with content). The coach would silently
+    drop the prose otherwise; better to surface the LLM confusion."""
+    with pytest.raises(ModelOutputError, match="EITHER 'steps' OR 'prompt_text'"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "prompt_text": "real teaching prose that would be lost",
+            "steps": _good_steps(),
+        })
+
+
+def test_legacy_lesson_with_prompt_text_still_validates():
+    """Backward-compat: lessons authored before the carousel landed
+    use the flat shape — they must keep validating."""
+    _validate_card({
+        "card_type": "lesson",
+        "module_id": "m1",
+        "topic_id": "t1",
+        "prompt_text": "Today's topic: greetings.",
+        "examples": ["Hallo!", "Guten Tag."],
+    })
+
+
+def test_stepped_lesson_rejects_under_min_steps():
+    """One step isn't a carousel."""
+    with pytest.raises(ModelOutputError, match="2-5 entries"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [{"kind": "concept", "body": "Just one."}],
+        })
+
+
+def test_stepped_lesson_rejects_over_max_steps():
+    """Six steps is too many — carousel fatigue."""
+    steps = [{"kind": "concept", "body": f"Step {i}."} for i in range(6)]
+    with pytest.raises(ModelOutputError, match="2-5 entries"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": steps,
+        })
+
+
+def test_stepped_lesson_rejects_unknown_step_kind():
+    with pytest.raises(ModelOutputError, match="must be one of"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [
+                {"kind": "concept", "body": "First."},
+                {"kind": "bogus", "body": "Bad."},
+            ],
+        })
+
+
+def test_stepped_lesson_rejects_quick_check_not_last():
+    """The renderer pegs the reveal-answer interaction to the LAST
+    step — a quick_check in the middle would break the UX."""
+    with pytest.raises(ModelOutputError, match="LAST step"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [
+                {"kind": "quick_check",
+                 "prompt": "?", "answer": "Yes"},
+                {"kind": "concept", "body": "Concept after quiz?"},
+            ],
+        })
+
+
+# Multiple quick_check steps would also trip the "LAST step" check
+# first (only the last index can be quick_check; everything else
+# raises the LAST check earlier), so the "at most one" branch in the
+# validator is defensive belt-and-braces. No test needed for an
+# unreachable path.
+
+
+def test_stepped_lesson_concept_requires_body():
+    with pytest.raises(ModelOutputError, match="'concept' requires"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [
+                {"kind": "concept"},  # no body
+                {"kind": "example", "body": "Example."},
+            ],
+        })
+
+
+def test_stepped_lesson_quick_check_requires_prompt_and_answer():
+    with pytest.raises(ModelOutputError, match="'prompt'"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [
+                {"kind": "concept", "body": "First."},
+                {"kind": "quick_check", "answer": "Yes"},  # no prompt
+            ],
+        })
+    with pytest.raises(ModelOutputError, match="'answer'"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [
+                {"kind": "concept", "body": "First."},
+                {"kind": "quick_check", "prompt": "?"},  # no answer
+            ],
+        })
+
+
+def test_stepped_lesson_examples_must_be_strings():
+    with pytest.raises(ModelOutputError, match="non-empty strings"):
+        _validate_card({
+            "card_type": "lesson",
+            "topic_id": "t1",
+            "steps": [
+                {"kind": "concept", "body": "Concept.",
+                 "examples": ["good", 42]},
+                {"kind": "example", "body": "Example."},
+            ],
+        })
+
+
+# ──────────────────────────────────────────────────────────────────
+# topic_id — soft-required, type-checked when present
+# ──────────────────────────────────────────────────────────────────
+
+def test_topic_id_omitted_is_fine():
+    """topic_id is soft-required — back-compat lets unTAGGED cards
+    through so they degrade gracefully (just don't count toward
+    the per-topic digest)."""
+    _validate_card({
+        "card_type": "lesson",
+        "prompt_text": "A lesson without topic_id.",
+    })
+
+
+def test_topic_id_must_be_string_when_present():
+    with pytest.raises(ModelOutputError, match="topic_id must be a string"):
+        _validate_card({
+            "card_type": "lesson",
+            "prompt_text": "x",
+            "topic_id": 123,
+        })
+
+
+# ──────────────────────────────────────────────────────────────────
 # Cloze
 # ──────────────────────────────────────────────────────────────────
 

@@ -661,3 +661,71 @@ def test_progress_for_goal_filter_scopes_to_one_curriculum(temp_db):
     p_all = store.progress_for(learner_id)
     assert p_all["total_seen"] == 2 and p_all["total_correct"] == 1
 
+
+# ============================================================
+# Per-topic digest (drives teach-then-test pacing)
+# ============================================================
+
+def test_progress_for_modules_groups_per_topic(temp_db):
+    """Lessons and exercises tagged with topic_id roll up into
+    topics_taught / topics_drilled buckets keyed by topic_id."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    gid = goal["goal_id"]
+
+    # Module mod-1 has two lesson topics (t1, t2) and one practice
+    # topic (t3). We seed two lesson cards on t1, one on t2, two
+    # exercises on t3.
+    store.save_card(gid, db.CARD_LESSON, "L1a",
+                    module_id="mod-1", topic_id="t1")
+    store.save_card(gid, db.CARD_LESSON, "L1b",
+                    module_id="mod-1", topic_id="t1")
+    store.save_card(gid, db.CARD_LESSON, "L2",
+                    module_id="mod-1", topic_id="t2")
+    store.save_card(gid, db.CARD_VOCAB, "E3a?",
+                    reference_answer="hi", module_id="mod-1", topic_id="t3")
+    store.save_card(gid, db.CARD_VOCAB, "E3b?",
+                    reference_answer="hi", module_id="mod-1", topic_id="t3")
+
+    out = store.progress_for_modules(learner_id, gid)
+    assert "mod-1" in out
+    mod = out["mod-1"]
+    assert mod["lessons_given"] == 3
+    assert mod["exercises_emitted"] == 2
+    assert mod["topics_taught"] == {"t1": 2, "t2": 1}
+    assert mod["topics_drilled"] == {"t3": 2}
+
+
+def test_progress_for_modules_handles_null_topic_id(temp_db):
+    """Cards tagged with module_id but no topic_id contribute to
+    module totals but not to the per-topic dicts — back-compat with
+    pre-pacing cards in production."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    gid = goal["goal_id"]
+    store.save_card(gid, db.CARD_LESSON, "L (no topic)",
+                    module_id="mod-1")
+    store.save_card(gid, db.CARD_VOCAB, "E (no topic)?",
+                    reference_answer="x", module_id="mod-1")
+
+    out = store.progress_for_modules(learner_id, gid)
+    assert out["mod-1"]["lessons_given"] == 1
+    assert out["mod-1"]["exercises_emitted"] == 1
+    assert out["mod-1"]["topics_taught"] == {}
+    assert out["mod-1"]["topics_drilled"] == {}
+
+
+def test_save_card_persists_topic_id(temp_db):
+    """The topic_id parameter survives the round-trip — the SRS query
+    side reads it back via the digest."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    card_id = store.save_card(
+        goal["goal_id"], db.CARD_LESSON, "lesson body",
+        module_id="mod-1", topic_id="t-greetings",
+    )
+    row = store.get_card(card_id)
+    assert row is not None
+    assert row.get("module_id") == "mod-1"
+    assert row.get("topic_id") == "t-greetings"
+

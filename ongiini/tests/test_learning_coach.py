@@ -528,6 +528,130 @@ def test_advance_module_no_op_when_under_target(temp_db):
     ) is None
 
 
+# ============================================================
+# Topic-aware pacing retry (no exercises on untaught topics)
+# ============================================================
+
+_OUTLINE_WITH_TOPICS = json.dumps({
+    "summary": "Job-interview German in 2 weeks.",
+    "modules": [
+        {"id": "mod-1", "title": "Greetings",
+         "status": "in_progress",
+         "estimated_cards": 6,
+         "topics": [
+             {"id": "t1", "title": "Formal vs informal", "kind": "lesson"},
+             {"id": "t2", "title": "Self-intro phrases", "kind": "lesson"},
+             {"id": "t3", "title": "Drill block", "kind": "practice"},
+         ]},
+    ],
+})
+
+_BAD_EXERCISE_UNTAUGHT_TOPIC = json.dumps({
+    "card_type": "vocab",
+    "module_id": "mod-1",
+    "topic_id": "t3",   # practice topic, but lessons t1/t2 not taught
+    "prompt_text": "How do you say 'good morning'?",
+    "reference_answer": "Guten Morgen.",
+})
+
+_GOOD_LESSON_T1 = json.dumps({
+    "card_type": "lesson",
+    "module_id": "mod-1",
+    "topic_id": "t1",
+    "title": "Formal vs Informal Greetings",
+    "steps": [
+        {"kind": "concept", "body": "In German, formality matters."},
+        {"kind": "example", "body": "Formal openers used in shops.",
+         "examples": ["Guten Tag, mein Name ist Sebastian."]},
+    ],
+})
+
+
+@pytest.mark.asyncio
+async def test_coach_retries_when_exercise_targets_untaught_topic(temp_db):
+    """The bug Sebastian hit on first card: model emits an exercise
+    for an untaught topic. The coach should retry once with a
+    steering note, and ship the corrected lesson instead."""
+    learner_id, goal_id = _setup(temp_db)
+    # Outline ships with two untaught lesson topics. Designer outputs
+    # an exercise on a practice topic anyway — pacing violation.
+    # On retry, the model returns a proper lesson for t1.
+    fm = FakeModel(responses=[
+        _OUTLINE_WITH_TOPICS, _CRITIC_READY,
+        _BAD_EXERCISE_UNTAUGHT_TOPIC,
+        _GOOD_LESSON_T1,
+    ])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    # The lesson is what got shipped — not the rejected exercise.
+    assert len(out) == 1
+    assert out[0]["kind"] == db.MSG_LESSON
+    # The retry-steering note was appended to the user prompt.
+    retry_user_prompt = fm.requests[-1].messages[1]["content"]
+    assert "STEERING NOTE" in retry_user_prompt
+    assert "untaught lesson topics" in retry_user_prompt
+
+
+@pytest.mark.asyncio
+async def test_coach_no_retry_when_exercise_topic_is_valid(temp_db):
+    """When all lesson topics are already taught, the model can drill
+    practice topics or recycle taught topics with different card types
+    — no retry needed."""
+    learner_id, goal_id = _setup(temp_db)
+    # Pre-seed: lessons taught for both t1 and t2 so the in-progress
+    # module has no untaught lesson topics.
+    store.save_card(goal_id, db.CARD_LESSON, "t1 lesson",
+                    module_id="mod-1", topic_id="t1")
+    store.save_card(goal_id, db.CARD_LESSON, "t2 lesson",
+                    module_id="mod-1", topic_id="t2")
+    # Now the model can legitimately drill t3 (a practice topic).
+    valid_exercise = json.dumps({
+        "card_type": "vocab",
+        "module_id": "mod-1",
+        "topic_id": "t3",
+        "prompt_text": "How do you say 'thank you'?",
+        "reference_answer": "Danke.",
+    })
+    fm = FakeModel(responses=[
+        _OUTLINE_WITH_TOPICS, _CRITIC_READY, valid_exercise,
+    ])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    assert len(out) == 1
+    assert out[0]["kind"] == db.MSG_EXERCISE
+    # Designer + critic + one card call = 3 requests. No retry fired.
+    assert len(fm.requests) == 3
+
+
+@pytest.mark.asyncio
+async def test_coach_ships_anyway_when_retry_still_violates(temp_db, caplog):
+    """If the second attempt still violates pacing, ship the bad card
+    with a WARNING so we can see it in production logs — don't loop."""
+    import logging
+    learner_id, goal_id = _setup(temp_db)
+    fm = FakeModel(responses=[
+        _OUTLINE_WITH_TOPICS, _CRITIC_READY,
+        _BAD_EXERCISE_UNTAUGHT_TOPIC,   # first attempt
+        _BAD_EXERCISE_UNTAUGHT_TOPIC,   # retry — still bad
+    ])
+    with caplog.at_level(logging.WARNING, logger="ongiini.learning.coach"):
+        out = await coach.run_turn(
+            learner_id=learner_id, goal_id=goal_id,
+            user_text=None, model=fm, skill_content="SKILL",
+        )
+    # The bad exercise ships rather than the run getting stuck.
+    assert len(out) == 1
+    assert out[0]["kind"] == db.MSG_EXERCISE
+    assert any(
+        "pacing-retry still violates" in rec.message
+        for rec in caplog.records
+    )
+
+
 @pytest.mark.asyncio
 async def test_classifier_does_not_see_just_appended_learner_message(temp_db):
     """The just-appended learner_text would otherwise show up in

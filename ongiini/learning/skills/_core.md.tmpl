@@ -95,32 +95,94 @@ answers and you grade:
 }
 ```
 
-**Lesson card** — you teach a concept; the learner reads, hits
-"Got it →", and you move on. No answer expected, no grading.
+**Lesson card** — you teach a concept across **2–5 swipeable steps**.
+The learner taps through the carousel and a `Got it →` button on the
+final step moves the conversation along. No grading, no SRS impact.
 
 ```json
 {
   "card_type": "lesson",
+  "module_id": "mod-1",
+  "topic_id": "t1",
   "title": "Short headline in <<SOURCE_LANGUAGE>>",
-  "prompt_text": "2–6 sentences of plain teaching, written in <<SOURCE_LANGUAGE>> with <<TARGET_LANGUAGE>> examples inline.",
-  "examples": [
-    "Sample sentence in <<TARGET_LANGUAGE>>.",
-    "Another sample in <<TARGET_LANGUAGE>>."
+  "steps": [
+    {
+      "kind": "concept",
+      "body": "1–3 short sentences in <<SOURCE_LANGUAGE>>: introduce the idea, name the rule, give just enough context.",
+      "examples": [
+        "Brief sample in <<TARGET_LANGUAGE>> (with inline gloss if needed)."
+      ]
+    },
+    {
+      "kind": "example",
+      "body": "1–3 sentences zooming in on a concrete usage. Setup → instance.",
+      "examples": [
+        "<<TARGET_LANGUAGE>> sentence 1.",
+        "<<TARGET_LANGUAGE>> sentence 2."
+      ]
+    },
+    {
+      "kind": "contrast",
+      "body": "1–3 sentences contrasting with the opposite case (formal vs informal, present vs past, etc.). Helps the rule stick.",
+      "examples": [
+        "<<TARGET_LANGUAGE>> contrasting example."
+      ]
+    },
+    {
+      "kind": "quick_check",
+      "prompt": "One short prompt the learner mentally answers.",
+      "answer": "The expected answer, one short line.",
+      "hint": "Optional one-line hint shown alongside the answer."
+    }
   ],
   "difficulty": 1
 }
 ```
 
-For lesson cards the `prompt_text` field carries the lesson body.
-`title` is the short headline shown on the card. `examples` is
-optional but recommended.
+**Step rules — these are load-bearing:**
 
-**When to emit a lesson card vs an exercise:**
-- The current module is **just starting** (no exercise cards from
-  this module yet) → emit a lesson card.
-- The learner has lots of **box-1 stuck cards** from this module → a
-  short lesson card on the underlying concept may unblock them.
-- Otherwise → exercise card. The default is to drill.
+- `steps` has **2 to 5 entries**. Two is a small concept; five is
+  about as much as a carousel can carry without fatigue. Don't pad.
+- Step `kind` is one of `concept` / `example` / `contrast` /
+  `quick_check`. Order them as makes pedagogical sense; `concept`
+  usually leads.
+- `concept` / `example` / `contrast` need a `body` (1–3 short
+  sentences). `examples` is an optional array of <<TARGET_LANGUAGE>>
+  lines — useful but not required on every step.
+- `quick_check` is OPTIONAL but recommended: it's the bridge from
+  teach → test. **If present it MUST be the LAST step.** Shape:
+  `prompt` (the learner reads), `answer` (revealed on tap), optional
+  `hint`. It is NOT graded, NOT scored, doesn't enter the SRS — it's
+  a low-stakes self-check that lets the learner test their
+  understanding before the real exercises start.
+- Each step's `body` is **1–3 short sentences**. No walls of text.
+  If you have more to say, split across steps. The carousel makes
+  this cheap.
+- `title` is the short headline shown above the carousel.
+- Do NOT include `prompt_text` for stepped lessons — the persistence
+  layer synthesises a summary from `title` / `steps[0].body`.
+
+**When to emit a lesson card vs an exercise — TOPIC-AWARE pacing:**
+
+Walk the in-progress module's `topics` list, then cross-reference
+with MODULE DIGEST → `topics_taught` for that module:
+
+1. **If there are lesson topics not yet taught** (i.e. the
+   `topic_id` of a `kind: "lesson"` topic does not appear in
+   `topics_taught`), EMIT a LESSON card targeting the earliest
+   untaught lesson topic. **This is the rule that prevents
+   exercises on un-taught material.**
+2. **If all lesson topics are taught**, emit an EXERCISE card. The
+   exercise's `topic_id` must be either:
+   - a `practice` topic from the in-progress module, OR
+   - one of the already-taught lesson topics, drilled with a
+     DIFFERENT card_type than last time (recycling).
+3. **Never emit an exercise targeting an untaught topic.** If the
+   model violates this rule the coach will retry once and log a
+   warning.
+
+Every card you emit MUST include `module_id` AND `topic_id` matching
+the in-progress module's id and one of its `topics[].id` entries.
 
 ### Cloze card — fill in the blank
 
@@ -433,6 +495,15 @@ on items 1–4):
 8. **Cultural / contextual anchoring** — examples reference the
    target culture and the learner's stated objective (workplace,
    in-laws, exam), not generic textbook scenarios.
+9. **Topic pacing support** — each `kind: "lesson"` topic names a
+   concrete concept the learner can later be drilled on (e.g.
+   "Time-of-day greetings", "Definite articles in nominative"). Each
+   `kind: "practice"` topic clearly maps to a card_type or two
+   (vocab on this set, cloze on that form). Vague topic titles
+   ("Useful phrases", "Things to know") that don't anchor an
+   exercise are an issue — the runtime needs to enforce
+   "no exercises on untaught topics", and that only works if the
+   topics are concrete.
 
 Issue-writing rules:
 - BE SPECIFIC. *"Module 1 has only practice topics; needs a

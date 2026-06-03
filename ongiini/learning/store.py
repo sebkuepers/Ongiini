@@ -612,14 +612,16 @@ def save_card(
     hint_text: str | None = None,
     difficulty: int | None = None,
     module_id: str | None = None,
+    topic_id: str | None = None,
 ) -> str:
     """Persist an LLM-generated card so SRS re-reviews surface the same
     prompt rather than re-rolling it. Returns the new card_id (UUID v4).
 
     ``module_id`` ties this card back to one of the modules in the
-    curriculum outline. Optional for back-compat with cards authored
-    before module-tagging, but new cards should include it so per-
-    module progress counts work.
+    curriculum outline. ``topic_id`` ties it to one of that module's
+    topics so the runtime can enforce "no exercises on untaught
+    topics". Both optional for back-compat with cards authored before
+    the tags existed, but new cards should include them.
     """
     if not goal_id:
         raise ValueError("goal_id is required")
@@ -632,11 +634,11 @@ def save_card(
         c.execute(
             "INSERT INTO learning_cards (card_id, goal_id, card_type, "
             "prompt_text, reference_answer, hint_text, difficulty, "
-            "module_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "module_id, topic_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (card_id, goal_id, card_type, prompt_text.strip(),
              reference_answer, hint_text, difficulty, module_id,
-             _now_iso()),
+             topic_id, _now_iso()),
         )
     return card_id
 
@@ -648,19 +650,28 @@ def progress_for_modules(
     """Per-module progress for one goal. Returns
     ``{module_id: {"lessons_given": int, "exercises_emitted": int,
                    "exercises_attempted": int, "exercises_correct": int,
-                   "cards_in_module": int}}``.
+                   "cards_in_module": int,
+                   "topics_taught": {topic_id: lesson_count, ...},
+                   "topics_drilled": {topic_id: exercise_count, ...}}}``.
 
     Counts only cards with a non-null ``module_id`` — older un-tagged
     cards are excluded so the numbers match what the curriculum panel
     UI claims to show. The breakdown distinguishes lessons (read +
     acknowledged) from exercises (attempted + graded) so the API can
-    answer "Module 1: 5 / 8 cards" with the right semantics."""
+    answer "Module 1: 5 / 8 cards" with the right semantics.
+
+    The per-topic dicts (``topics_taught`` / ``topics_drilled``) drive
+    the teach-then-test pacing rule — the runtime can refuse to drill
+    a topic that hasn't been taught yet. Cards with a NULL ``topic_id``
+    contribute to the module-level counts but not to the per-topic
+    breakdown."""
     from .db import CARD_LESSON, EXERCISE_CARD_TYPES
     if not learner_id or not goal_id:
         return {}
     with _conn() as c:
         rows = c.execute(
-            "SELECT lc.module_id AS module_id, lc.card_type, "
+            "SELECT lc.module_id AS module_id, lc.topic_id AS topic_id, "
+            "       lc.card_type, "
             "       COUNT(DISTINCT lc.card_id) AS n_cards, "
             "       COALESCE(SUM(crs.total_seen), 0) AS attempts_seen, "
             "       COALESCE(SUM(crs.total_correct), 0) AS attempts_correct "
@@ -668,7 +679,7 @@ def progress_for_modules(
             "LEFT JOIN card_review_state crs "
             "       ON crs.card_id = lc.card_id AND crs.learner_id = ? "
             "WHERE lc.goal_id = ? AND lc.module_id IS NOT NULL "
-            "GROUP BY lc.module_id, lc.card_type",
+            "GROUP BY lc.module_id, lc.topic_id, lc.card_type",
             (learner_id, goal_id),
         ).fetchall()
     out: dict[str, dict[str, Any]] = {}
@@ -680,15 +691,22 @@ def progress_for_modules(
             "exercises_attempted": 0,
             "exercises_correct": 0,
             "cards_in_module": 0,
+            "topics_taught": {},
+            "topics_drilled": {},
         })
         n = int(r["n_cards"] or 0)
         d["cards_in_module"] += n
+        topic = r["topic_id"]
         if r["card_type"] == CARD_LESSON:
             d["lessons_given"] += n
+            if topic:
+                d["topics_taught"][topic] = d["topics_taught"].get(topic, 0) + n
         elif r["card_type"] in EXERCISE_CARD_TYPES:
             d["exercises_emitted"] += n
             d["exercises_attempted"] += int(r["attempts_seen"] or 0)
             d["exercises_correct"] += int(r["attempts_correct"] or 0)
+            if topic:
+                d["topics_drilled"][topic] = d["topics_drilled"].get(topic, 0) + n
     return out
 
 

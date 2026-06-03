@@ -70,6 +70,12 @@
       "proverb": "Redewendung",
       "dialogue": "Dialog"
     },
+    "lesson": {
+      "prev": "← Zurück",
+      "next": "Weiter →",
+      "reveal_answer": "Antwort zeigen",
+      "quick_check_eyebrow": "Kurzer Check"
+    },
     "grammar": {
       "source_label": "Umformen"
     },

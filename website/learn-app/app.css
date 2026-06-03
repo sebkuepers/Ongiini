@@ -442,7 +442,10 @@
       font-size: 13.5px;
       color: var(--ink);
     }
-    .lesson-action { display: flex; justify-content: flex-end; padding-top: 4px; }
+    .lesson-action {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 4px; gap: 12px;
+    }
     .lesson-action button {
       padding: 8px 18px;
       background: var(--ink); color: var(--bone);
@@ -452,6 +455,95 @@
       transition: opacity 120ms ease;
     }
     .lesson-action button:hover { opacity: 0.9; }
+    .lesson-action button:disabled {
+      opacity: 0.4; cursor: default;
+    }
+    .lesson-prev {
+      background: transparent !important;
+      color: var(--ink-soft) !important;
+      border: 1px solid var(--rule) !important;
+      padding: 7px 14px !important;
+    }
+    .lesson-prev:hover:not(:disabled) {
+      background: var(--bone-deep) !important;
+      color: var(--ink) !important;
+    }
+    /* "Got it" terminal state — terracotta to signal "this commits". */
+    .lesson-next.lesson-got-it {
+      background: var(--terracotta);
+    }
+
+    /* Carousel chrome — dots + stage + per-step styling. */
+    .lesson-stage {
+      min-height: 90px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .lesson-step {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .lesson-step-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--amber);
+    }
+    .lesson-step-body {
+      font-size: 15px; line-height: 1.55; color: var(--ink); margin: 0;
+    }
+    .lesson-dots {
+      display: flex; justify-content: center; gap: 6px;
+      padding: 4px 0 0;
+    }
+    .lesson-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--rule);
+      transition: background 150ms ease, transform 150ms ease;
+    }
+    .lesson-dot-active {
+      background: var(--terracotta);
+      transform: scale(1.15);
+    }
+
+    /* Quick-check step — distinct visual so it doesn't look like an
+       exercise card with a missing input. */
+    .lesson-qc-prompt {
+      padding: 10px 14px;
+      background: var(--amber-soft);
+      border-left: 2px solid var(--amber);
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+    }
+    .lesson-qc-reveal {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .lesson-qc-reveal-btn {
+      align-self: flex-start;
+      padding: 7px 14px;
+      background: transparent;
+      border: 1px dashed var(--ink-soft);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .lesson-qc-reveal-btn:hover {
+      background: var(--bone-deep);
+      color: var(--ink);
+    }
+    .lesson-qc-answer {
+      padding: 10px 14px;
+      background: var(--bone-deep);
+      border-left: 2px solid var(--green);
+      border-radius: 0 8px 8px 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .lesson-qc-answer-text {
+      font-size: 15px; line-height: 1.5; color: var(--ink); margin: 0;
+      font-weight: 500;
+    }
+    .lesson-qc-hint {
+      font-size: 13px; line-height: 1.5; color: var(--ink-soft); margin: 0;
+    }
 
     /* Rich exercise card */
     .exercise-card {
