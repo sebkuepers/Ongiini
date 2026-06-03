@@ -78,6 +78,11 @@ _LESSON = json.dumps({
 # The design-review loop calls the critic immediately after the
 # designer. Tests that just want the curriculum to ship can queue
 # this "ready on iter 1" response right after the outline.
+#
+# Same payload is reused for the per-card critic that fires after
+# every ``generate_card_content`` call — also a {"ready": ...}
+# shape, so each card emission needs ONE critic response queued
+# right after the design response.
 _CRITIC_READY = json.dumps({"ready": True, "score": 9, "issues": []})
 
 
@@ -103,7 +108,10 @@ async def test_run_turn_no_text_no_active_card_designs_outline_and_emits_lesson(
     when the LLM picked the card_type; now the selector picks and
     teach-first is the rule.)"""
     learner_id, goal_id = _setup(temp_db)
-    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _LESSON])
+    fm = FakeModel(responses=[
+        _OUTLINE, _CRITIC_READY,    # outline + curriculum critic
+        _LESSON, _CRITIC_READY,     # card + card critic
+    ])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
@@ -160,12 +168,14 @@ async def test_answer_verdict_grades_and_advances(temp_db):
         '{"rating": "correct", "feedback": "Yes, dankie."}',
         # next thing: outline (designed lazily on first call)
         _OUTLINE,
-        # critic approves on iter 1
+        # curriculum critic approves on iter 1
         _CRITIC_READY,
         # ...then the next card. The pre-planted exercise wasn't
         # selector-anchored, so the selector still sees no taught
         # lessons → picks LESSON for the first lesson topic.
         _LESSON,
+        # card critic approves on iter 1
+        _CRITIC_READY,
     ])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
@@ -214,8 +224,9 @@ async def test_selector_drives_lesson_lesson_exercise_sequence(temp_db):
     # design+critic for this sequence test.
     store.save_curriculum_outline(goal_id, json.loads(_OUTLINE))
 
-    # Turn 1 — selector picks LESSON for t1.
-    fm = FakeModel(responses=[_LESSON])
+    # Turn 1 — selector picks LESSON for t1. Card critic approves
+    # immediately, so the queue is [design, critic].
+    fm = FakeModel(responses=[_LESSON, _CRITIC_READY])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
@@ -225,7 +236,7 @@ async def test_selector_drives_lesson_lesson_exercise_sequence(temp_db):
 
     # Turn 2 — t1 is taught (lessons_given[t1]=1). Selector picks
     # LESSON for t2 (NOT a repeat of t1, which was Sebastian's bug).
-    fm = FakeModel(responses=[_LESSON])
+    fm = FakeModel(responses=[_LESSON, _CRITIC_READY])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
@@ -234,7 +245,7 @@ async def test_selector_drives_lesson_lesson_exercise_sequence(temp_db):
 
     # Turn 3 — both lesson topics taught. Selector picks EXERCISE
     # for the practice topic p1.
-    fm = FakeModel(responses=[_EXERCISE])
+    fm = FakeModel(responses=[_EXERCISE, _CRITIC_READY])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
@@ -458,12 +469,14 @@ def test_advance_module_when_attempted_hits_estimate(temp_db):
         "m1": {"exercises_attempted": 6, "exercises_emitted": 6, "lessons_given": 0,
                "exercises_correct": 5, "cards_in_module": 6},
     }
-    new_outline = coach._advance_module_if_complete(
+    result = coach._advance_module_if_complete(
         goal_id="goal-1", outline=outline, digest=digest,
     )
-    assert new_outline is not None
-    assert new_outline["modules"][0]["status"] == "completed"
-    assert new_outline["modules"][1]["status"] == "in_progress"
+    assert result is not None
+    assert result.outline["modules"][0]["status"] == "completed"
+    assert result.outline["modules"][1]["status"] == "in_progress"
+    assert result.previous_title == "First"
+    assert result.new_title == "Second"
 
 
 def test_advance_module_when_emitted_overshoots(temp_db):
@@ -482,11 +495,11 @@ def test_advance_module_when_emitted_overshoots(temp_db):
     digest = {
         "m1": {"exercises_attempted": 4, "exercises_emitted": 9, "lessons_given": 0},
     }
-    new_outline = coach._advance_module_if_complete(
+    result = coach._advance_module_if_complete(
         goal_id="goal-1", outline=outline, digest=digest,
     )
-    assert new_outline is not None
-    assert new_outline["modules"][0]["status"] == "completed"
+    assert result is not None
+    assert result.outline["modules"][0]["status"] == "completed"
 
 
 @pytest.mark.asyncio
@@ -575,6 +588,7 @@ async def test_srs_replay_skips_just_answered_card(temp_db):
         '{"verdict": "answer"}',
         '{"rating": "wrong", "feedback": "no, dankie"}',
         _LESSON,
+        _CRITIC_READY,
     ])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
@@ -603,6 +617,69 @@ def test_advance_module_no_op_when_under_target(temp_db):
     assert coach._advance_module_if_complete(
         goal_id="goal-1", outline=outline, digest=digest,
     ) is None
+
+
+def test_advance_module_last_module_has_no_new_title(temp_db):
+    """When the just-completed module was the last one, the result
+    still records the previous title (for logging) but ``new_title``
+    is None — the coach uses that signal to skip the transition text
+    (the graduation message will handle it on the next turn)."""
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "Only One", "status": "in_progress",
+             "estimated_cards": 4},
+        ],
+    }
+    digest = {
+        "m1": {"exercises_attempted": 4, "exercises_emitted": 4, "lessons_given": 0},
+    }
+    result = coach._advance_module_if_complete(
+        goal_id="goal-1", outline=outline, digest=digest,
+    )
+    assert result is not None
+    assert result.previous_title == "Only One"
+    assert result.new_title is None
+    assert result.outline["modules"][0]["status"] == "completed"
+
+
+def test_emit_module_advance_text_skips_when_no_next_module(temp_db):
+    """Helper sanity: the transition text helper returns None on the
+    final-module case so the caller doesn't emit a "Next up: " bubble
+    with no next title."""
+    learner_id, goal_id = _setup(temp_db)
+    advanced = coach._AdvanceResult(
+        outline={"summary": "x", "modules": []},
+        previous_title="Done",
+        new_title=None,
+    )
+    assert coach._emit_module_advance_text(
+        learner_id=learner_id, goal_id=goal_id, advanced=advanced,
+    ) is None
+
+
+def test_emit_module_advance_text_persists_structured_payload(temp_db):
+    """Helper happy path: returns a MSG_COACH_TEXT carrying both a
+    plain-English fallback ``text`` (older clients) AND the structured
+    ``kind`` / ``previous_title`` / ``new_title`` fields the frontend
+    uses to render via i18n."""
+    learner_id, goal_id = _setup(temp_db)
+    advanced = coach._AdvanceResult(
+        outline={"summary": "x", "modules": []},
+        previous_title="Greetings",
+        new_title="Ordering food",
+    )
+    msg = coach._emit_module_advance_text(
+        learner_id=learner_id, goal_id=goal_id, advanced=advanced,
+    )
+    assert msg is not None
+    assert msg["kind"] == db.MSG_COACH_TEXT
+    p = msg["payload"]
+    assert p["kind"] == "module_advance"
+    assert p["previous_title"] == "Greetings"
+    assert p["new_title"] == "Ordering food"
+    assert "Greetings" in p["text"]
+    assert "Ordering food" in p["text"]
 
 
 @pytest.mark.asyncio

@@ -342,6 +342,7 @@ async def generate_card_content(
     module_title: str,
     topic_id: str,
     topic_title: str,
+    steering_note: str | None = None,
 ) -> dict[str, Any]:
     """Ask the model to author the CONTENT of one card, with the
     card_type / module / topic already chosen by the selector.
@@ -350,20 +351,141 @@ async def generate_card_content(
     ``card_type``, ``module_id``, ``topic_id`` (the model is told NOT
     to emit them) and persists.
 
+    ``steering_note`` is appended to the user prompt when the caller
+    is asking for a corrective re-roll (e.g. after the card critic
+    rejected the first attempt). Mirrors the steering_note pattern
+    on ``curriculum.revise_outline``.
+
     Raises ``ModelOutputError`` on malformed shape."""
     # Inject the just-decided card_type into the payload BEFORE the
     # validator runs. The model is told not to emit card_type (so the
     # brief stays single-purpose), but the per-type validators below
     # need to see it to pick the right shape checks.
+    user_prompt = _build_content_brief(
+        ctx,
+        card_type=card_type, module_id=module_id, module_title=module_title,
+        topic_id=topic_id, topic_title=topic_title,
+    )
+    if steering_note:
+        user_prompt = (
+            user_prompt
+            + "\n\nSTEERING NOTE (the previous attempt was reviewed and "
+            "rejected — address this before re-emitting):\n"
+            + steering_note
+        )
     payload = await ask_for_json(
         system_prompt=_build_system_prompt(skill_content),
-        user_prompt=_build_content_brief(
-            ctx,
-            card_type=card_type, module_id=module_id, module_title=module_title,
-            topic_id=topic_id, topic_title=topic_title,
-        ),
+        user_prompt=user_prompt,
         model=model,
     )
     payload["card_type"] = card_type
     _validate_card(payload)
     return payload
+
+
+# Iteration cap for the card-content review loop. Same posture as the
+# curriculum design loop: 1 author + 1 critic + optional 1 revise.
+# A second critic call after revise would double cost again with
+# diminishing returns; we ship after one revise regardless.
+_CARD_REVIEW_MAX_ITERATIONS = 1
+
+
+async def generate_card_content_with_review(
+    ctx: LearnerContext,
+    *,
+    model: Model,
+    skill_content: str,
+    card_type: str,
+    module_id: str,
+    module_title: str,
+    topic_id: str,
+    topic_title: str,
+) -> dict[str, Any]:
+    """Author + critic + maybe revise. Mirror of
+    ``curriculum.design_outline_with_review``.
+
+    Flow:
+      1. ``generate_card_content`` — first draft.
+      2. ``card_critic.critique_card`` — score against the Card
+         review checklist in SKILL.md.
+      3. If ``critique.ready`` → ship.
+      4. Else → ``generate_card_content`` again with the critic's
+         issues as ``steering_note``; ship whatever comes back.
+
+    Soft-fails: critic crash → ship original (critic returns
+    ``ready=True`` on degraded). Revise crash → ship original.
+
+    Worst case: 3 LLM calls per card (author + critic + revise).
+    Best case: 2 (author + critic-approves)."""
+    from . import card_critic as critic_mod   # local — break cycle
+
+    payload = await generate_card_content(
+        ctx,
+        model=model, skill_content=skill_content,
+        card_type=card_type, module_id=module_id, module_title=module_title,
+        topic_id=topic_id, topic_title=topic_title,
+    )
+
+    # Belt-and-braces: critique_card already soft-fails on
+    # ModelOutputError / Exception inside its ask_for_json call, but
+    # anything that raises BEFORE that (e.g. a non-serialisable nested
+    # object slipping past the validator into json.dumps) would still
+    # propagate. Catch here too so the orchestrator's stated contract
+    # — "critic crash → ship the original card" — is absolute.
+    try:
+        critique = await critic_mod.critique_card(
+            ctx, payload,
+            model=model, skill_content=skill_content,
+            card_type=card_type,
+            module_title=module_title,
+            topic_title=topic_title,
+        )
+    except Exception as exc:                                # noqa: BLE001
+        log.warning(
+            "card_critic: critic crashed pre-call on card_type=%s "
+            "topic=%s; shipping the original. error=%s",
+            card_type, topic_id, exc,
+        )
+        return payload
+    log.info(
+        "card_critic: card_type=%s topic=%s score=%d ready=%s issues=%d",
+        card_type, topic_id, critique.score, critique.ready,
+        len(critique.issues),
+    )
+    if critique.ready:
+        return payload
+
+    if _CARD_REVIEW_MAX_ITERATIONS <= 0:
+        return payload
+
+    # Revise pass — feed the critic's issues back as the steering
+    # note. Build a meaningful steering string even if the critic
+    # didn't list issues (degenerate but possible).
+    if critique.issues:
+        steering = "Critic feedback to address:\n" + "\n".join(
+            f"- {item}" for item in critique.issues
+        )
+    else:
+        steering = (
+            f"The critic scored this card {critique.score}/10 but did "
+            "not list specific issues. Tighten the card overall: "
+            "ensure every target-language sentence has an inline "
+            "source-language gloss, the level matches the learner, "
+            "and the shape is right for the card_type."
+        )
+    try:
+        revised = await generate_card_content(
+            ctx,
+            model=model, skill_content=skill_content,
+            card_type=card_type, module_id=module_id, module_title=module_title,
+            topic_id=topic_id, topic_title=topic_title,
+            steering_note=steering,
+        )
+    except ModelOutputError as exc:
+        log.warning(
+            "card_critic: revise failed on card_type=%s topic=%s; "
+            "shipping the original. error=%s",
+            card_type, topic_id, exc,
+        )
+        return payload
+    return revised

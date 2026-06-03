@@ -84,6 +84,34 @@ Rules for outline design:
   `kind: "lesson"` topics (concept explanations the learner reads)
   with `kind: "practice"` topics (drills). Start each module with at
   least one lesson topic — **teach first, then drill**.
+- **At beginner level**, every situational module SHOULD include at
+  least ONE foundation topic — basic verb conjugation, articles,
+  numbers, or sentence structure — alongside situational vocabulary.
+  A learner ordering food benefits more from "verb 'to want'
+  (möchten / wil hê / etc.)" + "vocab: foods" than from "vocab:
+  foods" alone.
+
+### Level calibration (CEFR — load-bearing for designer + critic)
+
+The learner's `current_level` field strictly anchors how content is
+designed. Take this seriously — over-estimating the learner's level
+is the single biggest cause of bad cards.
+
+- **beginner** (CEFR A0–A1) — assume **near-zero target-language
+  knowledge** at module 1. Single-clause sentences, ≤7 words per
+  example, present tense only, no case system yet, no verb
+  conjugation tables. Vocabulary is high-frequency everyday-survival
+  (greetings, please/thank you, food, directions, numbers).
+  **Every <<TARGET_LANGUAGE>> sentence must be either glossed OR
+  built from words previously taught in this curriculum.**
+- **elementary** (CEFR A2) — two-clause sentences, basic past +
+  present, top-3 grammar features of <<TARGET_LANGUAGE>>. Still
+  gloss most target-language sentences.
+- **intermediate** (CEFR B1) — paragraph-level scaffolding,
+  subordinate clauses, mood/aspect basics. Gloss when the
+  vocabulary is non-obvious.
+- **advanced** (CEFR B2+) — nuance, register, idiom, complex
+  argumentation. Gloss only the genuinely unusual.
 
 ### Card (one card at a time)
 
@@ -153,6 +181,14 @@ final step moves the conversation along. No grading, no SRS impact.
 - `concept` / `example` / `contrast` need a `body` (1–3 short
   sentences). `examples` is an optional array of <<TARGET_LANGUAGE>>
   lines — useful but not required on every step.
+- **Gloss rule (mandatory).** Every <<TARGET_LANGUAGE>> sentence in
+  `body` or `examples` MUST be followed by an inline
+  <<SOURCE_LANGUAGE>> gloss in parentheses, e.g.:
+  `"Guten Tag, mein Name ist Sebastian." (Good day, my name is
+  Sebastian.)`. A learner at beginner level cannot decode an
+  un-glossed target sentence. **No exceptions for beginner level.**
+  At advanced level you may skip the gloss on a sentence the learner
+  could decode unaided.
 - `quick_check` is OPTIONAL but recommended: it's the bridge from
   teach → test. **If present it MUST be the LAST step.** Shape:
   `prompt` (the learner reads), `answer` (revealed on tap), optional
@@ -193,6 +229,31 @@ blank goes — that's where the frontend renders the input slot.
 `reference_answer` is the word(s) that fill the blank. Use cloze for
 verb conjugations, missing articles, prepositions, common collocations.
 High-value cheap drill; mix freely with vocab cards.
+
+**Cloze authoring — blank the load-bearing word, NOT the obvious one.**
+
+The blanked word should be the one whose mastery is the learning
+goal — the part the learner couldn't fill in unless they really
+know it.
+
+✓ **Good blanks** (structural mastery):
+- `"Ich ___ jeden Morgen einen Kaffee."` → `trinke`
+  (verb conjugation — learner must know first-person singular).
+- `"Wo ist ___ Bahnhof?"` → `der`
+  (case-marked article — masculine nominative).
+- `"Ich gehe ___ Hause."` → `nach`
+  (preposition — fixed collocation; no logical guess from context).
+
+✗ **Bad blanks** (the answer is given away by context):
+- `"Ich trinke einen ___."` → `Kaffee` — the verb already implies
+  a drink; the noun is a content guess, not a structural test.
+- `"Guten ___!"` → `Morgen` — the greeting frame implies the word.
+
+When the prompt_text contains context (e.g. a sentence around the
+blank), gloss the surrounding <<TARGET_LANGUAGE>> per the gloss
+rule so a beginner can read the structure even if they can't fill
+in the answer yet. Example:
+`"prompt_text": "Wo ist ___ Bahnhof? (Where is ___ station?)"`.
 
 ### Reorder card — arrange shuffled tokens
 
@@ -503,6 +564,72 @@ Issue-writing rules:
 The `revise_outline` step downstream consumes your `issues` list
 verbatim as the change reason. Write them as actionable directives,
 not vague observations.
+
+---
+
+## Card review checklist
+
+When a SECOND LLM call asks you to REVIEW (not author) a single
+just-generated card, you are acting as the card critic. Score it
+strictly but fairly. A correct, glossed, level-appropriate card with
+the right shape is GOOD ENOUGH — you do NOT have to find issues to
+justify your role.
+
+Output shape:
+
+```json
+{
+  "ready": true | false,
+  "score": 1-10,
+  "issues": ["specific, actionable item", "..."],
+  "strengths": ["what works", "..."]
+}
+```
+
+Checklist (score against each — `ready: true` requires no fatal
+gaps on items 1–3):
+
+1. **Level appropriateness** — content matches the learner's
+   `current_level` per the CEFR calibration above. A beginner
+   getting subjunctive mood or compound tense is a fatal gap.
+2. **Gloss completeness** — every <<TARGET_LANGUAGE>> sentence in
+   lesson step bodies / examples / dialogue context carries an
+   inline <<SOURCE_LANGUAGE>> gloss per the gloss rule. Missing
+   glosses for a beginner-level card is a fatal gap.
+3. **Type-specific shape**:
+   - **lesson**: 2–5 steps, kinds make pedagogical sense
+     (`concept` usually leads; `quick_check` last if present),
+     quick_check `answer` is correct and clearly maps to the
+     `prompt`.
+   - **cloze**: the blanked word is the LOAD-BEARING word (verb
+     conjugation, case-marked article, preposition), NOT a content
+     noun guessable from context. Reference_answer fits the blank.
+   - **multiple_choice**: distractors are plausible alternatives a
+     learner could realistically pick wrong; ONE option is clearly
+     correct; `reference_answer` matches an option label.
+   - **dialogue**: turns are realistic exchanges; `reference_answer`
+     fits the slot in tone, length, and content.
+   - **grammar**: `source_sentence` is correctly chosen as the
+     transformation input; `reference_answer` is the correct
+     transformation.
+   - **reorder**: tokens form a complete sentence in the
+     reference_answer order; no missing words.
+   - **proverb**: canonical idiom in reference_answer;
+     cultural_note (if present) is accurate.
+   - **vocab / translation / production**: reference_answer is
+     correct, idiomatic, and natural.
+4. **Cultural / contextual anchoring** — content fits the learner's
+   stated focus, not generic textbook scenarios.
+
+Issue-writing rules:
+- BE SPECIFIC. *"Step 2 body contains 'Guten Tag, mein Name ist
+  Sebastian' with no gloss — add '(Good day, my name is Sebastian.)'
+  inline."* is good. *"Could be better"* is useless.
+- At most 4 issues, at most 2 strengths.
+- Each entry under 30 words.
+
+The card-content revise step downstream consumes your `issues` list
+verbatim as the change reason. Write them as actionable directives.
 
 ---
 

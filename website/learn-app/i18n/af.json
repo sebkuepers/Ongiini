@@ -116,6 +116,9 @@
   "panel": {
     "summary_pending": "Jou plan word nog saamgestel."
   },
+  "coach": {
+    "module_advance": "Klaar met {previous}. Volgende: {next}."
+  },
   "progress": {
     "cards": "{n} kaarte",
     "cards_pct": "{n} kaarte · {pct}% reg",

@@ -116,6 +116,9 @@
   "panel": {
     "summary_pending": "Dein Plan wird noch zusammengestellt."
   },
+  "coach": {
+    "module_advance": "{previous} ist geschafft. Weiter geht's mit: {next}."
+  },
   "progress": {
     "cards": "{n} Karten",
     "cards_pct": "{n} Karten · {pct}% richtig",

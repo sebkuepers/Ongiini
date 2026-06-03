@@ -22,6 +22,7 @@ would be hard to reason about.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from owela import Model
@@ -472,17 +473,31 @@ def _emit_off_topic_redirect(
 _OVERSHOOT_THRESHOLD = 1.5
 
 
+@dataclass(frozen=True)
+class _AdvanceResult:
+    """Outcome of a module-advance: the saved new outline plus the
+    titles needed to emit a transition coach text. ``new_title`` is
+    None when the just-completed module was the last one (the
+    selector will see graduation on the next turn). ``previous_title``
+    is typed Optional so a future refactor that moves the early-return
+    can't silently emit a ``"Done with . Next up: Y."`` bubble — the
+    helper guards on both fields."""
+    outline: dict[str, Any]
+    previous_title: str | None
+    new_title: str | None
+
+
 def _advance_module_if_complete(
     *,
     goal_id: str,
     outline: dict[str, Any] | None,
     digest: dict[str, dict[str, Any]],
-) -> dict[str, Any] | None:
+) -> _AdvanceResult | None:
     """If the current in_progress module has hit its
     ``estimated_cards`` target (or overshot it materially), mark it
     ``completed`` and promote the next ``not_started`` module to
-    ``in_progress``. Persists + returns the new outline. Returns None
-    when no change is needed.
+    ``in_progress``. Persists + returns an :class:`_AdvanceResult`.
+    Returns None when no change is needed.
 
     This is the fix for "10 / 6" — the model previously kept emitting
     cards in the same module forever because the outline's
@@ -497,6 +512,8 @@ def _advance_module_if_complete(
     modules = [dict(m) if isinstance(m, dict) else m for m in raw_modules]
 
     changed = False
+    previous_title: str | None = None
+    new_title: str | None = None
     for i, m in enumerate(modules):
         if not isinstance(m, dict):
             continue
@@ -514,11 +531,13 @@ def _advance_module_if_complete(
         if attempted < est and emitted < int(est * _OVERSHOOT_THRESHOLD):
             continue
         m["status"] = "completed"
+        previous_title = str(m.get("title") or mod_id)
         changed = True
         # Promote the next not_started module to in_progress.
         for j in range(i + 1, len(modules)):
             if isinstance(modules[j], dict) and modules[j].get("status") == "not_started":
                 modules[j]["status"] = "in_progress"
+                new_title = str(modules[j].get("title") or modules[j].get("id") or "")
                 break
         break
 
@@ -528,7 +547,46 @@ def _advance_module_if_complete(
     new_outline["modules"] = modules
     store.save_curriculum_outline(goal_id, new_outline)
     log.info("coach: advanced module on goal %s", goal_id)
-    return new_outline
+    return _AdvanceResult(
+        outline=new_outline,
+        previous_title=previous_title,
+        new_title=new_title,
+    )
+
+
+def _emit_module_advance_text(
+    *,
+    learner_id: str,
+    goal_id: str,
+    advanced: _AdvanceResult,
+) -> dict[str, Any] | None:
+    """Persist a friendly transition coach text after a module advance
+    so the learner sees "Done with X. Next up: Y." in their thread
+    rather than the next card silently appearing under a new heading.
+
+    Returns the persisted message or None if the just-completed module
+    was the last one (no "next up" to mention — the graduation message
+    will appear on its own).
+
+    Frontend reads the structured fields (``kind``, ``previous_title``,
+    ``new_title``) and renders via i18n; the ``text`` field is an
+    English fallback for older clients."""
+    if not advanced.new_title or not advanced.previous_title:
+        return None
+    text = (
+        f"Done with {advanced.previous_title}. "
+        f"Next up: {advanced.new_title}."
+    )
+    return messages.append(
+        learner_id=learner_id, goal_id=goal_id,
+        kind=MSG_COACH_TEXT,
+        payload={
+            "text": text,
+            "kind": "module_advance",
+            "previous_title": advanced.previous_title,
+            "new_title": advanced.new_title,
+        },
+    )
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -683,6 +741,11 @@ async def _produce_next_thing(
     )
     if advanced is not None:
         ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal_id)
+        transition = _emit_module_advance_text(
+            learner_id=learner_id, goal_id=goal_id, advanced=advanced,
+        )
+        if transition is not None:
+            new_messages.append(transition)
 
     # Step 3 — SRS replay. A previously-failed card whose Leitner
     # next_due_at <= now wins over a brand-new card so the learner
@@ -738,6 +801,11 @@ async def _produce_next_thing(
         )
         if advanced2 is not None:
             ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal_id)
+            transition2 = _emit_module_advance_text(
+                learner_id=learner_id, goal_id=goal_id, advanced=advanced2,
+            )
+            if transition2 is not None:
+                new_messages.append(transition2)
         sel = selector.select_next_card(
             outline=ctx.curriculum_outline,
             module_digest=ctx.module_digest,
@@ -780,7 +848,7 @@ async def _produce_next_thing(
     last_exc: ModelOutputError | None = None
     for attempt in range(2):
         try:
-            payload = await cards_mod.generate_card_content(
+            payload = await cards_mod.generate_card_content_with_review(
                 ctx,
                 model=model,
                 skill_content=skill_content,
