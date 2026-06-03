@@ -715,6 +715,32 @@ def test_progress_for_modules_handles_null_topic_id(temp_db):
     assert out["mod-1"]["topics_drilled"] == {}
 
 
+def test_save_card_persists_extras_and_round_trips(temp_db):
+    """The per-card-type extras (MC options / reorder tokens / dialogue
+    turns / etc.) are stored in extras_json on the card row so SRS
+    replay can rebuild the renderer payload. Without this a failed
+    reorder card resurfaces as a prompt with no token chips."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    card_id = store.save_card(
+        goal["goal_id"], db.CARD_REORDER, "Arrange:",
+        reference_answer="ich gehe jetzt nach Hause",
+        extras={"tokens": ["nach", "ich", "Hause", "gehe", "jetzt"]},
+    )
+    # SRS due-card query returns the extras parsed back into a dict.
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_id, user_answer="wrong",
+        ai_feedback="no", rating=db.RATING_WRONG,
+    )
+    due = store.next_due_cards(learner_id, goal_id=goal["goal_id"], limit=1)
+    assert len(due) == 1
+    assert due[0]["card_id"] == card_id
+    assert isinstance(due[0]["extras"], dict)
+    assert due[0]["extras"].get("tokens") == [
+        "nach", "ich", "Hause", "gehe", "jetzt",
+    ]
+
+
 def test_save_card_persists_topic_id(temp_db):
     """The topic_id parameter survives the round-trip — the SRS query
     side reads it back via the digest."""

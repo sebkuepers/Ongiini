@@ -613,6 +613,7 @@ def save_card(
     difficulty: int | None = None,
     module_id: str | None = None,
     topic_id: str | None = None,
+    extras: dict[str, Any] | None = None,
 ) -> str:
     """Persist an LLM-generated card so SRS re-reviews surface the same
     prompt rather than re-rolling it. Returns the new card_id (UUID v4).
@@ -622,6 +623,11 @@ def save_card(
     topics so the runtime can enforce "no exercises on untaught
     topics". Both optional for back-compat with cards authored before
     the tags existed, but new cards should include them.
+
+    ``extras`` is the per-card-type structural payload — MC options,
+    reorder tokens, dialogue turns, grammar source_sentence, proverb
+    cultural_note — stored as a JSON blob so SRS replay can rebuild
+    the renderer payload without losing the question's shape.
     """
     if not goal_id:
         raise ValueError("goal_id is required")
@@ -629,16 +635,17 @@ def save_card(
         raise ValueError(f"unknown card_type: {card_type}")
     if not prompt_text or not prompt_text.strip():
         raise ValueError("prompt_text is required")
+    extras_json = json.dumps(extras, ensure_ascii=False) if extras else None
     card_id = str(uuid4())
     with _conn() as c:
         c.execute(
             "INSERT INTO learning_cards (card_id, goal_id, card_type, "
             "prompt_text, reference_answer, hint_text, difficulty, "
-            "module_id, topic_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "module_id, topic_id, extras_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (card_id, goal_id, card_type, prompt_text.strip(),
              reference_answer, hint_text, difficulty, module_id,
-             topic_id, _now_iso()),
+             topic_id, extras_json, _now_iso()),
         )
     return card_id
 
@@ -769,7 +776,26 @@ def next_due_cards(
     params.append(limit)
     with _conn() as c:
         rows = c.execute(sql, params).fetchall()
-    return [dict(r) for r in rows]
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        d = dict(r)
+        # Deserialise extras_json so the SRS replay path can rebuild
+        # the renderer payload (MC options, reorder tokens, dialogue
+        # turns, etc.) instead of dropping the per-type extras.
+        raw = d.pop("extras_json", None)
+        if isinstance(raw, str) and raw:
+            try:
+                d["extras"] = json.loads(raw)
+            except json.JSONDecodeError:
+                log.warning(
+                    "store: corrupt extras_json for card %s; ignoring",
+                    d.get("card_id"),
+                )
+                d["extras"] = None
+        else:
+            d["extras"] = None
+        out.append(d)
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────

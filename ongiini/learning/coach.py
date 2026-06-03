@@ -576,6 +576,11 @@ def _persist_and_emit_lesson(
     )
 
 
+_EXERCISE_EXTRA_KEYS = (
+    "options", "tokens", "turns", "source_sentence", "cultural_note",
+)
+
+
 def _persist_and_emit_exercise(
     *,
     learner_id: str,
@@ -585,7 +590,11 @@ def _persist_and_emit_exercise(
 ) -> dict[str, Any]:
     """Save the exercise card row + emit the matching learner_message.
     Preserves per-type structural extras (options / tokens / turns /
-    source_sentence) so the frontend can render them."""
+    source_sentence / cultural_note) by storing them BOTH in the
+    card row (so SRS replay can rebuild the renderer payload) and
+    in the message payload (so the frontend renders the first
+    emission correctly)."""
+    extras = {k: payload[k] for k in _EXERCISE_EXTRA_KEYS if k in payload}
     card_id = store.save_card(
         goal_id,
         sel.card_type,
@@ -595,6 +604,7 @@ def _persist_and_emit_exercise(
         difficulty=payload.get("difficulty"),
         module_id=sel.module_id,
         topic_id=sel.topic_id,
+        extras=extras or None,
     )
     msg_payload: dict[str, Any] = {
         "card_type": sel.card_type,
@@ -602,12 +612,7 @@ def _persist_and_emit_exercise(
         "hint_text": payload.get("hint_text"),
         "difficulty": payload.get("difficulty"),
     }
-    # Per-type structural extras the renderer reads. Pass through
-    # whatever the model emitted; the validator already shape-checked.
-    for extra in ("options", "tokens", "turns", "source_sentence",
-                  "cultural_note"):
-        if extra in payload:
-            msg_payload[extra] = payload[extra]
+    msg_payload.update(extras)
     return messages.append(
         learner_id=learner_id, goal_id=goal_id,
         kind=MSG_EXERCISE,
@@ -690,16 +695,27 @@ async def _produce_next_thing(
     )
     if due_cards:
         d = due_cards[0]
+        replay_payload: dict[str, Any] = {
+            "card_type": d["card_type"],
+            "prompt_text": d["prompt_text"],
+            "hint_text": d.get("hint_text"),
+            "difficulty": d.get("difficulty"),
+            "review_box": int(d.get("box") or 1),
+        }
+        # Re-attach per-type structural extras so reorder/MC/dialogue/
+        # grammar/proverb cards render correctly on re-review. Without
+        # this a failed reorder card would resurface as just a prompt
+        # with no token chips — Sebastian's "I couldn't see the words"
+        # bug for repeated cards.
+        extras = d.get("extras")
+        if isinstance(extras, dict):
+            for k in _EXERCISE_EXTRA_KEYS:
+                if k in extras:
+                    replay_payload[k] = extras[k]
         msg = messages.append(
             learner_id=learner_id, goal_id=goal_id,
             kind=MSG_EXERCISE,
-            payload={
-                "card_type": d["card_type"],
-                "prompt_text": d["prompt_text"],
-                "hint_text": d.get("hint_text"),
-                "difficulty": d.get("difficulty"),
-                "review_box": int(d.get("box") or 1),
-            },
+            payload=replay_payload,
             card_id=d["card_id"],
         )
         new_messages.append(msg)

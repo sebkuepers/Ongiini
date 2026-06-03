@@ -292,6 +292,20 @@ def warmup() -> None:
             "ON learning_cards(goal_id, module_id, topic_id)"
         )
 
+        # extras_json on learning_cards — stores the per-card-type
+        # structural extras (multiple_choice options, reorder tokens,
+        # dialogue turns, grammar source_sentence, proverb
+        # cultural_note) as a JSON blob. Without this, SRS replay of
+        # a previously-failed card surfaces with only prompt_text +
+        # reference_answer — the renderer would draw a reorder card
+        # with no token chips, an MC card with no options, etc. The
+        # extras are LLM-authored at first emission and never change,
+        # so storing them on the card row (not in the volatile message
+        # payload) survives replays.
+        card_cols = {r["name"] for r in c.execute("PRAGMA table_info(learning_cards)").fetchall()}
+        if "extras_json" not in card_cols:
+            c.execute("ALTER TABLE learning_cards ADD COLUMN extras_json TEXT")
+
     log.info("learning sqlite warmed at %s", _db_path())
 
 
