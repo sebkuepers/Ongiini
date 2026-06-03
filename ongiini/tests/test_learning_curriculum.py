@@ -248,6 +248,50 @@ async def test_critic_not_ready_with_empty_issues_uses_synthesized_reason(temp_d
 
 
 @pytest.mark.asyncio
+async def test_designer_retries_once_on_initial_bad_json(temp_db, caplog):
+    """The first designer call sometimes returns malformed JSON. The
+    orchestrator should retry transparently once before bubbling the
+    error, so the learner doesn't see 'I had trouble putting your plan
+    together' for a one-off LLM hiccup."""
+    fm = FakeModel(responses=[
+        # Attempt 1: garbage that fails JSON parse.
+        "this is not JSON at all",
+        # Attempt 2: clean outline.
+        _GOOD_OUTLINE,
+        # Critic approves immediately.
+        json.dumps({"ready": True, "score": 8, "issues": []}),
+    ])
+    with caplog.at_level(logging.WARNING, logger="ongiini.learning.curriculum"):
+        out = await curriculum.design_outline_with_review(
+            _ctx(temp_db), model=fm, skill_content="SKILL",
+        )
+    assert out["modules"][0]["title"] == "Greetings"
+    # designer × 2 + critic × 1 = 3 calls
+    assert len(fm.requests) == 3
+    assert any(
+        "design_outline failed on first attempt" in rec.message
+        for rec in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_designer_raises_when_both_attempts_fail(temp_db):
+    """If the designer fails twice in a row, surface the error rather
+    than masking it — the coach has its own user-facing fallback."""
+    from ongiini.learning.llm import ModelOutputError
+    fm = FakeModel(responses=[
+        "not json",
+        "still not json",
+    ])
+    with pytest.raises(ModelOutputError):
+        await curriculum.design_outline_with_review(
+            _ctx(temp_db), model=fm, skill_content="SKILL",
+        )
+    # Two designer attempts, no critic call (we never got an outline).
+    assert len(fm.requests) == 2
+
+
+@pytest.mark.asyncio
 async def test_revise_failure_falls_back_to_prior_outline(temp_db, caplog):
     """If revise returns invalid JSON mid-loop, we keep the most
     recent valid outline rather than crashing or blocking."""
