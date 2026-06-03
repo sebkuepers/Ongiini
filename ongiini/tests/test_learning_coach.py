@@ -658,6 +658,160 @@ def test_emit_module_advance_text_skips_when_no_next_module(temp_db):
     ) is None
 
 
+def test_force_advance_module_promotes_regardless_of_estimated_cards(temp_db):
+    """The selector-driven advance must NOT consult estimated_cards.
+    Sebastian's bug: module 1 in_progress with est=10, digest shows
+    only 7 emitted / 0 attempted (the digest snapshot at the moment
+    advance_first fires can lag the real on-screen count). The gated
+    helper refuses to advance here — but the force helper is the one
+    called from the advance_first branch, and it MUST promote
+    anyway because the selector has already concluded the module's
+    drill load is empty."""
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "Foundations", "status": "in_progress",
+             "estimated_cards": 10},
+            {"id": "m2", "title": "Perfekt", "status": "not_started",
+             "estimated_cards": 12},
+        ],
+    }
+    result = coach._force_advance_module(
+        goal_id="goal-1", outline=outline,
+    )
+    assert result is not None
+    assert result.outline["modules"][0]["status"] == "completed"
+    assert result.outline["modules"][1]["status"] == "in_progress"
+    assert result.previous_title == "Foundations"
+    assert result.new_title == "Perfekt"
+
+
+def test_force_advance_module_last_module_returns_no_next_title(temp_db):
+    """When the just-completed module was the last one, force-advance
+    still records previous_title (logs) but returns ``new_title=None``
+    so the caller falls through to a real graduation message."""
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "Only One", "status": "in_progress",
+             "estimated_cards": 6},
+        ],
+    }
+    result = coach._force_advance_module(
+        goal_id="goal-1", outline=outline,
+    )
+    assert result is not None
+    assert result.previous_title == "Only One"
+    assert result.new_title is None
+    assert result.outline["modules"][0]["status"] == "completed"
+
+
+def test_force_advance_module_no_in_progress_returns_none(temp_db):
+    """Defensive: an outline with no in_progress module (everything
+    already completed) returns None — the caller's re-selection will
+    then land on real graduation."""
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "Done", "status": "completed",
+             "estimated_cards": 6},
+        ],
+    }
+    assert coach._force_advance_module(
+        goal_id="goal-1", outline=outline,
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_advance_first_branch_force_advances_under_estimate(temp_db):
+    """The full integration of the bug: plant an outline + just enough
+    cards to drive the selector to advance_first while leaving
+    module 1's estimated_cards target unmet. Before the fix the coach
+    refused to advance and emitted a false graduation; after the fix
+    the next module promotes and the learner sees the transition
+    bubble + a card from module 2."""
+    learner_id, goal_id = _setup(temp_db)
+    # Outline mirrors the screenshot: module 1 has the canonical
+    # 2-lesson + 1-practice topic layout that the selector clears in
+    # ~6 cards, while estimated_cards is set to 10 (the LLM's optimistic
+    # planning number). Module 2 has a real lesson topic so the
+    # selector can author a follow-up card after the advance.
+    outline = {
+        "summary": "x",
+        "modules": [
+            {"id": "m1", "title": "Foundations", "status": "in_progress",
+             "estimated_cards": 10,
+             "topics": [
+                 {"id": "m1-l1", "title": "SVO", "kind": "lesson"},
+                 {"id": "m1-l2", "title": "Verbs", "kind": "lesson"},
+                 {"id": "m1-p1", "title": "Practice basics", "kind": "practice"},
+             ]},
+            {"id": "m2", "title": "Perfekt", "status": "not_started",
+             "estimated_cards": 12,
+             "topics": [
+                 {"id": "m2-l1", "title": "Perfekt structure", "kind": "lesson"},
+                 {"id": "m2-p1", "title": "Drill Perfekt", "kind": "practice"},
+             ]},
+        ],
+    }
+    store.save_curriculum_outline(goal_id, outline)
+    # Plant cards under module 1 so the digest reports every topic
+    # quota AND the recycle cap met. Selector won't advance_first
+    # until each topic is drilled to TARGET_DRILLS_PER_PRACTICE_TOPIC
+    # (the recycle cap is `< TARGET`, so we need >= TARGET on every
+    # lesson topic too). Total: 2 lessons + 2 drills on p1 + 2 recycle
+    # drills on each of l1, l2 = 8 cards. We DO NOT call record_attempt
+    # — leaving exercises_attempted at 0 reproduces Sebastian's
+    # under-estimate digest that the OLD code refused to advance from.
+    store.save_card(goal_id, db.CARD_LESSON, "lesson body 1",
+                    module_id="m1", topic_id="m1-l1")
+    store.save_card(goal_id, db.CARD_LESSON, "lesson body 2",
+                    module_id="m1", topic_id="m1-l2")
+    store.save_card(goal_id, db.CARD_VOCAB, "drill p1 1",
+                    reference_answer="x", module_id="m1", topic_id="m1-p1")
+    store.save_card(goal_id, db.CARD_CLOZE, "p1 ___ drill 2",
+                    reference_answer="x", module_id="m1", topic_id="m1-p1")
+    store.save_card(goal_id, db.CARD_TRANSLATION, "recycle l1 a",
+                    reference_answer="x", module_id="m1", topic_id="m1-l1")
+    store.save_card(goal_id, db.CARD_TRANSLATION, "recycle l1 b",
+                    reference_answer="x", module_id="m1", topic_id="m1-l1")
+    store.save_card(goal_id, db.CARD_VOCAB, "recycle l2 a",
+                    reference_answer="x", module_id="m1", topic_id="m1-l2")
+    store.save_card(goal_id, db.CARD_VOCAB, "recycle l2 b",
+                    reference_answer="x", module_id="m1", topic_id="m1-l2")
+    # Queue the FakeModel for the lesson card (the selector will pick
+    # LESSON for m2's first lesson topic after the advance) + critic.
+    fm = FakeModel(responses=[_LESSON, _CRITIC_READY])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+
+    # NO graduation message; YES a module-advance bubble.
+    coach_texts = [m for m in out if m["kind"] == db.MSG_COACH_TEXT]
+    advance_msgs = [m for m in coach_texts
+                    if (m.get("payload") or {}).get("kind") == "module_advance"]
+    assert len(advance_msgs) == 1, (
+        f"expected exactly one module_advance bubble, got coach_texts={coach_texts}"
+    )
+    advance_payload = advance_msgs[0]["payload"]
+    assert advance_payload["previous_title"] == "Foundations"
+    assert advance_payload["new_title"] == "Perfekt"
+    # No graduation copy slipped through.
+    for m in coach_texts:
+        text = (m.get("payload") or {}).get("text") or ""
+        assert "finished every module" not in text
+
+    # The outline persisted with m1 → completed, m2 → in_progress.
+    saved = store.get_curriculum_outline(goal_id)
+    statuses = {m["id"]: m["status"] for m in saved["modules"]}
+    assert statuses == {"m1": "completed", "m2": "in_progress"}
+
+    # A lesson card from module 2 was emitted as the next thing.
+    new_card_msgs = [m for m in out if m["kind"] == db.MSG_LESSON]
+    assert len(new_card_msgs) == 1
+
+
 def test_emit_module_advance_text_persists_structured_payload(temp_db):
     """Helper happy path: returns a MSG_COACH_TEXT carrying both a
     plain-English fallback ``text`` (older clients) AND the structured

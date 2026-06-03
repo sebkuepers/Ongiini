@@ -554,6 +554,78 @@ def _advance_module_if_complete(
     )
 
 
+def _force_advance_module(
+    *,
+    goal_id: str,
+    outline: dict[str, Any] | None,
+) -> _AdvanceResult | None:
+    """Promote the in-progress module to ``completed`` and the next
+    ``not_started`` module to ``in_progress`` UNCONDITIONALLY — used
+    when the selector has already decided the in-progress module's
+    drill load is empty (its quota math says nothing left to
+    author). Returns None when there's no in-progress module at all
+    (the caller falls through to graduation, which is then correct).
+
+    Companion to :func:`_advance_module_if_complete` — same outline
+    rewrite + persist + ``_AdvanceResult`` shape, minus the
+    estimated_cards gate. Kept separate so each helper has one job:
+    the gated one backstops emit-overshoot at the top of the turn;
+    this one trusts the selector's advance_first verdict and trumps
+    the estimated_cards heuristic that fights it.
+
+    Why this exists: the selector's TARGET_LESSONS_PER_TOPIC +
+    TARGET_DRILLS_PER_PRACTICE_TOPIC + recycle cap exactly determine
+    when a module is drilled out, often well before
+    estimated_cards is reached. Without this helper the coach would
+    re-run the selector, see advance_first twice in a row, and emit
+    a false graduation — Sebastian's screenshot where module 1 sat
+    at 9/10 and modules 2+3 were untouched but the chat still said
+    "You've finished every module".
+    """
+    if not outline:
+        return None
+    raw_modules = outline.get("modules")
+    if not isinstance(raw_modules, list) or not raw_modules:
+        return None
+    modules = [dict(m) if isinstance(m, dict) else m for m in raw_modules]
+
+    previous_title: str | None = None
+    new_title: str | None = None
+    changed = False
+    for i, m in enumerate(modules):
+        if not isinstance(m, dict):
+            continue
+        if m.get("status") != "in_progress":
+            continue
+        mod_id = m.get("id")
+        if not isinstance(mod_id, str):
+            continue
+        m["status"] = "completed"
+        previous_title = str(m.get("title") or mod_id)
+        changed = True
+        for j in range(i + 1, len(modules)):
+            if isinstance(modules[j], dict) and modules[j].get("status") == "not_started":
+                modules[j]["status"] = "in_progress"
+                new_title = str(modules[j].get("title") or modules[j].get("id") or "")
+                break
+        break
+
+    if not changed:
+        return None
+    new_outline = dict(outline)
+    new_outline["modules"] = modules
+    store.save_curriculum_outline(goal_id, new_outline)
+    log.info(
+        "coach: force-advanced module on goal %s (selector-driven)",
+        goal_id,
+    )
+    return _AdvanceResult(
+        outline=new_outline,
+        previous_title=previous_title,
+        new_title=new_title,
+    )
+
+
 def _emit_module_advance_text(
     *,
     learner_id: str,
@@ -790,14 +862,17 @@ async def _produce_next_thing(
         module_digest=ctx.module_digest,
     )
     if sel.advance_first:
-        # Selector says nothing to do in this module — run advance
-        # once more and reselect. This is the rare path that fires
-        # when a module has hit its drill quotas mid-run; the count
-        # threshold in _advance_module_if_complete didn't catch it.
-        advanced2 = _advance_module_if_complete(
+        # Selector says nothing to do in this module — TRUST IT and
+        # force-advance regardless of the estimated_cards heuristic.
+        # The step-2 helper above is gated on estimated_cards; that's
+        # right for catching emit-overshoot at the top of the turn,
+        # but wrong here because the selector has already concluded
+        # the module's drill load is empty by its own quota math. Use
+        # the dedicated force-advance helper so the two paths can't
+        # disagree.
+        advanced2 = _force_advance_module(
             goal_id=goal_id,
             outline=ctx.curriculum_outline,
-            digest=ctx.module_digest,
         )
         if advanced2 is not None:
             ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal_id)
@@ -810,14 +885,14 @@ async def _produce_next_thing(
             outline=ctx.curriculum_outline,
             module_digest=ctx.module_digest,
         )
-        # If even after advance the selector STILL says advance_first
-        # (the outline is malformed — no topics list, or every module
-        # is empty), treat it as graduation. Better to land on a
-        # friendly "tell me what's next" than to loop or crash.
+        # If even after force-advance the selector STILL says
+        # advance_first, the learner genuinely finished the last
+        # module (no next not_started one to promote) — fall through
+        # to a real graduation message.
         if sel.advance_first:
             log.warning(
-                "coach: selector returned advance_first twice in a row — "
-                "treating as graduation. outline likely malformed."
+                "coach: selector returned advance_first twice in a row "
+                "even after force-advance — treating as real graduation."
             )
             sel = selector.CardSelection(graduation=True, phase="graduation_loop")
     if sel.graduation:
