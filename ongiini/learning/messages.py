@@ -82,6 +82,27 @@ def _sanitise_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
             pii.sanitize(x) if isinstance(x, str) else x
             for x in out["examples"]
         ]
+    # Multi-step lesson cards (steps[]): each step has its own
+    # free-text fields. Scrub them all in place so PII can't leak
+    # through the new payload shape.
+    if kind == MSG_LESSON and isinstance(out.get("steps"), list):
+        scrubbed_steps: list[Any] = []
+        for step in out["steps"]:
+            if not isinstance(step, dict):
+                scrubbed_steps.append(step)
+                continue
+            s = dict(step)
+            for field in ("body", "prompt", "answer", "hint"):
+                v = s.get(field)
+                if isinstance(v, str):
+                    s[field] = pii.sanitize(v)
+            if isinstance(s.get("examples"), list):
+                s["examples"] = [
+                    pii.sanitize(x) if isinstance(x, str) else x
+                    for x in s["examples"]
+                ]
+            scrubbed_steps.append(s)
+        out["steps"] = scrubbed_steps
     return out
 
 
