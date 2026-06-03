@@ -127,7 +127,7 @@
   },
   "intake": {
     "welcome_prefix": "Willkommen — lass uns dich einrichten. ",
-    "putting_plan": "Perfekt. Ich stelle jetzt deinen Plan zusammen…",
+    "putting_plan": "Perfekt. Ich stelle jetzt deinen Plan zusammen… Das kann 2-3 Minuten dauern — bitte lass das Fenster offen.",
     "welcome_back_short": "Willkommen zurück.",
     "focus_prompt_template": "Worauf möchtest du dich diesmal bei {target} konzentrieren?"
   },
