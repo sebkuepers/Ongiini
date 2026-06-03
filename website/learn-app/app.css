@@ -30,6 +30,9 @@
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
+      /* Sand stays as the chat surface background — the landing
+         covers it edge-to-edge with .band sections so the body bg
+         only shows once the user enters the chat. */
       background: var(--sand);
       color: var(--ink);
       font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
@@ -135,6 +138,29 @@
       margin: 0 auto;
       padding: 0 20px;
     }
+
+    /* ── Landing section bands ────────────────────────────────
+       Each landing section sits inside a full-width .band so the
+       page can alternate background tones (bone → sand → ink →
+       bone) the way ongiini.ai homepage does. The inner .wrap
+       still constrains content to 1080px and supplies horizontal
+       padding. The band itself only carries colour. */
+    .band { width: 100%; }
+    .band--bone { background: var(--bone); }
+    .band--sand { background: var(--sand); }
+    .band--ink {
+      background: var(--ink);
+      color: var(--bone);
+    }
+    /* Dark-band text overrides — keep the eyebrow + step accents
+       readable on ink without bleeding terracotta into the rest
+       of the palette. Mirrors the homepage's og-section--dark rules. */
+    .band--ink .section-eyebrow { color: var(--terracotta-light); }
+    .band--ink .section-h2 { color: var(--bone); }
+    .band--ink .step-num { color: var(--terracotta-light); }
+    .band--ink .step-title { color: var(--bone); }
+    .band--ink .step-desc { color: var(--ink-faint); }
+    .band--ink .step { border-left-color: var(--terracotta); }
 
     /* ── Landing (preserved from Phase 1) ─────────────────── */
     .hero {
