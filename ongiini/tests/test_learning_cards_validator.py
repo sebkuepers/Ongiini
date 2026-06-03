@@ -479,3 +479,56 @@ def test_proverb_cultural_note_field_optional():
         prompt_text="'too many cooks' in German:",
         reference_answer="Viele Köche verderben den Brei.",
     ))
+
+
+# ──────────────────────────────────────────────────────────────────
+# Gloss-blank-leak rule (cross-cutting)
+# Backstops the SKILL.md prose rule with a hard validator gate. The
+# inline source-language gloss is read-only context — a `___` inside
+# the gloss creates a phantom input slot the renderer either ignores
+# or paints with no matching answer, and either way confuses the
+# learner about what they're being asked to fill in.
+# ──────────────────────────────────────────────────────────────────
+
+def test_cloze_rejected_when_gloss_has_blank():
+    with pytest.raises(ModelOutputError, match="parenthesised gloss"):
+        _validate_card(_good(
+            "cloze",
+            prompt_text="Entschuldigung, ___ Sie einen Moment? "
+                        "(Excuse me, do ___ you have a moment?)",
+            reference_answer="haben",
+        ))
+
+
+def test_cloze_accepts_well_formed_gloss():
+    """Gloss spells out the missing piece in source-language."""
+    _validate_card(_good(
+        "cloze",
+        prompt_text="Entschuldigung, ___ Sie einen Moment? "
+                    "(Excuse me, do you have a moment?)",
+        reference_answer="haben",
+    ))
+
+
+def test_grammar_rejected_when_source_sentence_gloss_has_blank():
+    with pytest.raises(ModelOutputError, match="parenthesised gloss"):
+        _validate_card(_good(
+            "grammar",
+            prompt_text="Rewrite in the formal Sie form:",
+            source_sentence="Wie geht ___ dir? (How is ___ going?)",
+            reference_answer="Wie geht es Ihnen?",
+        ))
+
+
+def test_dialogue_rejected_when_turn_gloss_has_blank():
+    with pytest.raises(ModelOutputError, match="parenthesised gloss"):
+        _validate_card(_good(
+            "dialogue",
+            prompt_text="Complete:",
+            turns=[
+                {"speaker": "A",
+                 "text": "Wo ist ___ Bahnhof? (Where is ___ station?)",
+                 "answer": "der"},
+                {"speaker": "B", "text": "Dort drüben."},
+            ],
+        ))

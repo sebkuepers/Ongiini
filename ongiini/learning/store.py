@@ -756,6 +756,37 @@ def recent_topic_prompts(
     return [dict(r) for r in reversed(rows)]
 
 
+def recent_module_prompts(
+    goal_id: str,
+    module_id: str,
+    *,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Return the most recent ``limit`` drills on this module
+    (regardless of topic), oldest first.
+
+    Companion to :func:`recent_topic_prompts` for the variation rule:
+    when the author rotates across topics in a module, the topic-level
+    block only catches "same topic, same sentence" — but Sebastian saw
+    the same vocab card ("Thank you very much" → "Vielen Dank") appear
+    twice in module 1 on DIFFERENT topics, which the topic-level
+    visibility couldn't catch. This wider lens lets the author + critic
+    spot duplicate example sentences anywhere in the current module.
+    Returns the same shape as :func:`recent_topic_prompts`."""
+    if not goal_id or not module_id:
+        return []
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT card_type, prompt_text, reference_answer "
+            "FROM learning_cards "
+            "WHERE goal_id = ? AND module_id = ? "
+            "AND card_type != 'lesson' "
+            "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (goal_id, module_id, max(1, int(limit))),
+        ).fetchall()
+    return [dict(r) for r in reversed(rows)]
+
+
 def get_card(card_id: str) -> dict[str, Any] | None:
     if not card_id:
         return None

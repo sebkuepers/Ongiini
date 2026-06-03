@@ -105,7 +105,16 @@ _TYPE_RUBRICS: dict[str, str] = {
         "Grammar: the transformation has to be correct. The right "
         "verb form with one minor word-order issue → 'partial'. "
         "Wrong tense / mood / person → 'wrong'. Be strict on the "
-        "exact morphology being drilled; that's the whole point."
+        "exact morphology being drilled; that's the whole point. "
+        "IMPORTANT: if the learner's answer is MORE register-coherent "
+        "or MORE idiomatic than the reference_answer (e.g. replacing "
+        "'Hallo, wie geht es Ihnen?' — informal greeting with formal "
+        "pronoun — with 'Guten Tag, wie geht es Ihnen?' when "
+        "transforming to formal), score 'correct' and acknowledge the "
+        "better choice in feedback. Punishing a learner for natural "
+        "register coherence breaks trust. Token-level fidelity to the "
+        "reference is NOT the goal — the morphological transformation "
+        "being drilled is."
     ),
     CARD_PROVERB: (
         "Proverb: the canonical idiom is the reference. Exact match "
