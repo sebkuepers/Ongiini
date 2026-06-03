@@ -755,8 +755,16 @@ def next_due_cards(
     if exclude_card_id:
         sql += " AND lc.card_id != ?"
         params.append(exclude_card_id)
-    # Exercise cards only — lessons don't go through SRS.
-    sql += " AND lc.card_type IN ('vocab', 'translation', 'production')"
+    # Exercise cards only — lessons don't go through SRS. Drive the
+    # IN list from the canonical EXERCISE_CARD_TYPES tuple so cards
+    # of new types (cloze, multiple_choice, grammar, dialogue, etc.)
+    # also resurface via SRS replay. The earlier hard-coded
+    # ('vocab', 'translation', 'production') silently excluded
+    # everything added in the card-variety round.
+    from .db import EXERCISE_CARD_TYPES
+    placeholders = ",".join("?" for _ in EXERCISE_CARD_TYPES)
+    sql += f" AND lc.card_type IN ({placeholders})"
+    params.extend(EXERCISE_CARD_TYPES)
     sql += " ORDER BY crs.next_due_at ASC LIMIT ?"
     params.append(limit)
     with _conn() as c:

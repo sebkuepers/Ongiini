@@ -132,33 +132,25 @@ def _validate_card(payload: dict[str, Any]) -> None:
     if ct not in CARD_TYPES:
         raise ModelOutputError(f"card_type must be one of {CARD_TYPES}; got {ct!r}")
 
-    # Lesson cards have TWO valid shapes:
-    #   1. New multi-step shape: ``steps`` array with 2-5 entries.
-    #      ``prompt_text`` is optional (the per-step ``body`` carries
-    #      content); the persistence layer synthesises a prompt_text
-    #      from title/first-step for the DB NOT NULL constraint.
-    #   2. Legacy single-blob shape: ``prompt_text`` is required, no
-    #      ``steps``. Kept for backward-compat with cards authored
-    #      before the carousel landed.
-    # Exercise cards still require ``prompt_text`` unconditionally.
-    if ct == CARD_LESSON and "steps" in payload:
-        _validate_lesson_steps(payload["steps"])
-        # The two shapes are mutually exclusive: the model must pick
-        # ONE. Allowing both lets the model hedge by emitting prose in
-        # prompt_text alongside a steps[] array — the prose then gets
-        # silently dropped by the coach (which forwards steps to the
-        # frontend). Reject loudly so the LLM's mixed-shape confusion
-        # surfaces rather than hides.
-        pt = payload.get("prompt_text")
-        if isinstance(pt, str) and pt.strip():
+    # Shape rules per card_type:
+    #   * Lesson cards MUST use the multi-step shape (steps[] with
+    #     2-5 entries). The legacy single-blob ``prompt_text`` shape
+    #     is gone — the model is asked specifically for steps[] under
+    #     the new content brief, so accepting both opens room for
+    #     model confusion + dropped content.
+    #   * Exercise cards still require a non-empty ``prompt_text``.
+    # ``module_id`` and ``topic_id`` are NOT validated here. The
+    # selector picks them deterministically and the coach attaches
+    # them after calling the model — the model is not asked to emit
+    # them, so we don't check for them.
+    if ct == CARD_LESSON:
+        steps = payload.get("steps")
+        if not isinstance(steps, list):
             raise ModelOutputError(
-                "lesson cards must use EITHER 'steps' OR 'prompt_text', "
-                "not both — the prose in prompt_text would be silently "
-                "discarded. Pick the multi-step carousel (steps[]) or "
-                "the legacy single-blob shape (prompt_text only)."
+                "lesson card must include 'steps' as a list (2-5 "
+                "entries — concept / example / contrast / quick_check)"
             )
-        if pt is not None and not isinstance(pt, str):
-            raise ModelOutputError("lesson prompt_text must be a string when present")
+        _validate_lesson_steps(steps)
     else:
         if "prompt_text" not in payload:
             raise ModelOutputError(
@@ -166,25 +158,6 @@ def _validate_card(payload: dict[str, Any]) -> None:
             )
         if not isinstance(payload["prompt_text"], str) or not payload["prompt_text"].strip():
             raise ModelOutputError("card prompt_text must be a non-empty string")
-    # module_id is soft-required: if missing the card still saves (the
-    # store accepts None for back-compat), but the per-module progress
-    # bar can't count it. Log via downstream so we can spot LLM
-    # regressions without breaking the turn. Type-check when present.
-    if "module_id" in payload and payload["module_id"] is not None:
-        if not isinstance(payload["module_id"], str):
-            raise ModelOutputError(
-                f"module_id must be a string; got "
-                f"{type(payload['module_id']).__name__}"
-            )
-    # topic_id is also soft-required — drives topic-aware pacing
-    # (no exercises on untaught topics). Same back-compat policy as
-    # module_id: optional, type-checked when present.
-    if "topic_id" in payload and payload["topic_id"] is not None:
-        if not isinstance(payload["topic_id"], str):
-            raise ModelOutputError(
-                f"topic_id must be a string; got "
-                f"{type(payload['topic_id']).__name__}"
-            )
 
     # All exercise types require a non-empty reference_answer the
     # grader can score against. Lesson cards are exempt (they're
@@ -311,189 +284,86 @@ def _build_system_prompt(skill_content: str) -> str:
     )
 
 
-def _render_module_digest(ctx: LearnerContext) -> str:
-    """Per-module rollup the recent_cards window can't carry once the
-    learner is deep in a module. Without this the model loses track of
-    'lessons already given for module mod-1' after ~12 turns and
-    re-emits the original lesson — the exact bug Sebastian hit at the
-    13-card mark.
+def _build_content_brief(
+    ctx: LearnerContext,
+    *,
+    card_type: str,
+    module_id: str,
+    module_title: str,
+    topic_id: str,
+    topic_title: str,
+) -> str:
+    """Tight prompt: the SELECTOR has already decided card_type +
+    module + topic. The model's only job is to write the content.
 
-    The per-topic breakdown (``topics_taught`` / ``topics_drilled``)
-    drives the teach-then-test pacing rule below — the model can read
-    "topic t2 has been drilled but never taught" and steer back to a
-    lesson card. We filter the per-topic keys against the outline's
-    declared `topics[].id` set so a stray / typoed topic_id from a
-    past LLM hiccup doesn't get echoed back as a "real" taught topic."""
-    if not ctx.module_digest:
-        return "(no per-module data yet)"
-    # Build the per-module known-topic whitelist from the outline so
-    # bogus topic_ids (mismatched / typoed by a prior LLM call) don't
-    # leak back into the prompt.
-    known_topics_by_module: dict[str, set[str]] = {}
-    outline = ctx.curriculum_outline or {}
-    raw_modules = outline.get("modules") if isinstance(outline, dict) else None
-    if isinstance(raw_modules, list):
-        for m in raw_modules:
-            if not isinstance(m, dict):
-                continue
-            mod_id = m.get("id")
-            topics = m.get("topics")
-            if not isinstance(mod_id, str) or not isinstance(topics, list):
-                continue
-            ids = {
-                t.get("id") for t in topics
-                if isinstance(t, dict) and isinstance(t.get("id"), str)
-            }
-            known_topics_by_module[mod_id] = ids
-    lines: list[str] = []
-    for mod_id, d in ctx.module_digest.items():
-        lessons = d.get("lessons_given", 0)
-        ex_emit = d.get("exercises_emitted", 0)
-        ex_seen = d.get("exercises_attempted", 0)
-        ex_correct = d.get("exercises_correct", 0)
-        taught_raw = d.get("topics_taught") or {}
-        drilled_raw = d.get("topics_drilled") or {}
-        # Filter to ids declared in the outline if we have one;
-        # otherwise (legacy outlines without topics lists) keep the
-        # raw set — the runtime rule already skips pacing checks for
-        # those.
-        known = known_topics_by_module.get(mod_id)
-        if known is not None:
-            taught_keys = sorted(k for k in taught_raw.keys() if k in known)
-            drilled_keys = sorted(k for k in drilled_raw.keys() if k in known)
-        else:
-            taught_keys = sorted(taught_raw.keys())
-            drilled_keys = sorted(drilled_raw.keys())
-        taught_str = ", ".join(taught_keys) if taught_keys else "(none)"
-        drilled_str = ", ".join(drilled_keys) if drilled_keys else "(none)"
-        lines.append(
-            f"  - {mod_id}: lessons_given={lessons}, "
-            f"exercises_emitted={ex_emit}, "
-            f"exercises_attempted={ex_seen}, "
-            f"exercises_correct={ex_correct}, "
-            f"topics_taught=[{taught_str}], "
-            f"topics_drilled=[{drilled_str}]"
-        )
-    return "\n".join(lines)
-
-
-def _render_recent_cards(ctx: LearnerContext) -> str:
-    """Compact bullet list of the most recent cards the learner has
-    seen on this goal's thread. Without this the model has no way to
-    tell that it just emitted a lesson — so on every "Got it →" tap
-    it re-decides "module just started → lesson" and emits the same
-    thing again. Showing it the recent cards lets it pick the right
-    next move (drill the lesson it just gave, or start a new sub-topic).
-    """
-    if not ctx.recent_cards:
-        return "(none yet — this is the first card on this goal)"
-    lines: list[str] = []
-    for c in ctx.recent_cards:
-        kind = c.get("kind") or "?"
-        ct = c.get("card_type") or kind
-        ans = "answered" if c.get("answered") else "active"
-        title = c.get("title")
-        prompt = (c.get("prompt_text") or "")
-        # Compact the prompt — first 80 chars is enough to recognise
-        # the topic; we don't need to echo the whole lesson body.
-        snippet = (title or prompt).strip().splitlines()[0][:80] if (title or prompt) else "(empty)"
-        lines.append(f"  - [{kind}/{ct}] [{ans}] {snippet}")
-    return "\n".join(lines)
-
-
-def _build_user_prompt(ctx: LearnerContext) -> str:
+    No outline JSON, no module digest, no pacing rules, no recent
+    cards — none of those decisions are the model's anymore."""
     p = ctx.profile or {}
-    import json as _json
-    outline_json = "(none yet)"
-    if ctx.curriculum_outline:
-        outline_json = _json.dumps(ctx.curriculum_outline, indent=2, ensure_ascii=False)
-    progress_summary = "(no progress yet)"
-    if ctx.progress:
-        progress_summary = (
-            f"total_seen={ctx.progress.get('total_seen', 0)}, "
-            f"total_correct={ctx.progress.get('total_correct', 0)}, "
-            f"by_box={ctx.progress.get('by_box', {})}"
+    if card_type == CARD_LESSON:
+        content_brief = (
+            "Produce a LESSON card teaching this topic. Use the lesson "
+            "card shape from the skill reference: a `steps` array with "
+            "2-5 entries — kinds: concept / example / contrast / "
+            "quick_check (last only). Output JSON: "
+            "{ title, steps }. "
+            "DO NOT include card_type, module_id, topic_id, or "
+            "prompt_text — the coach attaches scaffolding."
+        )
+    else:
+        content_brief = (
+            f"Produce a {card_type} EXERCISE card drilling this topic. "
+            "Use the shape from the skill reference for this card_type "
+            "(prompt_text + reference_answer + any per-type extras like "
+            "options / tokens / turns / source_sentence). "
+            "Output JSON. DO NOT include card_type, module_id, or "
+            "topic_id — the coach attaches scaffolding."
         )
     return (
         "LEARNER:\n"
         f"  name: {tag_learner_input(p.get('name'))}\n"
         f"  level: {p.get('current_level') or 'beginner'}\n"
         f"  focus: {tag_learner_input(ctx.goal_title or ctx.goal_context or p.get('objective'))}\n"
-        f"\nCURRICULUM OUTLINE:\n{outline_json}\n"
-        f"\nPROGRESS: {progress_summary}\n"
-        f"\nMODULE DIGEST (per-module rollup — load-bearing for "
-        "lesson-vs-drill decisions; refer here BEFORE recent cards):\n"
-        f"{_render_module_digest(ctx)}\n"
-        f"\nRECENT CARDS ON THIS GOAL (oldest first, last 12):\n"
-        f"{_render_recent_cards(ctx)}\n"
-        "\nTASK: Author the next card. "
-        "INCLUDE the JSON keys `module_id` AND `topic_id` matching the "
-        "in-progress module and one of its `topics[].id` entries from "
-        "the outline above — both required so per-module / per-topic "
-        "progress can be tracked.\n"
-        "Topic-aware pacing rules (the single most important section):\n"
-        " 1. Walk the in-progress module's `topics` list. Find every "
-        "topic whose `kind` is \"lesson\" — these MUST be taught "
-        "before any exercise is drilled in this module.\n"
-        " 2. Cross-reference with MODULE DIGEST -> `topics_taught` for "
-        "that module. The set of TAUGHT lesson topics is "
-        "`topics_taught.keys()`.\n"
-        " 3. If there are LESSON topics not yet in `topics_taught` "
-        "(\"untaught lesson topics\"), EMIT A LESSON card targeting the "
-        "earliest one in outline order. Use the multi-step shape with "
-        "a `steps` array (see SKILL.md for the lesson shape).\n"
-        " 4. If every lesson topic in the in-progress module has been "
-        "taught, emit an EXERCISE card. The exercise's `topic_id` MUST "
-        "be either:\n"
-        "   (a) a `practice` topic from the in-progress module's "
-        "topics list, OR\n"
-        "   (b) one of the already-taught lesson topics, drilled with "
-        "a DIFFERENT card_type (vocab → cloze → dialogue, etc.) for "
-        "spaced recycling.\n"
-        " 5. NEVER emit an exercise targeting a topic whose id is not "
-        "in `topics_taught` AND not declared as a `practice` topic in "
-        "the outline. Cards on untaught material are the bug we are "
-        "trying to prevent.\n"
-        " 6. If lots of cards are stuck in Leitner box 1, prefer "
-        "consolidating cards (easier, on already-taught topics) over "
-        "introducing new themes.\n"
-        " 7. Pick the card_type that fits the topic and the learner's "
-        "level.\n"
-        "Output JSON only."
+        "\nCARD TO AUTHOR (selected by the coach — these are FIXED, "
+        "you don't pick them, you produce content for them):\n"
+        f"  card_type: {card_type}\n"
+        f"  module: {tag_learner_input(module_title)} (id: {module_id})\n"
+        f"  topic:  {tag_learner_input(topic_title)} (id: {topic_id})\n"
+        f"\n{content_brief}"
     )
 
 
-async def generate_card(
+async def generate_card_content(
     ctx: LearnerContext,
     *,
     model: Model,
     skill_content: str,
-    steering_note: str | None = None,
+    card_type: str,
+    module_id: str,
+    module_title: str,
+    topic_id: str,
+    topic_title: str,
 ) -> dict[str, Any]:
-    """Ask the model to author the next card. Returns a dict with at
-    least ``card_type`` and ``prompt_text``; ``reference_answer`` and
-    ``hint_text`` and ``difficulty`` may be present.
+    """Ask the model to author the CONTENT of one card, with the
+    card_type / module / topic already chosen by the selector.
 
-    ``steering_note`` is appended to the user prompt when the coach is
-    asking for a corrective re-roll (e.g. after a topic-pacing
-    violation). It lets us nudge the LLM without rebuilding the whole
-    prompt structure.
+    Returns the validated content payload. The coach attaches
+    ``card_type``, ``module_id``, ``topic_id`` (the model is told NOT
+    to emit them) and persists.
 
-    Raises ``ModelOutputError`` on bad JSON / missing required fields /
-    unknown card_type.
-    """
-    user_prompt = _build_user_prompt(ctx)
-    if steering_note:
-        user_prompt = (
-            user_prompt
-            + "\n\nSTEERING NOTE (the previous attempt was rejected — "
-            "address this before re-emitting):\n"
-            + steering_note
-        )
+    Raises ``ModelOutputError`` on malformed shape."""
+    # Inject the just-decided card_type into the payload BEFORE the
+    # validator runs. The model is told not to emit card_type (so the
+    # brief stays single-purpose), but the per-type validators below
+    # need to see it to pick the right shape checks.
     payload = await ask_for_json(
         system_prompt=_build_system_prompt(skill_content),
-        user_prompt=user_prompt,
+        user_prompt=_build_content_brief(
+            ctx,
+            card_type=card_type, module_id=module_id, module_title=module_title,
+            topic_id=topic_id, topic_title=topic_title,
+        ),
         model=model,
     )
+    payload["card_type"] = card_type
     _validate_card(payload)
     return payload

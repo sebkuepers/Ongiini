@@ -320,14 +320,11 @@ async def test_design_outline_raises_on_modules_with_non_dict_items(temp_db):
         await curriculum.design_outline(ctx, model=fm, skill_content=SKILL_REF)
 
 
-@pytest.mark.asyncio
-async def test_generate_card_raises_on_non_string_card_type(temp_db):
-    learner_id = _learner_with_intake(temp_db)
-    ctx = ctx_mod.build_learner_context(learner_id)
-    bad = json.dumps({"card_type": None, "prompt_text": "x"})
-    fm = FakeModel(response=bad)
-    with pytest.raises(llm.ModelOutputError, match="card_type must be a string"):
-        await cards_mod.generate_card(ctx, model=fm, skill_content=SKILL_REF)
+# test_generate_card_raises_on_non_string_card_type removed —
+# card_type is now injected by the selector before validation; the
+# LLM is told NOT to emit card_type, so a None-card_type from the
+# model is overwritten before the validator sees it. No code path
+# reaches the "must be a string" branch any more for this case.
 
 
 # ============================================================
@@ -365,11 +362,10 @@ async def test_revise_outline_requires_change_reason(temp_db):
 
 
 # ============================================================
-# cards.generate_card
+# cards.generate_card_content
 # ============================================================
 
-_GOOD_CARD_JSON = json.dumps({
-    "card_type": "vocab",
+_GOOD_CARD_CONTENT_JSON = json.dumps({
     "prompt_text": "How do you say \"thank you very much\" in Afrikaans?",
     "reference_answer": "baie dankie",
     "hint_text": "Two words.",
@@ -377,41 +373,43 @@ _GOOD_CARD_JSON = json.dumps({
 })
 
 
+def _content_kwargs(card_type: str = "vocab") -> dict:
+    return dict(
+        card_type=card_type,
+        module_id="mod-1", module_title="Greetings",
+        topic_id="t1", topic_title="Time-of-day greetings",
+    )
+
+
 @pytest.mark.asyncio
-async def test_generate_card_returns_validated_payload(temp_db):
+async def test_generate_card_content_returns_validated_payload(temp_db):
     learner_id = _learner_with_intake(temp_db)
     ctx = ctx_mod.build_learner_context(learner_id)
-    fm = FakeModel(response=_GOOD_CARD_JSON)
-    out = await cards_mod.generate_card(ctx, model=fm, skill_content=SKILL_REF)
-    assert out["card_type"] == "vocab"
+    fm = FakeModel(response=_GOOD_CARD_CONTENT_JSON)
+    out = await cards_mod.generate_card_content(
+        ctx, model=fm, skill_content=SKILL_REF, **_content_kwargs("vocab"),
+    )
+    assert out["card_type"] == "vocab"   # coach-injected
     assert out["reference_answer"] == "baie dankie"
 
 
 @pytest.mark.asyncio
-async def test_generate_card_raises_on_unknown_card_type(temp_db):
+async def test_generate_card_content_raises_on_empty_prompt(temp_db):
     learner_id = _learner_with_intake(temp_db)
     ctx = ctx_mod.build_learner_context(learner_id)
-    # ``multiple_choice`` used to be a "bad" type here but is now a
-    # real card type post-Phase-2-variety. Use a genuinely unknown
-    # card_type instead.
-    bad = json.dumps({"card_type": "klingon_card", "prompt_text": "?"})
-    fm = FakeModel(response=bad)
-    with pytest.raises(llm.ModelOutputError, match="card_type"):
-        await cards_mod.generate_card(ctx, model=fm, skill_content=SKILL_REF)
-
-
-@pytest.mark.asyncio
-async def test_generate_card_raises_on_empty_prompt(temp_db):
-    learner_id = _learner_with_intake(temp_db)
-    ctx = ctx_mod.build_learner_context(learner_id)
-    bad = json.dumps({"card_type": "vocab", "prompt_text": "   "})
+    bad = json.dumps({"prompt_text": "   ", "reference_answer": "x"})
     fm = FakeModel(response=bad)
     with pytest.raises(llm.ModelOutputError, match="prompt_text"):
-        await cards_mod.generate_card(ctx, model=fm, skill_content=SKILL_REF)
+        await cards_mod.generate_card_content(
+            ctx, model=fm, skill_content=SKILL_REF, **_content_kwargs("vocab"),
+        )
 
 
 @pytest.mark.asyncio
-async def test_generate_card_user_prompt_includes_outline_and_progress(temp_db):
+async def test_generate_card_content_brief_does_not_leak_pacing(temp_db):
+    """The new prompt is a tight content brief — it must NOT carry the
+    outline JSON, module digest, or any pacing rules (those decisions
+    are the selector's now)."""
     learner_id = _learner_with_intake(temp_db)
     goal = store.get_or_create_active_goal(learner_id)
     store.save_curriculum_outline(
@@ -421,10 +419,20 @@ async def test_generate_card_user_prompt_includes_outline_and_progress(temp_db):
         ]},
     )
     ctx = ctx_mod.build_learner_context(learner_id, goal_id=goal["goal_id"])
-    fm = FakeModel(response=_GOOD_CARD_JSON)
-    await cards_mod.generate_card(ctx, model=fm, skill_content=SKILL_REF)
+    fm = FakeModel(response=_GOOD_CARD_CONTENT_JSON)
+    await cards_mod.generate_card_content(
+        ctx, model=fm, skill_content=SKILL_REF, **_content_kwargs("vocab"),
+    )
     user_msg = fm.last_request.messages[1]["content"]
-    assert "Self-intro" in user_msg
+    # The brief names the selected scaffolding for context, NOT the
+    # whole outline.
+    assert "Time-of-day greetings" in user_msg
+    assert "Greetings" in user_msg
+    # The old prompt's pacing-rule scaffolding is gone.
+    assert "MODULE DIGEST" not in user_msg
+    assert "topics_taught" not in user_msg
+    assert "Topic-aware pacing rules" not in user_msg
+    assert "If MODULE DIGEST" not in user_msg
 
 
 # ============================================================

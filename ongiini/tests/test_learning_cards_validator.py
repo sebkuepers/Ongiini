@@ -47,12 +47,15 @@ def test_exercise_card_requires_reference_answer(ct):
         _validate_card(payload)
 
 
-def test_lesson_card_does_not_require_reference_answer():
-    """Lessons are read-and-acknowledge."""
-    _validate_card({
-        "card_type": "lesson",
-        "prompt_text": "Today's topic: greetings",
-    })
+def test_lesson_card_must_use_steps_shape():
+    """Lessons MUST use the multi-step shape now — the coach is the
+    only caller and asks the LLM specifically for steps[]. Legacy
+    single-blob shape (prompt_text only) is rejected outright."""
+    with pytest.raises(ModelOutputError, match="'steps' as a list"):
+        _validate_card({
+            "card_type": "lesson",
+            "prompt_text": "Today's topic: greetings",
+        })
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -88,28 +91,15 @@ def test_stepped_lesson_validates_without_prompt_text():
     })
 
 
-def test_stepped_lesson_rejects_both_shapes_at_once():
-    """The validator should reject a lesson card that carries both
-    `steps` AND `prompt_text` (with content). The coach would silently
-    drop the prose otherwise; better to surface the LLM confusion."""
-    with pytest.raises(ModelOutputError, match="EITHER 'steps' OR 'prompt_text'"):
-        _validate_card({
-            "card_type": "lesson",
-            "topic_id": "t1",
-            "prompt_text": "real teaching prose that would be lost",
-            "steps": _good_steps(),
-        })
-
-
-def test_legacy_lesson_with_prompt_text_still_validates():
-    """Backward-compat: lessons authored before the carousel landed
-    use the flat shape — they must keep validating."""
+def test_stepped_lesson_ignores_stray_prompt_text():
+    """If the model includes both prompt_text and steps, the validator
+    no longer fails — the new architecture asks ONLY for steps, so
+    any prompt_text the model emits is just ignored downstream
+    (the coach builds the lesson payload from steps + title)."""
     _validate_card({
         "card_type": "lesson",
-        "module_id": "m1",
-        "topic_id": "t1",
-        "prompt_text": "Today's topic: greetings.",
-        "examples": ["Hallo!", "Guten Tag."],
+        "prompt_text": "ignored leftover prose",
+        "steps": _good_steps(),
     })
 
 
@@ -214,27 +204,9 @@ def test_stepped_lesson_examples_must_be_strings():
         })
 
 
-# ──────────────────────────────────────────────────────────────────
-# topic_id — soft-required, type-checked when present
-# ──────────────────────────────────────────────────────────────────
-
-def test_topic_id_omitted_is_fine():
-    """topic_id is soft-required — back-compat lets unTAGGED cards
-    through so they degrade gracefully (just don't count toward
-    the per-topic digest)."""
-    _validate_card({
-        "card_type": "lesson",
-        "prompt_text": "A lesson without topic_id.",
-    })
-
-
-def test_topic_id_must_be_string_when_present():
-    with pytest.raises(ModelOutputError, match="topic_id must be a string"):
-        _validate_card({
-            "card_type": "lesson",
-            "prompt_text": "x",
-            "topic_id": 123,
-        })
+# Topic_id / module_id are no longer validated here — the selector
+# picks them and the coach attaches them after generate_card_content
+# returns. The model isn't asked to emit them, so we don't check.
 
 
 # ──────────────────────────────────────────────────────────────────
