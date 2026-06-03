@@ -259,9 +259,26 @@ async def design_outline_with_review(
             ctx, model=model, skill_content=skill_content,
         )
 
-    outline = await design_outline(
-        ctx, model=model, skill_content=skill_content,
-    )
+    # Initial design call. The model occasionally returns malformed
+    # JSON on the very first turn (extra prose around the object, etc.)
+    # and the learner sees "I had trouble putting your plan together".
+    # One transparent retry costs one LLM call in the rare flaky case
+    # and saves the user from having to hit Send again. If both
+    # attempts fail we let ModelOutputError bubble — the coach has its
+    # own user-facing error path.
+    try:
+        outline = await design_outline(
+            ctx, model=model, skill_content=skill_content,
+        )
+    except ModelOutputError as exc:
+        log.warning(
+            "curriculum: design_outline failed on first attempt (%s); "
+            "retrying once before surfacing the error",
+            exc,
+        )
+        outline = await design_outline(
+            ctx, model=model, skill_content=skill_content,
+        )
 
     for iteration in range(1, max_iterations + 1):
         critique = await critic_mod.critique_outline(
