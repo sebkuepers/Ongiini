@@ -140,42 +140,42 @@
     }
 
     /* ── Landing section bands ────────────────────────────────
-       Each landing section sits inside a full-width .band so the
-       page can alternate background tones (bone → sand → ink →
-       bone) the way ongiini.ai homepage does. The inner .wrap
-       still constrains content to 1080px and supplies horizontal
-       padding. The band carries colour + vertical breathing room
-       so neighbouring colours don't crowd the section content. */
+       Mirrors the ongiini.ai homepage section system verbatim
+       (.og-section + .og-section--sand / --dark) — same padding
+       values (56px desktop → 96px at ≥880px), same hairline
+       border-top between non-dark sections, same dark-band text
+       overrides. Renamed to .band so the learn-app doesn't have
+       to pretend its bands are "og-" prefixed homepage bits. */
     .band {
       width: 100%;
-      padding-block: 40px;
+      padding: 56px 0;
+      border-top: 1px solid var(--rule);
     }
     .band--bone { background: var(--bone); }
     .band--sand { background: var(--sand); }
     .band--ink {
       background: var(--ink);
       color: var(--bone);
+      border-top: none;
     }
-    /* Dark-band text overrides — keep the eyebrow + step accents
-       readable on ink without bleeding terracotta into the rest
-       of the palette. Mirrors the homepage's og-section--dark rules. */
+    /* Dark-band text overrides — same rules the homepage uses
+       on og-section--dark so the rhythm + readability match. */
     .band--ink .section-eyebrow { color: var(--terracotta-light); }
     .band--ink .section-h2 { color: var(--bone); }
     .band--ink .step-num { color: var(--terracotta-light); }
     .band--ink .step-title { color: var(--bone); }
     .band--ink .step-desc { color: var(--ink-faint); }
     .band--ink .step { border-left-color: var(--terracotta); }
+    @media (min-width: 880px) {
+      .band { padding: 96px 0; }
+    }
 
     /* ── Landing (preserved from Phase 1) ─────────────────── */
-    /* Inner section paddings were originally tuned for sections that
-       shared one background. Now that each section lives in its own
-       .band with its own padding-block, the inner padding only needs
-       to provide a small extra cushion (or, for the hero, a bit more
-       so the wordmark feels like it has room at the very top of the
-       page). */
+    /* Each section sits inside a .band that supplies the 56/96px
+       vertical padding (matching the homepage). The inner sections
+       just stack their content — element margins handle inter-element
+       spacing — so no vertical padding here. */
     .hero {
-      padding-top: 24px;
-      padding-bottom: 4px;
       text-align: center;
     }
     .hero-eyebrow {
@@ -206,7 +206,9 @@
       font-size: 15.5px; line-height: 1.6;
       color: var(--ink);
     }
-    .section { padding-top: 4px; padding-bottom: 4px; }
+    /* `.section` is just a semantic hook — the band owns vertical
+       padding; the inner element margins handle inter-element gaps. */
+    .section { }
     .section-eyebrow {
       font-family: 'Geist Mono', monospace;
       font-size: 11px; letter-spacing: 0.16em;
@@ -272,7 +274,7 @@
       font-size: 14px;
     }
     .topic-card[aria-disabled="true"] .topic-arrow { display: none; }
-    .how { padding-top: 4px; padding-bottom: 4px; }
+    .how { }
     .steps { display: grid; grid-template-columns: 1fr; gap: 24px; }
     @media (min-width: 720px) { .steps { grid-template-columns: repeat(3, 1fr); gap: 28px; } }
     .step { display: flex; flex-direction: column; gap: 8px; padding-left: 16px; border-left: 2px solid var(--terracotta-light); }
@@ -289,7 +291,7 @@
       color: var(--ink);
     }
     .step-desc { font-size: 14px; line-height: 1.6; color: var(--ink-soft); margin: 0; }
-    .closing { padding-top: 4px; padding-bottom: 16px; text-align: center; }
+    .closing { text-align: center; }
     .closing-cta {
       display: inline-flex; align-items: center; gap: 10px;
       padding: 16px 28px;
@@ -1059,13 +1061,9 @@
 
     @media (max-width: 600px) {
       .wrap { padding-left: 16px; padding-right: 16px; }
-      /* On mobile, trim the band padding so each section's vertical
-         footprint stays compact — there's less viewport to spend. */
-      .band { padding-block: 24px; }
-      .hero { padding-top: 12px; padding-bottom: 4px; }
-      .section { padding-top: 4px; padding-bottom: 4px; }
-      .how { padding-top: 4px; padding-bottom: 4px; }
-      .closing { padding-top: 4px; padding-bottom: 12px; }
+      /* Mobile sections stay at the desktop default (.band 56px 0).
+         No per-section padding overrides needed — the band handles
+         vertical spacing top-to-bottom. */
       .topic-card { min-height: 140px; padding: 18px 18px 14px; }
       .topic-name { font-size: 24px; }
       .topic-flag { font-size: 28px; }
