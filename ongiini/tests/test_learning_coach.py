@@ -44,27 +44,41 @@ class FakeModel:
         )
 
 
-# Stock JSON responses for common steps.
+# Stock JSON responses for common steps. With the selector-driven
+# architecture, outlines MUST include a ``topics`` list for the
+# selector to find an in-progress topic to author. A bare module
+# (no topics) would graduate the learner immediately.
 _OUTLINE = json.dumps({
     "summary": "Job-interview Afrikaans in 2 weeks.",
     "modules": [
-        {"id": "mod-1", "title": "Greetings", "status": "in_progress"},
+        {"id": "mod-1", "title": "Greetings", "status": "in_progress",
+         "estimated_cards": 8,
+         "topics": [
+             {"id": "t1", "title": "Hello + hi", "kind": "lesson"},
+             {"id": "t2", "title": "Goodbye", "kind": "lesson"},
+             {"id": "p1", "title": "Drill greetings", "kind": "practice"},
+         ]},
     ],
 })
+# Content payload for an exercise card — no card_type / module_id /
+# topic_id, those are attached by the coach after generate_card_content.
 _EXERCISE = json.dumps({
-    "card_type": "vocab",
     "prompt_text": "How do you say 'thank you'?",
     "reference_answer": "dankie",
+})
+# Content payload for a lesson card — steps[] only, no scaffolding.
+_LESSON = json.dumps({
+    "title": "Time-of-day greetings",
+    "steps": [
+        {"kind": "concept", "body": "Greetings vary by time of day."},
+        {"kind": "example", "body": "Examples:",
+         "examples": ["goeie môre", "goeie naand"]},
+    ],
 })
 # The design-review loop calls the critic immediately after the
 # designer. Tests that just want the curriculum to ship can queue
 # this "ready on iter 1" response right after the outline.
 _CRITIC_READY = json.dumps({"ready": True, "score": 9, "issues": []})
-_LESSON = json.dumps({
-    "card_type": "lesson",
-    "prompt_text": "In Afrikaans, common greetings include 'goeie môre'.",
-    "title": "Time-of-day greetings",
-})
 
 
 def _setup(temp_db):
@@ -83,15 +97,19 @@ def _setup(temp_db):
 # ============================================================
 
 @pytest.mark.asyncio
-async def test_run_turn_no_text_no_active_card_designs_outline_and_emits_card(temp_db):
+async def test_run_turn_no_text_no_active_card_designs_outline_and_emits_lesson(temp_db):
+    """Fresh outline with lesson topics → the selector picks LESSON
+    for the first lesson topic. (This was MSG_EXERCISE pre-selector
+    when the LLM picked the card_type; now the selector picks and
+    teach-first is the rule.)"""
     learner_id, goal_id = _setup(temp_db)
-    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _LESSON])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text=None, model=fm, skill_content="SKILL",
     )
     assert len(out) == 1
-    assert out[0]["kind"] == db.MSG_EXERCISE
+    assert out[0]["kind"] == db.MSG_LESSON
     # Outline got persisted as a side-effect.
     assert store.get_curriculum_outline(goal_id) is not None
 
@@ -144,19 +162,21 @@ async def test_answer_verdict_grades_and_advances(temp_db):
         _OUTLINE,
         # critic approves on iter 1
         _CRITIC_READY,
-        # ...then the next card
-        _EXERCISE,
+        # ...then the next card. The pre-planted exercise wasn't
+        # selector-anchored, so the selector still sees no taught
+        # lessons → picks LESSON for the first lesson topic.
+        _LESSON,
     ])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text="dankie", model=fm, skill_content="SKILL",
     )
     kinds = [m["kind"] for m in out]
-    # learner_text → feedback → progress → next exercise
+    # learner_text → feedback → progress → next card (a lesson now)
     assert kinds[0] == db.MSG_LEARNER_TEXT
     assert db.MSG_FEEDBACK in kinds
     assert db.MSG_PROGRESS in kinds
-    assert kinds[-1] == db.MSG_EXERCISE
+    assert kinds[-1] == db.MSG_LESSON
 
 
 @pytest.mark.asyncio
@@ -177,6 +197,50 @@ async def test_question_verdict_invokes_coach_response(temp_db):
     assert out[0]["kind"] == db.MSG_LEARNER_TEXT
     assert out[1]["kind"] == db.MSG_COACH_TEXT
     assert "ek het" in out[1]["payload"]["text"].lower()
+
+
+@pytest.mark.asyncio
+async def test_selector_drives_lesson_lesson_exercise_sequence(temp_db):
+    """End-to-end: the selector enforces teach-then-test across
+    multiple turns. With 2 lesson topics + 1 practice topic in the
+    outline, the first two turns are lessons (t1, then t2), and
+    the third turn is an exercise on the practice topic.
+
+    This is the canonical sequence Sebastian asked for: lessons
+    until lessons are done, THEN drills. No LLM-as-planner; pure
+    deterministic flow."""
+    learner_id, goal_id = _setup(temp_db)
+    # Plant the outline directly so we don't burn responses on
+    # design+critic for this sequence test.
+    store.save_curriculum_outline(goal_id, json.loads(_OUTLINE))
+
+    # Turn 1 — selector picks LESSON for t1.
+    fm = FakeModel(responses=[_LESSON])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    assert out[-1]["kind"] == db.MSG_LESSON
+    assert out[-1]["payload"].get("title")
+
+    # Turn 2 — t1 is taught (lessons_given[t1]=1). Selector picks
+    # LESSON for t2 (NOT a repeat of t1, which was Sebastian's bug).
+    fm = FakeModel(responses=[_LESSON])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    assert out[-1]["kind"] == db.MSG_LESSON
+
+    # Turn 3 — both lesson topics taught. Selector picks EXERCISE
+    # for the practice topic p1.
+    fm = FakeModel(responses=[_EXERCISE])
+    out = await coach.run_turn(
+        learner_id=learner_id, goal_id=goal_id,
+        user_text=None, model=fm, skill_content="SKILL",
+    )
+    assert out[-1]["kind"] == db.MSG_EXERCISE
+    assert out[-1]["payload"].get("card_type") == "vocab"   # first in rotation
 
 
 @pytest.mark.asyncio
@@ -474,10 +538,19 @@ async def test_srs_replay_skips_just_answered_card(temp_db):
     back-to-back. It surfaces on the turn AFTER one new card has been
     served."""
     learner_id, goal_id = _setup(temp_db)
+    # Plant an outline WITH topics so the selector can author. The
+    # SRS-replay-skip rule is what's being tested; the kind of card
+    # emitted afterwards isn't load-bearing.
     store.save_curriculum_outline(goal_id, {
         "summary": "x",
-        "modules": [{"id": "m1", "title": "M", "status": "in_progress",
-                     "estimated_cards": 6}],
+        "modules": [{
+            "id": "m1", "title": "M", "status": "in_progress",
+            "estimated_cards": 6,
+            "topics": [
+                {"id": "t1", "title": "Hellos", "kind": "lesson"},
+                {"id": "p1", "title": "Drill", "kind": "practice"},
+            ],
+        }],
     })
     card_id = store.save_card(
         goal_id, db.CARD_VOCAB, "thanks?",
@@ -496,22 +569,26 @@ async def test_srs_replay_skips_just_answered_card(temp_db):
         user_answer="x", ai_feedback="no", rating=db.RATING_WRONG,
     )
 
-    # User sends an answer → grading + next-card flow.
+    # User sends an answer → grading + next-card flow. The selector
+    # picks LESSON for the first untaught lesson topic (t1).
     fm = FakeModel(responses=[
         '{"verdict": "answer"}',
         '{"rating": "wrong", "feedback": "no, dankie"}',
-        _EXERCISE,                # new card the model authors
+        _LESSON,
     ])
     out = await coach.run_turn(
         learner_id=learner_id, goal_id=goal_id,
         user_text="x",
         model=fm, skill_content="SKILL",
     )
-    # The exercise emitted at the end is the NEW one — not the
-    # just-answered card_id re-surfaced.
-    exercise_msgs = [m for m in out if m["kind"] == db.MSG_EXERCISE]
-    assert len(exercise_msgs) == 1
-    assert exercise_msgs[0]["card_id"] != card_id
+    # The new card emitted at the end has a NEW card_id — not the
+    # just-answered card_id re-surfaced via SRS replay.
+    new_card_msgs = [
+        m for m in out
+        if m["kind"] in (db.MSG_LESSON, db.MSG_EXERCISE)
+    ]
+    assert len(new_card_msgs) == 1
+    assert new_card_msgs[0]["card_id"] != card_id
 
 
 def test_advance_module_no_op_when_under_target(temp_db):
@@ -526,170 +603,6 @@ def test_advance_module_no_op_when_under_target(temp_db):
     assert coach._advance_module_if_complete(
         goal_id="goal-1", outline=outline, digest=digest,
     ) is None
-
-
-# ============================================================
-# Topic-aware pacing retry (no exercises on untaught topics)
-# ============================================================
-
-_OUTLINE_WITH_TOPICS = json.dumps({
-    "summary": "Job-interview German in 2 weeks.",
-    "modules": [
-        {"id": "mod-1", "title": "Greetings",
-         "status": "in_progress",
-         "estimated_cards": 6,
-         "topics": [
-             {"id": "t1", "title": "Formal vs informal", "kind": "lesson"},
-             {"id": "t2", "title": "Self-intro phrases", "kind": "lesson"},
-             {"id": "t3", "title": "Drill block", "kind": "practice"},
-         ]},
-    ],
-})
-
-_BAD_EXERCISE_UNTAUGHT_TOPIC = json.dumps({
-    "card_type": "vocab",
-    "module_id": "mod-1",
-    "topic_id": "t3",   # practice topic, but lessons t1/t2 not taught
-    "prompt_text": "How do you say 'good morning'?",
-    "reference_answer": "Guten Morgen.",
-})
-
-_GOOD_LESSON_T1 = json.dumps({
-    "card_type": "lesson",
-    "module_id": "mod-1",
-    "topic_id": "t1",
-    "title": "Formal vs Informal Greetings",
-    "steps": [
-        {"kind": "concept", "body": "In German, formality matters."},
-        {"kind": "example", "body": "Formal openers used in shops.",
-         "examples": ["Guten Tag, mein Name ist Sebastian."]},
-    ],
-})
-
-
-@pytest.mark.asyncio
-async def test_coach_retries_when_exercise_targets_untaught_topic(temp_db):
-    """The bug Sebastian hit on first card: model emits an exercise
-    for an untaught topic. The coach should retry once with a
-    steering note, and ship the corrected lesson instead."""
-    learner_id, goal_id = _setup(temp_db)
-    # Outline ships with two untaught lesson topics. Designer outputs
-    # an exercise on a practice topic anyway — pacing violation.
-    # On retry, the model returns a proper lesson for t1.
-    fm = FakeModel(responses=[
-        _OUTLINE_WITH_TOPICS, _CRITIC_READY,
-        _BAD_EXERCISE_UNTAUGHT_TOPIC,
-        _GOOD_LESSON_T1,
-    ])
-    out = await coach.run_turn(
-        learner_id=learner_id, goal_id=goal_id,
-        user_text=None, model=fm, skill_content="SKILL",
-    )
-    # The lesson is what got shipped — not the rejected exercise.
-    assert len(out) == 1
-    assert out[0]["kind"] == db.MSG_LESSON
-    # The retry-steering note was appended to the user prompt.
-    retry_user_prompt = fm.requests[-1].messages[1]["content"]
-    assert "STEERING NOTE" in retry_user_prompt
-    assert "untaught lesson topics" in retry_user_prompt
-
-
-@pytest.mark.asyncio
-async def test_coach_no_retry_when_exercise_topic_is_valid(temp_db):
-    """When all lesson topics are already taught, the model can drill
-    practice topics or recycle taught topics with different card types
-    — no retry needed."""
-    learner_id, goal_id = _setup(temp_db)
-    # Pre-seed: lessons taught for both t1 and t2 so the in-progress
-    # module has no untaught lesson topics.
-    store.save_card(goal_id, db.CARD_LESSON, "t1 lesson",
-                    module_id="mod-1", topic_id="t1")
-    store.save_card(goal_id, db.CARD_LESSON, "t2 lesson",
-                    module_id="mod-1", topic_id="t2")
-    # Now the model can legitimately drill t3 (a practice topic).
-    valid_exercise = json.dumps({
-        "card_type": "vocab",
-        "module_id": "mod-1",
-        "topic_id": "t3",
-        "prompt_text": "How do you say 'thank you'?",
-        "reference_answer": "Danke.",
-    })
-    fm = FakeModel(responses=[
-        _OUTLINE_WITH_TOPICS, _CRITIC_READY, valid_exercise,
-    ])
-    out = await coach.run_turn(
-        learner_id=learner_id, goal_id=goal_id,
-        user_text=None, model=fm, skill_content="SKILL",
-    )
-    assert len(out) == 1
-    assert out[0]["kind"] == db.MSG_EXERCISE
-    # Designer + critic + one card call = 3 requests. No retry fired.
-    assert len(fm.requests) == 3
-
-
-@pytest.mark.asyncio
-async def test_coach_ships_anyway_when_retry_still_violates(temp_db, caplog):
-    """If the second attempt still violates pacing, ship the bad card
-    with a WARNING so we can see it in production logs — don't loop."""
-    import logging
-    learner_id, goal_id = _setup(temp_db)
-    fm = FakeModel(responses=[
-        _OUTLINE_WITH_TOPICS, _CRITIC_READY,
-        _BAD_EXERCISE_UNTAUGHT_TOPIC,   # first attempt
-        _BAD_EXERCISE_UNTAUGHT_TOPIC,   # retry — still bad
-    ])
-    with caplog.at_level(logging.WARNING, logger="ongiini.learning.coach"):
-        out = await coach.run_turn(
-            learner_id=learner_id, goal_id=goal_id,
-            user_text=None, model=fm, skill_content="SKILL",
-        )
-    # The bad exercise ships rather than the run getting stuck.
-    assert len(out) == 1
-    assert out[0]["kind"] == db.MSG_EXERCISE
-    assert any(
-        "pacing-retry still violates" in rec.message
-        for rec in caplog.records
-    )
-
-
-@pytest.mark.asyncio
-async def test_lesson_payload_falls_back_when_neither_steps_nor_body(temp_db, caplog):
-    """If the model emits a lesson payload that would render empty (no
-    steps with content AND no prompt_text body), the coach synthesises
-    a fallback body from the title and logs a WARNING so we can spot
-    the model regressing in production. Sebastian saw this on first
-    deploy of the carousel — title rendered, body was blank."""
-    import logging
-    learner_id, goal_id = _setup(temp_db)
-    # This payload would pass validation (it has a prompt_text), but
-    # simulate what could happen if the persistence layer ever ends up
-    # with both fields stripped — defence-in-depth, the warning fires.
-    # We force the empty path by emitting a lesson with prompt_text
-    # that's whitespace-only after the synth — i.e. title only.
-    bad_lesson = json.dumps({
-        "card_type": "lesson",
-        "title": "Common Greetings",
-        "module_id": "mod-1",
-        # No prompt_text, no steps — should fail validation, but we
-        # use the title-only payload via a steps stub that gets emptied.
-    })
-    # Actually use a path that DOES validate: prompt_text == title.
-    bad_lesson = json.dumps({
-        "card_type": "lesson",
-        "title": "Common Greetings",
-        "module_id": "mod-1",
-        "prompt_text": "Common Greetings",
-    })
-    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, bad_lesson])
-    out = await coach.run_turn(
-        learner_id=learner_id, goal_id=goal_id,
-        user_text=None, model=fm, skill_content="SKILL",
-    )
-    # Lesson rendered with body == prompt_text == title — visible
-    # content, not an empty carousel.
-    assert len(out) == 1
-    assert out[0]["kind"] == db.MSG_LESSON
-    assert out[0]["payload"].get("body") == "Common Greetings"
 
 
 @pytest.mark.asyncio

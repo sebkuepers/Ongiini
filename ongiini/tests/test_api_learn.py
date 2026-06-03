@@ -71,12 +71,21 @@ _OUTLINE = json.dumps({
     ],
 })
 _EXERCISE = json.dumps({
-    "card_type": "vocab",
     "prompt_text": "How do you say 'thank you'?",
     "reference_answer": "dankie",
 })
+# Lesson content payload — steps[] only, no scaffolding (the coach
+# attaches card_type/module_id/topic_id from the selector's pick).
+_LESSON = json.dumps({
+    "title": "Time-of-day greetings",
+    "steps": [
+        {"kind": "concept", "body": "Greetings vary by time of day."},
+        {"kind": "example", "body": "Examples:",
+         "examples": ["goeie môre", "goeie naand"]},
+    ],
+})
 # Critic-approves-on-iter-1 response — slots between outline and the
-# next exercise in queues that exercise the curriculum-design path.
+# next card in queues that exercise the curriculum-design path.
 _CRITIC_READY = json.dumps({"ready": True, "score": 9, "issues": []})
 
 
@@ -381,8 +390,11 @@ def test_goals_activate_includes_module_progress_for_target_goal(temp_db):
     assert body["module_progress"][0]["estimated_cards"] == 8
 
 
-def test_turn_no_text_no_goal_id_designs_outline_and_emits_exercise(temp_db):
-    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _EXERCISE])
+def test_turn_no_text_no_goal_id_designs_outline_and_emits_lesson(temp_db):
+    """Fresh learner → outline designed → selector picks first lesson
+    topic → frontend gets MSG_LESSON. (Used to be MSG_EXERCISE when
+    the LLM picked card_type; now teach-first is the rule.)"""
+    fm = FakeModel(responses=[_OUTLINE, _CRITIC_READY, _LESSON])
     client = _client(fm)
     s = client.post("/v1/learn/sessions", json={}).json()
     _finish_intake(client, s["learner_id"])
@@ -394,7 +406,7 @@ def test_turn_no_text_no_goal_id_designs_outline_and_emits_exercise(temp_db):
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body["messages"]) == 1
-    assert body["messages"][0]["kind"] == db.MSG_EXERCISE
+    assert body["messages"][0]["kind"] == db.MSG_LESSON
     assert body["curriculum_outline"]["summary"]
     # The goal info has the outline flag set after the outline was
     # written — the frontend's "Plan ready" badge depends on this.

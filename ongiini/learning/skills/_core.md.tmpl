@@ -101,9 +101,6 @@ final step moves the conversation along. No grading, no SRS impact.
 
 ```json
 {
-  "card_type": "lesson",
-  "module_id": "mod-1",
-  "topic_id": "t1",
   "title": "Short headline in <<SOURCE_LANGUAGE>>",
   "steps": [
     {
@@ -162,27 +159,15 @@ final step moves the conversation along. No grading, no SRS impact.
 - Do NOT include `prompt_text` for stepped lessons — the persistence
   layer synthesises a summary from `title` / `steps[0].body`.
 
-**When to emit a lesson card vs an exercise — TOPIC-AWARE pacing:**
+**You do NOT pick when to teach vs drill.** The coach (deterministic
+code) decides the next card's `card_type`, `module_id`, and
+`topic_id` BEFORE calling you. Your job is to produce the
+content for the card it asked for. Don't second-guess the picked
+card_type; don't emit lessons when asked for an exercise, or vice
+versa.
 
-Walk the in-progress module's `topics` list, then cross-reference
-with MODULE DIGEST → `topics_taught` for that module:
-
-1. **If there are lesson topics not yet taught** (i.e. the
-   `topic_id` of a `kind: "lesson"` topic does not appear in
-   `topics_taught`), EMIT a LESSON card targeting the earliest
-   untaught lesson topic. **This is the rule that prevents
-   exercises on un-taught material.**
-2. **If all lesson topics are taught**, emit an EXERCISE card. The
-   exercise's `topic_id` must be either:
-   - a `practice` topic from the in-progress module, OR
-   - one of the already-taught lesson topics, drilled with a
-     DIFFERENT card_type than last time (recycling).
-3. **Never emit an exercise targeting an untaught topic.** If the
-   model violates this rule the coach will retry once and log a
-   warning.
-
-Every card you emit MUST include `module_id` AND `topic_id` matching
-the in-progress module's id and one of its `topics[].id` entries.
+Don't include `card_type`, `module_id`, or `topic_id` in your
+output — the coach attaches those after you return.
 
 ### Cloze card — fill in the blank
 
@@ -192,8 +177,7 @@ the in-progress module's id and one of its `topics[].id` entries.
   "prompt_text": "Ich ___ jeden Morgen einen Kaffee.",
   "reference_answer": "trinke",
   "hint_text": "first-person present of 'trinken'",
-  "difficulty": 1,
-  "module_id": "mod-2"
+  "difficulty": 1
 }
 ```
 
@@ -211,8 +195,7 @@ High-value cheap drill; mix freely with vocab cards.
   "prompt_text": "Arrange these words into a correct sentence:",
   "tokens": ["nach", "ich", "Hause", "gehe", "jetzt"],
   "reference_answer": "ich gehe jetzt nach Hause",
-  "difficulty": 2,
-  "module_id": "mod-1"
+  "difficulty": 2
 }
 ```
 
@@ -236,8 +219,7 @@ becomes tedious.
     {"label": "C", "text": "Servus!",
      "explanation": "Regional + informal; not appropriate for a workplace."}
   ],
-  "reference_answer": "B",
-  "module_id": "mod-3"
+  "reference_answer": "B"
 }
 ```
 
@@ -258,8 +240,7 @@ of right/wrong, so they learn from the distractors too.
   "prompt_text": "Rewrite in the perfect tense:",
   "source_sentence": "Ich gehe ins Büro.",
   "reference_answer": "Ich bin ins Büro gegangen.",
-  "hint_text": "auxiliary 'sein' for movement verbs",
-  "module_id": "mod-2"
+  "hint_text": "auxiliary 'sein' for movement verbs"
 }
 ```
 
@@ -275,8 +256,7 @@ strict on grading: this is the morphology drill.
   "card_type": "proverb",
   "prompt_text": "Complete the German idiom for 'too many cooks spoil the broth':",
   "reference_answer": "Viele Köche verderben den Brei.",
-  "cultural_note": "Used the same way as in English; common in workplace conversation about over-collaboration.",
-  "module_id": "mod-4"
+  "cultural_note": "Used the same way as in English; common in workplace conversation about over-collaboration."
 }
 ```
 
@@ -295,8 +275,7 @@ proverb per module max.
     {"speaker": "Interviewer", "text": "Erzählen Sie mir etwas über sich."},
     {"speaker": "You", "text": "___"}
   ],
-  "reference_answer": "Mein Name ist Sebastian, ich habe fünf Jahre Erfahrung in Marketing.",
-  "module_id": "mod-3"
+  "reference_answer": "Mein Name ist Sebastian, ich habe fünf Jahre Erfahrung in Marketing."
 }
 ```
 
