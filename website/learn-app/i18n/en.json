@@ -45,11 +45,21 @@
   },
   "composer": {
     "placeholder": "Message Ongiini coach…",
+    "chat_placeholder": "Reply in your target language…",
     "legal_pre": "By using this you accept our",
     "legal_terms": "Terms",
     "legal_and": "and",
     "legal_privacy": "Privacy Policy",
     "send": "Send"
+  },
+  "mode": {
+    "cards": "Cards",
+    "chat": "Chat"
+  },
+  "chat": {
+    "notes_eyebrow": "Notes from this exchange",
+    "corrections_label": "Corrections",
+    "new_words_label": "New words"
   },
   "card": {
     "lesson_eyebrow": "Lesson",

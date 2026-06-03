@@ -40,6 +40,8 @@ from ..config import settings
 from typing import Callable
 
 from ..learning import coach as coach_mod
+from ..learning import conversation as conversation_mod
+from ..learning import context as ctx_mod
 from ..learning import (
     db, intake, intake_parser, messages as messages_mod, store, tokens,
 )
@@ -206,6 +208,27 @@ class TurnRequest(BaseModel):
     # intake completes, and after a graded answer that yielded a
     # transition coach_text but no follow-up exercise (rare).
     text: str | None = Field(default=None, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    """POST /v1/learn/chat body — conversation mode (Track C)."""
+    learner_id: str = Field(..., max_length=128)
+    goal_id: str | None = Field(default=None, max_length=128)
+    # Required: the learner's turn IN TARGET LANGUAGE at their level.
+    # An empty text isn't useful here (unlike /turn which uses None
+    # as "what's next") so the field is required.
+    text: str = Field(..., min_length=1, max_length=4000)
+
+
+class ChatResponse(BaseModel):
+    """The coach's reply + structured Notes block + the persisted
+    chat-message history rows the frontend appended to its thread."""
+    learner_id: str
+    goal_id: str
+    # Persisted message rows (MSG_CHAT_LEARNER, MSG_CHAT_COACH,
+    # MSG_CHAT_NOTES) the frontend appends to its chat thread in
+    # order.
+    messages: list[dict[str, Any]]
 
 
 class ModuleProgress(BaseModel):
@@ -711,6 +734,144 @@ def build_router(
             goals=goals_list,
             module_progress=mod_progress,
             active_module_id=active_mod_id,
+        )
+
+    # ── /chat ─── Track C: conversation mode ───────────────────
+    @router.post("/chat", response_model=ChatResponse)
+    async def chat_turn_endpoint(req: ChatRequest) -> ChatResponse:
+        """One conversation turn. The coach replies in the goal's
+        TARGET LANGUAGE at the learner's level, plus a Notes block
+        (corrections + new high-frequency words). Persists three
+        messages to the thread (learner / coach / notes) so the chat
+        rehydrates on reload."""
+        _ensure_enabled()
+
+        # Same intake gate as /turn — without a profile the prompts
+        # are useless and we'd burn tokens.
+        profile = store.get_profile(req.learner_id)
+        if not intake.is_complete(profile):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Intake not complete — finish onboarding first.",
+            )
+
+        # Resolve the goal — same logic as /turn so chat and cards
+        # share the same active-curriculum semantics.
+        if req.goal_id:
+            row = store.get_learner(req.learner_id)
+            if not row:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Learner not found.",
+                )
+            goals = store.list_goals(req.learner_id, include_archived=True)
+            match = next(
+                (g for g in goals if g["goal_id"] == req.goal_id), None,
+            )
+            if not match:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Goal not found.",
+                )
+            if match["status"] == "archived":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Goal is archived.",
+                )
+            goal = match
+        else:
+            active = _active_or_none(req.learner_id)
+            if active is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=("No active curriculum — pick a track first "
+                            "(chat needs a target language)."),
+                )
+            goal = active
+
+        goal_id = goal["goal_id"]
+
+        # Render the skill + build the learner context. Context reuse
+        # is intentional — chat sees the same CEFR calibration, the
+        # same error_patterns, the same focus the cards see.
+        skill_text = skill_renderer(
+            source=goal.get("source_language") or "english",
+            target=goal.get("language") or "afrikaans",
+        )
+        ctx = ctx_mod.build_learner_context(
+            req.learner_id, goal_id=goal_id,
+        )
+
+        # Build conversation memory from prior MSG_CHAT_* rows. The
+        # full thread list is used (not the recent_cards window) so
+        # the conversation can carry across long sessions.
+        thread = messages_mod.list_for_goal(
+            learner_id=req.learner_id, goal_id=goal_id, limit=200,
+        )
+        history = conversation_mod.build_history_from_messages(thread)
+
+        # Persist the learner turn FIRST so a model-side failure
+        # doesn't lose the input.
+        learner_msg = messages_mod.append(
+            learner_id=req.learner_id, goal_id=goal_id,
+            kind=db.MSG_CHAT_LEARNER,
+            payload={"text": req.text},
+        )
+
+        turn = await conversation_mod.chat_turn(
+            ctx,
+            user_text=req.text,
+            history=history,
+            model=model,
+            skill_content=skill_text,
+        )
+
+        # Soft-fail surface: an empty reply means the model crashed
+        # or returned malformed JSON. Emit a friendly coach_text in
+        # SOURCE language asking the learner to try again rather
+        # than fabricating a target-language reply.
+        if not turn.reply:
+            error_msg = messages_mod.append(
+                learner_id=req.learner_id, goal_id=goal_id,
+                kind=db.MSG_COACH_TEXT,
+                payload={
+                    "text": "Sorry — I couldn't reply just now. Try "
+                            "rephrasing or sending again.",
+                    "meta": {"error": "chat_turn_failed"},
+                },
+            )
+            return ChatResponse(
+                learner_id=req.learner_id,
+                goal_id=goal_id,
+                messages=[_message_item(learner_msg), _message_item(error_msg)],
+            )
+
+        coach_msg = messages_mod.append(
+            learner_id=req.learner_id, goal_id=goal_id,
+            kind=db.MSG_CHAT_COACH,
+            payload={"reply": turn.reply},
+        )
+        out_messages = [
+            _message_item(learner_msg),
+            _message_item(coach_msg),
+        ]
+        # Notes block — only emit when there's something worth
+        # surfacing. A clean turn with no corrections + no new words
+        # doesn't clutter the thread with an empty Notes bubble.
+        if turn.corrections or turn.new_words:
+            notes_msg = messages_mod.append(
+                learner_id=req.learner_id, goal_id=goal_id,
+                kind=db.MSG_CHAT_NOTES,
+                payload={
+                    "corrections": turn.corrections,
+                    "new_words": turn.new_words,
+                },
+            )
+            out_messages.append(_message_item(notes_msg))
+        return ChatResponse(
+            learner_id=req.learner_id,
+            goal_id=goal_id,
+            messages=out_messages,
         )
 
     # ── /goals ──────────────────────────────────────────────────
