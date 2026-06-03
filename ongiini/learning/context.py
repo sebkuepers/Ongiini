@@ -108,6 +108,17 @@ class LearnerContext:
     #                     "cards_in_module": int}}
     module_digest: dict[str, dict[str, object]] = field(default_factory=dict)
 
+    # Top error categories from the learner's recent grader-tagged
+    # attempts (Track D). Drives adaptive curriculum design: the
+    # designer's next outline can target a learner's actual weak
+    # spots (e.g. "12 gender_error attempts → next module covers
+    # noun gender") rather than running the same plan for every
+    # learner with the same stated goal. Shape:
+    # ``[{tag: 'gender_error', count: 12}, ...]`` capped at top 5.
+    # Empty list when the learner is fresh or all attempts were
+    # correct.
+    error_patterns: list[dict[str, object]] = field(default_factory=list)
+
 
 def build_learner_context(
     learner_id: str,
@@ -195,6 +206,20 @@ def build_learner_context(
         # numbers.
         module_digest = store.progress_for_modules(learner_id, goal_id)
 
+    error_patterns: list[dict[str, object]] = []
+    if learner_id:
+        try:
+            error_patterns = store.error_pattern_summary(
+                learner_id, goal_id=goal_id,
+            )
+        except Exception as exc:                                # noqa: BLE001
+            # Best-effort context decoration. A failure here MUST NOT
+            # block curriculum design or card authoring.
+            log.warning(
+                "context: error_pattern_summary lookup failed; "
+                "continuing without it. error=%s", exc,
+            )
+
     # Augment the profile dict with the resolved goal-level so prompts
     # that read ctx.profile['current_level'] get the per-goal value
     # when one is set. Profile-level stays as the fallback.
@@ -214,6 +239,7 @@ def build_learner_context(
         progress=progress,
         recent_cards=recent_cards,
         module_digest=module_digest,
+        error_patterns=error_patterns,
         source_language=source_language,
         target_language=target_language,
     )

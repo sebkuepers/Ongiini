@@ -120,6 +120,31 @@ def _render_context_for_prompt(ctx: LearnerContext) -> str:
         lines.append("  recent conversation excerpts:")
         for excerpt in ctx.recent_excerpts[:3]:
             lines.append(f"    > {tag_learner_input(excerpt)}")
+    # Track D — surface the learner's recent error categories so the
+    # designer can pad a remedial module if any one category dominates
+    # (e.g. 12 gender_error attempts in the recent window → add a
+    # module on noun gender). Empty for fresh learners — no signal.
+    if ctx.error_patterns:
+        parts = [
+            f"{e.get('tag')}×{e.get('count')}"
+            for e in ctx.error_patterns
+            if (
+                isinstance(e, dict)
+                and isinstance(e.get("tag"), str)
+                and e.get("tag")
+                # count==0 wouldn't be useful but is technically valid;
+                # use `is not None` so a zero-count never silently
+                # disappears from the surfaced block.
+                and e.get("count") is not None
+            )
+        ]
+        if parts:
+            lines.append("  recent error categories (top 5):")
+            lines.append(f"    {', '.join(parts)}")
+            lines.append(
+                "    If one category dominates (count ≥ 8), include a "
+                "remedial module that targets it."
+            )
     return "\n".join(lines)
 
 

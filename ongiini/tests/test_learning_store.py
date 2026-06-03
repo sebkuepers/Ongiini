@@ -910,3 +910,105 @@ def test_record_attempt_non_story_card_returns_real_box(temp_db):
     )
     assert out["new_box"] is not None
     assert out["next_due_at"] is not None
+
+
+def test_error_pattern_summary_counts_wrong_attempts_per_category(temp_db):
+    """Track D — the aggregator that drives adaptive curriculum
+    design. Confirms: groups by tag, filters out correct + partial
+    attempts (only RATING_WRONG counts), respects the recent window,
+    sorts by count descending."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    gid = goal["goal_id"]
+    card_id = store.save_card(
+        gid, db.CARD_VOCAB, "say the noun",
+        reference_answer="x", module_id="m1", topic_id="t1",
+    )
+    # Plant 3 'wrong' gender_error attempts + 2 'wrong' word_order
+    # attempts + 1 'correct' (should be excluded) + 1 'partial' with
+    # tags (excluded — only WRONG counts).
+    plant = [
+        ("gender_error",     db.RATING_WRONG),
+        ("gender_error",     db.RATING_WRONG),
+        ("gender_error",     db.RATING_WRONG),
+        ("word_order",       db.RATING_WRONG),
+        ("word_order",       db.RATING_WRONG),
+        ("word_order",       db.RATING_PARTIAL),    # excluded
+        ("gender_error",     db.RATING_CORRECT),    # excluded
+    ]
+    for tag, rating in plant:
+        store.record_attempt(
+            learner_id=learner_id, card_id=card_id,
+            user_answer="x", ai_feedback="ok",
+            rating=rating, error_tags=[tag],
+        )
+    out = store.error_pattern_summary(learner_id, goal_id=gid)
+    # Sorted by count DESC then tag alpha.
+    assert out == [
+        {"tag": "gender_error", "count": 3},
+        {"tag": "word_order",   "count": 2},
+    ]
+
+
+def test_error_pattern_summary_scopes_to_goal(temp_db):
+    """Errors from one curriculum must NOT pollute another curriculum's
+    error profile — otherwise switching between goals would corrupt
+    each one's adaptive plan."""
+    learner_id = store.create_anonymous_learner()
+    goal_a = store.get_or_create_active_goal(learner_id)
+    goal_b = store.create_new_goal(
+        learner_id, title="Afrikaans plan", language="afrikaans",
+    )
+    card_a = store.save_card(
+        goal_a["goal_id"], db.CARD_VOCAB, "german card",
+        reference_answer="x", module_id="m1", topic_id="t1",
+    )
+    card_b = store.save_card(
+        goal_b["goal_id"], db.CARD_VOCAB, "french card",
+        reference_answer="x", module_id="m1", topic_id="t1",
+    )
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_a,
+        user_answer="x", ai_feedback="ok",
+        rating=db.RATING_WRONG, error_tags=["gender_error"],
+    )
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_b,
+        user_answer="x", ai_feedback="ok",
+        rating=db.RATING_WRONG, error_tags=["case_error"],
+    )
+    a = store.error_pattern_summary(learner_id, goal_id=goal_a["goal_id"])
+    b = store.error_pattern_summary(learner_id, goal_id=goal_b["goal_id"])
+    assert a == [{"tag": "gender_error", "count": 1}]
+    assert b == [{"tag": "case_error",   "count": 1}]
+
+
+def test_error_pattern_summary_empty_when_no_attempts(temp_db):
+    learner_id = store.create_anonymous_learner()
+    assert store.error_pattern_summary(learner_id) == []
+
+
+def test_record_attempt_normalises_error_tags_vocabulary(temp_db):
+    """Tags outside the closed vocabulary are dropped at INSERT, so
+    a hallucinated label can't leak into the curriculum / card
+    prompts later."""
+    learner_id = store.create_anonymous_learner()
+    goal = store.get_or_create_active_goal(learner_id)
+    card_id = store.save_card(
+        goal["goal_id"], db.CARD_VOCAB, "say it",
+        reference_answer="x", module_id="m1", topic_id="t1",
+    )
+    # Mix of valid + invalid tags. record_attempt's own pass is
+    # tolerant (it normalises but does NOT whitelist — the whitelist
+    # is in grading._validate_grading) so this also exercises the
+    # storage normaliser.
+    store.record_attempt(
+        learner_id=learner_id, card_id=card_id,
+        user_answer="x", ai_feedback="ok",
+        rating=db.RATING_WRONG,
+        error_tags=["gender_error", "  word_order  ", 42, ""],
+    )
+    out = store.error_pattern_summary(learner_id, goal_id=goal["goal_id"])
+    # gender_error + word_order; the int and empty string are dropped.
+    tags = sorted(e["tag"] for e in out)
+    assert tags == ["gender_error", "word_order"]
