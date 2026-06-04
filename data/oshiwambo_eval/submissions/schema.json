@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/schema.json",
+  "title": "Ongiini-Eval-OW model submission line",
+  "description": "Schema for one line of a model-submission JSONL file. Each line represents one (item, dialect, model) triple — the model's translation of one English source item into one of the two Oshiwambo dialects. See the submission README and the concept paper for the surrounding protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "dialect",
+    "model_id",
+    "prompt_template_id",
+    "translation",
+    "timestamp"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 423,
+      "description": "Eval-set item ID. Matches the `id` column in eval_set.tsv and the line number in en.txt (1-indexed)."
+    },
+    "dialect": {
+      "type": "string",
+      "enum": ["oshindonga", "oshikwanyama"],
+      "description": "Target dialect of this translation. Submissions are one JSONL file per (model × dialect)."
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:+\\-]*$",
+      "description": "Stable model identifier. Recommended format: `<vendor>/<model-name>[:version]`. Used as the leaderboard row key and as the directory name (with `/` replaced by `--` in paths)."
+    },
+    "prompt_template_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Identifier for the prompt template used. The default is `ongiini-eval-ow-v1-zeroshot` (see Appendix C of the concept paper). If you used a different template, document it in the model card."
+    },
+    "translation": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "The model's translation in the target dialect. Empty string is allowed (some MT systems will not produce output for an unsupported language); English pass-through is allowed. Both are recorded as-is and visible on the leaderboard."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of the inference call."
+    },
+    "model_version": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Optional vendor build / checkpoint identifier (e.g. a model-card date stamp, a Hugging Face revision hash)."
+    },
+    "inference_compute": {
+      "type": "object",
+      "description": "Optional free-form metadata about the inference call (hardware, latency).",
+      "additionalProperties": true,
+      "properties": {
+        "hardware": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "wall_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "description": "Optional random seed used during decoding, where applicable."
+    },
+    "raw_response": {
+      "type": "string",
+      "maxLength": 8000,
+      "description": "Optional: the model's full response before any post-processing. Useful when you applied trimming, prefix-stripping, or formatting that might affect comparability."
+    }
+  }
+}
