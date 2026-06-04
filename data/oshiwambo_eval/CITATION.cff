@@ -28,8 +28,12 @@ keywords:
   - LLM evaluation
 
 authors:
-  - given-names: '[Translator first name pending consent]'
-    family-names: '[Translator family name pending consent]'
+  - given-names: 'Kaarina'
+    family-names: 'Shoozi'
+    affiliation: 'Independent translator, Namibia'
+    role: 'Translation reference (Oshindonga + Oshikwanyama)'
+  - given-names: 'Elizabeth'
+    family-names: 'Hamukwaya'
     affiliation: 'Independent translator, Namibia'
     role: 'Translation reference (Oshindonga + Oshikwanyama)'
   - given-names: 'Sebastian'
@@ -41,8 +45,10 @@ authors:
 preferred-citation:
   type: dataset
   authors:
-    - given-names: '[Translator first name]'
-      family-names: '[Translator family name]'
+    - given-names: 'Kaarina'
+      family-names: 'Shoozi'
+    - given-names: 'Elizabeth'
+      family-names: 'Hamukwaya'
     - given-names: 'Sebastian'
       family-names: 'Küpers'
   title: >-
