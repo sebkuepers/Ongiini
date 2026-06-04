@@ -38,9 +38,9 @@ configs:
 
 # Ongiini AI Oshindonga + Oshikwanyama Machine Translation Evaluation Set
 
-A 423-item evaluation set for machine translation between **English ↔ Oshindonga and English ↔ Oshikwanyama** — two Namibian Bantu languages of the Oshiwambo cluster that are absent from FLORES-200, MAFAND-MT, NLLB, and every major commercial translation API (Google, Azure, Amazon, DeepL, Cohere) as of May 2026.
+A 423-item evaluation set for machine translation between **English ↔ Oshindonga and English ↔ Oshikwanyama** — two Namibian Bantu dialects of the Oshiwambo cluster that are absent from FLORES-200, MAFAND-MT, NLLB-200, Madlad-400, Aya-23, and every major commercial translation API (Google, Azure, Amazon, DeepL, Cohere) as of mid-2026.
 
-This is, to our knowledge, the **first published MT evaluation set for these languages**.
+This is, to our knowledge, the **first published MT evaluation benchmark for these languages**, with native-speaker reference translations and a deterministic blind split. An earlier Oshindonga ↔ English training corpus exists ("Participatory Translations of Oshiwambo", AfricaNLP, ICLR 2022) but is not structured as an evaluation set.
 
 ## Quick use
 
@@ -66,7 +66,7 @@ There is no public way to measure how badly. This dataset provides one.
 
 The 423 source items are sampled from the actual register that a free WhatsApp-based AI helper for Namibians sees in production — daily questions about jobs, school, health, government services, family, religion — plus deliberately crafted items probing specific linguistic phenomena where MT models systematically fail (negation, noun-class agreement, code-switching, idioms, pronoun coreference, polysemy, multi-sentence cohesion).
 
-Reference translations are by **[Translator name pending consent]**, a native Oshindonga and Oshikwanyama speaker from northern Namibia.
+Reference translations are by **Kaarina Shoozi** and **Elizabeth Hamukwaya**, native Oshindonga and Oshikwanyama speakers from northern Namibia.
 
 ## Composition
 
@@ -214,6 +214,6 @@ See [`LICENSE`](LICENSE) for full text.
 
 ## Acknowledgements
 
-- **[Translator name pending consent]** — for the reference translations into both Oshindonga and Oshikwanyama. This dataset doesn't exist without your work.
+- **Kaarina Shoozi** — for the reference translations into both Oshindonga and Oshikwanyama. This dataset doesn't exist without your work.
 - The MT-eval literature that shaped our methodology — FLORES-200 (Goyal et al.), NTREX-128 (Federmann et al.), MAFAND-MT (Adelani et al.), AfriCOMET (Wang et al.), AfroBench (2025), ACES challenge sets (Amrhein et al.), and the chat-MT work by Farinha et al. (TACL 2024).
 - The real Namibian users of Ongiini AI whose conversational patterns shaped the source distribution. (Their messages are not in this dataset; their distribution is.)
