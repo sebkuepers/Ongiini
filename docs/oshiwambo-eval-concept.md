@@ -1,81 +1,141 @@
 # The Ongiini-Eval-OW Benchmark
 
-### A concept paper on benchmarking large language models and machine-translation systems for Oshindonga and Oshikwanyama
+### A concept paper for the planned benchmarking of machine translation and large language models on Oshindonga and Oshikwanyama
 
-**Ongiini AI · Common Intelligence Foundation · Namibia**
+**Sebastian Küpers**
+*Common Intelligence Foundation (programme of the Ongiini AI project,*
+[*https://ongiini.ai*](https://ongiini.ai)*) · Namibia*
+*Corresponding author:* [*hi@ongiini.ai*](mailto:hi@ongiini.ai)
 
-> **DRAFT — v0.3, 4 June 2026.** *Internal working draft. Not yet for
-> external distribution.* This revision rewrites every status,
-> verification, and timeline claim in the document so that nothing is
-> stated as "done" or "verified" beyond what we have evidence for. The
-> composition (600 items, per-phenomenon power, inter-translator
-> agreement) remains as planned in §3. Direct comments and corrections
-> to Sebastian Küpers.
+**Keywords:** machine translation · low-resource languages ·
+benchmarking · African NLP · Oshiwambo · Oshindonga · Oshikwanyama ·
+Bantu languages · evaluation · large language models
+
+**Version 1.0 (concept paper) · September 2026 · Paper licence: CC-BY 4.0**
+
+> **Citing this paper.** Until peer-reviewed publication, please cite
+> as: *Küpers, S. (2026). The Ongiini-Eval-OW Benchmark: A concept
+> paper for the planned benchmarking of machine translation and large
+> language models on Oshindonga and Oshikwanyama. arXiv preprint
+> arXiv:[ID].*
 
 ---
 
-## 1. Executive summary
+## Abstract
 
-**What.** Ongiini-Eval-OW is, to our knowledge, the first published
-evaluation benchmark for machine-translation and large-language-model
-output on the Oshiwambo language pair — English <-> **Oshindonga** and
-English <-> **Oshikwanyama** — with native-speaker reference
-translations from two independent translators, a deterministic blind
-split with stratified per-phenomenon coverage, and a reproducible
-scoring protocol. Prior Oshiwambo parallel data exists (notably the
-WON / "Writing Our Narratives" participatory corpus of 5,419
-Oshindonga <-> English sentences by Nekoto et al., AfricaNLP 2022,
-acknowledged below) but has been used as training material, not as a
-standardised benchmark for system evaluation. Ongiini-Eval-OW
-consists of six hundred (600) parallel items, with every phenomenon
-slice carrying at least 30 items so per-slice scores carry
-statistical signal.
+Oshiwambo — a cluster of mutually intelligible Bantu languages
+spoken by upwards of one million people across northern Namibia and
+southern Angola and the home language of roughly half of Namibian
+households — has, to our knowledge, no published machine-translation
+evaluation benchmark. Major commercial translation services (Google
+Translate, DeepL, Microsoft Translator), open multilingual MT models
+(NLLB-200, MADLAD-400), and the open Masakhane checkpoint
+collection all lack coverage of either of the two standardised
+dialects, Oshindonga and Oshikwanyama. Prior work exists in the
+form of the WON / "Writing Our Narratives" participatory training
+corpus [Nekoto et al., 2022], but no benchmark for system
+evaluation. This concept paper announces **Ongiini-Eval-OW**, a
+planned 600-item English ↔ Oshindonga / English ↔ Oshikwanyama
+evaluation benchmark with native-speaker reference translations from
+two independent translators, a 30-item inter-translator agreement
+set with published variance metrics, an 11-tag phenomenon-tagged
+stratification (each tag carrying ≥30 items), a deterministic blind
+split, and a reproducible scoring protocol over chrF++, BLEU, and
+COMET-22 plus a focused human-evaluation round. We document the
+empirical coverage gap, the dataset composition and methodology, the
+intended launch-leaderboard model matrix across American, European,
+and Chinese frontier and open-weight systems, and the contribution
+pipeline. The dataset is targeted for first public release at Q4
+2026 alongside an updated version of this paper; this v1.0 concept
+paper announces the design and the call for participation. Data and
+code will be released under CC-BY-4.0 (data) and MIT (code).
 
-**Why.** Oshiwambo is spoken by upwards of one million people across
-northern Namibia and southern Angola — the largest indigenous language
-cluster in Namibia and the home language of roughly half of Namibian
-households (49 %, 2011 census). As of mid-2026, **no major commercial
-or open-source machine-translation system supports either dialect**.
-We have directly inspected the tokenizer of NLLB-200, the README of
-Madlad-400, and the public Masakhane checkpoint repositories and
-found no Oshiwambo coverage in any of them; we have additionally
-checked the public language lists of Google Translate, DeepL, and
-Microsoft Translator and found Oshiwambo absent. The absence of an
-evaluation benchmark is part of why the absence persists: without
-measurement, no team can claim progress, and no funder can justify a
-fine-tune. This work creates the conditions.
+---
 
-**Who.** Ongiini AI — a Namibian non-profit AI assistant project under
-the Common Intelligence Foundation — co-developed the dataset with
-two native-speaker translators of both Oshindonga and Oshikwanyama,
-**Kaarina Shoozi** and **Elizabeth Hamukwaya**, drawing on production
-WhatsApp conversation data, original phenomenon-targeted crafting,
-and register-balanced formal items.
+## 1. Introduction
 
-**Status.** Composition is finalised; an internal 423-item v0.1 build
-exists with phenomenon tags and a deterministic split, and it has
-been used to validate the pipeline end-to-end with Claude Opus 4.7
-and Gemma 4 26B as reference baselines. The 600-item v1.0 dataset is
-now being built to the composition described in §3, and both
-translators are contracted for the work. First public release of
-both the dataset and the concept paper is targeted for Q3 2026 (see
-§7 Roadmap).
+Roughly one in two Namibian households uses an Oshiwambo dialect as
+their primary home language [Namibia Statistics Agency, 2011 census;
+The Namibian, 2023 census]. The cluster includes eight mutually
+intelligible Bantu varieties of which two — Oshindonga and
+Oshikwanyama — have standardised written forms, established
+orthographies, school curricula, and broadcast presence. Together
+they are spoken by approximately one to one and a half million
+people across northern Namibia and southern Angola, with
+Oshikwanyama particularly numerous in Angola's Cunene Province.
+For a language community of this size, the absence of any
+public machine-translation evaluation benchmark is striking.
 
-**The ask.** Three concrete contribution paths, detailed in §6:
+The absence is not theoretical. We have directly inspected the
+tokenizer of NLLB-200, the README and supported-language list of
+MADLAD-400, and the public Masakhane checkpoint repositories, and
+found no Oshiwambo coverage in any of them. We have additionally
+consulted the public language lists of Google Translate, DeepL, and
+Microsoft Translator, and found Oshiwambo absent from each. Frontier
+large language models — Claude, GPT, Gemini, Llama, Qwen — do
+produce Oshiwambo-like output when prompted, but the quality has
+not been measured by any benchmark and is therefore neither
+defensible nor falsifiable. Prior published parallel data for
+Oshiwambo amounts, to our knowledge, to the WON / "Writing Our
+Narratives" corpus by [Nekoto et al., 2022] — a ~5,500-sentence
+Oshindonga → English participatory training corpus that has been
+used for fine-tuning experiments but not as a standardised
+evaluation benchmark.
 
-1. **Run your model against the benchmark.** We will validate your
-   submission, compute the metrics, and add your model to the
-   leaderboard with attribution.
-2. **Help review the reference translations.** Native speakers
-   cross-validating the reference data make the benchmark stronger.
-3. **Propose phenomena and items.** Under-represented patterns —
-   proverbs, tones, Afrikaans code-switching — are explicit gaps we
-   want to close in future releases.
+This paper announces **Ongiini-Eval-OW**, a planned 600-item
+evaluation benchmark for English ↔ Oshindonga and English ↔
+Oshikwanyama machine translation and large-language-model output.
+The contribution is fourfold:
 
-If your work touches African-language NLP, machine translation,
-multilingual LLM evaluation, or low-resource translation policy:
-**this paper is the invitation to engage with us before the formal
-academic submission later this year**.
+1. **A reference-quality bilingual evaluation set.** 600 English
+   source items paired with native-speaker reference translations
+   into both standardised dialects, contributed by two independent
+   translators (Kaarina Shoozi and Elizabeth Hamukwaya).
+   A 30-item subset is translated by both translators independently
+   so that inter-translator agreement can be published as a variance
+   measurement, rather than asserted as a uniform reference of
+   uncertain quality.
+2. **Phenomenon-tagged stratification with usable per-slice
+   power.** Eleven phenomenon tags target known low-resource MT
+   failure modes (negation, noun-class agreement, code-switching,
+   politeness register, polysemy, multi-sentence cohesion, etc.),
+   with each tag carrying at least 30 items so that per-slice
+   scores in the 180-item blind split (30 %) carry roughly nine
+   items per slice — a working minimum for slice-level comparison.
+3. **Deployment-derived source items.** Roughly 30 % of the source
+   items are paraphrased from production user queries to the
+   Ongiini AI WhatsApp assistant, scrubbed of PII and capped at
+   three derived items per user. The result reflects the actual
+   distribution of questions that Namibian users ask digital
+   assistants in their language, not an encyclopaedic projection of
+   it.
+4. **A reproducible scoring protocol.** chrF++, BLEU, and COMET-22
+   computed automatically over a published JSONL submission format,
+   supplemented by a 50-item human-evaluation round with adequacy
+   and fluency ratings and published Krippendorff's α.
+
+This is a **concept paper for the planned v1.0 release**. An
+internal v0.1 build at 423 items exists and has been used to
+validate the pipeline end-to-end; the 600-item v1.0 build described
+in §3 is in production at the time of writing, with first public
+release of the dataset and an updated version of this paper
+targeted for Q4 2026. We publish this concept paper in advance to
+solicit model submissions, native-speaker reference review, and
+phenomenon-coverage contributions during the build phase — the
+patterns and the contact paths are detailed in §6.
+
+The remainder of the paper is organised as follows. §2 documents
+the empirical coverage gap and motivates the work. §3 specifies the
+dataset composition, stratification, splits, schema, safety
+provisions, and the inter-translator agreement methodology. §4
+specifies the benchmark protocol — the launch model matrix, the
+prompting and metrics conventions, the human-evaluation round, and
+the published-score discipline. §5 covers reproducibility. §6
+consolidates the call for participation, the roadmap, and contact
+details. §7 lists known limitations and anticipated reviewer
+critiques. §8 is the ethics statement. §9 contains acknowledgments,
+§10 the contributions statement, §11 the data and code availability
+statement, and §12 the references. Appendices A–E follow.
 
 ---
 
@@ -170,9 +230,9 @@ production.
 
 ### 3.1 Composition
 
-Six hundred (600) English source items, each paired with reference
-translations in both Oshindonga and Oshikwanyama, drawn from four
-provenance streams:
+The v1.0 dataset is being built to six hundred (600) English source
+items, each paired with reference translations in both Oshindonga
+and Oshikwanyama, drawn from four provenance streams:
 
 | Source | Items | Description |
 |---|---|---|
@@ -245,8 +305,9 @@ into two subsets:
   `seed = 42`, stratified by phenomenon × length × domain so each
   slice retains roughly its full-set proportion.
 
-Both subsets are translated and published; you can compute scores
-on either or on the full 600. The convention is:
+Both subsets will be translated and published at v1.0 release; you
+will be able to compute scores on either or on the full 600. The
+convention is:
 
 | Use | Which items? |
 |---|---|
@@ -316,12 +377,12 @@ appears in Appendix B.
 
 ### 3.6 Inter-translator agreement
 
-Kaarina Shoozi and Elizabeth Hamukwaya both independently translate
-a designated **30-item overlap set per dialect** (`in_agreement_set
-= true`). Both translations are published in
+Kaarina Shoozi and Elizabeth Hamukwaya will both independently
+translate a designated **30-item overlap set per dialect**
+(`in_agreement_set = true`). Both translations will be published in
 `oshindonga_reference` (primary) and `oshindonga_reference_alt`
-(second translator), analogously for Oshikwanyama. From this overlap
-we compute and publish:
+(second translator), analogously for Oshikwanyama. From this
+overlap we will compute and publish:
 
 - **Character-level chrF++ self-similarity** between the two
   translations of each item, reported as mean ± SD per dialect.
@@ -359,14 +420,14 @@ Chinese state-of-the-art models.
 
 **Frontier proprietary LLMs (we run via API).**
 
-- *American.* Claude Opus 4.8 (Anthropic); GPT-5.5 (OpenAI);
+- *American.* Claude Opus 5 (Anthropic); GPT-6 Astra (OpenAI);
   Gemini 3.1 Pro (Google DeepMind).
-- *Chinese.* DeepSeek V3.1 — both `deepseek-chat` (non-thinking) and
-  `deepseek-reasoner` (thinking) — via the DeepSeek API; Kimi K2.6
-  (Moonshot, 1T-parameter MoE with 32B active) via the Moonshot API;
-  GLM-5 (Z.ai / Zhipu, 744B MoE with 40B active) via the Z.ai API.
+- *Chinese.* DeepSeek V4.1 — both `deepseek-chat` (non-thinking) and
+  `deepseek-reasoner` (thinking) — via the DeepSeek API; Kimi K3
+  (Moonshot) via the Moonshot API; GLM-5.3 (Z.ai / Zhipu) via the
+  Z.ai API.
 - *European.* Mistral Large 3 (675B MoE, 41B active) and Mistral
-  Medium 3.1, via the Mistral API.
+  Medium 3.5 (128B dense), via the Mistral API.
 
 **Open-weight LLMs (we run on Spark; quantised where needed).**
 
@@ -375,11 +436,9 @@ Chinese state-of-the-art models.
   active — fits at FP4 but slow at single-stream decode). Llama 4
   is Meta's last open-weight release; their frontier model is now
   closed (see Muse Spark callout below).
-- *European.* Mistral Small 3.1 (24B dense, Apache 2.0 — easy fit on
+- *European.* Mistral Small 4 (24B dense, Apache 2.0 — easy fit on
   Spark).
-- *Chinese.* Qwen 3 30B-A3B (Alibaba, 30B MoE with 3B active — easy
-  fit) and Qwen 3 235B-A22B (235B MoE with 22B active — borderline
-  fit at FP4; we will attempt and report constraints honestly);
+- *Chinese.* Qwen 3.8 27B (Alibaba, Apache 2.0 — easy fit);
   DeepSeek-R1-Distill-Llama-70B (quantised) for a smaller-footprint
   reasoning baseline.
 
@@ -426,32 +485,37 @@ on-premise hardware beyond a single DGX Spark are not pre-committed.
 They are warmly welcomed via the submission pipeline (§6.1) and
 will be added to the leaderboard with attribution as teams submit.
 
-#### Notable absence: Meta Muse Spark
+#### Meta Muse Spark
 
 Meta's closed-weight frontier model **Muse Spark** (Meta
-Superintelligence Labs, April 2026) deserves a specific call-out.
-In informal hand-testing of a small number of prompts through the
-meta.ai consumer interface, Muse Spark **appeared to us to produce
-noticeably better Oshindonga and Oshikwanyama than the other systems
-we have informally probed**, including several frontier LLMs. This
-is a striking and unexpected signal — a system with no documented
-Oshiwambo training claim looks qualitatively strong — but the
-observation is anecdotal: a handful of prompts, judged by us, with
-no metric and no held-out set.
+Superintelligence Labs, first released April 2026) deserves a
+specific call-out. In informal hand-testing of a small number of
+prompts through the meta.ai consumer interface, Muse Spark
+**appeared to us to produce noticeably better Oshindonga and
+Oshikwanyama than the other systems we have informally probed**,
+including several frontier LLMs. This is a striking and unexpected
+signal — a system with no documented Oshiwambo training claim looks
+qualitatively strong — but the observation is anecdotal: a handful
+of prompts, judged by us, with no metric and no held-out set.
+Measuring it properly is precisely what this benchmark is for.
 
-We are nonetheless **not including Muse Spark in the launch
-leaderboard**. It has no public API; no on-premise option; no open
-weights; and at the time of writing the only way to interact with it
-is the consumer-facing meta.ai web/app interface. Running a 600-item
-benchmark through a consumer chat UI by hand is neither reproducible
-nor responsibly extrapolatable to a published score, and we will
-not present a number that we cannot stand behind methodologically.
+At the time this benchmark was designed, Muse Spark had no public
+API, no on-premise option and no open weights, and the only way to
+interact with it was the consumer-facing meta.ai web interface —
+which made a reproducible 600-item run impossible. That objection
+has since been removed: with the release of **Muse Spark 1.1** in
+July 2026, Meta opened the Meta Model API to developers in public
+preview, providing exactly the programmatic access the benchmark
+requires.
 
-We flag the apparent capability here so that readers, partners, and
-Meta itself are aware that this dataset is ready to measure Muse
-Spark properly the moment an API or programmatic access is made
-available. Until then, the observation is anecdotal and labelled as
-such.
+**We therefore commit to evaluating Muse Spark 1.1 as part of the
+launch leaderboard.** At the time of writing we do not have API
+access — the public preview opened to United States developers
+first, with a waitlist for broader availability. Should access not
+be in place by first public release, Muse Spark moves to the
+submission pipeline (§6) on the
+same terms as every other system we cannot run ourselves, and we
+would welcome a submission from Meta directly.
 
 ### 4.2 Prompting protocol
 
@@ -552,9 +616,9 @@ We are explicit about what the numbers do and do not support:
 - **Per-phenomenon blind-set scores** (typically ~9 items per slice)
   are interpretive. They are useful for spotting *where* a system
   struggles (e.g. noun-class agreement, multi-sentence cohesion)
-  but should not be reported as headline rankings. The leaderboard
-  presents per-slice cells with explicit CIs and a footnote
-  flagging small-N slices.
+  but will not be reported as headline rankings. The published
+  leaderboard will present per-slice cells with explicit CIs and a
+  footnote flagging small-N slices.
 - **Per-system per-dialect** scores aggregate to the full blind set
   for both dialects (180 items each) and are reliable.
 - **Item-level outputs** for every system are published alongside the
@@ -570,26 +634,27 @@ that a reviewer can dismantle on power grounds.
 ## 5. Reproducibility
 
 - **Dataset publication target.** HuggingFace dataset at
-  `CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval` (target
-  name; the scaffolding matches). CC-BY-4.0 licence on first
-  publication; full schema in the README.
-- **Scripts.** MIT-licensed in the Ongiini GitHub repository under
-  [`scripts/`](../scripts/). The pipeline scripts —
-  `mine_eval_candidates.py`, `curate_mined_candidates.py`,
-  `build_eval_v2.py`, `fill_baseline_translations.py`,
-  `export_eval_set.py` — have been executed end-to-end on the
-  internal v0.1 build and will be adapted as needed for the v1.0
-  build.
-- **Baselines as reference.** Pre-computed Claude Opus 4.7 and Gemma
-  4 26B outputs on the v0.1 build are available in
-  [`data/oshiwambo_eval/data/baselines/`](../data/oshiwambo_eval/data/baselines/),
-  MIT-licensed. These will be recomputed against the v1.0 dataset
-  before first public release and will form the first two rows of
-  the published leaderboard.
+  `CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval`. The
+  scaffolding (schema, README, license) matches the target. The
+  dataset will be released under CC-BY-4.0 at first public
+  publication.
+- **Scripts.** MIT-licensed at
+  <https://github.com/sebkuepers/Ongiini/tree/main/scripts>. The
+  pipeline scripts (`mine_eval_candidates.py`,
+  `curate_mined_candidates.py`, `build_eval_v2.py`,
+  `fill_baseline_translations.py`, `export_eval_set.py`) have been
+  executed end-to-end on the internal v0.1 build and will be
+  adapted for the v1.0 composition.
+- **Baselines as reference.** Pre-computed Claude Opus 4.7 and
+  Gemma 4 26B outputs on the v0.1 build exist internally in
+  `data/oshiwambo_eval/data/baselines/` and validate the pipeline.
+  Baselines will be re-computed against the v1.0 dataset (with
+  Claude Opus 5 and Gemma 4 26B) before first public release and
+  will form the first rows of the published leaderboard.
 - **Citation.** Citation File Format manifest at
-  [`data/oshiwambo_eval/CITATION.cff`](../data/oshiwambo_eval/CITATION.cff)
-  — renders as BibTeX, APA, and Zenodo metadata automatically.
-  Zenodo DOI to be issued at first formal publication.
+  <https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/CITATION.cff>
+  renders as BibTeX, APA, and Zenodo metadata automatically. A
+  Zenodo DOI will be minted at first formal publication.
 - **Versioning.** The first public dataset release will be pinned as
   `v1.0`. Schema-compatible updates will be minor (v1.1);
   schema-breaking changes will be major (v2). All releases will be
@@ -597,112 +662,80 @@ that a reviewer can dismantle on power grounds.
 
 ---
 
-## 6. How to contribute
+## 6. Call for participation and roadmap
 
-Three concrete contribution paths. Each has a defined pipeline so
-the cost-to-contribute is bounded and the benefit is durable.
+Three contribution paths invite the wider community to populate the
+benchmark and strengthen the reference quality. Each has a defined
+pipeline so the cost-to-contribute is bounded.
 
-### 6.1 Plug your model in
+### 6.1 Submit a model
 
-Most-impact, lowest-friction path. We have wired a JSONL submission
-format; you produce outputs, we run the metrics.
-
-**What you do:**
-
-1. Run your model against the English source items in
-   [`data/oshiwambo_eval/data/en.txt`](../data/oshiwambo_eval/data/en.txt),
-   producing one translation per line in each of the two dialects.
-2. Format the output as JSONL matching the schema at
-   [`data/oshiwambo_eval/submissions/schema.json`](../data/oshiwambo_eval/submissions/schema.json).
-   One submission per (model × dialect); two files per model.
-3. Open a pull request adding your submission to
-   `data/oshiwambo_eval/submissions/<model-id>/` along with a
-   one-page model card describing the system and the inference
-   conditions.
-
-**What we do:**
-
-- Validate the submission against the JSON schema.
-- Run the automated metrics (chrF++, BLEU, COMET-22) on every item
-  and publish the per-slice matrices.
-- Add your model to the leaderboard with attribution.
-- For submissions before the academic-paper cutoff (Q1 2027), the
-  submitting team is offered co-authorship on the eventual
-  publication.
-
-Detailed instructions and an end-to-end example at
-[`data/oshiwambo_eval/submissions/README.md`](../data/oshiwambo_eval/submissions/README.md).
+The most-impact, lowest-friction path. Run your system against the
+600 English source items, format the outputs as JSONL per the
+schema at
+[`data/oshiwambo_eval/submissions/schema.json`](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/schema.json),
+and open a pull request adding the submission under
+`data/oshiwambo_eval/submissions/<model-id>/` with a one-page
+model card. We validate the JSON, run chrF++, BLEU, and COMET-22
+on every item, publish the per-slice matrices, and add the system
+to the leaderboard with attribution. Detailed instructions and an
+end-to-end example are in
+[`data/oshiwambo_eval/submissions/README.md`](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md).
+For submissions made before the academic-paper cutoff (Q1 2027),
+the submitting team is offered co-authorship on the eventual
+publication.
 
 ### 6.2 Review the reference translations
 
-The dataset ships with two translators and a 30-item inter-translator
-agreement set (§3.6). Broader native-speaker review beyond those
-two strengthens the reference further and surfaces dialectal
-variation that should itself be documented.
+The dataset will ship with two translators and a 30-item
+inter-translator agreement set (§3.6). Broader native-speaker review
+beyond those two strengthens the reference further and surfaces
+dialectal variation that should itself be documented. Review a
+subset of the translations at your chosen size (even ten items
+helps); submit alternates or flag disagreements via review forms
+linked on the dataset repository at first public release; optionally
+provide rater demographics (dialect, region) so aggregated rater
+context can appear in the published methodology. Accepted alternates
+will be integrated into a minor dataset version (v1.1 etc.) and
+reviewers credited in the Acknowledgments.
 
-**What you do:**
-
-- Review a subset of the published translations (you choose the
-  size — even ten items helps).
-- Submit alternate translations or flag disagreements via a review
-  form (one form per dialect; links forthcoming on the dataset
-  repository).
-- Optionally provide rater demographics (dialect, region) so
-  aggregated rater context appears in the published methodology.
-
-**What we do:**
-
-- Aggregate the review submissions.
-- Publish a minor dataset version (e.g. v1.1) integrating alternate
-  translations as supplementary references.
-- Credit reviewers in the dataset Acknowledgments and the academic
-  paper.
-
-### 6.3 Add phenomena and items
+### 6.3 Propose phenomena and items
 
 Phenomenon coverage in v1.0 is balanced for the constructions we
-know to test; under-represented areas include Namibian-Afrikaans
+know to test. Under-represented areas include Namibian-Afrikaans
 code-switching, proverbs, tone-affecting honorifics, and discourse
-markers.
+markers. Propose new items with the required tags (length bucket,
+domain, phenomenon list) and proposed reference translations;
+optionally include a one-paragraph linguistic note explaining what
+the item tests. Submit via the contribution template at
+`data/oshiwambo_eval/contributions/`. Accepted items will enter a
+future dataset version (v1.x for schema-compatible additions, v2
+for schema changes); contributors are credited in the release notes.
 
-**What you do:**
-
-- Propose new items with the required tags (length bucket, domain,
-  phenomenon list) and proposed reference translations.
-- Optionally include a one-paragraph linguistic note explaining
-  what the item tests.
-- Submit via the contribution template at
-  `data/oshiwambo_eval/contributions/`.
-
-**What we do:**
-
-- Review proposed items with the language coordinator and the
-  reference translators.
-- Accepted items enter a future dataset version (v1.x for
-  schema-compatible additions, v2 for schema changes).
-- Contributors credited in the release notes.
-
----
-
-## 7. Roadmap
-
-Concrete milestones, with the controlled steps separated from the
-translator-dependent ones:
+### 6.4 Roadmap
 
 | When | Milestone |
 |---|---|
-| **Now (Q2 2026)** | Dataset rebuild to 600 items in progress; existing 423-item internal v0.1 build retired. New crafted + formal items being drafted; second Spark mining run scheduled. |
-| **Q3 2026** | 600-item dataset translated by both Kaarina Shoozi and Elizabeth Hamukwaya, including the 30-item agreement set. Claude + Gemma 4 26B baselines re-computed. Concept paper v1.0 published alongside dataset v1.0. **Soliciting model submissions for the launch leaderboard.** |
-| **Q4 2026** | First public leaderboard released — chrF++, BLEU, COMET-22 across the launch model matrix; inter-translator agreement published. |
-| **Q1 2027** | Human-evaluation round 1 results published with Krippendorff's α. |
+| **Q3 2026** | Concept paper v1.0 (this paper) published to arXiv as cs.CL. The 423-item internal v0.1 build fully translated into both dialects by both reference translators, validating the translation pipeline end-to-end at production scale. **Soliciting model submissions for the launch leaderboard.** |
+| **Q4 2026** | 600-item source set locked; existing 423-item internal v0.1 build superseded. New crafted + formal items authored; second Spark mining run executed. Translator handoff including the 30-item agreement set. Claude Opus 5 + Gemma 4 26B baselines computed. **Dataset v1.0 released** alongside the **first public leaderboard** — chrF++, BLEU, COMET-22 across the launch model matrix; inter-translator agreement published. |
+| **Q1 2027** | Human-evaluation round 1 results published with Krippendorff's α. Concept paper v2 submitted to arXiv with finalised numbers. |
 | **Q2 2027** | Academic paper submission. Target venues (in order of preference): AfricaNLP Workshop; ACL / EMNLP main track; LREC. |
 
-The roadmap is held against a publicly visible status page on the
-dataset repository so partners and sponsors can verify progress.
+The roadmap will be held against a publicly visible status section
+of the dataset README so partners and sponsors can verify progress.
+
+### 6.5 Contact
+
+- **GitHub.** Issues, pull requests, and discussion at
+  <https://github.com/sebkuepers/Ongiini> (the
+  `data/oshiwambo_eval/` directory).
+- **Email.** [hi@ongiini.ai](mailto:hi@ongiini.ai) for partnership
+  conversations, review requests, or submission questions.
+- **The Ongiini AI project.** <https://ongiini.ai>.
 
 ---
 
-## 8. Limitations
+## 7. Limitations
 
 The benchmark is honest about its constraints. We surface them
 explicitly so reviewers do not need to.
@@ -745,6 +778,14 @@ explicitly so reviewers do not need to.
   Nama and Damara dialect continuum), Rukwangali (`kwn`), and Silozi
   (`loz`) face the same coverage gap; they are future work but **not
   part of any commitment this benchmark makes**.
+- **Pre-release status.** This is a concept paper for the planned
+  v1.0 release; an internal v0.1 build at 423 items exists and has
+  been used to validate the pipeline, but the full 600-item v1.0
+  composition is in production at the time of writing. Final
+  numbers (inter-translator agreement, recomputed Claude Opus 5
+  and Gemma 4 26B baselines, populated leaderboard) will appear in
+  the arXiv v2 of this paper to be submitted at first public
+  dataset release (Q4 2026).
 
 #### Anticipated reviewer critiques and our responses
 
@@ -771,63 +812,223 @@ surface them here rather than wait for them in review:
 
 ---
 
-## 9. Acknowledgments and citation
+## 8. Ethics statement
+
+The Ongiini-Eval-OW benchmark is built on the following ethical
+posture, made explicit so the reader can verify it rather than
+trust it.
+
+**Consent and PII.** The 180 source items derived from production
+WhatsApp queries to the Ongiini AI assistant
+([https://ongiini.ai](https://ongiini.ai)) are **paraphrased**, not
+verbatim. Each source conversation is PII-scrubbed (phone numbers,
+ID numbers, addresses, personal names) before any human reviewer
+sees it, then rewritten into clean English by the dataset team
+preserving register and intent. The published English source is not
+attributable to any individual user, and verbatim user text is
+never released. Source users have agreed to the privacy policy at
+<https://ongiini.ai/privacy/>, which permits derived
+non-attributable use of aggregated signals for the explicit purpose
+of improving the assistant. A per-user cap of three derived items
+prevents any single user's speech patterns dominating the dataset.
+
+**Translator labour and credit.** Both reference translators
+(Kaarina Shoozi and Elizabeth Hamukwaya) are compensated for their
+work at market rates appropriate to professional Namibian
+translation work; their names appear in the Acknowledgments and in
+the dataset's CITATION.cff with their consent.
+
+**Reference variance, not adjudication.** The 30-item
+inter-translator agreement set publishes both translators' work
+side-by-side. We do not assert one translator's reference is
+"correct" and the other "alternate"; both are valid references from
+fluent native speakers, and the agreement set is a public window
+into the reference variance rather than an adjudication exercise.
+
+**Open licence as anti-extraction posture.** The dataset is
+released under CC-BY-4.0, the code under MIT, and this paper under
+CC-BY 4.0. Anyone improving on Oshiwambo translation through use of
+the benchmark must credit the artefact and the named translators —
+a deliberate counterweight to the historical pattern of
+low-resource language work being absorbed into proprietary systems
+without attribution.
+
+---
+
+## 9. Acknowledgments
 
 The benchmark is built collaboratively. Specific acknowledgments
 will be expanded with each release; the current contributors are:
 
 - **Kaarina Shoozi** and **Elizabeth Hamukwaya** — reference
   translators for both Oshindonga and Oshikwanyama.
-- Native-speaker reviewers (per-release acknowledgments).
 - The Ongiini AI team at the Common Intelligence Foundation.
 - The authors and maintainers of the publicly available Oshiwambo
   reference materials we consulted while designing this benchmark,
-  including *Hai ti! A Beginner's Guide to Oshikwanyama* (Crane,
-  Lindgren-Streicher & Wingo 2004, CC-BY-SA) and the Omniglot
-  Oshiwambo phrasebook.
+  including *Hai ti! A Beginner's Guide to Oshikwanyama*
+  [Crane et al., 2004] and the Omniglot Oshiwambo phrasebook.
 - **Meyabase** ([meyabase.com](https://www.meyabase.com/),
   [github.com/meyabase](https://github.com/meyabase)) — the
   Namibian Oshiwambo MT project led by Axel Mukwena. Meyabase's
-  ~70,000-pair English <-> Oshindonga corpus and Neural Machine
+  ~70,000-pair English ↔ Oshindonga corpus and Neural Machine
   Translation tool is the closest peer effort to ours; we hope the
   Meyabase team will submit their system against this benchmark via
   the submission pipeline at first public release. We are grateful
   for their public pioneering work.
 - **Nekoto, Kreutzer, Rajab, Ochieng & Abbott** — for *Participatory
-  Translations of Oshiwambo: Towards Culture Preservation with
-  Language Technology* (AfricaNLP at ICLR 2022; extended at the
-  NLP for Positive Impact workshop, EMNLP 2022). Their **WON**
-  ("Writing Our Narratives") corpus — 5,419 Oshindonga -> English
+  Translations of Oshiwambo* [Nekoto et al., 2022]. The WON
+  ("Writing Our Narratives") corpus — 5,419 Oshindonga → English
   sentences in the AfricaNLP version, ~7,500 in the EMNLP version
-  — produced by an eleven-participant, eight-day paid workshop with
-  Oshindonga speakers in Namibia, is the earliest published
-  Oshindonga <-> English parallel corpus we are aware of. Affiliations
-  span Masakhane NLP, Google Research, University of the
-  Witwatersrand, Microsoft Africa Research Institute, and Retro
-  Rabbit. Their participatory methodology and their honest
+  — is the earliest published Oshindonga ↔ English parallel corpus
+  we are aware of. Their participatory methodology and their honest
   documentation of the prior digitised-data landscape (including
   that the only OPUS-listed Oshikwanyama corpus is in fact
-  mislabelled German) was a direct influence on our approach.
-
-**Citation.** The full citation manifest is at
-[`data/oshiwambo_eval/CITATION.cff`](../data/oshiwambo_eval/CITATION.cff)
-and renders as BibTeX, APA, and Zenodo automatically. A
-non-canonical short form for working papers:
-
-> *Ongiini AI (2026). Ongiini-Eval-OW v1.0: an evaluation set for
-> machine translation and large-language-model output on Oshindonga
-> and Oshikwanyama. Common Intelligence Foundation.
-> https://huggingface.co/datasets/CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval*
+  mislabelled German) directly influenced our approach.
 
 ---
 
-## 10. Get in touch
+## 10. Contributions
 
-For model submissions, review requests, or partnership conversations:
+Sebastian Küpers designed the benchmark composition, authored this
+paper, built the pipeline, and runs the benchmark infrastructure.
+Kaarina Shoozi and Elizabeth Hamukwaya provide the reference
+translations for both Oshindonga and Oshikwanyama. The Meyabase
+project led by Axel Mukwena and the WON corpus by Nekoto et al.
+2022 are acknowledged as prior art that shaped the design.
 
-- **GitHub.** [`Ongiini/data/oshiwambo_eval/`](../data/oshiwambo_eval/) — issues, pull requests, discussions.
-- **Email.** Contact details published on the dataset repository.
-- **Common Intelligence Foundation.** [Foundation website link forthcoming]
+---
+
+## 11. Data and code availability
+
+The Ongiini-Eval-OW v1.0 dataset is targeted for first public
+release in Q4 2026 at
+<https://huggingface.co/datasets/CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval>
+under CC-BY-4.0. This arXiv submission is the **concept paper**
+announcing the planned release; an updated version of the paper
+will be submitted as arXiv v2 at first public release with
+finalised numbers and the live HuggingFace URL. Pipeline scripts
+(`mine_eval_candidates.py`, `curate_mined_candidates.py`,
+`build_eval_v2.py`, `fill_baseline_translations.py`,
+`export_eval_set.py`) are MIT-licensed and available at
+<https://github.com/sebkuepers/Ongiini/tree/main/scripts>.
+Pre-publication access to the v0.1 internal build (423 items, used
+to validate the pipeline end-to-end) is available to prospective
+reviewers and submitters on request to
+[hi@ongiini.ai](mailto:hi@ongiini.ai). The CITATION.cff manifest at
+<https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/CITATION.cff>
+renders as BibTeX and APA automatically; a Zenodo DOI will be
+minted at first formal publication.
+
+---
+
+## 12. References
+
+Adelani, D. I., Alabi, J. O., Fan, A., Kreutzer, J., Shen, X.,
+Reid, M., Ruder, S., et al. (2022). A Few Thousand Translations
+Go a Long Way! Leveraging Pre-trained Models for African News
+Translation (MAFAND-MT). *Proceedings of NAACL 2022*, 3053–3070.
+
+Anthropic (2026). *Claude Opus 5 model card.* San Francisco, CA.
+<https://www.anthropic.com/news/claude-opus-5>.
+
+Aryabumi, V., Dang, J., Talupuru, D., Dash, S., Cairuz, D., Lin, H.,
+Venkitesh, B., et al. (2024). *Aya 23: Open Weight Releases to
+Further Multilingual Progress.* arXiv:2405.15032.
+
+Costa-jussà, M. R., Cross, J., Çelebi, O., Elbayad, M., Heafield,
+K., Heffernan, K., Kalbassi, E., et al. (2022). *No Language Left
+Behind: Scaling Human-Centered Machine Translation (NLLB-200).*
+arXiv:2207.04672.
+
+Crane, T. M., Lindgren-Streicher, K., and Wingo, A. (2004).
+*Hai ti! A Beginner's Guide to Oshikwanyama.* Peace Corps Namibia.
+CC-BY-SA. <https://wingolog.org/pub/hai-ti/hai-ti.pdf>.
+
+DeepSeek AI (2026). *DeepSeek V4.1.* API documentation,
+<https://api-docs.deepseek.com/updates>.
+
+Federmann, C., Kocmi, T., and Xin, Y. (2022). *NTREX-128 — News
+Test References for MT Evaluation of 128 Languages.* WMT 2022.
+
+Google DeepMind (2026). *Gemini 3.* Blog post,
+<https://blog.google/products/gemini/gemini-3/>.
+
+Google DeepMind (2026). *Gemma 4 model card.*
+<https://ai.google.dev/gemma/docs/core/model_card_4>.
+
+Goyal, N., Gao, C., Chaudhary, V., Chen, P.-J., Wenzek, G., Ju, D.,
+Krishnan, S., Ranzato, M., Guzmán, F., and Fan, A. (2022). The
+FLORES-101 Evaluation Benchmark for Low-Resource and Multilingual
+Machine Translation. *TACL* 10:522–538.
+
+Hossain, M. M., Anastasopoulos, A., Blanco, E., and Palmer, A.
+(2020). It's not a Non-Issue: Negation as a Source of Error in
+Machine Translation. *Findings of EMNLP 2020*, 3869–3885.
+
+Joshi, P., Santy, S., Budhiraja, A., Bali, K., and Choudhury, M.
+(2020). The State and Fate of Linguistic Diversity and Inclusion
+in the NLP World. *Proceedings of ACL 2020*, 6282–6293.
+
+Krippendorff, K. (2004). *Content Analysis: An Introduction to Its
+Methodology.* 2nd ed. Sage Publications.
+
+Kudugunta, S., Caswell, I., Zhang, B., Garcia, X., Choquette-Choo,
+C. A., Lee, K., Xin, D., Kusupati, A., et al. (2023). *MADLAD-400:
+A Multilingual And Document-Level Large Audited Dataset.*
+NeurIPS 2023 Datasets and Benchmarks.
+
+Maho, J. F. (2009). *NUGL Online: The Online Version of the New
+Updated Guthrie List, a Referential Classification of the Bantu
+Languages.*
+
+Mistral AI (2026). *Mistral Medium 3.5.*
+<https://huggingface.co/mistralai/Mistral-Medium-3.5-128B>.
+
+Mistral AI (2025). *Introducing Mistral 3 — Mistral Large 3,
+Medium 3, Small 3.* <https://mistral.ai/news/mistral-3/>.
+
+Moonshot AI (2026). *Kimi K3: Open Frontier Intelligence.*
+<https://github.com/MoonshotAI/Kimi-K3>.
+
+Namibia Statistics Agency (2024). *2023 Population and Housing
+Census — Main Report.* Windhoek.
+<https://nsa.org.na/document/2023-population-and-housing-census-main-report/>.
+
+Nekoto, W. O., Kreutzer, J., Rajab, J., Ochieng, M., and Abbott, J.
+(2022). Participatory Translations of Oshiwambo: Towards Culture
+Preservation with Language Technology. *AfricaNLP Workshop at
+ICLR 2022.* Extended at the NLP for Positive Impact workshop,
+EMNLP 2022.
+
+OpenAI (2026). *Introducing GPT-6 Astra.*
+<https://openai.com/index/gpt-6/>.
+
+Papineni, K., Roukos, S., Ward, T., and Zhu, W.-J. (2002). BLEU:
+A Method for Automatic Evaluation of Machine Translation.
+*Proceedings of ACL 2002*, 311–318.
+
+Popović, M. (2017). chrF++: Words Helping Character n-grams.
+*Proceedings of WMT 2017*, 612–618.
+
+Rei, R., De Souza, J. G. C., Alves, D., Zerva, C., Farinha, A. C.,
+Glushkova, T., Lavie, A., Coheur, L., and Martins, A. F. T. (2022).
+COMET-22: Unbabel-IST 2022 Submission for the Metrics Shared Task.
+*Proceedings of WMT 2022.*
+
+Touvron, H., et al. (2025). *The Llama 4 herd: Scout, Maverick,
+Behemoth.* Meta AI blog,
+<https://ai.meta.com/blog/llama-4-multimodal-intelligence/>.
+
+Wang, J., Adelani, D. I., Agrawal, S., Rei, R., Briakou, E., Carpuat,
+M., He, X., et al. (2024). AfriMTE and AfriCOMET: Enhancing COMET
+to Embrace Under-resourced African Languages. *Proceedings of NAACL
+2024,* 5435–5454.
+
+Yang, A., et al. (2025). *Qwen 3.* Qwen GitHub release,
+<https://github.com/QwenLM/Qwen3>.
+
+Z.ai / Zhipu AI (2026). *GLM-5.3.* HuggingFace model release,
+<https://huggingface.co/zai-org/GLM-5.3>.
 
 ---
 
@@ -1017,11 +1218,13 @@ Contributors to Ongiini-Eval-OW agree to:
 
 ---
 
-*This document is versioned with the dataset. Concept paper
-v0.3-draft (4 June 2026) is an internal working draft describing the
-planned 600-item composition; the existing 423-item internal build
-will be superseded. The first public release will be cut as concept
-paper v1.0 alongside dataset v1.0 at the end of Q3 2026, once both
-translators have completed the new items and the agreement set.
-Suggestions and corrections are welcomed as pull requests against
-this file.*
+*This concept paper is versioned with the dataset. Version 1.0
+(this version, September 2026) announces the design of the planned
+Ongiini-Eval-OW v1.0 dataset; an internal v0.1 build at 423 items
+exists and has been used to validate the pipeline end-to-end. An
+updated arXiv v2 of this paper will be submitted at first public
+release of the dataset (planned Q4 2026). Suggestions and
+corrections are welcomed as pull requests against the source
+markdown at*
+[*github.com/sebkuepers/Ongiini*](https://github.com/sebkuepers/Ongiini)
+*or by email to* [*hi@ongiini.ai*](mailto:hi@ongiini.ai).
