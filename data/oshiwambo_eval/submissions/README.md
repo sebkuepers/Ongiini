@@ -40,10 +40,10 @@ matches `data/en.txt` (one item per line, line N = id N).
 {
   "id":                    1,
   "dialect":               "oshindonga",
-  "model_id":              "anthropic/claude-opus-4-7",
+  "model_id":              "anthropic/claude-opus-5",
   "prompt_template_id":    "ongiini-eval-ow-v1-zeroshot",
   "translation":           "Wa lalapo!",
-  "timestamp":             "2026-06-04T12:34:56Z"
+  "timestamp":             "2026-09-22T12:34:56Z"
 }
 ```
 
@@ -51,7 +51,7 @@ matches `data/en.txt` (one item per line, line N = id N).
 |---|---|---|
 | `id` | int | Eval-set item ID, 1..423 (matches the dataset). |
 | `dialect` | enum | `"oshindonga"` or `"oshikwanyama"`. One file per dialect. |
-| `model_id` | string | Stable model identifier. Recommended format: `<vendor>/<model-name>[:version]`. Examples: `anthropic/claude-opus-4-7`, `meta/llama-4-405b`, `google/madlad400-7b-mt`. |
+| `model_id` | string | Stable model identifier. Recommended format: `<vendor>/<model-name>[:version]`. Examples: `anthropic/claude-opus-5`, `meta/llama-4-405b`, `google/madlad400-7b-mt`. |
 | `prompt_template_id` | string | Identifier for the prompt template used. Default: `ongiini-eval-ow-v1-zeroshot` (Appendix C of the concept paper). |
 | `translation` | string | Your model's translation. Pass-through (English left untranslated) is allowed; empty string is allowed. Both are recorded as-is. |
 | `timestamp` | string | ISO-8601 UTC timestamp of inference. |
@@ -62,11 +62,11 @@ matches `data/en.txt` (one item per line, line N = id N).
 {
   "id":                    1,
   "dialect":               "oshindonga",
-  "model_id":              "anthropic/claude-opus-4-7",
+  "model_id":              "anthropic/claude-opus-5",
   "prompt_template_id":    "ongiini-eval-ow-v1-zeroshot",
   "translation":           "Wa lalapo!",
-  "timestamp":             "2026-06-04T12:34:56Z",
-  "model_version":         "20260415",
+  "timestamp":             "2026-09-22T12:34:56Z",
+  "model_version":         "20260724",
   "inference_compute":     {"hardware": "8x A100", "wall_time_ms": 421},
   "seed":                  42,
   "raw_response":          "Wa lalapo!"
@@ -147,7 +147,7 @@ readers can interpret the score.
 4. **Leaderboard update.** Your model is added to the public
    leaderboard with attribution and a link to the model card.
 5. **Co-authorship invitation.** For submissions before the
-   academic-paper cutoff (Q1 2027), submitting teams are offered
+   academic-paper cutoff (Q2 2027), submitting teams are offered
    co-authorship on the eventual publication.
 
 ---

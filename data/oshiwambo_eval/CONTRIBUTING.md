@@ -22,7 +22,7 @@ model card.
 What we do: validate the submission, compute chrF++ / BLEU /
 COMET-22, publish per-slice matrices, attribute on the leaderboard,
 invite co-authorship on the eventual paper if submitted before the
-Q1 2027 cutoff.
+Q2 2027 cutoff.
 
 ---
 
