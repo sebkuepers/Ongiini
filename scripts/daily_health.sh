@@ -7,7 +7,9 @@
 # number through the running webhook container.
 #
 # Install (crontab -e on the Spark, as the repo owner):
-#   15 7 * * * ONGIINI_OPERATOR_MSISDN=2648xxxxxxx bash ~/dev/Ongiini/scripts/daily_health.sh
+#   15 7 * * * bash ~/dev/Ongiini/scripts/daily_health.sh
+# The operator number is read from ONGIINI_OPERATOR_MSISDN in the
+# environment or, if unset, from the repo's .env.
 #
 # Why: the Tavily 402 outage of Aug–Sep 2026 failed every web search for
 # five weeks before anyone noticed. This check fails on day one.
@@ -17,6 +19,9 @@ set -uo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TRACE="${ONGIINI_TRACE_PATH:-$REPO_DIR/data/trace.jsonl}"
 CONTAINER="${ONGIINI_WEBHOOK_CONTAINER:-ongiini-webhook}"
+if [ -z "${ONGIINI_OPERATOR_MSISDN:-}" ] && [ -f "$REPO_DIR/.env" ]; then
+  ONGIINI_OPERATOR_MSISDN="$(grep '^ONGIINI_OPERATOR_MSISDN=' "$REPO_DIR/.env" | cut -d= -f2-)"
+fi
 
 report="$(python3 "$REPO_DIR/scripts/trace_query.py" health --window=24h --path "$TRACE")"
 status=$?
