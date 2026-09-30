@@ -5,6 +5,12 @@
 #   + --chat-template <gemma4 tool chat template>
 #       Fixes vLLM #41452 ("Gemma4 can't process images in tool message")
 #       — lets us pass tools= alongside image_url content again.
+#       Since 2026-09-30 the template is the repo copy in
+#       deploy/spark/tool_chat_template_gemma4.jinja (vLLM `main`, carries
+#       Google's 2026-07-15 fixes: thoughts preserved across tool calls
+#       within a turn, turn-tag balance, null handling, rejects string
+#       tool-call arguments). The image-bundled May-5 copy is the rollback:
+#       TEMPLATE_SRC=bundled bash deploy/spark/restart-vllm-with-mm-flags.sh
 #   + --limit-mm-per-prompt '{"image": 4, "audio": 0}'
 #       Required to enable image profiling and explicitly disables the
 #       audio tower allocation we don't use.
@@ -36,7 +42,16 @@ set -euo pipefail
 CONTAINER=gemma4-vllm
 IMAGE=vllm/vllm-openai:gemma4-0505-arm64-cu130
 MODEL_DIR=/home/nexus/models/gemma-4-26b-a4b-nvfp4
-TEMPLATE_PATH=/vllm-workspace/examples/tool_chat_template_gemma4.jinja
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE_SRC="${TEMPLATE_SRC:-repo}"
+TEMPLATE_MOUNT=()
+if [ "$TEMPLATE_SRC" = "bundled" ]; then
+  TEMPLATE_PATH=/vllm-workspace/examples/tool_chat_template_gemma4.jinja
+else
+  TEMPLATE_PATH=/templates/tool_chat_template_gemma4.jinja
+  TEMPLATE_MOUNT=(-v "$SCRIPT_DIR/tool_chat_template_gemma4.jinja:$TEMPLATE_PATH:ro")
+fi
+echo "==> chat template: $TEMPLATE_SRC ($TEMPLATE_PATH)"
 
 echo "==> stopping $CONTAINER"
 docker stop "$CONTAINER" 2>/dev/null || true
@@ -49,6 +64,7 @@ docker run -d \
   --gpus all --ipc host --shm-size 64gb \
   -p 8124:8000 \
   -v "$MODEL_DIR:/models/gemma4" \
+  "${TEMPLATE_MOUNT[@]}" \
   "$IMAGE" \
   --model /models/gemma4 \
   --served-model-name gemma-4-26b \

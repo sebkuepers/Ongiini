@@ -54,8 +54,14 @@ restart takes ~3-4 minutes for the cold model load; the script polls
 `/v1/models` and exits non-zero if vLLM doesn't come back.
 
 The flags it adds over the base command:
-- `--chat-template /vllm-workspace/examples/tool_chat_template_gemma4.jinja`
-  → fixes vLLM #41452 (tools + image_url in one call).
+- `--chat-template` pointing at `deploy/spark/tool_chat_template_gemma4.jinja`
+  (bind-mounted read-only from the script's directory)
+  → fixes vLLM #41452 (tools + image_url in one call). Since 2026-09-30 this
+  is the vLLM `main` copy of the template, which carries Google's 2026-07-15
+  fixes (thoughts kept across tool calls within a turn, turn-tag balance,
+  null handling, string tool-call arguments rejected). The model weights did
+  not change. To roll back to the image-bundled May-5 template:
+  `TEMPLATE_SRC=bundled bash deploy/spark/restart-vllm-with-mm-flags.sh`.
 - `--limit-mm-per-prompt '{"image":4,"audio":0}'`
   → required to enable image profiling; disables the unused audio tower.
 - `--mm-processor-kwargs '{"max_soft_tokens":280}'`
