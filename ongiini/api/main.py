@@ -35,6 +35,7 @@ from ..whatsapp import (
 )
 from .chat import build_router as build_chat_router
 from .learn import build_router as build_learn_router
+from .rate import build_router as build_rate_router
 from ..learning import db as learning_db
 
 # Single per-process Owela agent. Built lazily in lifespan so the
@@ -148,6 +149,14 @@ async def lifespan(app: FastAPI):
             # Don't bring the webhook down if the learn surface can't
             # warm up — same soft-fail discipline contributions uses.
             log.warning("learn endpoint warmup failed: %s", exc)
+
+    # ── ongiini.ai/rate/ — human rating of translations (before chat mount,
+    # same reason as learn: the chat sub-app catches /v1/* greedily) ──
+    try:
+        app.include_router(build_rate_router(), prefix="/v1/rate")
+        log.info("rate endpoint enabled at /v1/rate")
+    except Exception as exc:                                # noqa: BLE001
+        log.warning("rate endpoint setup failed: %s", exc)
 
     if settings.chat_enabled:
         chat_sub = FastAPI(title="Ongiini Chat", openapi_url=None)

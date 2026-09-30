@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f5efe4" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Rate translations — Ongiini</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd;
+      --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+      --terracotta: #c46c3f; --terracotta-deep: #9a4f2d;
+      --rule: #d1c8b9; --rule-faint: #ddd5c6;
+      --good: #2f7d4f; --warn: #a8761c; --bad: #b3432f;
+      --gutter: 20px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bone); color: var(--ink); }
+    body { font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 16px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column; }
+    .bar { position: sticky; top: 0; background: color-mix(in oklab, var(--bone) 88%, transparent);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--rule-faint); z-index: 2; }
+    .bar-inner { max-width: 640px; margin: 0 auto; padding: 0 var(--gutter); height: 56px; display: flex; align-items: center; justify-content: space-between; }
+    .mark { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--ink); }
+    .mark img { width: 26px; height: 26px; }
+    .mark span { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 18px; }
+    .mark .dot { color: var(--terracotta); font-style: normal; }
+    .count { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+    main { flex: 1; width: 100%; max-width: 640px; margin: 0 auto; padding: 28px var(--gutter) 40px; }
+    .eyebrow { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--terracotta-deep); margin: 0 0 12px; }
+    h1 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(34px, 8vw, 46px); line-height: 1.05; letter-spacing: -0.015em; margin: 0 0 16px; }
+    h1 em { font-style: italic; color: var(--terracotta-deep); }
+    p { margin: 0 0 14px; color: var(--ink-soft); }
+    .card { background: var(--bone-deep); border: 1px solid var(--rule-faint); border-radius: 16px; padding: 18px; margin: 18px 0; }
+    .label { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+    .src { font-size: 17px; color: var(--ink); margin: 0 0 16px; }
+    .tgt { font-family: 'Instrument Serif', serif; font-size: 26px; line-height: 1.25; color: var(--ink); margin: 0; }
+    .answers { display: grid; gap: 10px; margin-top: 18px; }
+    .answer { appearance: none; width: 100%; text-align: left; border: 1px solid var(--rule); background: var(--bone);
+      border-radius: 14px; padding: 14px 16px; font: inherit; color: var(--ink); cursor: pointer; display: flex; gap: 14px; align-items: center; min-height: 58px; }
+    .answer:hover { border-color: var(--terracotta); }
+    .answer:focus-visible { outline: 2px solid var(--terracotta); outline-offset: 2px; }
+    .answer[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; }
+    .icon { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; font-weight: 600; flex: none; color: #fff; }
+    .answer strong { display: block; font-weight: 600; }
+    .answer small { color: var(--ink-soft); font-size: 13.5px; }
+    .i-good { background: var(--good); } .i-warn { background: var(--warn); } .i-bad { background: var(--bad); } .i-skip { background: var(--ink-faint); }
+    textarea { width: 100%; min-height: 90px; margin-top: 8px; border: 1px solid var(--rule); border-radius: 12px; padding: 12px;
+      font: 17px/1.4 'Geist', ui-sans-serif, system-ui, sans-serif; background: var(--bone); color: var(--ink); resize: vertical; }
+    .btn { appearance: none; border: 0; border-radius: 999px; padding: 14px 22px; font: 500 15px 'Geist', ui-sans-serif, system-ui;
+      background: var(--terracotta-deep); color: #fff; cursor: pointer; display: inline-flex; gap: 10px; align-items: center; }
+    .btn.ghost { background: transparent; color: var(--terracotta-deep); border: 1px solid var(--terracotta); }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+    .steps { margin: 18px 0; padding: 0; list-style: none; }
+    .steps li { display: flex; gap: 14px; padding: 12px 0; border-top: 1px solid var(--rule-faint); color: var(--ink-soft); }
+    .steps li:first-child { border-top: 0; }
+    .steps .n { font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--terracotta); line-height: 1; width: 22px; flex: none; }
+    .fine { font-size: 13px; color: var(--ink-faint); }
+    .fine a { color: var(--ink-soft); }
+    .progress { height: 4px; background: var(--rule-faint); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+    .progress div { height: 100%; background: var(--terracotta); width: 0; transition: width .3s; }
+    .hidden { display: none !important; }
+    .err { color: var(--bad); }
+  </style>
+</head>
+<body>
+  <header class="bar"><div class="bar-inner">
+    <a class="mark" href="/"><img src="/assets/ongiini-icon-192-v2.png" alt="" /><span>Ongiini<span class="dot">.</span></span></a>
+    <span class="count" id="count"></span>
+  </div></header>
+
+  <main>
+    <!-- loading / invalid -->
+    <section id="v-msg"><p class="eyebrow">Rate translations</p><h1 id="msg-title">One moment…</h1><p id="msg-text"></p></section>
+
+    <!-- welcome -->
+    <section id="v-welcome" class="hidden">
+      <p class="eyebrow">Rate translations · <span id="w-dialect"></span></p>
+      <h1>Tangi unene, <em id="w-name"></em>.</h1>
+      <p>You'll see an English sentence and a translation into <strong id="w-dialect2"></strong>. Tell us, as a native speaker, whether the translation is right. Some translations were made by people, some by computers — judge each one on its own.</p>
+      <ul class="steps">
+        <li><span class="n">1</span><span><strong>Correct</strong> — the meaning is right and it sounds natural.</span></li>
+        <li><span class="n">2</span><span><strong>Small mistakes</strong> — the meaning is mostly right, but a word, spelling or phrasing is off.</span></li>
+        <li><span class="n">3</span><span><strong>Wrong</strong> — the meaning is wrong, something important is missing, or it isn't really <span class="w-d"></span>.</span></li>
+        <li><span class="n">4</span><span><strong>Can't judge</strong> — fine to use whenever you are unsure.</span></li>
+      </ul>
+      <p>If you know a better way to say it, you can write it down — that helps us a lot. A few translations are wrong on purpose, to check that the system works. Take breaks whenever you like; your progress is saved.</p>
+      <div class="row"><button class="btn" id="start">Start <span>→</span></button></div>
+      <p class="fine" style="margin-top:22px">We store your ratings and suggestions under the name on your invite, nothing else — no phone number. <a href="/privacy/">Privacy policy</a></p>
+    </section>
+
+    <!-- task -->
+    <section id="v-task" class="hidden">
+      <div class="progress"><div id="bar"></div></div>
+      <div class="card">
+        <div class="label">English</div>
+        <p class="src" id="t-en"></p>
+        <div class="label" id="t-dl"></div>
+        <p class="tgt" id="t-text"></p>
+      </div>
+      <p style="margin:0;color:var(--ink)"><strong>Is this a correct, natural translation?</strong></p>
+      <div class="answers" role="group" aria-label="Your rating">
+        <button class="answer" data-v="correct"><span class="icon i-good">✓</span><span><strong>Correct</strong><small>Right meaning, sounds natural</small></span></button>
+        <button class="answer" data-v="minor"><span class="icon i-warn">~</span><span><strong>Small mistakes</strong><small>Mostly right, something is off</small></span></button>
+        <button class="answer" data-v="wrong"><span class="icon i-bad">✗</span><span><strong>Wrong</strong><small>Wrong meaning or not really this language</small></span></button>
+        <button class="answer" data-v="cant_judge"><span class="icon i-skip">?</span><span><strong>Can't judge</strong><small>Skip this one</small></span></button>
+      </div>
+      <div id="suggest" class="hidden" style="margin-top:16px">
+        <div class="label">How would you say it? (optional)</div>
+        <textarea id="s-text" placeholder="Write the better translation here"></textarea>
+        <div class="row"><button class="btn" id="s-send">Next <span>→</span></button></div>
+      </div>
+      <p class="err" id="t-err"></p>
+    </section>
+
+    <!-- break / done -->
+    <section id="v-break" class="hidden">
+      <p class="eyebrow">Well done</p>
+      <h1 id="b-title"></h1>
+      <p id="b-text"></p>
+      <div class="row" id="b-actions"><button class="btn" id="b-more">Do ten more <span>→</span></button></div>
+    </section>
+  </main>
+
+<script>
+(function () {
+  var API = location.hostname === "localhost" ? "http://localhost:8766/v1/rate" : "https://api.ongiini.ai/v1/rate";
+  var NAMES = { oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama" };
+  var token = null, task = null, verdict = null, shownAt = 0, session = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  function show(id) { ["v-msg", "v-welcome", "v-task", "v-break"].forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); }
+  function msg(title, text) { $("msg-title").textContent = title; $("msg-text").textContent = text || ""; show("v-msg"); }
+  function count(n) { $("count").textContent = n + " rated"; }
+
+  // Token: from #t=… once, then localStorage; strip it from the address bar.
+  var m = location.hash.match(/t=([A-Za-z0-9_\-]+)/);
+  try { if (m) { localStorage.setItem("ongiini.rate.token", m[1]); } token = localStorage.getItem("ongiini.rate.token"); }
+  catch (e) { token = m ? m[1] : null; }
+  var go = /[?&]go\b/.test(location.search);
+  if (m) history.replaceState(null, "", location.pathname + location.search);
+  if (!token) { msg("This page needs an invite.", "Please open the personal link we sent you on WhatsApp."); return; }
+
+  function post(path, body) {
+    return fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { if (r.status === 401) throw new Error("invite"); if (!r.ok) throw new Error("server"); return r.json(); });
+  }
+  function render(t) {
+    task = t; verdict = null; shownAt = Date.now();
+    document.querySelectorAll(".answer").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+    $("suggest").classList.add("hidden"); $("s-text").value = ""; $("t-err").textContent = "";
+    if (!t) { $("b-title").textContent = "That's everything for now."; $("b-text").textContent = "Tangi unene! We'll let you know when there are new sentences to rate."; $("b-actions").classList.add("hidden"); show("v-break"); return; }
+    $("t-en").textContent = t.english; $("t-text").textContent = t.text;
+    $("t-dl").textContent = NAMES[t.dialect] || t.dialect;
+    $("bar").style.width = (session % 10) * 10 + "%";
+    show("v-task"); window.scrollTo(0, 0);
+  }
+  function send(v, suggestion) {
+    document.querySelectorAll(".answer, #s-send").forEach(function (b) { b.disabled = true; });
+    post("/answer", { token: token, task_id: task.task_id, verdict: v, suggestion: suggestion || null, duration_ms: Date.now() - shownAt })
+      .then(function (r) {
+        session += 1; count(r.progress.done);
+        document.querySelectorAll(".answer, #s-send").forEach(function (b) { b.disabled = false; });
+        if (session % 10 === 0 && r.task) {
+          $("b-title").textContent = session + " sentences — tangi unene!"; $("b-text").textContent = "Take a break, or carry on. Your progress is saved.";
+          $("b-actions").classList.remove("hidden"); show("v-break"); task = r.task; return;
+        }
+        render(r.task);
+      })
+      .catch(function () { document.querySelectorAll(".answer, #s-send").forEach(function (b) { b.disabled = false; });
+        $("t-err").textContent = "That didn't save — please check your connection and try again."; });
+  }
+  document.querySelectorAll(".answer").forEach(function (b) {
+    b.addEventListener("click", function () {
+      verdict = b.dataset.v;
+      document.querySelectorAll(".answer").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      if (verdict === "minor" || verdict === "wrong") { $("suggest").classList.remove("hidden"); $("s-text").focus(); }
+      else send(verdict);
+    });
+  });
+  $("s-send").addEventListener("click", function () { if (verdict) send(verdict, $("s-text").value); });
+  $("b-more").addEventListener("click", function () { render(task); });
+  $("start").addEventListener("click", function () { try { localStorage.setItem("ongiini.rate.welcomed", "1"); } catch (e) {} render(task); });
+  document.addEventListener("keydown", function (e) {
+    if ($("v-task").classList.contains("hidden") || e.target.tagName === "TEXTAREA") return;
+    var k = { "1": "correct", "2": "minor", "3": "wrong", "4": "cant_judge" }[e.key];
+    if (k) document.querySelector('.answer[data-v="' + k + '"]').click();
+  });
+
+  post("/session", { token: token }).then(function (s) {
+    var d = s.dialects.map(function (x) { return NAMES[x] || x; }).join(" and ");
+    $("w-name").textContent = s.label; $("w-dialect").textContent = d; $("w-dialect2").textContent = d;
+    document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
+    count(s.progress.done); task = s.task;
+    var welcomed = false; try { welcomed = localStorage.getItem("ongiini.rate.welcomed") === "1"; } catch (e) {}
+    if ((welcomed && s.progress.done > 0) || go) render(task); else show("v-welcome");
+  }).catch(function (e) {
+    if (e.message === "invite") { try { localStorage.removeItem("ongiini.rate.token"); } catch (x) {}
+      msg("This invite link doesn't work.", "It may have been replaced. Please ask us for a new link on WhatsApp."); }
+    else msg("We can't reach the server right now.", "Please try again in a few minutes.");
+  });
+})();
+</script>
+</body>
+</html>

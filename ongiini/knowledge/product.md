@@ -503,7 +503,7 @@ An open yardstick is the first step towards AI that really speaks Oshiwambo — 
 
 ## Privacy policy (full text)
 
-How Ongiini handles your data — last updated 2 June 2026
+How Ongiini handles your data — last updated 30 September 2026
 
 **The short version.** Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).
 
@@ -535,7 +535,7 @@ When you message the Ongiini WhatsApp number, we receive your phone number (as y
 
 #### Short-term conversation memory
 
-We keep approximately the last 50 turns of your conversation (each turn = one message from you plus one reply) in a local file on the computer that runs Ongiini, identified by your phone number. Once the stored history grows beyond about 70 entries, the oldest entries are condensed into a single short summary line ("Earlier in this conversation: …") and the most recent ~40 turns are kept verbatim. Before any message is written to disk, we automatically scrub obvious personal data patterns from the text (email addresses, IBANs, credit-card numbers and Namibian-format ID numbers are replaced with placeholders such as `[REDACTED:email]`).
+We keep approximately the last 50 turns of your conversation (each turn = one message from you plus one reply) in a local file on the computer that runs Ongiini, identified by your phone number. Once the stored history grows beyond about 70 entries, the oldest entries are condensed into a single short summary line ("Earlier in this conversation: …") and the most recent ~40 turns are kept verbatim. Before any message is written to disk, we automatically scrub obvious personal data patterns from the text (email addresses, mobile phone numbers, IBANs, credit-card numbers and Namibian-format ID numbers are replaced with placeholders such as `[REDACTED:email]`).
 
 **Purpose:** to allow the assistant to follow a conversation across messages (so you don't have to repeat context).
 
@@ -614,6 +614,18 @@ The learning surface at [learn.ongiini.ai](https://learn.ongiini.ai) is a protot
 **Legal basis.** Art. 6 (1) (b) GDPR — performance of the service you requested by starting an intake on the learning surface. Where you provide the optional WhatsApp number for the magic-link upgrade, that is processed under Art. 6 (1) (a) GDPR — your explicit consent.
 
 **What is NOT stored.** No source IP beyond rate-limiting (same posture as the chat surface). No conversation excerpts from the WhatsApp / chat channels are copied across unless we say so explicitly here; for the current prototype, the learning surface does not read from mem0 or short-term WhatsApp memory.
+
+#### Translation ratings (ongiini.ai/rate)
+
+Native speakers we invite personally can help check translations for our Oshiwambo research at [ongiini.ai/rate](/rate/). You see an English sentence and a translation, and say whether it is correct; you can suggest a better translation.
+
+**What's stored.** The name or nickname on your invite, the dialect(s) you rate, each rating you give, any better translation you type (automatically scrubbed of personal-data patterns before saving), and how long each rating took. Your invite link contains a random code; we store only a one-way hash of it. We do not store your phone number or IP address for this surface.
+
+**How long.** For as long as the benchmark research runs. Ratings are published only in aggregate — never under your name — unless you ask to be credited by name. Ask us on WhatsApp or by email and we delete your ratings and invite.
+
+**Purpose.** To check the quality of the reference translations and of machine translations for the Ongiini-Eval-OW benchmark (see [ongiini.ai/research](/research/)), and to improve Ongiini's Oshiwambo support.
+
+**Legal basis.** Art. 6 (1) (a) GDPR — your consent, given by opening your invite and rating — and Art. 89 GDPR / § 27 BDSG for the research use. You can withdraw at any time by simply stopping; ask us to delete what you have already submitted.
 
 ### 3. Who else sees your data (processors and third parties)
 
@@ -720,7 +732,7 @@ Conversation data is stored on a single computer operated by us, in Germany, beh
 
 If we change this policy materially, we will update the date at the top and, for substantial changes (e.g. new categories of processing, new processors, change of controller upon foundation registration), notify users via the WhatsApp service or on the website.
 
-Last updated: 2 June 2026. Effective immediately.
+Last updated: 30 September 2026. Effective immediately.
 
 ## Terms of service (full text)
 
