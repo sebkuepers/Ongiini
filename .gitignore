@@ -19,5 +19,7 @@ node_modules/
 # is formally established. Deployed directly to Cloudflare Pages via wrangler.
 foundation/
 
-# Unreleased eval references (blind split must never be public)
+# Unreleased eval references (blind split must never be public) and any
+# file derived from production user messages (mining candidates etc.)
 data/private/
+data/*candidates*

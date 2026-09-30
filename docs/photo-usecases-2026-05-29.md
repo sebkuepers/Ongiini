@@ -60,7 +60,7 @@ Not "what is X" but concrete tasks:
 - Course outlines with "make me exam notes" / "develop study schedule"
 - WhatsApp / online quiz photos — "which letter is right"
 
-**Power-user pattern.** One user (`...[REDACTED]`) sent **10 photos of a
+**Power-user pattern.** One user sent **10 photos of a
 single Cambridge mathematics paper** in one session and walked through
 every question one-by-one with Ongiini as tutor.
 
@@ -84,9 +84,9 @@ Direct + spillover from "misc" probably ~17% total:
 
 - Hair-bundle seller with pricing lists (Vietnamese raw hair)
 - Food / braai photos for flyer + WhatsApp status copy
-- Crochet products for branding feedback [REDACTED] — high-quality
-  product photography)
-- Restaurant menus ("[REDACTED]" with traditional + modern food)
+- Crochet products for branding feedback (high-quality product
+  photography)
+- Restaurant menus (traditional + modern food)
 - Sneaker / perfume seller doing "in stock" posts
 - Logo design feedback (driving school, podcast)
 
@@ -95,10 +95,10 @@ I can be your creative director" — exactly the right honest framing.
 
 ### 4. Real-world field utility — small in count, high in value
 
-- Farmer: "[REDACTED] — can I spray it on tomatoes that I
-  transplanted on 24 Feb 2026?" → bot reads label, gives
+- Farmer: photo of a fungicide label, asking whether it is safe on
+  recently transplanted tomatoes → bot reads label, gives
   application-rate guidance
-- Patient: "Pain in my foot after a long walk" → bot recommends RICE
+- Patient: foot pain after a long walk → bot recommends RICE
   method + see a doctor
 - Construction company: tax + BIPA + Social Security certs uploaded
   one at a time → bot helps assemble the tender-readiness story

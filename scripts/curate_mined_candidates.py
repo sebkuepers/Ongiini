@@ -22,12 +22,13 @@ Modifies data/eval_v2_real_candidates.tsv in place, filling
 from __future__ import annotations
 
 import csv
+import json
 import re
 import sys
 from collections import Counter
 from pathlib import Path
 
-TSV = Path("/Users/sebkuepers/dev/Ongiini/data/eval_v2_real_candidates.tsv")
+TSV = Path(__file__).resolve().parents[1] / "data/private/eval_v2_real_candidates.tsv"
 
 
 # ── PASS 1: hard-reject regex patterns ─────────────────────────────
@@ -71,19 +72,10 @@ HARD_REJECT_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bfuck you\b", re.I), "abusive"),
     # Garbled voice
     (re.compile(r"my the number my the number"), "garbled voice"),
-    (re.compile(r"[REDACTED]"), "garbled voice"),
-    (re.compile(r"^\[voice note\] Mechanical feet"), "garbled voice"),
-    (re.compile(r"\b[REDACTED]\b"), "abusive voice"),
-    # Specific named research / mine / circuit
-    (re.compile(r"\b[REDACTED]\b", re.I), "very specific research"),
-    (re.compile(r"\b[REDACTED]\b", re.I), "specific circuit"),
-    (re.compile(r"\b[REDACTED]\b", re.I), "specific person"),
-    (re.compile(r"\b[REDACTED]\b", re.I), "specific person"),
-    (re.compile(r"\b[REDACTED]\b"), "Oshiwambo content"),
-    (re.compile(r"\bP\.D\.K\b"), "specific street"),
-    (re.compile(r"\b[REDACTED]\b", re.I), "specific neighbourhood"),
-    (re.compile(r"\b[REDACTED]\b", re.I), "specific street"),
-    (re.compile(r"\b[REDACTED]\b", re.I), "specific mine"),
+    # Entity-specific patterns (verbatim fragments of user messages:
+    # names, streets, employers) live in the gitignored
+    # data/private/curation_denylist.json and are appended below —
+    # they must never be committed.
     # Truncation
     (re.compile(r"\.{3,}\s*$"), "truncated (ellipsis)"),
     # Non-English-dominant items
@@ -91,6 +83,14 @@ HARD_REJECT_PATTERNS: list[tuple[re.Pattern, str]] = [
                 r"Shama aike wa penge|okwa landa|Omusamane okwa)\b", re.I),
      "Oshiwambo-dominant"),
 ]
+
+
+_DENYLIST = Path(__file__).resolve().parents[1] / "data/private/curation_denylist.json"
+if _DENYLIST.exists():
+    HARD_REJECT_PATTERNS += [
+        (re.compile(e["pattern"], re.I if e["ignorecase"] else 0), e["reason"])
+        for e in json.loads(_DENYLIST.read_text())
+    ]
 
 
 # ── PASS 2: explicit per-ID manual rejections ──────────────────────
@@ -103,12 +103,12 @@ MANUAL_REJECT: dict[int, str] = {
     # Multi-line list/CV content (1-newline survivors that are still listy
     # or have embedded contact info I can read but regex can't classify)
     3:   "multi-line + emoji-only ack",
-    18:  "CV with specific employer ([REDACTED])",
-    25:  "specific employer ([REDACTED])",
+    18:  "CV with specific employer (named employer + town)",
+    25:  "specific employer (named business)",
     26:  "multi-line + asks about specific organization session",
     76:  "multi-line CV scaffolding",
     89:  "multi-line meta question",
-    124: "specific employer ([REDACTED])",
+    124: "specific employer (named business)",
     142: "feels like distress signal, deserves human reply not eval item",
     145: "multi-line presentation prep",
     150: "multi-line birthday-toast triviality",
@@ -118,14 +118,14 @@ MANUAL_REJECT: dict[int, str] = {
     187: "multi-line CV scaffold",
     195: "multi-line + location info",
     196: "multi-line + specific course/Nust combo",
-    197: "multi-line + specific college (Sunshine)",
-    201: "specific NGO ([REDACTED]) tied to user role",
-    202: "specific employer ([REDACTED])",
+    197: "multi-line + specific college (named college)",
+    201: "specific NGO (named) tied to user role",
+    202: "specific employer (named employer + town)",
     207: "multi-line list",
-    219: "specific institute ([REDACTED])",
+    219: "specific institute (named)",
     226: "list-style",
     233: "multi-line + relates to specific personal call",
-    245: "specific training org ([REDACTED]) tied to user CV",
+    245: "specific training org (named) tied to user CV",
     252: "multi-line trivial",
     265: "multi-line CV list",
     272: "list-style with mother-tongue Rukwangali",
@@ -139,8 +139,8 @@ MANUAL_REJECT: dict[int, str] = {
     94:  "contraceptive + pregnancy uncertainty",
     138: "sexual content involving a minor",
     # Garbled voice notes that survived regex
-    16:  "garbled voice ([REDACTED])",
-    87:  "garbled voice ([REDACTED])",
+    16:  "garbled voice ",
+    87:  "garbled voice ",
     132: "voice note: cryptic, unclear meaning",
     # Items that read fine but reference very specific things
     44:  "user admits to theft (real but might be flagged sensitive)",

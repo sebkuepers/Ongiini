@@ -49,17 +49,16 @@ The single biggest voice-driver isn't a topic — it's an emotional
 register. When users get vulnerable, frustrated, or want to express
 something nuanced about a relationship, they switch to voice.
 
-**The clearest pattern**: one user (`...[REDACTED]`) sent seven voice notes
+**The clearest pattern**: one user sent seven voice notes
 in a row, all between 250–800 words, working through a difficult moment
 with his girlfriend (he had been away in the field, lost contact, was
 trying to apologise). Each voice note got longer as he poured out more
 detail — typing this out would have taken him 20+ minutes per turn.
 Voice made it possible.
 
-Sample transcripts (truncated):
-- *"[REDACTED]"*
-- *"[REDACTED]"*
-- *"[REDACTED]"*
+Typical asks (paraphrased — no verbatim user content): drafting a
+message to a partner after a long silence, an apology letter to an ex
+in Afrikaans, a follow-up text explaining a difficult conversation.
 
 Implication: **voice is the emotional pressure-release channel**.
 People who would never type 200 words about their relationship
@@ -74,9 +73,8 @@ painful; speaking them is effortless.
 **The problem**: Whisper doesn't handle Bantu / Khoisan languages
 well. The transcripts come out as either:
 - Plausible-looking Latin gibberish that resembles Oshiwambo phonemes
-  (*"[REDACTED]"*)
 - Or Whisper guessing the wrong language entirely and outputting
-  Icelandic / Korean / Arabic strings (*"[REDACTED]"*)
+  Icelandic / Korean / Arabic strings
 
 Either way, the bot reads "I don't understand, please use English or
 Afrikaans" and the user's intent is lost.
@@ -95,9 +93,10 @@ multi-clause academic questions, or describing what they did in the
 lab. It's the channel for "I have a complicated thing to set up before
 I get to my actual question."
 
-Sample:
-- *"[REDACTED]"* (60 words)
-- *"[REDACTED]"* (29 words)
+Typical asks (paraphrased): an agriculture student describing a
+practical livestock project before asking how to write the report
+(~60 words); a statistics question about reading Z tables at a given
+confidence level (~30 words).
 
 Typing this with one thumb on a phone keyboard is much slower than
 speaking it. The longer + more contextual the academic ask, the more
@@ -108,9 +107,8 @@ words/voice avg)
 
 Two users dominate this category, but they generate **very long**
 voice notes — songs, prayer chants, requests for prayer-service
-structuring. One user (`...[REDACTED]` again) recorded a 478-character
-worship chant ("*Lord, we declare your victory, we declare your
-victory...*") to ask the bot to help structure a Sunday service.
+structuring. One user recorded a ~480-character worship chant to ask the bot
+to help structure a Sunday service.
 
 Implication: **religious/spiritual content seems uniquely voice-
 native**. Songs, declarations, chants need to be heard to be felt.
@@ -120,10 +118,9 @@ of users but high-intensity engagement.
 ### 5. Frustration → voice (4.2%, all very short)
 
 When users are angry, they swear in voice. Three different users had
-voice notes that the bot needed to apologise to, including:
-- *"No, no, no, no. Fuck you for saying [REDACTED] sells my data. Fuck
-  you, okay? Fuck you."*
-- *"[REDACTED]"*
+voice notes that the bot needed to apologise to — angry pushback on a
+data-privacy claim the bot had made, and a complaint about slow
+responses compared with another assistant.
 
 Different from typed complaints — voice complaints land harder, are
 more raw, less filtered.

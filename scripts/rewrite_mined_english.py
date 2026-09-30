@@ -15,7 +15,7 @@ Each rewrite preserves:
 
 Two IDs are REMOVED outright because regex missed them (curly-quote
 or comma-separated name patterns):
-  68  — personal name "[REDACTED]"
+  68  — personal name
   229 — specific kindergarten "Smiley's" (curly apostrophe)
 
 Modifies data/eval_v2_real_candidates.tsv in place:
@@ -28,7 +28,7 @@ import csv
 import sys
 from pathlib import Path
 
-TSV = Path("/Users/sebkuepers/dev/Ongiini/data/eval_v2_real_candidates.tsv")
+TSV = Path(__file__).resolve().parents[1] / "data/private/eval_v2_real_candidates.tsv"
 
 
 # id → rewritten EN (or "" to mark for removal)
