@@ -1,5 +1,10 @@
 """Held-out benchmark for the router classifier.
 
+NOTE (2026-09-30): ``main()`` below still scores the old three-word
+PROMPT_A_LONG, not the production JSON classifier. For the production
+number use ``router_depth_eval.py``, which runs ``GemmaClassifier`` on
+the CASES defined here plus the casual-turn depth cases.
+
 The dev set in router_eval.py was used to iterate on the prompt; running
 against it again only confirms overfitting. This is a SEPARATE, fresh
 test set written without looking at the dev cases, drawing from
