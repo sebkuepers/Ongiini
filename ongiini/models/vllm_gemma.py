@@ -230,6 +230,16 @@ class VLLMGemmaModel(Model):
 
     async def complete(self, req: ModelRequest) -> ModelResponse:
         thinking_on = req.thinking != THINKING_OFF
+        # vLLM 0.20 + gemma4 parser: with thinking on AND a named
+        # tool_choice, the whole output can land in the reasoning channel;
+        # content is then None and the tool-call parser dies on
+        # `assert content is not None` (HTTP 500 — found in the 2026-09-30
+        # eval). A forced call only has to pick arguments, so it runs
+        # without thinking; the compose call after it still thinks.
+        forced_call = bool(req.tools) and isinstance(req.tool_choice, dict)
+        thinking_suppressed = thinking_on and forced_call
+        if thinking_suppressed:
+            thinking_on = False
         budget = req.thinking_budget if thinking_on else None
         if budget is not None and req.thinking == THINKING_LOW:
             budget = min(budget, _LOW_THINKING_MAX_BUDGET)
@@ -240,7 +250,7 @@ class VLLMGemmaModel(Model):
             chat_template_kwargs["reasoning_budget"] = budget
 
         messages = req.messages
-        if req.thinking == THINKING_LOW:
+        if req.thinking == THINKING_LOW and thinking_on:
             messages = _with_low_thinking_hint(messages)
 
         kwargs: dict[str, Any] = {
@@ -336,6 +346,8 @@ class VLLMGemmaModel(Model):
         finish_reason = getattr(choice, "finish_reason", "") if choice else ""
 
         attrs: dict[str, Any] = {}
+        if thinking_suppressed:
+            attrs["thinking_suppressed_for_forced_tool"] = True
         if leak_count_total > 0:
             # v1.4 audit: scrub detected leaked Gemma 4 channel tokens.
             # Surface the count so TracingHook can record it and the

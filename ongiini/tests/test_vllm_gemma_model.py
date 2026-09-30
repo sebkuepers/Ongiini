@@ -495,3 +495,27 @@ def test_detect_truncated_thinking_leak_strong_evidence_without_truncation():
     assert _detect_truncated_thinking_leak(
         very_strong, finish_reason="stop", enable_thinking=False,
     ) is True
+
+
+@pytest.mark.asyncio
+async def test_thinking_is_suppressed_on_a_forced_tool_call():
+    """vLLM 0.20's gemma4 parser 500s (assert content is not None) when a
+    named tool_choice meets thinking and all output lands in reasoning."""
+    response = _make_openai_response(content="", tool_calls=[{
+        "id": "c1", "type": "function",
+        "function": {"name": "web_search", "arguments": '{"query": "x"}'},
+    }], finish_reason="tool_calls")
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client, max_tokens=450)
+    req = ModelRequest(
+        messages=[{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}],
+        tools=[{"type": "function", "function": {"name": "web_search"}}],
+        tool_choice={"type": "function", "function": {"name": "web_search"}},
+        thinking="low", thinking_budget=256, max_tokens=450,
+    )
+    out = await model.complete(req)
+    kw = client.chat.completions.create.call_args.kwargs
+    assert kw["extra_body"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert kw["max_tokens"] == 450
+    assert "Reasoning effort" not in kw["messages"][0]["content"]
+    assert out.attrs["thinking_suppressed_for_forced_tool"] is True
