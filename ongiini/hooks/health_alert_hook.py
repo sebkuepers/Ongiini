@@ -32,8 +32,9 @@ Sender = Callable[[str, str], Awaitable[object]]
 
 async def _default_sender(to: str, text: str) -> object:
     # Imported lazily so the hook can be unit-tested without WhatsApp config.
-    from ..whatsapp import send_text
-    return await send_text(to, text)
+    # Template first (delivered outside the 24h window), text as fallback.
+    from ..ops_alert import send_ops_alert
+    return await send_ops_alert(to, text)
 
 
 class HealthAlertHook:

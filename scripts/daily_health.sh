@@ -38,9 +38,9 @@ if [ -n "${ONGIINI_OPERATOR_MSISDN:-}" ]; then
   docker exec -i -e TO="$ONGIINI_OPERATOR_MSISDN" "$CONTAINER" python3 - <<PY || logger -t ongiini-health "alert delivery failed"
 import asyncio, os, sys
 sys.path.insert(0, "/app")
-from ongiini.whatsapp import send_text
-text = "Ongiini AI daily health check found problems (last 24 h):\n" + """$breaches"""
-asyncio.run(send_text(os.environ["TO"], text))
+from ongiini.ops_alert import send_ops_alert
+text = "daily health check found problems (last 24 h):\n" + """$breaches"""
+print(asyncio.run(send_ops_alert(os.environ["TO"], text)))
 PY
 fi
 exit 1

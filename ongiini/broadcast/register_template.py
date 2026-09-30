@@ -148,6 +148,38 @@ TEMPLATES: dict[str, dict] = {
         ],
     },
 
+    # ── D: UTILITY — operator service alert ───────────────────────
+    # Sent ONLY to the operator's own number (ONGIINI_OPERATOR_MSISDN)
+    # by ongiini.ops_alert when a capability goes down or the daily
+    # health check breaches. A template, because free text is only
+    # delivered inside the 24h customer-service window.
+    "ongiini_ops_alert": {
+        "category": "UTILITY",
+        "language": "en",
+        "components": [
+            {
+                "type": "HEADER",
+                "format": "TEXT",
+                "text": "Ongiini AI service alert",
+            },
+            {
+                "type": "BODY",
+                "text": (
+                    "Automated operator notice for your Ongiini AI "
+                    "service: {{1}}\n\n"
+                    "Check the Spark host logs for details."
+                ),
+                "example": {
+                    "body_text": [[
+                        "tool web_search failed repeatedly (provider "
+                        "returned HTTP 402) and was switched off for 15 "
+                        "minutes; search turns answer in degraded mode"
+                    ]],
+                },
+            },
+        ],
+    },
+
     # ── C: UTILITY — weekly account-status + usage suggestion ─────
     # Sent weekly. {{1}} is the remaining-token count; {{2}} is a
     # short suggestion for what to use the tokens on (generated per
