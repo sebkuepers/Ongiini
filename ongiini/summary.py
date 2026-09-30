@@ -99,6 +99,35 @@ async def summarize_turns(
     return (resp.content or "").strip()
 
 
+async def load_history_folded(
+    msisdn: str,
+    *,
+    load: Any,
+    save: Any,
+) -> list[dict[str, Any]]:
+    """Load the user's history and, if it crossed the threshold, fold it
+    AND persist the folded version.
+
+    Persisting matters: before 2026-09-30 the folded history only went to
+    the model, the stored file stayed long, and every later turn folded
+    again — one extra model call per turn on long conversations, and a
+    new summary at the head of the history each time, so vLLM's prefix
+    cache never covered the history. Saved, the history grows from
+    ``memory_keep_recent`` back to the threshold between folds and stays
+    byte-stable (cacheable) in between.
+
+    Call under the per-user lock.
+    """
+    history = load(msisdn)
+    folded = await maybe_summarize(history, msisdn=msisdn)
+    if folded is not history:
+        try:
+            save(msisdn, folded)
+        except Exception as exc:                     # noqa: BLE001 — persistence is soft
+            log.warning("saving folded history failed for %s: %s", msisdn, exc)
+    return folded
+
+
 async def maybe_summarize(
     history: list[dict[str, Any]],
     msisdn: str | None = None,

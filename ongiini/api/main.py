@@ -23,7 +23,7 @@ from ..memory import SessionStore, long_term as mem, short_term as memory
 from ..runtime import build_shared_components, build_whatsapp_runtime
 from ..stats import analyses as stats_analyses
 from ..stats.api import router as stats_router
-from ..summary import maybe_summarize
+from ..summary import load_history_folded
 from ..delivery_log import record_status as record_delivery_status
 from ..whatsapp import (
     download_media,
@@ -693,8 +693,7 @@ async def handle_image_message(
     ]
 
     async with memory.lock_for(msisdn):
-        history = memory.load(msisdn)
-        history = await maybe_summarize(history, msisdn=msisdn)
+        history = await load_history_folded(msisdn, load=memory.load, save=memory.save)
 
         # msg_id="" because main.py already fired mark_as_read on webhook
         # receipt — the executor's transport.acknowledge would no-op.
@@ -843,8 +842,7 @@ async def handle_message(
     # messages from the same number can't race and clobber each other's
     # memory file. Different users run concurrently.
     async with memory.lock_for(msisdn):
-        history = memory.load(msisdn)
-        history = await maybe_summarize(history, msisdn=msisdn)
+        history = await load_history_folded(msisdn, load=memory.load, save=memory.save)
 
         # ``storage_text`` carries the persistence-side label (e.g.
         # "[voice note] <transcript>" for audio turns). The model sees
