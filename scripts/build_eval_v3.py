@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Extend the frozen 423-item v2 set to the 600-item v1.0 composition.
 
-Append-only: every v2 row keeps its id, fields and blind-split flag, so
+Append-only for items: every v2 row keeps its id and fields, so
 references already delivered for ids 1..423 stay valid. The 177 new
 items come from three v3 seed files and get ids 424..600, grouped by
-provenance. 20% of the new items join the blind split (seeded), which
-keeps the blind share of the whole set at ~20%.
+provenance.
+
+The blind split follows the concept paper (§3): 30% of all 600 items
+(180), stratified by primary phenomenon × length bucket × domain,
+seed 42. It replaces the v0.1 flags (84 of 423, unstratified) — safe
+because no references or scores had been published.
 
 Provenance labels follow the v1.0 schema: v2's `real_mined` becomes
 `mined_paraphrased` (the English was always a paraphrase).
@@ -54,13 +58,72 @@ PHENOMENA = [
 TAG_FLOOR = 30
 
 
+def stratified_blind(rows: list[dict], share: float, seed: int) -> set[str]:
+    """Pick round(share * n) ids so every stratum (primary phenomenon ×
+    length × domain) is represented in proportion. Quotas use the
+    largest-remainder method; ties and within-stratum picks are seeded."""
+    rng = random.Random(seed)
+    strata: dict[tuple, list[str]] = {}
+    for r in rows:
+        primary = r["phenomenon_tags"].split(";")[0] or "none"
+        strata.setdefault((primary, r["length_bucket"], r["domain"]), []).append(r["id"])
+    target = round(share * len(rows))
+    keys = sorted(strata)
+    quota = {k: int(share * len(strata[k])) for k in keys}
+    rest = sorted(keys, key=lambda k: (-(share * len(strata[k]) - quota[k]), rng.random()))
+    for k in rest[: target - sum(quota.values())]:
+        quota[k] += 1
+    picked: set[str] = set()
+    for k in keys:
+        ids = sorted(strata[k], key=int)
+        rng.shuffle(ids)
+        picked.update(ids[: quota[k]])
+    return balance_tags(rows, picked, share, rng)
+
+
+def balance_tags(rows: list[dict], picked: set[str], share: float,
+                 rng: random.Random) -> set[str]:
+    """Stratifying on the primary tag under-samples secondary tags. Swap
+    a dev item carrying a short tag for a blind item of the same length
+    bucket until every tag has at least floor(share * n_tag) blind items,
+    without pushing any other tag below its floor."""
+    tags = {r["id"]: [t for t in r["phenomenon_tags"].split(";") if t] for r in rows}
+    length = {r["id"]: r["length_bucket"] for r in rows}
+    total = Counter(t for ts in tags.values() for t in ts)
+    floor = {t: int(share * n) for t, n in total.items()}
+    order = sorted(tags, key=int)
+    rng.shuffle(order)
+    for _ in range(200):
+        count = Counter(t for i in picked for t in tags[i])
+        short = [t for t in sorted(floor) if count[t] < floor[t]]
+        if not short:
+            break
+        t = short[0]
+        swap = None
+        for add in (i for i in order if i not in picked and t in tags[i]):
+            for drop in (i for i in order if i in picked and length[i] == length[add]
+                         and t not in tags[i]):
+                after = count.copy()
+                after.update(tags[add])
+                after.subtract(tags[drop])
+                if all(after[x] >= floor[x] or after[x] >= count[x] for x in floor):
+                    swap = (add, drop)
+                    break
+            if swap:
+                break
+        if not swap:
+            break
+        picked = (picked - {swap[1]}) | {swap[0]}
+    return picked
+
+
 def norm(text: str) -> str:
     return re.sub(r"\W+", " ", text.lower()).strip()
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--blind-split-pct", type=float, default=20.0)
+    ap.add_argument("--blind-split-pct", type=float, default=30.0)
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args(argv)
 
@@ -82,13 +145,10 @@ def main(argv: list[str] | None = None) -> int:
         it["length_bucket"] = length_bucket(it["english"])
         it["phenomenon_tags"] = ";".join(it["phenomenon_tags"])
 
-    rng = random.Random(args.seed)
-    n_blind = round(len(new) * args.blind_split_pct / 100)
-    blind = set(rng.sample([it["id"] for it in new], n_blind))
-    for it in new:
-        it["in_blind_split"] = "true" if it["id"] in blind else "false"
-
     rows = old + new
+    blind = stratified_blind(rows, args.blind_split_pct / 100, args.seed)
+    for r in rows:
+        r["in_blind_split"] = "true" if r["id"] in blind else "false"
     failures = []
     seen = Counter(norm(r["english"]) for r in rows)
     dupes = [k for k, v in seen.items() if v > 1]
@@ -136,6 +196,11 @@ def main(argv: list[str] | None = None) -> int:
     print("phenomena:", {t: tags[t] for t in PHENOMENA}, file=sys.stderr)
     b = sum(r["in_blind_split"] == "true" for r in rows)
     print(f"blind: {b} ({b / n:.1%})", file=sys.stderr)
+    bt = Counter(t for r in rows if r["in_blind_split"] == "true"
+                 for t in r["phenomenon_tags"].split(";") if t)
+    print("blind per phenomenon:", {t: bt[t] for t in PHENOMENA}, file=sys.stderr)
+    print("blind per length:", dict(Counter(r["length_bucket"] for r in rows
+                                            if r["in_blind_split"] == "true")), file=sys.stderr)
     return 0
 
 

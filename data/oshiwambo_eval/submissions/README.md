@@ -24,8 +24,39 @@ For each model you want to enter into the leaderboard:
 
 Place both under
 `data/oshiwambo_eval/submissions/<model-id>/`. Submit via pull
-request, or email if you don't have a GitHub account (contact
-details in the dataset README).
+request, or email the files to [hi@ongiini.ai](mailto:hi@ongiini.ai)
+if you'd rather not publish your outputs before the leaderboard
+launches.
+
+---
+
+## Submission rules (pre-release)
+
+The v1.0 references are not public yet, so we score submissions
+privately and send the results back.
+
+- **Translate all 600 items** of
+  [`data/oshiwambo_eval_v3.tsv`](../../oshiwambo_eval_v3.tsv) into
+  both dialects. References exist today for ids 1..423; we score
+  those now and re-score the remaining items when their references
+  land — no need to resubmit.
+- **One scored submission per system version.** A new version means
+  new weights or a changed prompting protocol, described in the model
+  card. Fixing a formatting error is not a new version.
+- **What you get back before the release:** chrF++, BLEU and the
+  derailment rate on the development split, with the per-phenomenon,
+  per-length and per-domain breakdown, plus the headline chrF++ (with
+  95 % bootstrap CI) and BLEU on the blind split. Blind-split slices
+  and item-level blind results are withheld until the release — with
+  repeated feedback they would let a system fit the blind set.
+- **Respect the blind split.** Items with `in_blind_split = true` must
+  not be used for prompt tuning, model selection or training. The
+  English sources are public; if any of them went into training data,
+  say so in the model card.
+- **Pre-release submissions are marked as such** on the leaderboard:
+  no system could have seen the references before they were published.
+- **Publication.** Scores and model cards appear on the leaderboard at
+  launch, with attribution.
 
 ---
 
@@ -94,8 +125,8 @@ jsonschema -i data/oshiwambo_eval/submissions/<model-id>/<file>.jsonl \
            data/oshiwambo_eval/submissions/schema.json
 ```
 
-A valid submission is exactly 423 lines per file, with every `id`
-field appearing exactly once, in the order matching `en.txt`. The
+A valid submission is exactly 600 lines per file, with every `id`
+from 1 to 600 appearing exactly once, in id order. The
 JSON Schema enforces field shapes; the count and ordering are
 checked at intake.
 
@@ -139,10 +170,15 @@ readers can interpret the score.
 1. **Schema validation.** Run the JSON-schema check. If it fails,
    we open a comment on the PR with the validation output so you
    can fix and resubmit.
-2. **Metric computation.** We run chrF++, BLEU, and COMET-22
-   against the reference translations on every item, plus the
-   per-slice matrices (per-phenomenon, per-length bucket,
-   per-domain, blind vs development split).
+2. **Metric computation.** We run chrF++ and BLEU (sacrebleu) and
+   the derailment rate against the reference translations on every
+   item, plus the per-slice matrices (per-phenomenon, per-length
+   bucket, per-domain, blind vs development split), using
+   [`scripts/score_eval_baselines.py`](../../../scripts/score_eval_baselines.py).
+   COMET-22 is the tertiary metric, reported with the caveat from the
+   concept paper that its training data does not include Oshiwambo
+   (it is being added to the scoring script before the leaderboard
+   launch).
 3. **Sanity check.** A native-speaker reviewer spot-checks ~10
    items to catch obvious pipeline bugs (empty outputs, wrong
    language, encoding issues).
@@ -158,13 +194,14 @@ readers can interpret the score.
 
 Suppose Acme AI wants to submit their `acme/wambo-v1` translator.
 
-1. Run inference. For each English item in `data/en.txt`:
+1. Run inference. For each English item in `data/oshiwambo_eval_v3.tsv`:
    ```python
-   for idx, source in enumerate(open("en.txt"), start=1):
+   import csv
+   for row in csv.DictReader(open("oshiwambo_eval_v3.tsv"), delimiter="\t"):
        for dialect in ("oshindonga", "oshikwanyama"):
-           translation = acme_translate(source.strip(), target=dialect)
+           translation = acme_translate(row["english"], target=dialect)
            write_jsonl(dialect, {
-               "id": idx,
+               "id": int(row["id"]),
                "dialect": dialect,
                "model_id": "acme/wambo-v1",
                "prompt_template_id": "ongiini-eval-ow-v1-zeroshot",

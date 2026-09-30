@@ -2,7 +2,7 @@
 """Export the internal v2 TSV into publication-ready formats.
 
 Reads:
-  data/private/oshiwambo_eval_v2.tsv  the internal working TSV (gitignored;
+  data/private/oshiwambo_eval_v3.tsv  the internal working TSV (gitignored;
                                     full schema incl. <translator>_* refs,
                                     claude_*, gemma_*, in_blind_split)
 
@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "data/private/oshiwambo_eval_v2.tsv"
+SOURCE = ROOT / "data/private/oshiwambo_eval_v3.tsv"
 PUBLIC_ROOT = ROOT / "data/oshiwambo_eval"
 PRIVATE_ROOT = ROOT / "data/private/export"
 

@@ -39,7 +39,7 @@ native-speaker references, built from the register Ongiini AI actually sees.
 | **Size** | 600 English source items for v1.0, each to be translated into both dialects |
 | **Composition** | 150 retained phrasebook items · 180 paraphrased from production conversations · 210 crafted for 11 linguistic phenomena · 60 formal / institutional |
 | **Phenomena** | negation, noun-class agreement, pronoun coreference, tense/aspect, numbers and dates, named entities, code-switching, politeness register, figurative language, polysemy, multi-sentence cohesion — at least 30 items each |
-| **Splits** | 80 % development / 20 % blind (seeded, fixed per item) |
+| **Splits** | 420 development / 180 blind (30 %), stratified by phenomenon, length and domain (seed 42) |
 | **Metrics** | chrF++ (primary) and BLEU via sacrebleu, a derailment rate for runaway outputs, and a planned human evaluation of adequacy and fluency |
 | **References** | Kaarina Shoozi and Elizabeth Hamukwaya, native speakers from northern Namibia |
 
@@ -53,8 +53,10 @@ native-speaker references, built from the register Ongiini AI actually sees.
 
 The English sources are public now so that anyone can prepare a submission.
 Reference translations are not in this repository; they are released together
-with v1.0. Until then, [`data/oshiwambo_eval/`](data/oshiwambo_eval/) holds the
-dataset card, the submission schema and the contribution guide.
+with v1.0. Until then we score submissions privately against the references
+and return the scores — see **[how to submit a system](data/oshiwambo_eval/submissions/README.md)**.
+Submissions made before the release are, by construction, free of reference
+contamination.
 
 ### Where things are
 

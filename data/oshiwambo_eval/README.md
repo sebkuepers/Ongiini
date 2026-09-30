@@ -100,13 +100,13 @@ Items can carry several tags. A tag is only assigned where that phenomenon is th
 | `oshikwanyama_reference` | str | Oshikwanyama reference (empty until release) |
 | `oshindonga_translator_notes` | str | Translator notes — mostly on loanwords kept on purpose |
 | `oshikwanyama_translator_notes` | str | Translator notes |
-| `in_blind_split` | bool | True for the held-back 20 % |
+| `in_blind_split` | bool | True for the 180 blind items (30 %) |
 
 Parallel plaintext files (`data/en.txt`, `data/oshindonga.txt`, `data/oshikwanyama.txt`, line N = id N) are provided for tools such as sacrebleu, fairseq and sentencepiece.
 
 ## Splits
 
-A fixed 20 % of items form the **blind** split (v0.1: 84 of 423; v1.0: 119 of 600). Every item keeps its split when the set grows — v1.0 only adds items.
+**180 of the 600 items (30 %) form the blind split**, drawn with seed 42 and stratified by primary phenomenon × length × domain, so that every phenomenon has at least 9 blind items. The authoritative flags are in [`../oshiwambo_eval_v3.tsv`](../oshiwambo_eval_v3.tsv); they replace the unstratified 84-item split of v0.1 (the v0.1 files under `data/` still carry the old flags until the release export).
 
 - `development` — use freely for prompt design and system development.
 - `blind` — use only for final reporting; do not look at blind items while tuning.
@@ -184,7 +184,7 @@ See [`LICENSE`](LICENSE) for full text.
 
 ## Contact
 
-- **About the eval set**: open an issue at [github.com/sebkuepers/Ongiini](https://github.com/sebkuepers/Ongiini)
+- **About the eval set and submissions**: [hi@ongiini.ai](mailto:hi@ongiini.ai), or open an issue at [github.com/sebkuepers/Ongiini](https://github.com/sebkuepers/Ongiini)
 - **About Ongiini AI** (the AI assistant this eval set is built for): [https://ongiini.ai](https://ongiini.ai)
 - **About the Common Intelligence Foundation**: [https://common-intelligence.org](https://common-intelligence.org)
 
