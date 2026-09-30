@@ -184,7 +184,7 @@ See [`LICENSE`](LICENSE) for full text.
 
 ## Contact
 
-- **About the eval set and submissions**: [hi@ongiini.ai](mailto:hi@ongiini.ai), or open an issue at [github.com/sebkuepers/Ongiini](https://github.com/sebkuepers/Ongiini)
+- **About the eval set and submissions**: [hello@ongiini.ai](mailto:hello@ongiini.ai), or open an issue at [github.com/sebkuepers/Ongiini](https://github.com/sebkuepers/Ongiini)
 - **About Ongiini AI** (the AI assistant this eval set is built for): [https://ongiini.ai](https://ongiini.ai)
 - **About the Common Intelligence Foundation**: [https://common-intelligence.org](https://common-intelligence.org)
 

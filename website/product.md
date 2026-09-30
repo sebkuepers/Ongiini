@@ -438,7 +438,7 @@ Native speakers can add sentence pairs through WhatsApp, one sentence at a time.
 3
 #### Work with us
 
-Researchers, universities and teams building for Namibian languages — we would like to hear from you. [hi@ongiini.ai](mailto:hi@ongiini.ai)
+Researchers, universities and teams building for Namibian languages — we would like to hear from you. [hello@ongiini.ai](mailto:hello@ongiini.ai)
 
 Roadmap
 

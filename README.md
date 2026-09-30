@@ -192,6 +192,6 @@ The dataset itself has its own [citation file](data/oshiwambo_eval/CITATION.cff)
 
 ## Contact
 
-[ongiini.ai](https://ongiini.ai) · [hi@ongiini.ai](mailto:hi@ongiini.ai) ·
+[ongiini.ai](https://ongiini.ai) · [hello@ongiini.ai](mailto:hello@ongiini.ai) ·
 [issues](https://github.com/sebkuepers/Ongiini/issues) for the code and the benchmark ·
 [common-intelligence.org](https://common-intelligence.org) for the foundation

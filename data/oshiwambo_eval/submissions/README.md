@@ -24,7 +24,7 @@ For each model you want to enter into the leaderboard:
 
 Place both under
 `data/oshiwambo_eval/submissions/<model-id>/`. Submit via pull
-request, or email the files to [hi@ongiini.ai](mailto:hi@ongiini.ai)
+request, or email the files to [hello@ongiini.ai](mailto:hello@ongiini.ai)
 if you'd rather not publish your outputs before the leaderboard
 launches.
 

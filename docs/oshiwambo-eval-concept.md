@@ -5,7 +5,7 @@
 **Sebastian Küpers**
 *Common Intelligence Foundation (programme of the Ongiini AI project,*
 [*https://ongiini.ai*](https://ongiini.ai)*) · Namibia*
-*Corresponding author:* [*hi@ongiini.ai*](mailto:hi@ongiini.ai)
+*Corresponding author:* [*hello@ongiini.ai*](mailto:hello@ongiini.ai)
 
 **Keywords:** machine translation · low-resource languages ·
 benchmarking · African NLP · Oshiwambo · Oshindonga · Oshikwanyama ·
@@ -729,7 +729,7 @@ of the dataset README so partners and sponsors can verify progress.
 - **GitHub.** Issues, pull requests, and discussion at
   <https://github.com/sebkuepers/Ongiini> (the
   `data/oshiwambo_eval/` directory).
-- **Email.** [hi@ongiini.ai](mailto:hi@ongiini.ai) for partnership
+- **Email.** [hello@ongiini.ai](mailto:hello@ongiini.ai) for partnership
   conversations, review requests, or submission questions.
 - **The Ongiini AI project.** <https://ongiini.ai>.
 
@@ -914,7 +914,7 @@ finalised numbers and the live HuggingFace URL. Pipeline scripts
 Pre-publication access to the v0.1 internal build (423 items, used
 to validate the pipeline end-to-end) is available to prospective
 reviewers and submitters on request to
-[hi@ongiini.ai](mailto:hi@ongiini.ai). The CITATION.cff manifest at
+[hello@ongiini.ai](mailto:hello@ongiini.ai). The CITATION.cff manifest at
 <https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/CITATION.cff>
 renders as BibTeX and APA automatically; a Zenodo DOI will be
 minted at first formal publication.
@@ -1227,4 +1227,4 @@ release of the dataset (planned Q4 2026). Suggestions and
 corrections are welcomed as pull requests against the source
 markdown at*
 [*github.com/sebkuepers/Ongiini*](https://github.com/sebkuepers/Ongiini)
-*or by email to* [*hi@ongiini.ai*](mailto:hi@ongiini.ai).
+*or by email to* [*hello@ongiini.ai*](mailto:hello@ongiini.ai).
