@@ -1,7 +1,5 @@
 .env
 .env.local
-data/*.json
-data/*.log
 __pycache__/
 *.pyc
 *.pyo
@@ -19,7 +17,14 @@ node_modules/
 # is formally established. Deployed directly to Cloudflare Pages via wrangler.
 foundation/
 
-# Unreleased eval references (blind split must never be public) and any
-# file derived from production user messages (mining candidates etc.)
-data/private/
-data/*candidates*
+# data/ is the production bind-mount: user histories, mem0, logs, mining
+# output. Ignore everything and allowlist only files that are meant to be
+# public. Anything derived from user messages or unreleased references
+# belongs in data/private/ and must never be allowlisted.
+data/*
+!data/.gitkeep
+!data/corpus_sources.md
+!data/eval_v2_retained_v1.tsv
+!data/oshiwambo_eval/
+!data/oshiwambo_eval_v2.tsv
+!data/oshiwambo_eval_v*_seeds.md
