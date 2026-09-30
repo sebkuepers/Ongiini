@@ -83,7 +83,7 @@ edit that one file.
 | `summary.py` | `maybe_summarize()` — rolling-summary of long histories (LLM call). |
 | `audio.py` | faster-whisper transcription wrapper. |
 | `whatsapp.py` | Low-level Meta Graph API calls (send_text, mark_as_read, download_media, signature verify). |
-| `pii.py` | Regex PII scrubber (email, IBAN, card, ID). |
+| `pii.py` | Regex PII scrubber (email, mobile phone, IBAN, card, ID). |
 | `ratelimit.py` | Per-user rate-limit check (in-process). |
 | `filters.py` | MSISDN normalisation + allow-check. |
 | `usage.py` | Per-user token-usage log (1M/month allowance). |

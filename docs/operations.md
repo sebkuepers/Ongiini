@@ -220,7 +220,7 @@ Per user, all on the Spark, nothing leaves the box:
    message ("Earlier in this conversation: …") and keep the last 40 entries
    verbatim.
    Before any message is written, regex-scrubbed for obvious PII patterns
-   (email, IBAN, credit card, 11-digit Namibian ID — replaced with
+   (email, mobile phone number, IBAN, credit card, 11-digit Namibian ID — replaced with
    `[REDACTED:kind]` placeholders). Image and voice messages are stored as
    text placeholders only: `[image attached] <caption>` for images,
    `[voice note] <transcript>` for voice (the audio bytes are discarded
@@ -305,7 +305,7 @@ with Gemma 4 for GPU memory. Typical 30s voice note transcribes in 2-5s.
 
 Audio bytes are NEVER persisted. Short-term memory and mem0 only ever
 see the transcript text, which goes through the same PII scrub the text
-path uses (email / IBAN / card / 11-digit ID → placeholders before
+path uses (email / mobile / IBAN / card / 11-digit ID → placeholders before
 write).
 
 Code: `ongiini/audio.py` (transcribe wrapper),

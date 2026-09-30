@@ -10,6 +10,8 @@ affects what lands on disk and what's replayed in future turns.
 
 Patterns currently scrubbed:
 - Email addresses
+- Namibian mobile numbers (08x xxx xxxx, +264 8x xxx xxxx, 00264…,
+  bare 2648x…) and any other "+"-prefixed international number
 - Credit card numbers (13-19 digits, with optional spaces/dashes)
 - IBAN-style international bank account numbers
 - 11-digit standalone numbers that look like Namibian National IDs
@@ -19,8 +21,10 @@ WhatsApp-style messages):
 - Street addresses
 - Person names
 - Passport numbers (varied format)
-- Phone numbers other than the user's own (would clobber legitimate
-  references like "call BIPA on 061 374 400")
+- Namibian landlines, service and short numbers (061 374 400,
+  +264 61 374 400, 10111) — those are how users are told to reach BIPA,
+  clinics or the police, and are not personal. Mobile numbers are: they
+  appeared verbatim in stored CVs and job applications.
 - **URLs** — public web addresses, never user-shared PII. Facebook
   video IDs and similar long-digit path components were matching the
   credit-card regex and corrupting cited source links in replies. The
@@ -39,6 +43,19 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
 
     # IBAN — 2 country letters, 2 check digits, 11-30 alphanumerics
     (re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), "[REDACTED:iban]"),
+
+    # Namibian mobile — 0 or (+|00)264 or bare 264, then 8x and seven
+    # digits, spaces/dashes allowed. Landlines (06x) are left alone.
+    # Must run before the card pattern: "+264 81 …" is 12 digits and
+    # longer foreign numbers used to surface as "+[REDACTED:card]".
+    (re.compile(r"(?<![\d+])(?:(?:\+|00)?264[ -]?|0)8\d(?:[ -]?\d){7}(?!\d)"),
+     "[REDACTED:phone]"),
+
+    # Any other "+"-prefixed international number (E.164: 8-15 digits).
+    # +264 is excluded so Namibian landlines written with the country
+    # code stay readable.
+    (re.compile(r"(?<![\d+])\+(?!264)\d(?:[ -]?\d){7,14}(?!\d)"),
+     "[REDACTED:phone]"),
 
     # Credit card — 13-19 digits, possibly broken by spaces or dashes,
     # bounded by non-digit. Catches "4111 1111 1111 1111" style.

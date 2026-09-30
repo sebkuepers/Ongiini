@@ -13,7 +13,8 @@ Three tiers, all on the Spark, none shared with any third party:
   user+assistant back-and-forth at `/data/{msisdn}.json` (capped at 100
   entries on disk). Marathon chats fold their oldest turns into a leading
   `system` "Earlier in this conversation: …" line so a long chat stays
-  bounded. PII patterns (email, IBAN, credit card, 11-digit Namibian ID)
+  bounded. PII patterns (email, mobile phone number, IBAN, credit card, 11-digit
+  Namibian ID; landlines and service numbers are kept)
   are regex-scrubbed BEFORE the message is written, replaced with
   `[REDACTED:kind]` placeholders.
 

@@ -1,12 +1,14 @@
 """Unit tests for the PII sanitiser.
 
-Covers the patterns that DO scrub (email, credit-card, IBAN, ID), AND
+Covers the patterns that DO scrub (email, phone, credit-card, IBAN, ID), AND
 the URL carve-out — URLs are public addresses and must not be touched,
 even when their path contains digit sequences that look like a credit
 card or National ID.
 """
 
 from __future__ import annotations
+
+import pytest
 
 from ongiini.pii import sanitize, sanitize_message
 
@@ -41,6 +43,58 @@ def test_eleven_digit_national_id_redacted():
     out = sanitize("My ID is 12345678901.")
     assert "[REDACTED:id]" in out
     assert "12345678901" not in out
+
+
+# ---------- phone numbers: mobiles go, landlines / service numbers stay ----------
+
+@pytest.mark.parametrize("number", [
+    "0812345678",
+    "081 234 5678",
+    "085-123-4567",
+    "+264 81 234 5678",
+    "+264812345678",
+    "00264 81 234 5678",
+    "264812345678",          # bare country code, as users type it
+    "+49 151 23456789",      # foreign mobile (whitelisted pilot users)
+    "+27 82 123 4567",
+])
+def test_mobile_numbers_redacted(number):
+    out = sanitize(f"Please call me on {number} after five.")
+    assert "[REDACTED:phone]" in out
+    assert number not in out
+    assert out.startswith("Please call me on ") and out.endswith(" after five.")
+
+
+def test_international_mobile_no_longer_surfaces_as_card():
+    """Before the phone pattern, long "+" numbers hit the card regex and
+    left a stray "+" behind: "+[REDACTED:card]"."""
+    out = sanitize("contact +264 81 234 5678 or +49 151 23456789")
+    assert "[REDACTED:card]" not in out
+    assert "+[REDACTED" not in out
+    assert out.count("[REDACTED:phone]") == 2
+
+
+@pytest.mark.parametrize("text", [
+    "Call BIPA on 061 374 400 for company registration.",
+    "The clinic line is +264 61 203 9111.",
+    "In an emergency dial 10111.",
+    "The meeting starts at 08:30 on 08-12-2026.",
+    "Order number 1234567890 was shipped.",
+])
+def test_landlines_service_numbers_and_dates_untouched(text):
+    assert sanitize(text) == text
+
+
+def test_eleven_digit_id_starting_with_08_stays_an_id():
+    """An 11-digit number must not be half-matched as a mobile."""
+    out = sanitize("ID 08123456789 on the form")
+    assert "[REDACTED:id]" in out
+    assert "[REDACTED:phone]" not in out
+
+
+def test_phone_inside_url_preserved():
+    url = "https://wa.me/264812345678"
+    assert sanitize(f"chat here {url}") == f"chat here {url}"
 
 
 # ---------- v1.6.1 URL carve-out: URLs must be preserved ----------

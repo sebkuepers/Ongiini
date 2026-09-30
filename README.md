@@ -133,9 +133,10 @@ little as possible:
 
 - **No message content in logs.** Usage and trace logs record counts, names,
   lengths and timings only.
-- **Scrubbed before storage.** Email, IBAN, card and national-ID patterns are
-  replaced with placeholders before anything is written to disk or to long-term
-  memory. The model sees the raw text; storage does not.
+- **Scrubbed before storage.** Email addresses, mobile phone numbers, IBANs,
+  card and national-ID numbers are replaced with placeholders before anything
+  is written to disk or to long-term memory. The model sees the raw text;
+  storage does not.
 - **No images or audio kept.** Photos are described and voice notes are
   transcribed, then the bytes are discarded.
 - **Nothing leaves the machine.** Memory, the vector store and the model all
