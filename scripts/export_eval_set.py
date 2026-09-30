@@ -2,11 +2,12 @@
 """Export the internal v2 TSV into publication-ready formats.
 
 Reads:
-  data/oshiwambo_eval_v2.tsv        the internal working TSV (full schema:
-                                    includes claude_*, gemma_*, in_blind_split,
-                                    scoring columns)
+  data/private/oshiwambo_eval_v2.tsv  the internal working TSV (gitignored;
+                                    full schema incl. <translator>_* refs,
+                                    claude_*, gemma_*, in_blind_split)
 
-Writes (under data/oshiwambo_eval/data/):
+Writes under data/private/export/data/ by default, or — with --release,
+only when the dataset goes public — under data/oshiwambo_eval/data/:
   eval_set.tsv             clean public schema (no claude/gemma baselines)
   eval_set.jsonl           one JSON object per item — HF-friendly
   en.txt                   EN sources only, one per line, line N = id N
@@ -22,24 +23,26 @@ MT-tooling chain (Moses, fairseq, sentencepiece, sacrebleu) takes
 plaintext parallel files. Providing them lets researchers benchmark
 their systems with zero glue code.
 
-Run once the v2 TSV is final (after Elizabeth's translations land):
+The references are unreleased and the repo is public: never commit a
+--release export before the v1.0 launch, or the blind split leaks.
 
-    python3 scripts/export_eval_set.py
+    python3 scripts/export_eval_set.py                 # private preview
+    python3 scripts/export_eval_set.py --release       # launch day only
 
 Idempotent — safe to re-run any time.
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "data/oshiwambo_eval_v2.tsv"
-OUT_ROOT = ROOT / "data/oshiwambo_eval"
-DATA_DIR = OUT_ROOT / "data"
-BASELINES_DIR = DATA_DIR / "baselines"
+SOURCE = ROOT / "data/private/oshiwambo_eval_v2.tsv"
+PUBLIC_ROOT = ROOT / "data/oshiwambo_eval"
+PRIVATE_ROOT = ROOT / "data/private/export"
 
 
 # Public schema — what goes into eval_set.tsv. claude_* / gemma_*
@@ -59,7 +62,25 @@ PUBLIC_COLS = [
 ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--translator", default="kaarina",
+                    help="Column prefix of the reference translations")
+    ap.add_argument("--release", action="store_true",
+                    help="Write into the public dataset dir (launch day only)")
+    args = ap.parse_args(argv)
+    t = args.translator
+    OUT_ROOT = PUBLIC_ROOT if args.release else PRIVATE_ROOT
+    DATA_DIR = OUT_ROOT / "data"
+    BASELINES_DIR = DATA_DIR / "baselines"
+    if not args.release:
+        # Seed baselines so the keep-populated guard below behaves the
+        # same as against the public dir.
+        BASELINES_DIR.mkdir(parents=True, exist_ok=True)
+        for f in (PUBLIC_ROOT / "data/baselines").glob("*.jsonl"):
+            if not (BASELINES_DIR / f.name).exists():
+                (BASELINES_DIR / f.name).write_bytes(f.read_bytes())
+
     if not SOURCE.exists():
         print(f"ERROR: source TSV missing at {SOURCE}", file=sys.stderr)
         return 1
@@ -82,14 +103,13 @@ def main() -> int:
             "phenomenon_tags": r["phenomenon_tags"],
             "provenance": r["provenance"],
             "english": r["english"],
-            # Translator-reference columns. The internal TSV stores
-            # these under elizabeth_* (placeholder until renamed at
-            # publish time). Map them through here so the public file
-            # has the neutral column names.
-            "oshindonga_reference": r.get("elizabeth_oshindonga", ""),
-            "oshikwanyama_reference": r.get("elizabeth_oshikwanyama", ""),
-            "oshindonga_translator_notes": r.get("elizabeth_oshindonga_notes", ""),
-            "oshikwanyama_translator_notes": r.get("elizabeth_oshikwanyama_notes", ""),
+            # Translator-reference columns: the internal TSV stores
+            # them per translator (<translator>_*); the public file
+            # uses neutral column names.
+            "oshindonga_reference": r.get(f"{t}_oshindonga", ""),
+            "oshikwanyama_reference": r.get(f"{t}_oshikwanyama", ""),
+            "oshindonga_translator_notes": r.get(f"{t}_oshindonga_notes", ""),
+            "oshikwanyama_translator_notes": r.get(f"{t}_oshikwanyama_notes", ""),
             "in_blind_split": r["in_blind_split"],
         })
     out_tsv = DATA_DIR / "eval_set.tsv"
@@ -153,6 +173,16 @@ def main() -> int:
     #    confuses them with the gold references ────────────────────
     def write_baseline(prefix: str, fname: str, label: str) -> None:
         out = BASELINES_DIR / fname
+        # Baselines may be filled straight into the JSONL (see
+        # fill_baseline_translations.py) without touching the TSV —
+        # never clobber a populated file with an empty source column.
+        if out.exists() and not any(
+            (r.get(f"{prefix}_oshindonga") or r.get(f"{prefix}_oshikwanyama") or "").strip()
+            for r in rows
+        ):
+            print(f"  kept {out.relative_to(ROOT)}  (no {prefix}_* data in source TSV)",
+                  file=sys.stderr)
+            return
         n_filled = 0
         with out.open("w") as f:
             for r in rows:
