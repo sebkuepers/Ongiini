@@ -2,13 +2,14 @@
 
 Endpoints (under ``/v1/rate/``), both POST with the invite token in the
 body (never in a URL the server logs):
-  * ``/session`` — validate the token, return the rater's label, dialects,
-    progress and the first screen
-  * ``/answer``  — store one screen (per-candidate verdicts, choice,
-    optional flags / better translation, or a skip) and return the next
+  * ``/session`` — validate the token; return label, dialects, progress,
+    the onboarding practice examples (with their expected answer and
+    feedback) and the first item
+  * ``/answer``  — store one verdict (+ optional issues, better
+    translation, or a can't-judge reason) and return the next item
 
-Screens never reveal whether a candidate is the human reference, a model
-or a control. See ongiini/ratings.py for assignment and storage.
+Real items never reveal whether a translation is the human reference, a
+model or a control. See ongiini/ratings.py for assignment and storage.
 """
 from __future__ import annotations
 
@@ -27,13 +28,11 @@ class SessionIn(BaseModel):
 
 
 class AnswerIn(SessionIn):
-    screen_id: str = Field(min_length=1, max_length=64)
-    verdicts: dict[str, str] | None = None
-    wrong_dialect: list[str] | None = Field(default=None, max_length=5)
-    choice: str | None = Field(default=None, max_length=64)
-    english_strange: bool = False
+    item_key: str = Field(min_length=1, max_length=64)
+    verdict: str
+    cant_reason: str | None = None
+    issues: list[str] | None = Field(default=None, max_length=6)
     suggestion: str | None = Field(default=None, max_length=1000)
-    skipped: bool = False
     duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
 
 
@@ -53,7 +52,8 @@ def build_router() -> APIRouter:
             rater = rater_or_401(con, body.token)
             return {"label": rater["label"], "dialects": rater["dialects"].split(","),
                     "progress": ratings.progress(con, rater["rater_id"]),
-                    "screen": ratings.next_screen(con, rater)}
+                    "practice": ratings.practice_items(con, rater),
+                    "item": ratings.next_item(con, rater)}
         finally:
             con.close()
 
@@ -63,14 +63,13 @@ def build_router() -> APIRouter:
         try:
             rater = rater_or_401(con, body.token)
             try:
-                ratings.record(con, rater, body.screen_id, verdicts=body.verdicts,
-                               wrong_dialect=body.wrong_dialect, choice=body.choice,
-                               english_strange=body.english_strange, suggestion=body.suggestion,
-                               skipped=body.skipped, duration_ms=body.duration_ms)
+                ratings.record(con, rater, body.item_key, body.verdict,
+                               cant_reason=body.cant_reason, issues=body.issues,
+                               suggestion=body.suggestion, duration_ms=body.duration_ms)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from None
             return {"progress": ratings.progress(con, rater["rater_id"]),
-                    "screen": ratings.next_screen(con, rater)}
+                    "item": ratings.next_item(con, rater)}
         finally:
             con.close()
 

@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light" />
   <meta name="theme-color" content="#f5efe4" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Rate translations — Ongiini</title>
+  <title>Check translations — Ongiini AI</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -65,25 +65,22 @@
     .fine a { color: var(--ink-soft); }
     .progress { height: 4px; background: var(--rule-faint); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
     .progress div { height: 100%; background: var(--terracotta); width: 0; transition: width .3s; }
-    .cand { background: var(--bone); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 14px 12px; margin-top: 12px; }
-    .cand-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-    .cand-letter { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.1em; color: var(--terracotta-deep); font-weight: 500; }
-    .cand .tgt { font-size: 23px; margin: 4px 0 12px; }
-    .seg3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .seg3 button, .choice button { appearance: none; border: 1px solid var(--rule); background: var(--bone-deep); color: var(--ink);
-      border-radius: 10px; padding: 10px 6px; font: 500 14px 'Geist', ui-sans-serif, system-ui; cursor: pointer; min-height: 46px; }
-    .seg3 button[aria-pressed="true"][data-v="send"] { background: var(--good); border-color: var(--good); color: #fff; }
-    .seg3 button[aria-pressed="true"][data-v="fix"] { background: var(--warn); border-color: var(--warn); color: #fff; }
-    .seg3 button[aria-pressed="true"][data-v="no"] { background: var(--bad); border-color: var(--bad); color: #fff; }
-    .flag { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); margin-top: 10px; cursor: pointer; }
-    .flag input { width: 16px; height: 16px; accent-color: var(--terracotta-deep); }
-    .q { margin: 22px 0 8px; color: var(--ink); font-weight: 600; }
-    .choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .choice button.wide { grid-column: span 3; }
-    .choice button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bone); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .chip { appearance: none; border: 1px solid var(--rule); background: var(--bone); color: var(--ink); border-radius: 999px;
+      padding: 9px 14px; font: 500 14px 'Geist', ui-sans-serif, system-ui; cursor: pointer; min-height: 40px; }
+    .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bone); }
+    .panel { border-top: 1px solid var(--rule-faint); margin-top: 18px; padding-top: 16px; }
+    .q { margin: 22px 0 4px; color: var(--ink); font-weight: 600; font-size: 17px; }
+    .tgt { overflow-wrap: anywhere; }
     .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
     .btn[disabled] { opacity: .45; cursor: not-allowed; }
-    .skip { background: none; border: 0; color: var(--ink-soft); text-decoration: underline; font: 14px 'Geist', sans-serif; cursor: pointer; padding: 8px 0; }
+    .skip { background: none; border: 0; color: var(--ink-soft); text-decoration: underline; font: 14px 'Geist', sans-serif; cursor: pointer; padding: 12px 0; }
+    .feedback { border-radius: 14px; padding: 14px 16px; margin-top: 16px; color: var(--ink); }
+    .feedback.ok { background: color-mix(in oklab, var(--good) 14%, var(--bone)); border: 1px solid color-mix(in oklab, var(--good) 40%, var(--bone)); }
+    .feedback.no { background: color-mix(in oklab, var(--warn) 14%, var(--bone)); border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--bone)); }
+    .feedback strong { display: block; margin-bottom: 4px; }
+    .tag { display: inline-block; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--terracotta-deep); border: 1px solid var(--terracotta); border-radius: 999px; padding: 3px 10px; margin-bottom: 14px; }
     .hidden { display: none !important; }
     .err { color: var(--bad); }
   </style>
@@ -96,51 +93,86 @@
 
   <main>
     <!-- loading / invalid -->
-    <section id="v-msg"><p class="eyebrow">Rate translations</p><h1 id="msg-title">One moment…</h1><p id="msg-text"></p></section>
+    <section id="v-msg"><p class="eyebrow">Check translations</p><h1 id="msg-title">One moment…</h1><p id="msg-text"></p></section>
 
     <!-- welcome -->
     <section id="v-welcome" class="hidden">
-      <p class="eyebrow">Rate translations · <span id="w-dialect"></span></p>
+      <p class="eyebrow">Check translations · <span class="w-d"></span></p>
       <h1>Tangi unene, <em id="w-name"></em>.</h1>
-      <p>For each English sentence you'll see two or three translations into <strong id="w-dialect2"></strong>. Some were made by people, some by computers — you won't know which. As a native speaker, tell us two things:</p>
+      <p>We are building a test set of English sentences with <strong class="w-d"></strong> translations. You can help by checking the translations as a native speaker.</p>
       <ul class="steps">
-        <li><span class="n">1</span><span><strong>For each translation: would you send it as it is?</strong><br>✓ <em>Yes, as it is</em> · ~ <em>Only after fixing something</em> · ✗ <em>No</em>. Tick <em>wrong dialect</em> if it isn't really <span class="w-d"></span>.</span></li>
-        <li><span class="n">2</span><span><strong>Which one would you send?</strong> Pick one, say several are equally good, or choose <em>none</em> and — if you like — write how you would say it.</span></li>
+        <li><span class="n">1</span><span>You see an English sentence and <strong>one translation</strong>. Translations come from different sources, some from computers.</span></li>
+        <li><span class="n">2</span><span>You answer one question: <strong>is this a good translation?</strong> ✓ Good, ~ Almost, or ✗ Wrong.</span></li>
+        <li><span class="n">3</span><span>If something is off, you can say what — and how you would say it. That is optional, but very valuable.</span></li>
       </ul>
-      <p>If the English sentence itself sounds strange, tick the box — that helps too. A few translations are wrong on purpose, to check that the system works. Skip any sentence you're unsure about. Take breaks whenever you like; your progress is saved.</p>
-      <div class="row"><button class="btn" id="start">Start <span>→</span></button></div>
-      <p class="fine" style="margin-top:22px">We store your ratings and suggestions under the name on your invite, nothing else — no phone number. <a href="/privacy/">Privacy policy</a></p>
+      <p>We go in rounds of ten. Stop whenever you like; your progress is saved. First, two quick practice examples.</p>
+      <div class="row"><button class="btn" id="start">Practice <span>→</span></button></div>
+      <p class="fine" style="margin-top:22px">We store your answers and suggestions under the name on your invite, nothing else — no phone number. <a href="/privacy/">Privacy policy</a></p>
     </section>
 
-    <!-- task -->
+    <!-- tip after practice -->
+    <section id="v-tip" class="hidden">
+      <p class="eyebrow">Ready</p>
+      <h1>One question <em>helps most.</em></h1>
+      <p><strong>Is the meaning right?</strong> If someone would misunderstand it, or something important is missing, it is <strong>✗ Wrong</strong> — even if it sounds fine.</p>
+      <p>If the meaning is right but a word, the spelling or the phrasing is off, it is <strong>~ Almost</strong>. If you would send it exactly like this, it is <strong>✓ Good</strong>.</p>
+      <p>Some translations are wrong on purpose, to check that the system works.</p>
+      <div class="row"><button class="btn" id="go">Start <span>→</span></button></div>
+    </section>
+
+    <!-- task (also used for practice) -->
     <section id="v-task" class="hidden">
       <div class="progress"><div id="bar"></div></div>
-      <div class="card" style="margin-bottom:6px">
+      <span class="tag hidden" id="t-practice">Practice</span>
+      <div class="card" style="margin-bottom:10px">
         <div class="label">English</div>
         <p class="src" id="t-en" style="margin:0"></p>
       </div>
-      <p class="q">Would you send this translation as it is?</p>
-      <div id="cands"></div>
-      <p class="q">Which one would you send?</p>
-      <div class="choice" id="choice"></div>
-      <label class="flag" style="margin-top:14px"><input type="checkbox" id="en-strange" /> The English sentence itself is strange</label>
-      <div id="suggest" style="margin-top:14px">
-        <div class="label">How would you say it? (optional)</div>
-        <textarea id="s-text" placeholder="Write a better translation here"></textarea>
+      <div class="card" style="margin-top:0">
+        <div class="label" id="t-lang"></div>
+        <p class="tgt" id="t-text"></p>
       </div>
-      <div class="actions">
-        <button class="btn" id="next" disabled>Next <span>→</span></button>
-        <button class="skip" id="skip">I can't judge this sentence</button>
+      <p class="q">Is this a good translation?</p>
+      <div class="answers" id="answers">
+        <button class="answer" type="button" data-v="good" aria-pressed="false"><span class="icon i-good">✓</span><span><strong>Good</strong><small>Correct and natural — I'd send it like this</small></span></button>
+        <button class="answer" type="button" data-v="almost" aria-pressed="false"><span class="icon i-warn">~</span><span><strong>Almost</strong><small>The meaning is right, but a word, spelling or phrasing is off</small></span></button>
+        <button class="answer" type="button" data-v="wrong" aria-pressed="false"><span class="icon i-bad">✗</span><span><strong>Wrong</strong><small>Someone would misunderstand it, or something important is missing</small></span></button>
       </div>
+
+      <div class="feedback hidden" id="p-feedback"><strong id="p-head"></strong><span id="p-text"></span>
+        <div class="row"><button class="btn" id="p-next">Next <span>→</span></button></div></div>
+
+      <div class="panel hidden" id="follow">
+        <div class="label">What is off? (optional)</div>
+        <div class="chips" id="issues">
+          <button class="chip" type="button" data-i="word_choice" aria-pressed="false">Word choice</button>
+          <button class="chip" type="button" data-i="spelling_grammar" aria-pressed="false">Spelling / grammar</button>
+          <button class="chip" type="button" data-i="unnatural" aria-pressed="false">Sounds unnatural</button>
+          <button class="chip" type="button" data-i="other_dialect" aria-pressed="false">Other dialect</button>
+        </div>
+        <div class="label" style="margin-top:16px">How would you say it? (optional)</div>
+        <textarea id="s-text" placeholder="Write your translation here"></textarea>
+        <div class="actions"><button class="btn" id="next">Next <span>→</span></button></div>
+      </div>
+
+      <div class="panel hidden" id="cant">
+        <div class="label">Why not? (tap one)</div>
+        <div class="chips">
+          <button class="chip" type="button" data-c="english">I didn't understand the English</button>
+          <button class="chip" type="button" data-c="unfamiliar_word">An unfamiliar word</button>
+          <button class="chip" type="button" data-c="other">Something else</button>
+        </div>
+      </div>
+      <div class="actions" id="cant-row"><button class="skip" id="skip">I can't judge this one</button></div>
       <p class="err" id="t-err"></p>
     </section>
 
     <!-- break / done -->
     <section id="v-break" class="hidden">
-      <p class="eyebrow">Well done</p>
+      <p class="eyebrow" id="b-eyebrow">Tangi unene!</p>
       <h1 id="b-title"></h1>
       <p id="b-text"></p>
-      <div class="row" id="b-actions"><button class="btn" id="b-more">Do ten more <span>→</span></button></div>
+      <div class="row" id="b-actions"><button class="btn" id="b-more">Ten more <span>→</span></button></div>
     </section>
   </main>
 
@@ -148,17 +180,20 @@
 (function () {
   var API = location.hostname === "localhost" ? "http://localhost:8766/v1/rate" : "https://api.ongiini.ai/v1/rate";
   var NAMES = { oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama" };
-  var LETTERS = ["A", "B", "C", "D"];
-  var token = null, screen = null, state = null, shownAt = 0, session = 0;
+  var ROUND = 10;
+  var token = null, item = null, next = null, verdict = null, shownAt = 0, session = 0, busy = false;
+  var practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
   var $ = function (id) { return document.getElementById(id); };
-  function show(id) { ["v-msg", "v-welcome", "v-task", "v-break"].forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); }
+  var VIEWS = ["v-msg", "v-welcome", "v-tip", "v-task", "v-break"];
+  function show(id) { VIEWS.forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); window.scrollTo(0, 0); }
   function msg(title, text) { $("msg-title").textContent = title; $("msg-text").textContent = text || ""; show("v-msg"); }
-  function count(n) { $("count").textContent = n + " done"; }
-  function el(tag, attrs, text) { var e = document.createElement(tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+  function count() { $("count").textContent = prog.done ? prog.done + " checked" : ""; }
+  function press(host, sel, on) { host.querySelectorAll(sel).forEach(function (b) { b.setAttribute("aria-pressed", b === on ? "true" : "false"); }); }
 
   var m = location.hash.match(/t=([A-Za-z0-9_\-]+)/);
-  try { if (m) localStorage.setItem("ongiini.rate.token", m[1]); token = localStorage.getItem("ongiini.rate.token"); }
-  catch (e) { token = m ? m[1] : null; }
+  if (m) store("ongiini.rate.token", m[1]);
+  token = store("ongiini.rate.token") || (m ? m[1] : null);
   var go = /[?&]go\b/.test(location.search);
   if (m) history.replaceState(null, "", location.pathname + location.search);
   if (!token) { msg("This page needs an invite.", "Please open the personal link we sent you on WhatsApp."); return; }
@@ -167,85 +202,97 @@
     return fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) { if (r.status === 401) throw new Error("invite"); if (!r.ok) throw new Error("server"); return r.json(); });
   }
-  function complete() {
-    return screen && screen.candidates.every(function (c) { return state.verdicts[c.cid]; }) && state.choice;
-  }
-  function refresh() { $("next").disabled = !complete(); }
 
-  function render(s) {
-    screen = s; state = { verdicts: {}, wrong: {}, choice: null }; shownAt = Date.now();
-    $("t-err").textContent = ""; $("s-text").value = ""; $("en-strange").checked = false;
-    if (!s) { $("b-title").textContent = "That's everything for now."; $("b-text").textContent = "Tangi unene! We'll let you know when there are new sentences to rate."; $("b-actions").classList.add("hidden"); show("v-break"); return; }
-    $("t-en").textContent = s.english;
-    $("bar").style.width = (session % 10) * 10 + "%";
-    var host = $("cands"); host.innerHTML = "";
-    s.candidates.forEach(function (c, i) {
-      var box = el("div", { "class": "cand" });
-      var head = el("div", { "class": "cand-head" }); head.appendChild(el("span", { "class": "cand-letter" }, LETTERS[i] + " · " + (NAMES[s.dialect] || s.dialect)));
-      box.appendChild(head); box.appendChild(el("p", { "class": "tgt" }, c.text));
-      var seg = el("div", { "class": "seg3", role: "group", "aria-label": "Translation " + LETTERS[i] });
-      [["send", "✓ Yes, as is"], ["fix", "~ Fix first"], ["no", "✗ No"]].forEach(function (o) {
-        var b = el("button", { type: "button", "data-v": o[0], "aria-pressed": "false" }, o[1]);
-        b.addEventListener("click", function () {
-          state.verdicts[c.cid] = o[0];
-          seg.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
-          refresh();
-        });
-        seg.appendChild(b);
-      });
-      box.appendChild(seg);
-      var lab = el("label", { "class": "flag" }); var cb = el("input", { type: "checkbox" });
-      cb.addEventListener("change", function () { state.wrong[c.cid] = cb.checked; });
-      lab.appendChild(cb); lab.appendChild(document.createTextNode(" Wrong dialect")); box.appendChild(lab);
-      host.appendChild(box);
-    });
-    var ch = $("choice"); ch.innerHTML = "";
-    var opts = s.candidates.map(function (c, i) { return [c.cid, LETTERS[i], ""]; })
-      .concat([["several", "Several are equally good", "wide"], ["none", "None — I'd say it differently", "wide"]]);
-    opts.forEach(function (o) {
-      var b = el("button", { type: "button", "aria-pressed": "false", "class": o[2] }, o[1]);
-      b.addEventListener("click", function () {
-        state.choice = o[0];
-        ch.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
-        if (o[0] === "none") $("s-text").focus();
-        refresh();
-      });
-      ch.appendChild(b);
-    });
-    refresh(); show("v-task"); window.scrollTo(0, 0);
+  function reset() {
+    verdict = null; busy = false; $("t-err").textContent = ""; $("s-text").value = "";
+    press($("answers"), ".answer", null); press($("issues"), ".chip", null);
+    ["follow", "cant", "p-feedback"].forEach(function (id) { $(id).classList.add("hidden"); });
+    $("answers").querySelectorAll(".answer").forEach(function (b) { b.disabled = false; });
   }
+  function fill(it, isPractice) {
+    reset();
+    $("t-practice").classList.toggle("hidden", !isPractice);
+    $("cant-row").classList.toggle("hidden", isPractice);
+    $("t-en").textContent = it.english; $("t-text").textContent = it.text;
+    $("t-lang").textContent = NAMES[it.dialect] || it.dialect;
+    $("bar").style.width = isPractice ? ((pIdx + 1) / practice.length * 100) + "%" : ((session % ROUND) / ROUND * 100) + "%";
+    shownAt = Date.now(); show("v-task");
+  }
+  function render(it) {
+    item = it; pIdx = -1;
+    if (!it) {
+      $("b-eyebrow").textContent = "Tangi unene!"; $("b-title").textContent = "That's everything for now.";
+      $("b-text").textContent = "You've checked " + prog.done + " · together " + prog.everyone + ". We'll let you know when there are new sentences.";
+      $("b-actions").classList.add("hidden"); show("v-break"); return;
+    }
+    fill(it, false);
+  }
+  function startPractice() {
+    if (!practice.length) { show("v-tip"); return; }
+    pIdx = 0; fill(practice[0], true);
+  }
+
   function send(payload) {
-    $("next").disabled = true;
-    post("/answer", Object.assign({ token: token, screen_id: screen.screen_id, duration_ms: Date.now() - shownAt }, payload))
+    if (busy) return; busy = true; $("next").disabled = true;
+    post("/answer", Object.assign({ token: token, item_key: item.item_key, duration_ms: Date.now() - shownAt }, payload))
       .then(function (r) {
-        session += 1; count(r.progress.done);
-        if (session % 10 === 0 && r.screen) {
-          $("b-title").textContent = session + " sentences — tangi unene!"; $("b-text").textContent = "Take a break, or carry on. Your progress is saved.";
-          $("b-actions").classList.remove("hidden"); show("v-break"); screen = r.screen; return;
+        session += 1; prog = r.progress; count(); $("next").disabled = false;
+        if (session % ROUND === 0 && r.item) {
+          $("b-eyebrow").textContent = "Round done"; $("b-title").textContent = "Tangi unene!";
+          $("b-text").textContent = "You've checked " + prog.done + " · together " + prog.everyone + ". Carry on, or take a break — your progress is saved.";
+          $("b-actions").classList.remove("hidden"); item = r.item; show("v-break"); return;
         }
-        render(r.screen);
+        render(r.item);
       })
-      .catch(function () { refresh(); $("t-err").textContent = "That didn't save — please check your connection and try again."; });
+      .catch(function () { busy = false; $("next").disabled = false; $("t-err").textContent = "That didn't save — please check your connection and try again."; });
   }
+
+  $("answers").querySelectorAll(".answer").forEach(function (b) {
+    b.addEventListener("click", function () {
+      verdict = b.getAttribute("data-v"); press($("answers"), ".answer", b); $("cant").classList.add("hidden");
+      if (pIdx >= 0) {                                   // practice: feedback, nothing is stored
+        var p = practice[pIdx], ok = verdict === p.expected;
+        $("answers").querySelectorAll(".answer").forEach(function (x) { x.disabled = true; });
+        var fb = $("p-feedback"); fb.className = "feedback " + (ok ? "ok" : "no");
+        $("p-head").textContent = ok ? "Yes — well spotted." : "Look again.";
+        $("p-text").textContent = p.explanation || "";
+        return;
+      }
+      if (verdict === "good") { send({ verdict: "good" }); return; }
+      $("follow").classList.remove("hidden");
+      $("follow").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+  $("issues").querySelectorAll(".chip").forEach(function (b) {
+    b.addEventListener("click", function () { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true"); });
+  });
   $("next").addEventListener("click", function () {
-    if (!complete()) return;
-    send({ verdicts: state.verdicts, choice: state.choice,
-           wrong_dialect: Object.keys(state.wrong).filter(function (k) { return state.wrong[k]; }),
-           english_strange: $("en-strange").checked, suggestion: $("s-text").value || null });
+    var issues = []; $("issues").querySelectorAll('.chip[aria-pressed="true"]').forEach(function (b) { issues.push(b.getAttribute("data-i")); });
+    send({ verdict: verdict, issues: issues, suggestion: $("s-text").value.trim() || null });
   });
   $("skip").addEventListener("click", function () {
-    send({ skipped: true, english_strange: $("en-strange").checked, suggestion: $("s-text").value || null });
+    $("follow").classList.add("hidden"); press($("answers"), ".answer", null); verdict = null;
+    $("cant").classList.remove("hidden"); $("cant").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
-  $("b-more").addEventListener("click", function () { render(screen); });
-  $("start").addEventListener("click", function () { try { localStorage.setItem("ongiini.rate.welcomed", "1"); } catch (e) {} render(screen); });
+  $("cant").querySelectorAll(".chip").forEach(function (b) {
+    b.addEventListener("click", function () { send({ verdict: "cant_judge", cant_reason: b.getAttribute("data-c") }); });
+  });
+  $("p-next").addEventListener("click", function () {
+    pIdx += 1;
+    if (pIdx < practice.length) fill(practice[pIdx], true);
+    else { pIdx = -1; store("ongiini.rate.practiced", "1"); show("v-tip"); }
+  });
+  $("start").addEventListener("click", startPractice);
+  $("go").addEventListener("click", function () { render(item); });
+  $("b-more").addEventListener("click", function () { render(item); });
 
   post("/session", { token: token }).then(function (s) {
     var d = s.dialects.map(function (x) { return NAMES[x] || x; }).join(" and ");
-    $("w-name").textContent = s.label; $("w-dialect").textContent = d; $("w-dialect2").textContent = d;
+    $("w-name").textContent = s.label;
     document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
-    count(s.progress.done); screen = s.screen;
-    var welcomed = false; try { welcomed = localStorage.getItem("ongiini.rate.welcomed") === "1"; } catch (e) {}
-    if ((welcomed && s.progress.done > 0) || go) render(screen); else show("v-welcome");
+    prog = s.progress; count(); item = s.item;
+    practice = (s.practice || []).filter(function (p) { return p.dialect === s.dialects[0]; }).slice(0, 2);
+    if (go || prog.done > 0 || store("ongiini.rate.practiced") === "1") render(item); else show("v-welcome");
   }).catch(function (e) {
     if (e.message === "invite") { try { localStorage.removeItem("ongiini.rate.token"); } catch (x) {}
       msg("This invite link doesn't work.", "It may have been replaced. Please ask us for a new link on WhatsApp."); }

@@ -1,5 +1,9 @@
-"""Tests for the side-by-side translation-rating store."""
+"""Tests for the v3 rating store: one translation per task, grouped items,
+pairing and control rules, repeats, group mixing."""
 from __future__ import annotations
+
+import json
+import random
 
 import pytest
 
@@ -13,14 +17,29 @@ def con(tmp_path):
     c.close()
 
 
-def screen(sid, item, dialect="oshikwanyama", priority=2, target=1, control=False):
-    cands = [{"cand_id": f"{sid}-k", "text": f"ref {item}", "kind": "ref", "source": "kaarina"},
-             {"cand_id": f"{sid}-c", "text": f"claude {item}", "kind": "model", "source": "claude-opus-5"}]
-    cands.append({"cand_id": f"{sid}-x", "text": "other sentence", "kind": "control",
-                  "source": "kaarina-ref-of-9", "expected": "no"} if control else
-                 {"cand_id": f"{sid}-g", "text": f"gemma {item}", "kind": "model", "source": "gemma-4-26b"})
-    return {"screen_id": sid, "round": "r1", "item_id": item, "dialect": dialect,
-            "english": f"en {item}", "priority": priority, "target": target, "candidates": cands}
+def item(key, sid, grp, kind="ref", target=1, pair_of=None, severity=0, dialect="oshikwanyama",
+         expected=None, source=None):
+    return {"item_key": key, "round": "r1", "sentence_id": sid, "dialect": dialect,
+            "english": f"en {sid}", "text": f"{grp} {sid}", "grp": grp, "kind": kind,
+            "source": source or grp, "expected": expected, "target": target, "pair_of": pair_of,
+            "severity": severity}
+
+
+def full_set(n=40):
+    items = []
+    for s in range(n):
+        items.append(item(f"ref{s}", s, "random_ref"))
+        items.append(item(f"cl{s}", s, "claude_pair", kind="model", pair_of=f"ref{s}"))
+    for s in range(100, 110):
+        items.append(item(f"flag{s}", s, "flagged_ref", target=2, severity=s % 3))
+        items.append(item(f"gem{s}", s, "gemma", kind="model"))
+    for s in range(200, 215):
+        items.append(item(f"err{s}", s, "control_error", kind="control", expected="wrong"))
+        items.append(item(f"ref{s}", s, "random_ref"))          # same sentence as a control
+    items.append(item("wrong1", 300, "control_wrong", kind="control", expected="wrong"))
+    items.append({**item("prac1", 400, "practice", kind="practice", expected="wrong"),
+                  "explanation": "The number does not match the English."})
+    return items
 
 
 def rater(con, dialects=("oshikwanyama",), label="R"):
@@ -28,10 +47,15 @@ def rater(con, dialects=("oshikwanyama",), label="R"):
     return token, ratings.rater_for(con, token)
 
 
-def answer_all(con, r, s, verdict="send", choice=None):
-    ids = [c["cid"] for c in s["candidates"]]
-    ratings.record(con, r, s["screen_id"], verdicts={i: verdict for i in ids}, wrong_dialect=[],
-                   choice=choice or ids[0])
+def run(con, r, n, verdict="good"):
+    served = []
+    for _ in range(n):
+        it = ratings.next_item(con, r)
+        if it is None:
+            break
+        served.append(it["item_key"])
+        ratings.record(con, r, it["item_key"], verdict)
+    return served
 
 
 def test_token_stored_hashed(con):
@@ -40,93 +64,149 @@ def test_token_stored_hashed(con):
     assert ratings.rater_for(con, "nope") is None
 
 
-def test_priority_order_and_targets(con):
-    ratings.load_screens(con, [screen("a", 1, priority=3), screen("b", 2, priority=1),
-                               screen("c", 3, priority=2, target=2)])
-    _, r1 = rater(con)
-    order = []
-    while (s := ratings.next_screen(con, r1)):
-        order.append(s["screen_id"])
-        answer_all(con, r1, s)
-    assert order == ["b", "c", "a"]
-    _, r2 = rater(con)
-    assert ratings.next_screen(con, r2)["screen_id"] == "c"   # only c wants a 2nd rater
-
-
-def test_screen_never_reveals_kind_or_source(con):
-    ratings.load_screens(con, [screen("a", 1, control=True)])
+def test_items_never_reveal_origin_but_practice_has_feedback(con):
+    ratings.load_items(con, full_set())
     _, r = rater(con)
-    s = ratings.next_screen(con, r)
-    assert set(s) == {"screen_id", "dialect", "english", "candidates"}
-    assert all(set(c) == {"cid", "text"} for c in s["candidates"])
-    assert "kaarina" not in str(s) and "control" not in str(s)
+    it = ratings.next_item(con, r)
+    assert set(it) == {"item_key", "dialect", "english", "text"}
+    prac = ratings.practice_items(con, r)
+    assert prac and prac[0]["expected"] == "wrong" and prac[0]["explanation"]
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "prac1", "wrong")       # practice is never scored
 
 
-def test_candidate_order_differs_between_raters(con):
-    ratings.load_screens(con, [screen(f"s{i}", i, target=2) for i in range(12)])
-    _, r1 = rater(con, label="A")
-    _, r2 = rater(con, label="B")
-    orders = set()
-    for _ in range(12):
-        for r in (r1, r2):
-            s = ratings.next_screen(con, r)
-            orders.add(tuple(c["cid"][-1] for c in s["candidates"]))
-            answer_all(con, r, s)
-    assert len(orders) > 1
+def test_claude_pair_only_to_same_rater_after_gap(con):
+    ratings.load_items(con, full_set())
+    _, a = rater(con, label="A")
+    _, b = rater(con, label="B")
+    served_a = run(con, a, 40)
+    served_b = run(con, b, 40)
+    pos_a = {}
+    for i, k in enumerate(served_a):
+        pos_a.setdefault(k, i)                         # first sighting, not the repeat
+    for k in served_a:
+        if k.startswith("cl"):
+            ref = "ref" + k[2:]
+            assert ref in pos_a and pos_a[k] - pos_a[ref] >= ratings.PAIR_GAP
+    for k in served_b:
+        if k.startswith("cl"):
+            assert "ref" + k[2:] in served_b                # never someone else's pair
 
 
-def test_every_candidate_needs_a_verdict_and_a_valid_choice(con):
-    ratings.load_screens(con, [screen("a", 1)])
+def test_gemma_never_to_rater_who_saw_that_reference(con):
+    items = [item("flag1", 1, "flagged_ref", target=2), item("gem1", 1, "gemma", kind="model")]
+    ratings.load_items(con, items)
+    _, a = rater(con)
+    ratings.record(con, a, "flag1", "good")
+    assert ratings.next_item(con, a) is None
+    _, b = rater(con, label="B")
+    served = run(con, b, 5)
+    assert served[0] in ("flag1", "gem1") and not ({"flag1", "gem1"} <= set(served))
+
+
+def test_control_error_and_reference_of_same_sentence_exclude_each_other(con):
+    ratings.load_items(con, [item("err1", 1, "control_error", kind="control", expected="wrong"),
+                             item("ref1", 1, "random_ref")])
     _, r = rater(con)
-    s = ratings.next_screen(con, r)
-    ids = [c["cid"] for c in s["candidates"]]
-    with pytest.raises(ValueError):
-        ratings.record(con, r, "a", verdicts={ids[0]: "send"}, wrong_dialect=[], choice=ids[0])
-    with pytest.raises(ValueError):
-        ratings.record(con, r, "a", verdicts={i: "great" for i in ids}, wrong_dialect=[], choice=ids[0])
-    with pytest.raises(ValueError):
-        ratings.record(con, r, "a", verdicts={i: "send" for i in ids}, wrong_dialect=[], choice="bogus")
-    ratings.record(con, r, "a", verdicts={i: "no" for i in ids}, wrong_dialect=[ids[1]],
-                   choice="none", suggestion="Better one, call 081 234 5678")
-    row = con.execute("SELECT choice, suggestion FROM screen_ratings").fetchone()
-    assert row["choice"] == "none" and "[REDACTED:phone]" in row["suggestion"]
-    assert con.execute("SELECT SUM(wrong_dialect) FROM candidate_ratings").fetchone()[0] == 1
+    served = run(con, r, 5)
+    assert len(served) == 1
 
 
-def test_skip_needs_no_verdicts_and_counts_as_done(con):
-    ratings.load_screens(con, [screen("a", 1), screen("b", 2)])
+def test_repeats_after_gap_marked_and_capped(con):
+    ratings.load_items(con, full_set(60))
     _, r = rater(con)
-    ratings.record(con, r, "a", verdicts=None, wrong_dialect=None, choice=None, skipped=True)
-    assert ratings.progress(con, r["rater_id"])["done"] == 1
-    assert ratings.next_screen(con, r)["screen_id"] == "b"
+    run(con, r, 80)
+    rows = con.execute("SELECT item_key, seq, is_repeat FROM ratings WHERE rater_id = ?",
+                       (r["rater_id"],)).fetchall()
+    firsts = {x["item_key"]: x["seq"] for x in rows if not x["is_repeat"]}
+    reps = [x for x in rows if x["is_repeat"]]
+    assert 0 < len(reps) <= ratings.MAX_REPEATS
+    for x in reps:
+        assert x["seq"] - firsts[x["item_key"]] >= ratings.REPEAT_GAP
+        assert not x["item_key"].startswith(("err", "wrong"))
+
+
+def test_sessions_mix_groups_from_the_start(con):
+    ratings.load_items(con, full_set())
+    _, r = rater(con)
+    first20 = run(con, r, 20)
+    groups = {k.rstrip("0123456789") for k in first20}
+    assert {"ref", "flag"} <= groups and ({"err", "wrong"} & groups)
+
+
+def test_flagged_items_get_two_raters(con):
+    ratings.load_items(con, [item("flag1", 1, "flagged_ref", target=2)])
+    _, a = rater(con, label="A")
+    _, b = rater(con, label="B")
+    _, c = rater(con, label="C")
+    assert run(con, a, 3) == ["flag1"] and run(con, b, 3) == ["flag1"] and run(con, c, 3) == []
+
+
+def test_record_validation_and_scrubbing(con):
+    ratings.load_items(con, [item("ref1", 1, "random_ref"), item("ref2", 2, "random_ref"),
+                             item("ref3", 3, "random_ref")])
+    _, r = rater(con)
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "ref1", "great")
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "ref1", "wrong", issues=["meaning"])
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "ref1", "cant_judge", cant_reason="tired")
+    ratings.record(con, r, "ref1", "wrong", issues=["word_choice", "unnatural"],
+                   suggestion="better, call 081 234 5678")
+    ratings.record(con, r, "ref2", "good", issues=["word_choice"])      # issues ignored on good
+    ratings.record(con, r, "ref3", "cant_judge", cant_reason="english")
+    rows = {x["item_key"]: x for x in con.execute("SELECT * FROM ratings")}
+    assert json.loads(rows["ref1"]["issues"]) == ["unnatural", "word_choice"]
+    assert "[REDACTED:phone]" in rows["ref1"]["suggestion"]
+    assert rows["ref2"]["issues"] is None and rows["ref3"]["cant_reason"] == "english"
 
 
 def test_other_dialect_rejected(con):
-    ratings.load_screens(con, [screen("a", 1, dialect="oshindonga")])
+    ratings.load_items(con, [item("ref1", 1, "random_ref", dialect="oshindonga")])
     _, r = rater(con, ("oshikwanyama",))
-    assert ratings.next_screen(con, r) is None
+    assert ratings.next_item(con, r) is None
     with pytest.raises(ValueError):
-        ratings.record(con, r, "a", verdicts={}, wrong_dialect=[], choice="none")
+        ratings.record(con, r, "ref1", "good")
 
 
-def test_report_absolute_relative_and_controls(con):
-    ratings.load_screens(con, [screen("a", 1), screen("b", 2, control=True)])
-    _, r = rater(con)
-    ratings.record(con, r, "a", verdicts={"a-k": "send", "a-c": "fix", "a-g": "no"},
-                   wrong_dialect=[], choice="a-k")
-    ratings.record(con, r, "b", verdicts={"b-k": "send", "b-c": "send", "b-x": "send"},
-                   wrong_dialect=[], choice="several")                      # missed the control
-    rep = ratings.report(con)
-    k = rep["by_source"]["kaarina/oshikwanyama"]
-    assert k["send"] == 2 and k["chosen"] == 1 and k["shown"] == 2 and k["send_pct"] == 100.0
-    assert rep["raters"][0]["controls"] == 1 and rep["raters"][0]["controls_ok"] == 0
+def test_simulation_three_raters_rules_hold(con):
+    ratings.load_items(con, full_set(50))
+    rs = [rater(con, label=f"R{i}")[1] for i in range(3)]
+    rng = random.Random(1)
+    active = list(rs)
+    while active:
+        r = rng.choice(active)
+        it = ratings.next_item(con, r)
+        if it is None:
+            active.remove(r)
+            continue
+        ratings.record(con, r, it["item_key"], rng.choice(["good", "almost", "wrong"]))
+    rows = con.execute("SELECT r.rater_id, r.item_key, r.seq, r.is_repeat, i.grp, i.sentence_id, "
+                       "i.pair_of FROM ratings r JOIN items i USING (item_key)").fetchall()
+    by_rater: dict[int, dict] = {}
+    for x in rows:
+        by_rater.setdefault(x["rater_id"], {})[(x["item_key"], x["is_repeat"])] = x
+    for rid, mine in by_rater.items():
+        firsts = {k[0]: v for k, v in mine.items() if not k[1]}
+        ref_like = [v["sentence_id"] for v in firsts.values() if v["grp"] in ratings.REF_LIKE]
+        assert len(ref_like) == len(set(ref_like))            # one reference-like per sentence
+        for v in firsts.values():
+            if v["grp"] == "claude_pair":
+                assert firsts[v["pair_of"]]["seq"] + ratings.PAIR_GAP <= v["seq"]
+    n_per = dict(con.execute("SELECT item_key, COUNT(DISTINCT rater_id) FROM ratings GROUP BY 1").fetchall())
+    for key, n in n_per.items():
+        if key.startswith("flag"):
+            assert n <= 2
+        elif key.startswith(("ref", "cl", "gem")):
+            assert n == 1
 
 
 def test_delete_round_and_rater(con):
-    ratings.load_screens(con, [screen("a", 1)])
+    ratings.load_items(con, full_set(5))
     _, r = rater(con)
-    answer_all(con, r, ratings.next_screen(con, r))
-    assert ratings.delete_round(con, "r1") == 1
+    run(con, r, 3)
+    assert ratings.delete_round(con, "r1") > 0
     ratings.delete_rater(con, r["rater_id"])
-    for t in ("screens", "candidates", "screen_ratings", "candidate_ratings", "raters"):
-        assert con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM ratings").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM raters").fetchone()[0] == 0

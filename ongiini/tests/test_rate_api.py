@@ -1,4 +1,4 @@
-"""HTTP-level tests for /v1/rate."""
+"""HTTP-level tests for /v1/rate (v3)."""
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -15,20 +15,22 @@ def test_session_and_answer_flow(tmp_path, monkeypatch):
     app.include_router(build_router(), prefix="/v1/rate")
     c = TestClient(app)
     con = ratings.connect()
-    ratings.load_screens(con, [{"screen_id": "a", "round": "r1", "item_id": 1, "dialect": "oshindonga",
-        "english": "Hello", "priority": 1, "target": 1, "candidates": [
-            {"cand_id": "a1", "text": "Wa lalapo", "kind": "ref", "source": "kaarina"},
-            {"cand_id": "a2", "text": "Halo", "kind": "model", "source": "claude-opus-5"}]}])
+    base = {"round": "r1", "dialect": "oshindonga", "english": "Hello"}
+    ratings.load_items(con, [
+        {**base, "item_key": "a", "sentence_id": 1, "text": "Wa lalapo", "grp": "random_ref",
+         "kind": "ref", "source": "kaarina"},
+        {**base, "item_key": "p", "sentence_id": 9, "text": "x", "grp": "practice", "kind": "practice",
+         "source": "kaarina+err:number", "expected": "wrong", "explanation": "Number differs."}])
     token = ratings.add_rater(con, "Tester", ["oshindonga"])
     con.close()
 
     assert c.post("/v1/rate/session", json={"token": "x" * 20}).status_code == 401
     s = c.post("/v1/rate/session", json={"token": token}).json()
-    assert s["label"] == "Tester" and s["screen"]["screen_id"] == "a"
-    assert "kaarina" not in str(s) and "ref" not in str(s["screen"]["candidates"])
-    bad = c.post("/v1/rate/answer", json={"token": token, "screen_id": "a",
-                                          "verdicts": {"a1": "send"}, "choice": "a1"})
+    assert s["label"] == "Tester" and s["item"]["item_key"] == "a"
+    assert s["practice"][0]["expected"] == "wrong"
+    assert "kaarina" not in str(s["item"])
+    bad = c.post("/v1/rate/answer", json={"token": token, "item_key": "a", "verdict": "great"})
     assert bad.status_code == 400
-    ok = c.post("/v1/rate/answer", json={"token": token, "screen_id": "a",
-                                         "verdicts": {"a1": "send", "a2": "no"}, "choice": "a1"}).json()
-    assert ok["progress"]["done"] == 1 and ok["screen"] is None
+    ok = c.post("/v1/rate/answer", json={"token": token, "item_key": "a", "verdict": "almost",
+                                         "issues": ["word_choice"], "suggestion": "Wa lala po"}).json()
+    assert ok["progress"] == {"done": 1, "everyone": 1} and ok["item"] is None

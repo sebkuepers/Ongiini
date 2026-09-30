@@ -2,10 +2,17 @@
 """Admin for the ongiini.ai/rate/ surface. Runs inside the webhook container:
 
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py add-rater "Ndapewa" oshikwanyama
-    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py load /data/private/rating_tasks_round1.json
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py load /data/private/rating_items_r1.json
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py report
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py raters
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py deactivate 3
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py delete-rater 3
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py delete-round demo
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py reset-test --yes
+
+delete-rater removes a rater and all their ratings; delete-round removes a
+round's items and their ratings; reset-test wipes everything (test phase
+only — refuses without --yes).
 
 add-rater prints the personal invite link once — send it via WhatsApp.
 Only a hash of the token is stored; a lost link is replaced by a new rater.
@@ -39,10 +46,10 @@ def main(argv: list[str]) -> int:
         token = ratings.add_rater(con, args[0], dialects)
         print(f"{args[0]} ({', '.join(dialects)}):\n  {BASE_URL}#t={token}")
     elif cmd == "load" and len(args) == 1:
-        n = ratings.load_tasks(con, json.loads(Path(args[0]).read_text()))
-        print(f"{n} tasks in the database")
+        n = ratings.load_items(con, json.loads(Path(args[0]).read_text()))
+        print(f"{n} items in the database")
     elif cmd == "report":
-        print(json.dumps(ratings.report(con), indent=2))
+        print(json.dumps(ratings.summary(con), indent=2))
     elif cmd == "raters":
         for r in con.execute("SELECT rater_id, label, dialects, active, "
                              "(SELECT COUNT(*) FROM ratings x WHERE x.rater_id = raters.rater_id) n FROM raters"):
@@ -51,6 +58,16 @@ def main(argv: list[str]) -> int:
         with con:
             con.execute("UPDATE raters SET active = 0 WHERE rater_id = ?", (int(args[0]),))
         print("deactivated")
+    elif cmd == "delete-rater" and len(args) == 1:
+        ratings.delete_rater(con, int(args[0]))
+        print("deleted rater and their ratings")
+    elif cmd == "delete-round" and len(args) == 1:
+        print(f"{ratings.delete_round(con, args[0])} items deleted (with their ratings)")
+    elif cmd == "reset-test" and args == ["--yes"]:
+        with con:
+            for t in ("ratings", "items", "raters"):
+                con.execute(f"DELETE FROM {t}")
+        print("all raters, items and ratings deleted")
     else:
         print(__doc__)
         return 1
