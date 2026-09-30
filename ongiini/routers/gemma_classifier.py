@@ -15,11 +15,11 @@ verdict, a confidence band, a short reasoning trace, and a small
     OPT_OUT_BROADCAST,                 # stop receiving proactive nudges
   }
 
-PolicyTable consumes ``verdict`` + ``depth`` (depth is derived: SEARCH_DEEP
-→ DEEP, everything else → SHALLOW). Everything else returned by Gemma —
-``confidence``, ``reasoning``, ``extracted``, ``state_relevance``,
-``secondary_verdict`` — lands in ``ClassifierResult.attrs`` for hooks /
-downstream consumers that want richer signal than a single label.
+PolicyTable consumes ``verdict`` + ``depth`` (depth is derived:
+SEARCH_DEEP / NONE_DEEP → DEEP, everything else → SHALLOW). ``confidence``
+lands in ``ClassifierResult.attrs``. The model is not asked for a
+reasoning sentence any more: decoding it was most of the classifier's
+1.4 s p50 latency.
 
 Why JSON: the previous design emitted one bare token and threw away
 every signal Gemma had. It also leaned on state-as-gate rules in the
@@ -31,8 +31,12 @@ as part of its reasoning, and gives us per-call traces we can iterate
 on.
 
 Fail-safe: any timeout, JSON parse failure, or network error yields
-``ClassifierResult(verdict="NONE", depth="SHALLOW")``, which the policy
-table maps to a sensible default — never breakage.
+``ClassifierResult(verdict="NONE", depth="DEEP", fallback_reason=...)``.
+DEEP so an unclassified turn is never cut short; ``fallback_reason`` so
+the trace can tell a failed classification from a real NONE.
+
+The call goes through the shared Owela ``Model`` adapter (same output
+sanitising and timeout ceiling as the act loop).
 """
 
 from __future__ import annotations
@@ -47,9 +51,11 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from owela import (
-    ClassifierResult, DEPTH_DEEP, DEPTH_SHALLOW, InboundMessage,
-    VERDICT_ADMIN, VERDICT_DOCS, VERDICT_NONE, VERDICT_SEARCH,
+    ClassifierResult, DEPTH_DEEP, DEPTH_SHALLOW, InboundMessage, Model,
+    ModelRequest, VERDICT_ADMIN, VERDICT_DOCS, VERDICT_NONE, VERDICT_SEARCH,
 )
+
+from ..models.vllm_gemma import VLLMGemmaModel
 
 log = logging.getLogger("ongiini.routers.gemma")
 
@@ -73,7 +79,7 @@ VERDICT_OPT_OUT_BROADCAST = "OPT_OUT_BROADCAST"
 # to NONE + SHALLOW. Kept as a set so membership is O(1).
 _VALID_VERDICTS: frozenset[str] = frozenset({
     "SEARCH_SHALLOW", "SEARCH_DEEP", "SEARCH",  # legacy: bare SEARCH → SHALLOW
-    "DOCS", "ADMIN", "NONE",
+    "DOCS", "ADMIN", "NONE", "NONE_DEEP",
     VERDICT_CONTRIB_INVITE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_NEXT,
     VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP, VERDICT_CONTRIB_DECLINE,
     VERDICT_CONTRIB_STATS,
@@ -111,7 +117,7 @@ decide what kind of turn it is. The downstream policy table uses your verdict
 to choose which tools the model gets, what loop shape to run, and which reply
 style is appropriate.
 
-The 13 verdicts you can choose from are:
+The 14 verdicts you can choose from are:
 
 SEARCH_SHALLOW — the question needs the web AND the answer is a single fact,
 single business name, number, price, opening time, yes/no with brief context.
@@ -167,7 +173,12 @@ THIS conversation whose answer is already in the history (asking for the
 sources you cited earlier, asking for a summary of what was discussed,
 re-asking for an option you already presented). These don't need a tool call
 — the answer is in the history. NONE is also the default for anything that
-doesn't fit the other 12 buckets.
+doesn't fit the other 13 buckets.
+
+NONE_DEEP — same as NONE, but a good answer needs length: translating a
+passage, writing or improving a CV, letter or essay, explaining homework or a
+concept step by step, a plan or list of 5+ items. Greetings, yes/no, quick
+facts and short follow-ups stay NONE.
 
 CONTRIBUTE_INVITE — the user is volunteering to help translate Oshiwambo OR
 asking whether/when Ongiini supports Oshiwambo OR using Oshiwambo for a real
@@ -302,9 +313,8 @@ Tie-breakers when you're unsure:
 Output schema — return ONE JSON object, no surrounding prose:
 
 {{
-  "verdict":    one of the 13 labels above,
-  "confidence": "high" | "medium" | "low",
-  "reasoning":  1-2 sentences explaining what in the message drove the verdict
+  "verdict":    one of the 14 labels above,
+  "confidence": "high" | "medium" | "low"
 }}
 
 {contribute_state}{facts}{context}Current message:
@@ -328,13 +338,10 @@ Output schema — return ONE JSON object, no surrounding prose:
 # side cheap on every call regardless of timeout.
 _TIMEOUT_S = 8.0
 
-# Max output tokens for the JSON reply. Trimmed schema (verdict +
-# confidence + reasoning, no extracted/state_relevance/secondary) needs
-# ~30 tokens scaffolding + 60-80 tokens of reasoning text = ~120 total.
-# 200 leaves headroom; truncation would corrupt the JSON and fall
-# through to NONE — we surface finish_reason=="length" so it's
-# monitorable from logs.
-_MAX_OUTPUT_TOKENS = 200
+# Max output tokens for the JSON reply. The schema is verdict +
+# confidence only (~20 tokens); 60 leaves headroom. Truncation would
+# corrupt the JSON and fall back — finish_reason=="length" is logged.
+_MAX_OUTPUT_TOKENS = 60
 
 
 class GemmaClassifier:
@@ -342,9 +349,10 @@ class GemmaClassifier:
 
     def __init__(
         self,
-        base_url: str,
-        model_id: str,
+        base_url: str = "",
+        model_id: str = "",
         *,
+        model: Model | None = None,
         client: AsyncOpenAI | None = None,
         timeout_s: float = _TIMEOUT_S,
         max_prev_chars: int = 500,
@@ -354,7 +362,8 @@ class GemmaClassifier:
         self.timeout_s = timeout_s
         self.max_prev_chars = max_prev_chars
         self.short_msg_threshold_chars = short_msg_threshold_chars
-        self._client = client or AsyncOpenAI(base_url=base_url, api_key="not-needed")
+        # Production passes the shared adapter; tests may pass a raw client.
+        self._model: Model = model or VLLMGemmaModel(base_url, model_id, client=client)
 
     async def classify(self, msg: InboundMessage) -> ClassifierResult:
         text = (msg.text or "").strip()
@@ -364,8 +373,11 @@ class GemmaClassifier:
         # Image-bearing turns skip the router. The current message's
         # informational content is in the IMAGE, not the text caption —
         # a caption like "what is this?" routinely misclassifies as DOCS.
+        # DEEP: photos are mostly homework and CVs, which need room.
         if msg.has_image:
-            return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_SHALLOW)
+            return ClassifierResult(
+                verdict=VERDICT_NONE, depth=DEPTH_DEEP, attrs={"skipped": "image"},
+            )
 
         # Read the contributor's state ONCE. It feeds two decisions:
         #  - the state block we render into the prompt;
@@ -412,58 +424,46 @@ class GemmaClassifier:
             if facts:
                 facts = facts + "\n\n"
 
-        try:
-            resp = await asyncio.wait_for(
-                self._client.chat.completions.create(
-                    model=self.model_id,
-                    messages=[{
-                        "role": "user",
-                        "content": CLASSIFIER_PROMPT.format(
-                            user_text=text,
-                            context=context,
-                            contribute_state=contribute_state,
-                            facts=facts,
-                        ),
-                    }],
-                    temperature=0.0,
-                    max_tokens=_MAX_OUTPUT_TOKENS,
-                    response_format={"type": "json_object"},
+        req = ModelRequest(
+            messages=[{
+                "role": "user",
+                "content": CLASSIFIER_PROMPT.format(
+                    user_text=text,
+                    context=context,
+                    contribute_state=contribute_state,
+                    facts=facts,
                 ),
-                timeout=self.timeout_s,
-            )
-        except asyncio.TimeoutError:
-            log.warning("classifier timed out after %ss — falling back to NONE", self.timeout_s)
-            return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_SHALLOW)
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("classifier failed (%s) — falling back to NONE", exc)
-            return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_SHALLOW)
-
-        # Detect output truncation. When the model hits _MAX_OUTPUT_TOKENS
-        # mid-JSON, json.loads silently fails and we fall through to NONE.
-        # Surfacing it here as a warning makes the truncation rate
-        # monitorable from logs without changing user-facing behaviour.
+            }],
+            temperature=0.0,
+            max_tokens=_MAX_OUTPUT_TOKENS,
+            response_format="json_object",
+            timeout_s=self.timeout_s,
+        )
         try:
-            finish_reason = resp.choices[0].finish_reason if resp.choices else ""
-        except Exception:
-            finish_reason = ""
-        if finish_reason == "length":
+            resp = await asyncio.wait_for(self._model.complete(req), timeout=self.timeout_s)
+        except asyncio.TimeoutError:
+            log.warning("classifier timed out after %ss — falling back", self.timeout_s)
+            return _fallback("timeout")
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("classifier failed (%s) — falling back", exc)
+            return _fallback(f"error:{type(exc).__name__}")
+
+        if resp.finish_reason == "length":
             log.warning(
-                "classifier output truncated at max_tokens=%d — JSON parse will fail "
-                "and route to NONE. Consider bumping _MAX_OUTPUT_TOKENS.",
+                "classifier output truncated at max_tokens=%d — JSON parse will fail",
                 _MAX_OUTPUT_TOKENS,
             )
 
-        billable_in, completion, cached = _billable(resp.usage)
-        verdict, depth, attrs = self._parse(resp)
-
-        return ClassifierResult(
-            verdict=verdict,
-            depth=depth,
-            tokens_in=billable_in,
-            tokens_out=completion,
-            cached_tokens=cached,
-            attrs=attrs,
-        )
+        parsed = self._parse(resp.content)
+        if parsed is None:
+            result = _fallback("unparseable")
+        else:
+            verdict, depth, attrs = parsed
+            result = ClassifierResult(verdict=verdict, depth=depth, attrs=attrs)
+        result.tokens_in = resp.tokens_in
+        result.tokens_out = resp.tokens_out
+        result.cached_tokens = resp.cached_tokens
+        return result
 
     # ----- internal helpers -----
 
@@ -608,44 +608,33 @@ class GemmaClassifier:
         return "Recent facts about this user (for disambiguation):\n" + "\n".join(rendered)
 
     @staticmethod
-    def _parse(resp: Any) -> tuple[str, str, dict[str, Any]]:
+    def _parse(raw: str) -> tuple[str, str, dict[str, Any]] | None:
         """Parse Gemma's JSON reply into (verdict, depth, attrs).
 
-        On any parse failure / unrecognised verdict, returns the
-        fail-safe ``(NONE, SHALLOW, {})`` — same posture as the old
-        token parser. Logs a warning so it's visible in traces."""
-        if not resp.choices:
-            return VERDICT_NONE, DEPTH_SHALLOW, {}
-
-        raw = (resp.choices[0].message.content or "").strip()
+        Returns None on any parse failure / unrecognised verdict — the
+        caller turns that into a fallback with ``fallback_reason``.
+        Logs a warning so it's visible."""
+        raw = (raw or "").strip()
         try:
             parsed = json.loads(raw)
         except (json.JSONDecodeError, ValueError):
-            log.warning("classifier got unparseable JSON %r — falling back to NONE", raw[:200])
-            return VERDICT_NONE, DEPTH_SHALLOW, {}
+            log.warning("classifier got unparseable JSON %r", raw[:200])
+            return None
 
         if not isinstance(parsed, dict):
-            log.warning("classifier JSON was not an object: %r — falling back to NONE", raw[:200])
-            return VERDICT_NONE, DEPTH_SHALLOW, {}
+            log.warning("classifier JSON was not an object: %r", raw[:200])
+            return None
 
         # Gemma occasionally emits non-string verdict values (int, bool,
-        # null, list) — strip()/upper() would AttributeError. Coerce
-        # defensively: only treat as a valid verdict when it's an actual
-        # string in the allowed set.
+        # null, list) — coerce defensively.
         raw_verdict_field = parsed.get("verdict")
         if not isinstance(raw_verdict_field, str):
-            log.warning(
-                "classifier got non-string verdict %r — falling back to NONE",
-                raw_verdict_field,
-            )
-            return VERDICT_NONE, DEPTH_SHALLOW, {}
+            log.warning("classifier got non-string verdict %r", raw_verdict_field)
+            return None
         raw_verdict = raw_verdict_field.strip().upper()
         if raw_verdict not in _VALID_VERDICTS:
-            log.warning(
-                "classifier got unrecognised verdict %r — falling back to NONE",
-                raw_verdict,
-            )
-            return VERDICT_NONE, DEPTH_SHALLOW, {}
+            log.warning("classifier got unrecognised verdict %r", raw_verdict)
+            return None
 
         # Verdict → (verdict_for_policy, depth) mapping.
         if raw_verdict == "SEARCH_SHALLOW":
@@ -660,21 +649,24 @@ class GemmaClassifier:
             verdict, depth = VERDICT_ADMIN, DEPTH_SHALLOW
         elif raw_verdict == "NONE":
             verdict, depth = VERDICT_NONE, DEPTH_SHALLOW
+        elif raw_verdict == "NONE_DEEP":
+            verdict, depth = VERDICT_NONE, DEPTH_DEEP
         else:
             # All CONTRIBUTE_* and OPT_OUT_BROADCAST pass through as-is.
             verdict, depth = raw_verdict, DEPTH_SHALLOW
 
-        # Everything else flows into attrs for downstream consumers
-        # (hooks, future policies that gate on confidence, eval logs).
         attrs: dict[str, Any] = {
-            "verdict_raw":       raw_verdict,
-            "confidence":        parsed.get("confidence"),
-            "reasoning":         parsed.get("reasoning"),
-            "extracted":         parsed.get("extracted") if isinstance(parsed.get("extracted"), dict) else {},
-            "state_relevance":   parsed.get("state_relevance"),
-            "secondary_verdict": parsed.get("secondary_verdict"),
+            "verdict_raw": raw_verdict,
+            "confidence":  parsed.get("confidence"),
         }
         return verdict, depth, attrs
+
+
+def _fallback(reason: str) -> ClassifierResult:
+    """The classifier could not decide. NONE/DEEP: general chat with room
+    to answer fully, rather than a short reply to a question we never
+    understood."""
+    return ClassifierResult(verdict=VERDICT_NONE, depth=DEPTH_DEEP, fallback_reason=reason)
 
 
 def _format_age(iso_ts: str | None) -> str:
@@ -701,18 +693,3 @@ def _format_age(iso_ts: str | None) -> str:
     if seconds < 86400:
         return f"set {int(seconds // 3600)}h ago"
     return f"set {int(seconds // 86400)}d ago"
-
-
-def _billable(usage_obj: Any) -> tuple[int, int, int]:
-    """Same logic as the model adapter — local copy avoids a cross-import
-    just for one small helper."""
-    if usage_obj is None:
-        return 0, 0, 0
-    prompt_tokens = int(getattr(usage_obj, "prompt_tokens", 0) or 0)
-    completion_tokens = int(getattr(usage_obj, "completion_tokens", 0) or 0)
-    cached = 0
-    details = getattr(usage_obj, "prompt_tokens_details", None)
-    if details is not None:
-        cached = int(getattr(details, "cached_tokens", 0) or 0)
-    billable_in = max(0, prompt_tokens - cached)
-    return billable_in, completion_tokens, cached

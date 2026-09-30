@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from owela import ToolError
 from ongiini import search as _search
 
 
@@ -209,11 +210,29 @@ async def test_web_search_invalid_topic_falls_back_to_general(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_web_search_no_api_key_returns_friendly_message(monkeypatch):
+async def test_web_search_no_api_key_raises_tool_error(monkeypatch):
+    """A missing key is a failure, not a result: the ToolStep must carry
+    an error so the breaker counts it and the turn degrades."""
     monkeypatch.setattr(_search.settings, "tavily_api_key", "")
-    text, urls = await _search.web_search("hello")
-    assert "not configured" in text.lower()
-    assert urls == []
+    with pytest.raises(ToolError, match="not configured"):
+        await _search.web_search("hello")
+
+
+@pytest.mark.asyncio
+async def test_web_search_http_402_raises_tool_error(monkeypatch):
+    """The Aug–Sep 2026 outage: Tavily answered 402 Payment Required on
+    every call. That must surface as a ToolError the model can read."""
+    _search._SEARCH_CACHE.clear()
+    monkeypatch.setattr(_search.settings, "tavily_api_key", "fake-key")
+    request = httpx.Request("POST", _search.TAVILY_SEARCH_URL)
+    response = httpx.Response(402, request=request)
+
+    async def fake_post(self, url, json=None):
+        return response
+
+    with patch("httpx.AsyncClient.post", new=fake_post):
+        with pytest.raises(ToolError, match="HTTP 402"):
+            await _search.web_search("repo rate")
 
 
 @pytest.mark.asyncio

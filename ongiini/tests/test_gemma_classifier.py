@@ -159,19 +159,20 @@ async def test_unrecognised_verdict_falls_back_to_none():
     c = _make_classifier(_client_json("UNKNOWN_LABEL"))
     result = await c.classify(_msg("ambiguous"))
     assert result.verdict == VERDICT_NONE
-    assert result.depth == DEPTH_SHALLOW
+    assert result.depth == DEPTH_DEEP                 # fallback never cuts short
+    assert result.fallback_reason == "unparseable"
 
 
 @pytest.mark.asyncio
 async def test_json_parse_failure_falls_back_to_none():
-    """JSON parse failure → NONE+SHALLOW with empty attrs. Mirrors the
-    old token-parser fallback exactly so the safety net stays loud and
-    visible (the warning log) but invisible to the user."""
+    """JSON parse failure → NONE/DEEP with empty attrs and a
+    fallback_reason, so the trace tells it apart from a real NONE."""
     c = _make_classifier(_client_returning("this is not json {{{"))
     result = await c.classify(_msg("ambiguous"))
     assert result.verdict == VERDICT_NONE
-    assert result.depth == DEPTH_SHALLOW
+    assert result.depth == DEPTH_DEEP
     assert result.attrs == {}
+    assert result.fallback_reason == "unparseable"
 
 
 @pytest.mark.asyncio
@@ -194,7 +195,8 @@ async def test_json_missing_verdict_key_falls_back_to_none():
     ))
     result = await c.classify(_msg("ambiguous"))
     assert result.verdict == VERDICT_NONE
-    assert result.depth == DEPTH_SHALLOW
+    assert result.depth == DEPTH_DEEP
+    assert result.fallback_reason == "unparseable"
 
 
 @pytest.mark.asyncio
@@ -206,40 +208,48 @@ async def test_json_non_string_verdict_falls_back_to_none():
         c = _make_classifier(_client_returning(bogus))
         result = await c.classify(_msg("ambiguous"))
         assert result.verdict == VERDICT_NONE, f"failed for {bogus!r}"
-        assert result.depth == DEPTH_SHALLOW
+        assert result.depth == DEPTH_DEEP
+        assert result.fallback_reason == "unparseable"
 
 
 # ---------- Attrs population ----------
 
 @pytest.mark.asyncio
 async def test_attrs_populated_from_json():
-    """JSON fields beyond verdict flow into ClassifierResult.attrs so
-    hooks and future policy gates can read confidence, reasoning, the
-    extracted dict, etc."""
-    extracted = {
-        "named_dialect": "Oshindonga",
-        "looks_like_translation": True,
-        "looks_like_button_confirmation": False,
-        "looks_like_decline": False,
-        "active_topic_domain": "translation",
-    }
-    body = _json_for(
-        VERDICT_CONTRIB_SAVE,
-        confidence="high",
-        reasoning="User answered in Oshindonga phonology",
-        extracted=extracted,
-        state_relevance="fresh",
-        secondary_verdict="NONE",
-    )
+    """verdict_raw and confidence flow into ClassifierResult.attrs so
+    hooks and the trace can read them; a real decision has no
+    fallback_reason."""
+    body = _json_for(VERDICT_CONTRIB_SAVE, confidence="high")
     c = _make_classifier(_client_returning(body))
     result = await c.classify(_msg("Onkalo yombepo ombwaanawa nena"))
     assert result.verdict == VERDICT_CONTRIB_SAVE
     assert result.attrs["confidence"] == "high"
-    assert result.attrs["reasoning"] == "User answered in Oshindonga phonology"
-    assert result.attrs["extracted"] == extracted
-    assert result.attrs["state_relevance"] == "fresh"
-    assert result.attrs["secondary_verdict"] == "NONE"
     assert result.attrs["verdict_raw"] == VERDICT_CONTRIB_SAVE
+    assert result.fallback_reason is None
+
+
+@pytest.mark.asyncio
+async def test_none_deep_maps_to_none_with_deep_depth():
+    c = _make_classifier(_client_json("NONE_DEEP"))
+    result = await c.classify(_msg("please translate this paragraph into Afrikaans for me"))
+    assert result.verdict == VERDICT_NONE
+    assert result.depth == DEPTH_DEEP
+    assert result.fallback_reason is None
+
+
+@pytest.mark.asyncio
+async def test_plain_none_stays_shallow():
+    c = _make_classifier(_client_json("NONE"))
+    result = await c.classify(_msg("thanks, that helps"))
+    assert (result.verdict, result.depth) == (VERDICT_NONE, DEPTH_SHALLOW)
+
+
+def test_prompt_asks_for_no_reasoning_field():
+    """Decoding a reasoning sentence was most of the classifier latency."""
+    from ongiini.routers.gemma_classifier import CLASSIFIER_PROMPT
+    schema = CLASSIFIER_PROMPT[CLASSIFIER_PROMPT.index("Output schema"):]
+    assert '"reasoning"' not in schema
+    assert "NONE_DEEP" in CLASSIFIER_PROMPT
 
 
 # ---------- Token reporting ----------
@@ -285,6 +295,8 @@ async def test_image_message_skips_classification():
     c = _make_classifier(client)
     result = await c.classify(_msg("what is this?", has_image=True))
     assert result.verdict == VERDICT_NONE
+    assert result.depth == DEPTH_DEEP             # homework / CV photos need room
+    assert result.fallback_reason is None
     client.chat.completions.create.assert_not_called()
 
 
@@ -301,6 +313,7 @@ async def test_classifier_timeout_falls_back_to_none():
     c = _make_classifier(client, timeout_s=0.05)
     result = await c.classify(_msg("a typical question"))
     assert result.verdict == VERDICT_NONE
+    assert result.fallback_reason == "timeout"
 
 
 @pytest.mark.asyncio
@@ -312,6 +325,7 @@ async def test_classifier_exception_falls_back_to_none():
     c = _make_classifier(client)
     result = await c.classify(_msg("a typical question"))
     assert result.verdict == VERDICT_NONE
+    assert result.fallback_reason == "error:RuntimeError"
 
 
 # ---------- Response_format wiring ----------
@@ -325,7 +339,8 @@ async def test_classifier_requests_json_response_format():
     await c.classify(_msg("a typical question"))
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs.get("response_format") == {"type": "json_object"}
-    assert kwargs.get("max_tokens") == 200
+    assert kwargs.get("max_tokens") == 60
+    assert kwargs.get("temperature") == 0.0
 
 
 # ---------- Pronoun + short-message context ----------
@@ -524,8 +539,6 @@ async def test_stale_pending_save_plus_button_click_does_not_get_save_verdict():
     result = await c.classify(_msg("Yes, let's do that", history=history))
     assert result.verdict != VERDICT_CONTRIB_SAVE
     assert result.verdict == VERDICT_NONE
-    assert result.attrs.get("state_relevance") == "stale"
-    assert result.attrs["extracted"]["looks_like_button_confirmation"] is True
 
 
 # ---------- State block always present ----------

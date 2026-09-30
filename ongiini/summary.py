@@ -17,10 +17,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from openai import AsyncOpenAI
+from owela import Model, ModelRequest
 
 from . import usage
 from .config import settings
+from .models.vllm_gemma import VLLMGemmaModel
 
 log = logging.getLogger("ongiini.summary")
 
@@ -42,9 +43,17 @@ _SUMMARIZER_SYSTEM_PROMPT = (
 SUMMARY_PREFIX = "Earlier in this conversation: "
 
 
-# Module-level client. Constructed once; reused for every summarisation
-# call.
-_client = AsyncOpenAI(base_url=settings.vllm_base_url, api_key="not-needed")
+# Module-level model adapter, constructed once. Going through the Owela
+# adapter gives the summary the same output sanitising and request
+# timeout as every other call. ``set_model`` lets the runtime share its
+# adapter and tests inject a fake.
+_model: Model = VLLMGemmaModel(settings.vllm_base_url, settings.vllm_model)
+_SUMMARY_TIMEOUT_S = 30.0
+
+
+def set_model(model: Model) -> None:
+    global _model
+    _model = model
 
 
 async def summarize_turns(
@@ -67,28 +76,27 @@ async def summarize_turns(
         content = (m.get("content") or "")[:400]
         body += f"{role}: {content}\n"
 
-    resp = await _client.chat.completions.create(
-        model=settings.vllm_model,
+    resp = await _model.complete(ModelRequest(
         messages=[
             {"role": "system", "content": _SUMMARIZER_SYSTEM_PROMPT},
             {"role": "user", "content": body},
         ],
         temperature=0.3,
         max_tokens=200,
-    )
+        timeout_s=_SUMMARY_TIMEOUT_S,
+    ))
 
     if msisdn:
         try:
-            billable_in, completion, _cached = usage.billable_from_usage(resp.usage)
-            if billable_in or completion:
+            if resp.tokens_in or resp.tokens_out:
                 usage.record(
-                    msisdn, billable_in, completion,
+                    msisdn, resp.tokens_in, resp.tokens_out,
                     used_search=False, kind="summary",
                 )
         except Exception:
             pass    # billing is soft — never block the summary
 
-    return (resp.choices[0].message.content or "").strip()
+    return (resp.content or "").strip()
 
 
 async def maybe_summarize(

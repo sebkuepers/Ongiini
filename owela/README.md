@@ -52,9 +52,9 @@ is smart enough to consistently pick the right tool and reasoning
 strategy. It does not work as reliably on smaller models.
 
 Owela makes the loop shape an explicit **Policy table**, indexed by a
-classifier's verdict + depth. The classifier (a separate, prefix-cached
-LLM call ~85ms p50) decides the turn's category (SEARCH / DOCS / ADMIN /
-NONE) and its complexity (SHALLOW / DEEP). The PolicyTable maps that
+classifier's verdict + depth. The classifier (a separate, short LLM
+call) decides the turn's category (SEARCH / DOCS / ADMIN / NONE) and
+its complexity (SHALLOW / DEEP). The PolicyTable maps that
 pair to a frozen Policy object that drives the rest of the turn:
 
 ```
@@ -89,9 +89,9 @@ InboundMessage
      │                     ▼
      │                  Policy
      │                     │
-     ├──► (interstitial — optional, v1)
+     ├──► (degrade — required tool down) ────▶ DegradeStep
      │
-     ├──► (planner — optional, v1) ──────────▶ PlanStep
+     ├──► (planner — optional) ──────────────▶ PlanStep
      │
      ▼
   act loop (1..max_steps)
@@ -136,7 +136,7 @@ import asyncio
 from openai import AsyncOpenAI
 from owela import (
     Agent, AUTO, ClassifierResult, DEPTH_SHALLOW, HookRegistry,
-    InboundMessage, Policy, PolicyTable, Runtime, ToolRegistry,
+    InboundMessage, Policy, PolicyTable, Runtime, SendResult, ToolRegistry,
     VERDICT_NONE, tool,
 )
 
@@ -151,9 +151,9 @@ class StdoutTransport:
     format = "plain_text"
     async def acknowledge(self, msg): pass
     async def send_interstitial(self, user_id, policy): pass
-    async def send(self, user_id, body, policy, *, used_search=False):
+    async def send(self, user_id, body, policy, ctx):
         print(f"[{user_id}] {body}")
-        return True
+        return SendResult(sent=True)
 
 class NullClassifier:
     async def classify(self, msg):
@@ -170,7 +170,7 @@ class SimpleMemory:
 
 # Use your inference engine of choice. Anything with an OpenAI-compatible
 # /v1/chat/completions endpoint works — see ongiini/models/vllm_gemma.py
-# for a real adapter that surfaces reasoning_budget + cached_tokens.
+# for a real adapter that maps thinking budgets and cached_tokens.
 
 @tool(name="add", params={"a": "First number.", "b": "Second."})
 async def add(a: int, b: int) -> str:
@@ -213,7 +213,8 @@ package in this repository.
 |---|---|
 | `owela.Agent` | Top-level orchestrator. `agent.handle(msg)` runs one turn. |
 | `owela.Runtime` | Composition root. Frozen dataclass holding model, transport, memory, classifier, tools, hooks, policies. Built once at app startup. |
-| `owela.executor.execute_turn` | The only orchestrator function (~180 LOC). No special cases. |
+| `owela.executor.execute_turn` | The only orchestrator function (~130 LOC body). No special cases. Always replies, always fires `on_turn_complete`. |
+| `owela.CircuitBreaker` | Per-tool failure tracking. Open breaker → tool short-circuited; policies that `requires_tools` it degrade. |
 | `owela.Policy` + `owela.PolicyTable` | Loop-shape configuration indexed by (verdict, depth). |
 | `owela.Step` (and subclasses) | Typed dataclasses for each phase of a turn. |
 | `owela.tool` (decorator) | Declares a Python async function as a tool. Auto-generates the OpenAI schema from type hints + docstring. |
@@ -240,8 +241,8 @@ DGX Spark). The whole stack — framework, application, and infrastructure
 API stability:
 - `Step`, `Policy`, `PolicyTable`, `tool`, `Runtime`, `Agent` —
   considered stable for v0.
-- The Planner / Reviewer / interstitial-UX hooks are designed in but
-  not yet wired (v1 work).
+- Planner, Reviewer, interstitial timer, capability degrade, soft
+  deadlines and forced-tool verification are wired and in production.
 - Streaming responses, multi-tenant Runtime, async-iteration over
   steps — not yet supported.
 

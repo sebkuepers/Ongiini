@@ -9,14 +9,25 @@ What's special here, vs. just hitting AsyncOpenAI directly:
      overhead doesn't keep eating the user's monthly allowance after
      the first warm-up request.
 
-  2. **Gemma 4 reasoning knobs.** ``enable_thinking`` and
-     ``reasoning_budget`` are passed via ``extra_body.chat_template_kwargs``.
-     The Policy decides whether to enable thinking on this turn; the
-     adapter just propagates.
+  2. **Gemma 4 reasoning knobs.** ``ModelRequest.thinking`` maps to
+     ``chat_template_kwargs.enable_thinking`` (+ ``reasoning_budget``).
+     Thinking gets its own token budget ON TOP of the reply budget, so
+     reasoning can no longer consume the answer (the root cause of the
+     2026-05-23 leak: a 500-token thinking budget inside a shared
+     1500-token cap). ``thinking="low"`` also adds a one-line
+     low-effort hint to the first system message, per Google's Gemma 4
+     guidance.
 
-  3. **Single-attempt semantics.** No internal retries. The webhook's
-     fire-and-forget pattern + Meta's webhook redelivery handle the
-     retry case at the right layer.
+  3. **One sanitising path.** Leaked channel tokens and truncated raw
+     reasoning are scrubbed here, for every caller — the act loop and
+     the auxiliary calls (classifier, planner, reviewer, summariser) all
+     go through ``complete``.
+
+  4. **Single-attempt semantics, bounded.** No internal retries, but a
+     per-request timeout (default 90 s, overridable via
+     ``ModelRequest.timeout_s``) so a hung engine surfaces as an error
+     the executor can turn into a fallback reply instead of minutes of
+     silence.
 """
 
 from __future__ import annotations
@@ -27,7 +38,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from owela import Model, ModelRequest, ModelResponse
+from owela import THINKING_LOW, THINKING_OFF, Model, ModelRequest, ModelResponse
 
 log = logging.getLogger("ongiini.models.vllm_gemma")
 
@@ -118,10 +129,12 @@ _RAW_THINKING_DETRITUS_PATTERNS = (
 )
 
 
-_TRUNCATED_THINKING_REPLY = (
-    "Sorry — I got tangled up while thinking through that. "
-    "Could you try asking again, maybe a bit more simply?"
-)
+# Google's Gemma 4 guidance: a short low-effort instruction in the system
+# turn cuts thinking tokens (~20 %) without switching thinking off.
+_LOW_THINKING_HINT = "Reasoning effort: LOW. Think briefly, then answer."
+_LOW_THINKING_MAX_BUDGET = 256
+
+DEFAULT_TIMEOUT_S = 90.0
 
 
 def _detect_truncated_thinking_leak(
@@ -180,6 +193,18 @@ def _billable_from_usage(usage_obj: Any) -> tuple[int, int, int]:
     return billable_in, completion_tokens, cached
 
 
+def _with_low_thinking_hint(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a copy of ``messages`` whose first system message ends with
+    the low-effort thinking hint. Never mutates the caller's list — the
+    executor owns it and appends to it across the act loop."""
+    out = list(messages)
+    for i, m in enumerate(out):
+        if m.get("role") == "system" and isinstance(m.get("content"), str):
+            out[i] = {**m, "content": m["content"] + "\n\n" + _LOW_THINKING_HINT}
+            return out
+    return [{"role": "system", "content": _LOW_THINKING_HINT}] + out
+
+
 class VLLMGemmaModel(Model):
     """Gemma 4 via vLLM's OpenAI-compatible endpoint."""
 
@@ -190,31 +215,51 @@ class VLLMGemmaModel(Model):
         temperature: float = 0.6,
         max_tokens: int = 1500,
         *,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
         client: AsyncOpenAI | None = None,
     ) -> None:
         self.base_url = base_url
         self.model_id = model_id
         self.temperature = temperature
         self.max_tokens = max_tokens
-        # Caller can inject a client for tests; default is a fresh AsyncOpenAI.
-        self._client = client or AsyncOpenAI(base_url=base_url, api_key="not-needed")
+        # Caller can inject a client for tests; default is a fresh AsyncOpenAI
+        # with a bounded timeout (the SDK default is 600 s).
+        self._client = client or AsyncOpenAI(
+            base_url=base_url, api_key="not-needed", timeout=timeout_s,
+        )
 
     async def complete(self, req: ModelRequest) -> ModelResponse:
+        thinking_on = req.thinking != THINKING_OFF
+        budget = req.thinking_budget if thinking_on else None
+        if budget is not None and req.thinking == THINKING_LOW:
+            budget = min(budget, _LOW_THINKING_MAX_BUDGET)
         # Gemma 4 reasoning knobs travel via extra_body so they reach the
         # vLLM chat template.
-        chat_template_kwargs: dict[str, Any] = {"enable_thinking": req.enable_thinking}
-        if req.enable_thinking and req.policy.reasoning_budget is not None:
-            chat_template_kwargs["reasoning_budget"] = req.policy.reasoning_budget
+        chat_template_kwargs: dict[str, Any] = {"enable_thinking": thinking_on}
+        if budget is not None:
+            chat_template_kwargs["reasoning_budget"] = budget
 
-        resp = await self._client.chat.completions.create(
-            model=self.model_id,
-            messages=req.messages,
-            tools=req.tools or None,
-            tool_choice=req.tool_choice,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            extra_body={"chat_template_kwargs": chat_template_kwargs},
-        )
+        messages = req.messages
+        if req.thinking == THINKING_LOW:
+            messages = _with_low_thinking_hint(messages)
+
+        kwargs: dict[str, Any] = {
+            "model": self.model_id,
+            "messages": messages,
+            "temperature": self.temperature if req.temperature is None else req.temperature,
+            # Thinking gets its own budget on top of the reply's.
+            "max_tokens": (req.max_tokens or self.max_tokens) + (budget or 0),
+            "extra_body": {"chat_template_kwargs": chat_template_kwargs},
+        }
+        if req.tools:
+            kwargs["tools"] = req.tools
+            kwargs["tool_choice"] = req.tool_choice
+        if req.response_format == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
+        if req.timeout_s is not None:
+            kwargs["timeout"] = req.timeout_s
+
+        resp = await self._client.chat.completions.create(**kwargs)
 
         billable_in, completion, cached = _billable_from_usage(resp.usage)
         choice = resp.choices[0] if resp.choices else None
@@ -245,7 +290,10 @@ class VLLMGemmaModel(Model):
         # v1.4 audit: track count so the trace can show recurrence.
         content, leak_count_primary = _strip_gemma_reasoning_leak(content)
         leak_count_total = leak_count_primary
-        if not content:
+        # Only when thinking was requested: with thinking off, any reasoning
+        # text is a stray thought channel (Gemma 4 occasionally emits one
+        # anyway) and must never become the reply.
+        if not content and thinking_on:
             reasoning = ""
             for candidate in (
                 getattr(msg, "reasoning", None),
@@ -305,15 +353,18 @@ class VLLMGemmaModel(Model):
         # that ALSO somehow produced tool calls is a much weirder beast
         # and we don't want to blow away its tool output).
         if not tool_calls and _detect_truncated_thinking_leak(
-            content, finish_reason, req.enable_thinking,
+            content, finish_reason, thinking_on,
         ):
+            # Drop the leaked reasoning. An empty reply makes the transport
+            # send its own "couldn't come up with a reply" text; the trace
+            # records the block so recurrence is visible.
             log.warning(
                 "truncated/raw thinking detected in reply (finish_reason=%s, "
-                "enable_thinking=%s, content_len=%d) — replacing with retry "
-                "message to avoid leaking chain-of-thought to user",
-                finish_reason, req.enable_thinking, len(content),
+                "thinking=%s, content_len=%d) — dropping it to avoid leaking "
+                "chain-of-thought to the user",
+                finish_reason, req.thinking, len(content),
             )
-            content = _TRUNCATED_THINKING_REPLY
+            content = ""
             attrs["truncated_thinking_blocked"] = True
 
         return ModelResponse(

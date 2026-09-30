@@ -39,7 +39,9 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from owela import InboundMessage, PlanStep, Policy, QueryVariant, Step
+from owela import InboundMessage, Model, ModelRequest, PlanStep, Policy, QueryVariant, Step
+
+from .models.vllm_gemma import VLLMGemmaModel
 
 log = logging.getLogger("ongiini.planner")
 
@@ -161,17 +163,18 @@ _MAX_QUERIES = 5
 class OngiiniPlanner:
     """Calls Gemma with a planning prompt before the act loop.
 
-    Constructed with the vLLM endpoint + model id; tests inject a
-    fake AsyncOpenAI client. The prefix of the prompt is byte-stable
-    across requests so vLLM's prefix cache hits on every call after
-    warm-up (the variable suffix is just the user's question).
+    Production passes the shared Owela ``Model`` adapter (same output
+    sanitising as every other call); tests may inject a fake AsyncOpenAI
+    client instead. The prefix of the prompt is byte-stable across
+    requests so vLLM's prefix cache hits on every call after warm-up.
     """
 
     def __init__(
         self,
-        base_url: str,
-        model_id: str,
+        base_url: str = "",
+        model_id: str = "",
         *,
+        model: Model | None = None,
         client: AsyncOpenAI | None = None,
         timeout_s: float = _TIMEOUT_S,
         max_tokens: int = _PLAN_MAX_TOKENS,
@@ -179,7 +182,7 @@ class OngiiniPlanner:
         self.model_id = model_id
         self.timeout_s = timeout_s
         self.max_tokens = max_tokens
-        self._client = client or AsyncOpenAI(base_url=base_url, api_key="not-needed")
+        self._model: Model = model or VLLMGemmaModel(base_url, model_id, client=client)
 
     async def plan(
         self,
@@ -206,22 +209,20 @@ class OngiiniPlanner:
         # queries).
         recent_history = _format_recent_history(msg.history)
 
-        try:
-            resp = await asyncio.wait_for(
-                self._client.chat.completions.create(
-                    model=self.model_id,
-                    messages=[{
-                        "role": "user",
-                        "content": _PLAN_PROMPT.format(
-                            question=question,
-                            recent_history=recent_history,
-                        ),
-                    }],
-                    temperature=0.3,
-                    max_tokens=self.max_tokens,
+        req = ModelRequest(
+            messages=[{
+                "role": "user",
+                "content": _PLAN_PROMPT.format(
+                    question=question,
+                    recent_history=recent_history,
                 ),
-                timeout=self.timeout_s,
-            )
+            }],
+            temperature=0.3,
+            max_tokens=self.max_tokens,
+            timeout_s=self.timeout_s,
+        )
+        try:
+            resp = await asyncio.wait_for(self._model.complete(req), timeout=self.timeout_s)
         except asyncio.TimeoutError:
             log.warning(
                 "planner timed out after %ss — proceeding without plan", self.timeout_s,
@@ -235,66 +236,68 @@ class OngiiniPlanner:
             step.attrs["error"] = str(exc)
             return step
 
-        billable_in, completion, cached = _billable(resp.usage)
-        step.tokens_in = billable_in
-        step.tokens_out = completion
-        step.cached_tokens = cached
+        step.tokens_in = resp.tokens_in
+        step.tokens_out = resp.tokens_out
+        step.cached_tokens = resp.cached_tokens
 
-        raw = ""
-        if resp.choices:
-            raw = (resp.choices[0].message.content or "").strip()
-
-        facts_known, queries = _parse_plan(raw)
+        facts_known, queries = _parse_plan((resp.content or "").strip())
         step.plan_text = facts_known
         step.queries = queries
         step.ended_at = time.monotonic()
         return step
 
 
+_HISTORY_EXCHANGES = 3
+_HISTORY_SNIPPET_CHARS = 300
+
+
 def _format_recent_history(history: list[dict[str, Any]]) -> str:
-    """Format the last user+assistant exchange (or just the previous
-    user message) into a prompt-friendly block. Returns "" when there's
+    """Format the last few exchanges (oldest first) plus any leading
+    rolling summary into a prompt block for resolving follow-ups like
+    "compare them" / "and the other one?". Returns "" when there's
     nothing useful — keeps the prompt byte-stable for prefix-cache hits
     on first-turn queries.
 
-    We take only the LAST 2 entries (the immediately preceding turn).
-    Pulling deeper history adds tokens without helping resolution —
-    follow-up pronouns almost always point at the IMMEDIATELY prior
-    turn, not three turns back.
+    Up to ``_HISTORY_EXCHANGES`` user+assistant pairs: 16 % of production
+    plans came back with no queries, and follow-ups that point two turns
+    back ("the second bank you mentioned") were a recurring cause.
+    Image-bearing turns (list content) are skipped.
     """
     if not history:
         return ""
-    # Find last user message and the assistant response that followed
-    # it (if any). Walk backwards, keeping the last assistant + last
-    # user before it.
-    last_assistant: str | None = None
-    last_user: str | None = None
+
+    def snip(text: str) -> str:
+        text = text.strip()
+        if len(text) > _HISTORY_SNIPPET_CHARS:
+            return text[:_HISTORY_SNIPPET_CHARS] + "…"
+        return text
+
+    summary = ""
+    first = history[0]
+    if first.get("role") == "system" and isinstance(first.get("content"), str):
+        summary = snip(first["content"])
+
+    lines: list[str] = []
+    users_seen = 0
     for entry in reversed(history):
         role = entry.get("role")
         content = entry.get("content")
-        # Only handle plain string content (image-bearing turns use
-        # list[dict] content_parts; skip those for the planner — the
-        # image isn't useful for query decomposition).
-        if not isinstance(content, str):
+        if role not in ("user", "assistant") or not isinstance(content, str) or not content.strip():
             continue
-        if role == "assistant" and last_assistant is None:
-            last_assistant = content.strip()
-        elif role == "user" and last_user is None:
-            last_user = content.strip()
-            break    # we have the immediately prior user turn
-
-    if not last_user and not last_assistant:
+        label = "USER" if role == "user" else "REPLY"
+        lines.append(f"  {label}: {snip(content)}")
+        if role == "user":
+            users_seen += 1
+            if users_seen >= _HISTORY_EXCHANGES:
+                break
+    if not lines and not summary:
         return ""
 
-    parts = ["", "Conversation just before this question (for resolving"
+    parts = ["", "Conversation just before this question, oldest first (for resolving"
              " pronouns like 'them', 'this', 'what about'):"]
-    if last_user:
-        # Cap to ~400 chars — we just need pronoun context.
-        snippet = last_user[:400] + ("…" if len(last_user) > 400 else "")
-        parts.append(f"  PREVIOUS USER: {snippet}")
-    if last_assistant:
-        snippet = last_assistant[:400] + ("…" if len(last_assistant) > 400 else "")
-        parts.append(f"  PREVIOUS REPLY: {snippet}")
+    if summary:
+        parts.append(f"  SUMMARY: {summary}")
+    parts.extend(reversed(lines))
     parts.append("")
     return "\n".join(parts)
 
@@ -394,16 +397,3 @@ def _parse_plan(raw: str) -> tuple[str, list[QueryVariant]]:
                 break
 
     return facts_known, queries
-
-
-def _billable(usage_obj: Any) -> tuple[int, int, int]:
-    """Same prefix-cache-aware billing logic as the model + classifier."""
-    if usage_obj is None:
-        return 0, 0, 0
-    prompt_tokens = int(getattr(usage_obj, "prompt_tokens", 0) or 0)
-    completion_tokens = int(getattr(usage_obj, "completion_tokens", 0) or 0)
-    cached = 0
-    details = getattr(usage_obj, "prompt_tokens_details", None)
-    if details is not None:
-        cached = int(getattr(details, "cached_tokens", 0) or 0)
-    return max(0, prompt_tokens - cached), completion_tokens, cached

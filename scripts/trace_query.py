@@ -20,6 +20,16 @@ Usage examples::
     python scripts/trace_query.py queries-count-distribution --window=7d
     python scripts/trace_query.py token-spend --by=policy --window=30d
     python scripts/trace_query.py token-spend --by=user --window=30d
+    python scripts/trace_query.py tool-errors --window=24h
+    python scripts/trace_query.py wall-latency --window=7d
+    python scripts/trace_query.py health --window=24h   # exit 1 on breach
+
+``health`` is the "is anything broken right now" check: tool error
+rates, degraded turns, classifier fallbacks, forced tools the engine
+ignored, deadline overruns, reply length and wall latency, each with a
+threshold. It exits non-zero when a threshold is breached, so a cron
+job can alert. (The Tavily 402 outage of Aug–Sep 2026 would have
+tripped ``tool-errors`` on its first day.)
 
 Output is JSON to stdout (single object) — pipe to ``jq`` for
 operator workflows.
@@ -311,6 +321,204 @@ def cmd_token_spend(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# ---------- health commands (Owela v2 trace fields) ----------
+
+# Thresholds for ``health``. A breach is reported and makes the process
+# exit 1. Rates only count once there is enough volume to mean anything.
+_HEALTH_MIN_SAMPLES = 20
+_HEALTH_THRESHOLDS = {
+    "tool_error_rate_pct": 50.0,        # per tool
+    "degraded_rate_pct": 20.0,
+    "router_fallback_rate_pct": 10.0,
+    "forced_tool_miss_rate_pct": 10.0,
+    "deadline_exceeded_rate_pct": 15.0,
+    "over_25s_pct": 25.0,
+}
+
+
+def _pct(part: int, total: int) -> float:
+    return round(part / total * 100, 1) if total else 0.0
+
+
+def _percentile(values: list[float], q: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(round((len(ordered) - 1) * q)))]
+
+
+def _tool_results(t: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    for c in t.get("calls") or []:
+        for r in c.get("tool_results") or []:
+            yield r
+
+
+def cmd_tool_errors(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-tool call count, error count and rate, plus the most common
+    error prefixes (exception text only — never tool output)."""
+    by_tool: dict[str, dict[str, Any]] = {}
+    for t in traces:
+        for r in _tool_results(t):
+            name = r.get("name") or "?"
+            row = by_tool.setdefault(name, {"calls": 0, "errors": 0, "prefixes": {}})
+            row["calls"] += 1
+            err = r.get("error")
+            if err:
+                row["errors"] += 1
+                prefix = str(err)[:60]
+                row["prefixes"][prefix] = row["prefixes"].get(prefix, 0) + 1
+    out = {}
+    for name, row in sorted(by_tool.items(), key=lambda kv: -kv[1]["calls"]):
+        top = sorted(row["prefixes"].items(), key=lambda kv: -kv[1])[:3]
+        out[name] = {
+            "calls": row["calls"],
+            "errors": row["errors"],
+            "error_rate_pct": _pct(row["errors"], row["calls"]),
+            "top_errors": dict(top),
+        }
+    return {"by_tool": out}
+
+
+def cmd_degraded_rate(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    degraded = [t for t in traces if t.get("degraded")]
+    triggers: dict[str, int] = {}
+    for t in degraded:
+        trig = (t.get("degrade") or {}).get("trigger", "?")
+        triggers[trig] = triggers.get(trig, 0) + 1
+    return {
+        "turns": len(traces),
+        "degraded": len(degraded),
+        "degraded_rate_pct": _pct(len(degraded), len(traces)),
+        "by_trigger": triggers,
+    }
+
+
+def cmd_router_fallback_rate(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    routed = [t for t in traces if t.get("router")]
+    reasons: dict[str, int] = {}
+    for t in routed:
+        reason = t["router"].get("fallback_reason")
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+    fallbacks = sum(reasons.values())
+    return {
+        "routed": len(routed),
+        "fallbacks": fallbacks,
+        "router_fallback_rate_pct": _pct(fallbacks, len(routed)),
+        "by_reason": reasons,
+    }
+
+
+def cmd_forced_tool_miss_rate(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    forced = misses = 0
+    for t in traces:
+        for c in t.get("calls") or []:
+            if c.get("forced_tool"):
+                forced += 1
+                if c.get("forced_tool_honoured") is False:
+                    misses += 1
+    return {
+        "forced_calls": forced,
+        "not_honoured": misses,
+        "forced_tool_miss_rate_pct": _pct(misses, forced),
+    }
+
+
+def cmd_deadline_exceeded_rate(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    by_policy: dict[str, list[int]] = {}
+    for t in traces:
+        row = by_policy.setdefault(t.get("policy") or "?", [0, 0])
+        row[0] += 1
+        if t.get("deadline_exceeded"):
+            row[1] += 1
+    total = sum(r[0] for r in by_policy.values())
+    exceeded = sum(r[1] for r in by_policy.values())
+    return {
+        "deadline_exceeded_rate_pct": _pct(exceeded, total),
+        "by_policy": {p: {"turns": n, "exceeded": e, "rate_pct": _pct(e, n)}
+                      for p, (n, e) in sorted(by_policy.items())},
+    }
+
+
+def cmd_reply_length(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    by_policy: dict[str, list[int]] = {}
+    reasons: dict[str, int] = {}
+    for t in traces:
+        by_policy.setdefault(t.get("policy") or "?", []).append(int(t.get("reply_len") or 0))
+        reason = t.get("reply_reason")
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+    return {
+        "by_policy": {
+            p: {"n": len(v), "p50": _percentile(v, 0.5), "p95": _percentile(v, 0.95)}
+            for p, v in sorted(by_policy.items())
+        },
+        "reply_reasons": reasons,
+        "truncated": sum(1 for t in traces if t.get("truncated")),
+    }
+
+
+def cmd_wall_latency(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    """End-to-end turn time (router start → reply sent), tools included.
+    Falls back to model-only ``total_latency_ms`` for traces written
+    before ``wall_ms`` existed."""
+    by_policy: dict[str, list[float]] = {}
+    for t in traces:
+        ms = t.get("wall_ms")
+        if ms is None:
+            ms = t.get("total_latency_ms")
+        if ms is None:
+            continue
+        by_policy.setdefault(t.get("policy") or "?", []).append(ms / 1000)
+    all_s = [x for v in by_policy.values() for x in v]
+    return {
+        "p50_s": _percentile(all_s, 0.5),
+        "p90_s": _percentile(all_s, 0.9),
+        "p95_s": _percentile(all_s, 0.95),
+        "over_25s_pct": _pct(sum(1 for x in all_s if x > 25), len(all_s)),
+        "by_policy": {
+            p: {"n": len(v), "p50_s": _percentile(v, 0.5), "p95_s": _percentile(v, 0.95),
+                "over_25s_pct": _pct(sum(1 for x in v if x > 25), len(v))}
+            for p, v in sorted(by_policy.items())
+        },
+    }
+
+
+def cmd_health(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
+    """All health signals with thresholds. ``breaches`` lists every
+    signal over its threshold; the CLI exits 1 when it is non-empty."""
+    report = {
+        "tool_errors": cmd_tool_errors(args, traces)["by_tool"],
+        "degraded": cmd_degraded_rate(args, traces),
+        "router_fallback": cmd_router_fallback_rate(args, traces),
+        "forced_tool_miss": cmd_forced_tool_miss_rate(args, traces),
+        "deadline_exceeded": cmd_deadline_exceeded_rate(args, traces),
+        "wall_latency": cmd_wall_latency(args, traces),
+        "reply_length": cmd_reply_length(args, traces),
+    }
+    th = _HEALTH_THRESHOLDS
+    breaches: list[str] = []
+    for tool, row in report["tool_errors"].items():
+        if row["calls"] >= _HEALTH_MIN_SAMPLES and row["error_rate_pct"] > th["tool_error_rate_pct"]:
+            breaches.append(f"tool {tool}: {row['error_rate_pct']}% errors over {row['calls']} calls")
+    checks = [
+        ("degraded_rate_pct", report["degraded"]["degraded_rate_pct"], len(traces)),
+        ("router_fallback_rate_pct", report["router_fallback"]["router_fallback_rate_pct"],
+         report["router_fallback"]["routed"]),
+        ("forced_tool_miss_rate_pct", report["forced_tool_miss"]["forced_tool_miss_rate_pct"],
+         report["forced_tool_miss"]["forced_calls"]),
+        ("deadline_exceeded_rate_pct", report["deadline_exceeded"]["deadline_exceeded_rate_pct"],
+         len(traces)),
+        ("over_25s_pct", report["wall_latency"]["over_25s_pct"], len(traces)),
+    ]
+    for key, value, n in checks:
+        if n >= _HEALTH_MIN_SAMPLES and value > th[key]:
+            breaches.append(f"{key}: {value}% > {th[key]}% (n={n})")
+    report["breaches"] = breaches
+    report["_exit"] = 1 if breaches else 0
+    return report
+
+
 COMMANDS = {
     "revise-rate": cmd_revise_rate,
     "critique-timeout-rate": cmd_critique_timeout_rate,
@@ -320,6 +528,14 @@ COMMANDS = {
     "latency-percentiles": cmd_latency_percentiles,
     "search-pass-rate": cmd_search_pass_rate,
     "token-spend": cmd_token_spend,
+    "tool-errors": cmd_tool_errors,
+    "degraded-rate": cmd_degraded_rate,
+    "router-fallback-rate": cmd_router_fallback_rate,
+    "forced-tool-miss-rate": cmd_forced_tool_miss_rate,
+    "deadline-exceeded-rate": cmd_deadline_exceeded_rate,
+    "reply-length": cmd_reply_length,
+    "wall-latency": cmd_wall_latency,
+    "health": cmd_health,
 }
 
 
@@ -352,6 +568,7 @@ def main(argv: list[str] | None = None) -> int:
 
     traces = list(_iter_traces(path, since=since, policy=args.policy))
     result = COMMANDS[args.command](args, traces)
+    exit_code = int(result.pop("_exit", 0))
     result["window"] = args.window
     if args.policy:
         result["policy"] = args.policy
@@ -359,7 +576,7 @@ def main(argv: list[str] | None = None) -> int:
     result["trace_path"] = str(path)
 
     print(json.dumps(result, indent=2))
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

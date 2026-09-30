@@ -42,53 +42,96 @@ def force_tool(name: str) -> ToolChoice:
     return {"type": "function", "function": {"name": name}}
 
 
+def forced_tool_name(choice: ToolChoice) -> str | None:
+    """The tool name a named ``tool_choice`` forces, or None for
+    "auto" / "none" / "required"."""
+    if isinstance(choice, dict):
+        return (choice.get("function") or {}).get("name") or None
+    return None
+
+
+THINKING_OFF = "off"
+THINKING_LOW = "low"
+THINKING_ON = "on"
+ALL_THINKING = (THINKING_OFF, THINKING_LOW, THINKING_ON)
+
+
 @dataclass(frozen=True)
 class Policy:
     """One named row of the policy table.
 
-    Fields with ``enable_*`` prefix are feature flags. v0 ships them all
-    declarable but the v1-only ones (planner, critique, interstitial)
-    must stay False until the corresponding Planner/Reviewer is wired
-    into the Runtime. The executor enforces this — it skips a flagged
-    phase if the corresponding runtime component is None.
+    Fields with ``enable_*`` prefix are feature flags. A flagged phase
+    only runs when the corresponding runtime component (Planner,
+    Reviewer) is also wired in — missing component + flag-on means the
+    phase is skipped.
+
+    Product strings (``fallback_reply``, ``reply_notice``) are carried
+    as opaque fields: the application writes them into its own policy
+    rows, the framework never inspects their content.
     """
     name: str
     first_tool: ToolChoice = AUTO
     max_steps: int = 6
 
-    # v1 feature flags. v0 should keep all of these False.
+    # Optional phases.
     enable_planner: bool = False
     enable_critique: bool = False
-    enable_interstitial: bool = False
 
-    # Gemma 4 reasoning knobs. None means "let the model adapter pick".
-    reasoning_budget: int | None = 500
-    enable_thinking_after_long_results: bool = True
-    long_result_threshold_chars: int = 1000
+    # Output budget and sampling. ``max_reply_tokens`` bounds the visible
+    # reply; thinking gets its own budget on top (``max_thinking_tokens``)
+    # so reasoning can never eat the answer. None = adapter default.
+    max_reply_tokens: int | None = None
+    temperature: float | None = None
+    thinking: str = THINKING_OFF        # "off" | "low" | "on"
+    max_thinking_tokens: int | None = None
 
     # Tool exposure. None = expose every registered tool; a tuple = expose
     # only those names. Useful for narrowing the surface on cheap turns
     # (e.g. casual chat exposing no tools at all).
     expose_tools: tuple[str, ...] | None = None
 
-    # Planner-driven multi-query fan-out. When ``planner_query_tool``
-    # is set AND a prior PlanStep carries non-empty ``queries``, the
-    # executor synthesises one parallel call to this tool per
-    # QueryVariant on turn 1 — bypassing the model's first call.
-    #
-    # The variant's ``query`` string becomes the kwarg named by
-    # ``planner_query_arg``; ``variant.extra`` (a dict) is spread as
-    # additional kwargs. The string is opaque to Owela — the
-    # application registers a tool by this name. Per anti-trap #8 no
-    # tool name is hardcoded in the executor.
-    planner_query_tool: str | None = None
-    planner_query_arg: str = "query"
-    # Default kwargs merged into every synthesised planner-fan-out tool
-    # call BEFORE ``QueryVariant.extra``. Use for policy-level tool
-    # configuration that should apply to all variants (e.g. a search
-    # policy that wants every search to skip full-page content because
-    # an auto-followup will fetch it). Variant-level ``extra`` overrides.
-    planner_query_default_args: dict[str, Any] = field(default_factory=dict)
+    # Named prompt sections the application's MemoryProvider should
+    # include for this turn. Opaque to Owela — it only carries the names.
+    prompt_sections: tuple[str, ...] = ()
+
+    # Capability requirements. If any tool in ``requires_tools`` is
+    # unavailable before the turn (circuit breaker open) or errors during
+    # it, the executor swaps to the Policy named ``on_unavailable`` and
+    # records a DegradeStep. ``on_unavailable=None`` keeps the policy but
+    # still records the DegradeStep so the turn is visibly degraded.
+    requires_tools: tuple[str, ...] = ()
+    on_unavailable: str | None = None
+    # A line the transport may append to the reply (e.g. an honesty note
+    # on a degraded policy). The executor never reads it.
+    reply_notice: str = ""
+
+    # Turn guarantees. ``deadline_s`` is soft: once exceeded, no new
+    # optional work starts (the next model call composes without tools;
+    # critique and revise are skipped). ``interstitial_after_s`` sends
+    # the transport's "still working" message if the turn is still
+    # running after that many seconds (capped at the transport's typing
+    # window). ``fallback_reply`` is sent when the loop exhausts
+    # ``max_steps`` or a phase raises; "" lets the transport supply its
+    # own empty-reply text.
+    deadline_s: float | None = None
+    interstitial_after_s: float | None = None
+    fallback_reply: str = ""
+
+    # Deterministic first-call synthesis. When ``synth_tool`` is set the
+    # executor can dispatch calls to it WITHOUT a model call:
+    #   - one call per ``PlanStep.queries`` variant, if a plan has any;
+    #   - else one call built from the message text, if
+    #     ``synth_first_call_from_message`` is True;
+    #   - and, as a recovery, when ``first_tool`` forced ``synth_tool``
+    #     but the model's first response did not call it.
+    # The query string becomes the kwarg named ``synth_arg`` ("" = pass
+    # no text argument, for tools that take none); ``synth_default_args``
+    # are merged into every call BEFORE ``QueryVariant.extra``. Tool
+    # names are opaque to Owela (anti-trap #8).
+    synth_tool: str | None = None
+    synth_arg: str = "query"
+    synth_default_args: dict[str, Any] = field(default_factory=dict)
+    synth_first_call_from_message: bool = False
 
     # Deterministic follow-up tool synthesis. When ``auto_followup_after``
     # is set, the executor watches each ToolStep: if its ``tool_name``
@@ -110,14 +153,10 @@ class Policy:
     # Cap on items passed to ``auto_followup_tool``. The executor
     # consolidates ``attrs[auto_followup_attr]`` from every matching
     # ToolStep this turn (multi-query fan-out can produce many), then
-    # dedupes and trims to this count. Default 5 mirrors typical search-
-    # fetch pipelines (e.g. Tavily's /extract batch cap).
+    # dedupes and trims to this count.
     auto_followup_max_items: int = 5
     # When True (default), the consolidated pool keeps only one item
-    # per URL host — typical case is search results where multiple
-    # pages from the same domain compete. Set False when you want
-    # multiple items per host (e.g. fetching multiple PDFs from one
-    # government site).
+    # per URL host. Set False when you want multiple items per host.
     auto_followup_one_per_host: bool = True
 
     # Per-tool char caps for results placed into the model's message
@@ -131,6 +170,13 @@ class Policy:
     # Policy construction.
     tool_result_message_caps: dict[str, int] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.thinking not in ALL_THINKING:
+            raise ValueError(
+                f"Policy {self.name!r}: thinking must be one of {ALL_THINKING}, "
+                f"got {self.thinking!r}"
+            )
+
 
 class PolicyTable:
     """Maps (verdict, depth) tuples to Policies.
@@ -140,12 +186,23 @@ class PolicyTable:
        2. (verdict, SHALLOW) — default depth for that verdict
        3. ("NONE", SHALLOW) — global fallback
     If none of those resolves, ``PolicyNotFound`` is raised.
+
+    Policies that are only reached by name (a degraded fallback named in
+    ``Policy.on_unavailable``) are registered with ``add`` and resolved
+    with ``by_name``.
     """
     def __init__(self) -> None:
         self._entries: dict[tuple[str, str], Policy] = {}
+        self._named: dict[str, Policy] = {}
 
     def set(self, verdict: str, depth: str, policy: Policy) -> "PolicyTable":
         self._entries[(verdict, depth)] = policy
+        self._named[policy.name] = policy
+        return self
+
+    def add(self, policy: Policy) -> "PolicyTable":
+        """Register a policy reachable only by name."""
+        self._named[policy.name] = policy
         return self
 
     def lookup(self, verdict: str, depth: str = DEPTH_SHALLOW) -> Policy:
@@ -153,6 +210,12 @@ class PolicyTable:
             if key in self._entries:
                 return self._entries[key]
         raise PolicyNotFound(f"no policy for verdict={verdict!r} depth={depth!r}")
+
+    def by_name(self, name: str) -> Policy:
+        try:
+            return self._named[name]
+        except KeyError:
+            raise PolicyNotFound(f"no policy named {name!r}") from None
 
     def all(self) -> dict[tuple[str, str], Policy]:
         return dict(self._entries)

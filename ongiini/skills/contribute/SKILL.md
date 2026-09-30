@@ -1,7 +1,7 @@
 ---
 name: contribute
 description: Phrasing reference for the community Oshiwambo translation contribution loop. The CLASSIFIER decides which contribute action to take (CONTRIBUTE_INVITE / DIALECT / NEXT / SAVE / SKIP / DECLINE / STATS) and the POLICY TABLE forces the matching contribute_* tool — you don't choose tools manually here. Your job is to read the forced tool's JSON result and compose a warm, on-brand WhatsApp reply. This skill gives you the phrasing templates + the consent-respecting framing.
-load: always
+load: on_demand
 ---
 
 # Community contribution loop — phrasing guide

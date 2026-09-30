@@ -31,12 +31,14 @@ def test_router_step():
 
 
 def test_model_call_step():
-    mcs = ModelCallStep(turn=2, tokens_in=100, tokens_out=50, enable_thinking=True, reasoning_budget=500)
+    mcs = ModelCallStep(turn=2, tokens_in=100, tokens_out=50, thinking="on", thinking_budget=500)
     assert mcs.kind == "model_call"
     assert mcs.turn == 2
-    assert mcs.enable_thinking is True
-    assert mcs.reasoning_budget == 500
+    assert mcs.thinking == "on"
+    assert mcs.thinking_budget == 500
     assert mcs.tool_calls == []
+    assert mcs.forced_tool is None
+    assert mcs.forced_tool_honoured is None
 
 
 def test_tool_step():
@@ -48,10 +50,21 @@ def test_tool_step():
 
 
 def test_reply_step():
-    rs = ReplyStep(reply_len=200, sent=True, dead_urls_stripped=1)
+    rs = ReplyStep(reply_len=200, sent=True)
     assert rs.kind == "reply"
     assert rs.sent is True
-    assert rs.dead_urls_stripped == 1
+    assert rs.reason == "ok"
+    assert rs.truncated is False
+    assert rs.degraded is False
+    assert rs.deadline_exceeded is False
+
+
+def test_degrade_and_error_steps():
+    from owela.step import DegradeStep, ErrorStep
+    d = DegradeStep(from_policy="a", to_policy="b", missing_tools=("web_search",), trigger="breaker_open")
+    assert d.kind == "degrade"
+    e = ErrorStep(phase="turn", exc_type="RuntimeError", message="boom")
+    assert e.kind == "error"
 
 
 def test_v1_steps_exist():

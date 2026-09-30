@@ -10,28 +10,21 @@ Owela's executor doesn't know any of this — it just calls ``send()``
 like any other transport. The capture pattern lives entirely in the
 adapter.
 
-Markdown is preserved (the browser renders it). Dead-URL stripping is
-shared with WhatsAppTransport — both transports talk to the same
-search-backed model and shouldn't differ in how they handle stale
-citations.
+Markdown is preserved (the browser renders it). URL hygiene and
+boundary trimming are shared with WhatsAppTransport via
+``reply_hygiene`` — both transports talk to the same search-backed
+model and shouldn't differ in how they handle citations.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import re
 
-import httpx
+from owela import InboundMessage, Policy, ReplyContext, SendResult
 
-from owela import InboundMessage, Policy
+from . import reply_hygiene
 
 log = logging.getLogger("ongiini.transports.web_chat")
-
-
-# Same URL regex WhatsAppTransport uses. The constant lives in
-# whatsapp_transport.py too — kept local here so the two transports
-# stay independent (avoids accidental coupling later).
-_URL_RE = re.compile(r"https?://[^\s)>\"]+")
 
 
 class WebChatTransport:
@@ -54,11 +47,13 @@ class WebChatTransport:
     def __init__(
         self,
         *,
-        dead_url_check_timeout_s: float = 2.0,
         reply_timeout_s: float = 90.0,
+        empty_reply_text: str = "Sorry, I couldn't come up with a reply.",
+        continue_offer_text: str = "Want the rest? Reply **more**.",
     ) -> None:
-        self.dead_url_check_timeout_s = dead_url_check_timeout_s
         self.reply_timeout_s = reply_timeout_s
+        self.empty_reply_text = empty_reply_text
+        self.continue_offer_text = continue_offer_text
         # The captured reply slot. ``send()`` sets ``_reply`` and signals
         # ``_event``; ``await_reply()`` blocks on the event then returns
         # the slot. None until set; empty string is a legal value if the
@@ -80,10 +75,9 @@ class WebChatTransport:
         return None
 
     async def send_interstitial(self, user_id: str, policy: Policy) -> None:
-        """No-op for web chat. ``policy.enable_interstitial`` only fires
-        on SEARCH_DEEP today — when we eventually stream replies we
-        might surface progress events here, but for the
-        wait-for-complete MVP there's nothing to deliver."""
+        """No-op for web chat. When we eventually stream replies we might
+        surface progress events here, but for the wait-for-complete MVP
+        there's nothing to deliver."""
         return None
 
     async def send(
@@ -91,9 +85,8 @@ class WebChatTransport:
         user_id: str,
         body: str,
         policy: Policy,
-        *,
-        used_search: bool = False,
-    ) -> bool:
+        ctx: ReplyContext,
+    ) -> SendResult:
         """Capture the reply into the per-request slot.
 
         Same post-processing pipeline as WhatsAppTransport with two
@@ -104,9 +97,8 @@ class WebChatTransport:
           - The char cap is much higher (10_000 vs 4096) — there's no
             external API limit constraining browser delivery.
 
-        Dead-URL stripping is shared logic with WhatsAppTransport; only
-        runs when ``used_search`` is set so plain conversational turns
-        don't eat the HEAD-check latency budget.
+        URL hygiene is shared with WhatsAppTransport and only runs when
+        a citation tool fired this turn.
 
         Note: markdown tables (``| col | col |``) are NOT converted
         here. The frontend renderer (see ``website/chat-app/index.html``)
@@ -123,27 +115,36 @@ class WebChatTransport:
                 "web_chat send() called twice; ignoring second body "
                 "(len=%d)", len(body or ""),
             )
-            return True
+            return SendResult(sent=True)
 
+        attrs: dict[str, object] = {}
         cleaned = (body or "").strip()
+        if cleaned and ctx.truncated:
+            cleaned = reply_hygiene.trim_to_boundary(cleaned)
+            cleaned = f"{cleaned}\n\n{self.continue_offer_text}"
+            attrs["trimmed_at_boundary"] = True
         if not cleaned:
-            cleaned = "Sorry, I couldn't come up with a reply."
+            cleaned = self.empty_reply_text
+            attrs["empty_fallback"] = True
 
-        if used_search:
-            cleaned = await self._strip_dead_urls(cleaned)
-            if not cleaned.strip():
-                cleaned = (
-                    "I had sources for this but they didn't come back as "
-                    "live links right now. Want me to search again with "
-                    "different terms?"
-                )
-        if len(cleaned) > self.max_message_chars:
-            cleaned = cleaned[: self.max_message_chars]
+        if reply_hygiene.cites_tools(ctx.used_tools):
+            cleaned, dropped = reply_hygiene.drop_unlisted_urls(cleaned, ctx.allowed_urls)
+            attrs["urls_dropped"] = dropped
+            if not cleaned:
+                cleaned = self.empty_reply_text
+                attrs["empty_fallback"] = True
+
+        notice = f"\n\n_{policy.reply_notice}_" if policy.reply_notice else ""
+        limit = self.max_message_chars - len(notice)
+        if len(cleaned) > limit:
+            cleaned = reply_hygiene.cap_at_boundary(cleaned, limit)
+            attrs["chars_capped"] = True
+        cleaned += notice
 
         self._reply = cleaned
         self._send_ok = True
         self._event.set()
-        return True
+        return SendResult(sent=True, attrs=attrs)
 
     async def await_reply(self) -> str:
         """Block until ``send()`` fires, return the captured body.
@@ -188,56 +189,3 @@ class WebChatTransport:
         """True once ``send()`` has fired. Lets the handler decide
         whether to attempt graceful degradation."""
         return self._send_ok
-
-    # ─── internal hygiene (shared logic with WhatsAppTransport) ──────
-
-    async def _strip_dead_urls(self, reply: str) -> str:
-        """HEAD-check every URL in the reply; drop lines containing
-        404/410 URLs or malformed (embedded HTML tag) URLs. Soft-fail:
-        timeouts and other errors keep the URL in place."""
-        if not reply:
-            return reply
-        raw_urls = _URL_RE.findall(reply)
-        urls = [u.rstrip(".,;:!?)") for u in raw_urls]
-        malformed = {u for u in urls if "<" in u or ">" in u}
-        urls = [u for u in urls if u not in malformed]
-        urls = list(dict.fromkeys(urls))
-
-        cleaned = reply
-        if malformed:
-            cleaned = self._drop_lines_containing(cleaned, malformed)
-        if urls:
-            dead = await self._head_check_for_dead(urls)
-            if dead:
-                cleaned = self._drop_lines_containing(cleaned, dead)
-        return cleaned
-
-    async def _head_check_for_dead(self, urls: list[str]) -> set[str]:
-        timeout = self.dead_url_check_timeout_s
-
-        async def _check(url: str) -> tuple[str, bool]:
-            try:
-                async with httpx.AsyncClient(
-                    timeout=timeout, follow_redirects=True,
-                ) as client:
-                    r = await client.head(url)
-                    if r.status_code == 405:
-                        r = await client.get(url, headers={"Range": "bytes=0-0"})
-                    return url, r.status_code not in (404, 410)
-            except Exception:                      # noqa: BLE001 — soft-fail
-                return url, True
-
-        results = await asyncio.gather(*[_check(u) for u in urls])
-        return {u for u, alive in results if not alive}
-
-    @staticmethod
-    def _drop_lines_containing(text: str, bad: set[str] | list[str]) -> str:
-        bad_set = set(bad)
-        out_lines: list[str] = []
-        for line in text.split("\n"):
-            if any(b in line for b in bad_set):
-                continue
-            out_lines.append(line)
-        cleaned = "\n".join(out_lines)
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-        return cleaned.strip()

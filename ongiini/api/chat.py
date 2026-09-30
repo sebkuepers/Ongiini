@@ -50,7 +50,7 @@ from . import chat_ratelimit
 from ..config import settings
 from ..memory import SessionMemoryProvider, SessionStore
 from ..runtime import SharedComponents, build_chat_runtime
-from ..system_prompt import SYSTEM_PROMPT
+from ..system_prompt import build_system_prompt
 from ..transports import WebChatTransport
 
 log = logging.getLogger("ongiini.api.chat")
@@ -240,7 +240,7 @@ def build_router(
         # 6. Build per-request transport + memory + runtime.
         transport = WebChatTransport()
         memory_provider = SessionMemoryProvider(
-            system_prompt=SYSTEM_PROMPT,
+            prompt_builder=build_system_prompt,
             store=store,
             skills=shared.skills,
             pii_sanitiser=pii_sanitiser,

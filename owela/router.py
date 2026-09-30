@@ -32,6 +32,10 @@ class ClassifierResult:
     into the RouterStep so billing hooks see classifier cost. ``attrs``
     is for adapter-specific extras (e.g. the raw classifier response
     object for debug logging).
+
+    ``fallback_reason`` must be set whenever the verdict is a fallback
+    rather than a decision (timeout, exception, unparseable output), so
+    traces can tell the two apart.
     """
     verdict: str = VERDICT_NONE
     depth: str = DEPTH_SHALLOW
@@ -39,20 +43,18 @@ class ClassifierResult:
     tokens_out: int = 0
     cached_tokens: int = 0
     attrs: dict[str, Any] = field(default_factory=dict)
+    fallback_reason: str | None = None
 
 
 @runtime_checkable
 class Classifier(Protocol):
     """Single method: classify an inbound message.
 
-    Implementations must be fail-safe: any error (timeout, parse failure,
-    network blip) should yield ``ClassifierResult(verdict="NONE")`` rather
-    than raising. That way the executor falls back to the global default
-    policy and the user still gets a reply.
-
-    The Ongiini impl uses Gemma 4 as the classifier with a prefix-cached
-    prompt (~270 tokens) and a 2s timeout. See
-    ``ongiini/routers/gemma_classifier.py``.
+    Implementations should be fail-safe: any error (timeout, parse
+    failure, network blip) should yield a fallback verdict with
+    ``fallback_reason`` set rather than raising. If one does raise, the
+    executor records an ErrorStep and routes to the global default policy
+    with ``fallback_reason="exception:<Type>"``.
     """
 
     async def classify(self, msg: InboundMessage) -> ClassifierResult:

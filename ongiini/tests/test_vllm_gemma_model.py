@@ -109,13 +109,15 @@ def _make_client(response) -> Any:
     return client
 
 
-def _basic_request(enable_thinking: bool = False) -> ModelRequest:
+def _basic_request(thinking: str = "off", thinking_budget: int | None = None, **kw) -> ModelRequest:
     return ModelRequest(
         messages=[{"role": "user", "content": "hi"}],
         tools=[],
         tool_choice="auto",
         policy=Policy(name="test"),
-        enable_thinking=enable_thinking,
+        thinking=thinking,
+        thinking_budget=thinking_budget,
+        **kw,
     )
 
 
@@ -143,26 +145,83 @@ async def test_complete_subtracts_cached_tokens():
 
 @pytest.mark.asyncio
 async def test_complete_passes_reasoning_kwargs_when_enabled():
-    """When enable_thinking=True AND policy.reasoning_budget is set, the
-    adapter must propagate both via extra_body.chat_template_kwargs."""
+    """thinking="on" with a budget → both reach the chat template, and the
+    thinking budget is added ON TOP of the reply budget."""
     response = _make_openai_response()
     client = _make_client(response)
-    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
-    await model.complete(_basic_request(enable_thinking=True))
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client, max_tokens=1500)
+    await model.complete(_basic_request(thinking="on", thinking_budget=500))
     call_kwargs = client.chat.completions.create.call_args.kwargs
     assert call_kwargs["extra_body"] == {
         "chat_template_kwargs": {"enable_thinking": True, "reasoning_budget": 500},
     }
+    assert call_kwargs["max_tokens"] == 2000
+
+
+@pytest.mark.asyncio
+async def test_complete_uses_request_budget_and_temperature():
+    response = _make_openai_response()
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client, temperature=0.6)
+    await model.complete(_basic_request(max_tokens=300, temperature=0.1))
+    call_kwargs = client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["max_tokens"] == 300
+    assert call_kwargs["temperature"] == 0.1
+
+
+@pytest.mark.asyncio
+async def test_thinking_low_caps_budget_and_adds_hint_without_mutating_request():
+    response = _make_openai_response()
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
+    req = ModelRequest(
+        messages=[{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}],
+        thinking="low", thinking_budget=900, max_tokens=400,
+    )
+    await model.complete(req)
+    call_kwargs = client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["extra_body"]["chat_template_kwargs"] == {
+        "enable_thinking": True, "reasoning_budget": 256,
+    }
+    assert call_kwargs["max_tokens"] == 400 + 256
+    assert "Reasoning effort: LOW" in call_kwargs["messages"][0]["content"]
+    # The executor owns req.messages and appends to it; it must be untouched.
+    assert req.messages[0]["content"] == "sys"
+
+
+@pytest.mark.asyncio
+async def test_json_response_format_and_timeout_are_forwarded():
+    response = _make_openai_response(content='{"verdict": "NONE"}')
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
+    await model.complete(_basic_request(response_format="json_object", timeout_s=8.0))
+    call_kwargs = client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["response_format"] == {"type": "json_object"}
+    assert call_kwargs["timeout"] == 8.0
+
+
+@pytest.mark.asyncio
+async def test_truncated_thinking_leak_is_dropped_not_replaced_with_canned_text():
+    leak = (
+        "The user is asking about the rule. Let me think.\n"
+        "*   First the instruction says X\n*   Self-correction: but wait, actually Y"
+    )
+    response = _make_openai_response(content=leak, finish_reason="length")
+    client = _make_client(response)
+    model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
+    out = await model.complete(_basic_request(thinking="on", thinking_budget=500))
+    assert out.content == ""
+    assert out.attrs["truncated_thinking_blocked"] is True
 
 
 @pytest.mark.asyncio
 async def test_complete_omits_budget_when_thinking_off():
-    """enable_thinking=False -> reasoning_budget must NOT appear (otherwise
-    vLLM may apply it even when thinking is supposed to be off)."""
+    """thinking="off" -> reasoning_budget must NOT appear (otherwise vLLM
+    may apply it even when thinking is supposed to be off)."""
     response = _make_openai_response()
     client = _make_client(response)
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
-    await model.complete(_basic_request(enable_thinking=False))
+    await model.complete(_basic_request(thinking="off", thinking_budget=500))
     call_kwargs = client.chat.completions.create.call_args.kwargs
     assert call_kwargs["extra_body"] == {
         "chat_template_kwargs": {"enable_thinking": False},
@@ -199,7 +258,7 @@ async def test_complete_falls_back_to_reasoning_when_content_empty():
     response = _make_openai_response(content="", reasoning="my thinking went here")
     client = _make_client(response)
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
-    out = await model.complete(_basic_request(enable_thinking=True))
+    out = await model.complete(_basic_request(thinking="on"))
     assert out.content == "my thinking went here"
 
 
@@ -210,7 +269,7 @@ async def test_complete_falls_back_to_legacy_reasoning_content_field():
     response = _make_openai_response(content="", reasoning_content="legacy thinking")
     client = _make_client(response)
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
-    out = await model.complete(_basic_request(enable_thinking=True))
+    out = await model.complete(_basic_request(thinking="on"))
     assert out.content == "legacy thinking"
 
 
@@ -224,7 +283,7 @@ async def test_complete_falls_back_to_model_extra_reasoning():
     response.choices[0].message.model_extra = {"reasoning": "extra-located"}
     client = _make_client(response)
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
-    out = await model.complete(_basic_request(enable_thinking=True))
+    out = await model.complete(_basic_request(thinking="on"))
     assert out.content == "extra-located"
 
 
@@ -235,10 +294,7 @@ async def test_complete_passes_messages_and_tools():
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
     msgs = [{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}]
     tools = [{"type": "function", "function": {"name": "t"}}]
-    req = ModelRequest(
-        messages=msgs, tools=tools, tool_choice="auto",
-        policy=Policy(name="t"), enable_thinking=False,
-    )
+    req = ModelRequest(messages=msgs, tools=tools, tool_choice="auto", policy=Policy(name="t"))
     await model.complete(req)
     call_kwargs = client.chat.completions.create.call_args.kwargs
     assert call_kwargs["messages"] == msgs
@@ -248,16 +304,16 @@ async def test_complete_passes_messages_and_tools():
 
 
 @pytest.mark.asyncio
-async def test_complete_passes_none_tools_when_empty():
+async def test_complete_omits_tools_and_tool_choice_when_empty():
     """OpenAI's chat.completions.create rejects an empty tools=[] in some
-    versions. Send None instead — same semantic, friendlier across SDK
-    versions."""
+    versions, and a tool_choice without tools is meaningless. Omit both."""
     response = _make_openai_response()
     client = _make_client(response)
     model = VLLMGemmaModel(base_url="x", model_id="gemma", client=client)
     await model.complete(_basic_request())
     call_kwargs = client.chat.completions.create.call_args.kwargs
-    assert call_kwargs["tools"] is None
+    assert "tools" not in call_kwargs
+    assert "tool_choice" not in call_kwargs
 
 
 # ---------- v1.3.2 hotfix: reasoning-leak scrubber ----------

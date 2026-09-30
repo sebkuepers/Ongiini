@@ -40,8 +40,12 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from owela import (
-    CritiqueStep, InboundMessage, Policy, ReviseStep, Step, ToolStep,
+    CritiqueStep, InboundMessage, Model, ModelRequest, Policy, ReviseStep,
+    Step, ToolStep,
 )
+
+from .models.vllm_gemma import VLLMGemmaModel
+from .transports.reply_hygiene import URL_RE, canonical_url
 
 log = logging.getLogger("ongiini.reviewer")
 
@@ -177,32 +181,42 @@ _PERF_BUDGET_S = 30.0    # log a warning if critique or revise exceeds this
 # call. The aggregate cap caps the total at this many chars, dropping
 # whole later steps (preserves at least the FIRST search + fetch
 # bodies which carry the bulk of grounding).
-_TOOL_BLOCK_AGGREGATE_CAP = 24000
+_TOOL_BLOCK_AGGREGATE_CAP = 32000
+
+# Revise output budget when the policy doesn't set one.
+_REVISE_DEFAULT_MAX_TOKENS = 1200
 
 
 class OngiiniReviewer:
     """Calls Gemma with critique + (conditionally) revise prompts.
 
-    Constructed with the vLLM endpoint + model id; tests inject a
-    fake AsyncOpenAI client. The critique prompt's prefix is
-    byte-stable across requests so vLLM's prefix cache hits.
+    Production passes the shared Owela ``Model`` adapter; tests may
+    inject a fake AsyncOpenAI client. ``system_prompt`` is given to the
+    revise call so the rewritten reply keeps the assistant's persona,
+    language rules and reply shape (before 2026-09-30 revise ran with no
+    system prompt at all). The critique prompt's prefix is byte-stable
+    across requests so vLLM's prefix cache hits.
     """
 
     def __init__(
         self,
-        base_url: str,
-        model_id: str,
+        base_url: str = "",
+        model_id: str = "",
         *,
+        model: Model | None = None,
         client: AsyncOpenAI | None = None,
+        system_prompt: str = "",
         perf_budget_s: float = _PERF_BUDGET_S,
     ) -> None:
         self.model_id = model_id
+        self.system_prompt = system_prompt
         # ``perf_budget_s`` is observation-only: critique/revise log a
         # warning if they exceed it but the call is never killed. v1.6.2
         # removed the kill-and-soft-fail timeouts that were causing
-        # silent quality regressions under load.
+        # silent quality regressions under load. The adapter's 90 s
+        # request timeout is the backstop.
         self.perf_budget_s = perf_budget_s
-        self._client = client or AsyncOpenAI(base_url=base_url, api_key="not-needed")
+        self._model: Model = model or VLLMGemmaModel(base_url, model_id, client=client)
 
     async def critique(
         self,
@@ -222,29 +236,44 @@ class OngiiniReviewer:
             step.ended_at = time.monotonic()
             return step
 
-        tool_names, tool_block = self._tool_summary(prior_steps)
+        # Deterministic check first: a URL in the draft that no tool
+        # returned this turn was invented. That is the most common
+        # confabulation we have seen, and it needs no model call.
+        invented = _unlisted_urls(draft, prior_steps)
+        if invented:
+            step.verdict = "REVISE"
+            step.reasons = [
+                "Cites URL(s) that did not appear in this turn's tool results: "
+                + ", ".join(invented[:3])
+                + ". Use only URLs from the tool results, or none."
+            ]
+            step.attrs["mode"] = "deterministic"
+            step.attrs["invented_urls"] = len(invented)
+            step.ended_at = time.monotonic()
+            return step
+        step.attrs["mode"] = "llm"
 
+        tool_names, tool_block = self._tool_summary(prior_steps, policy)
+
+        req = ModelRequest(
+            messages=[{
+                "role": "user",
+                "content": _CRITIQUE_PROMPT.format(
+                    user_question=user_question,
+                    tool_names=tool_names or "(none)",
+                    tool_results=tool_block or "(no tool calls this turn)",
+                    draft_reply=draft,
+                ),
+            }],
+            temperature=0.0,
+            max_tokens=400,
+        )
         try:
-            resp = await self._client.chat.completions.create(
-                model=self.model_id,
-                messages=[{
-                    "role": "user",
-                    "content": _CRITIQUE_PROMPT.format(
-                        user_question=user_question,
-                        tool_names=tool_names or "(none)",
-                        tool_results=tool_block or "(no tool calls this turn)",
-                        draft_reply=draft,
-                    ),
-                }],
-                temperature=0.0,
-                max_tokens=400,
-            )
+            resp = await self._model.complete(req)
         except Exception as exc:                       # noqa: BLE001 — soft-fail
-            # Real failures (network drop, model crash) still flow
-            # through here. We can't critique without a model response,
-            # so we PASS the draft and log loudly. This is NOT a budget
-            # cap — the AsyncOpenAI client's default 600s timeout is the
-            # backstop. We never kill a critique call for being slow.
+            # Real failures (network drop, model crash, the adapter's
+            # request timeout). We can't critique without a model
+            # response, so we PASS the draft and log loudly.
             log.warning("critique failed (%s) — shipping draft unchanged", exc)
             step.verdict = "PASS"
             step.attrs["error"] = str(exc)
@@ -259,14 +288,11 @@ class OngiiniReviewer:
                 elapsed, self.perf_budget_s,
             )
 
-        billable_in, completion, cached = _billable(resp.usage)
-        step.tokens_in = billable_in
-        step.tokens_out = completion
-        step.cached_tokens = cached
+        step.tokens_in = resp.tokens_in
+        step.tokens_out = resp.tokens_out
+        step.cached_tokens = resp.cached_tokens
 
-        raw = ""
-        if resp.choices:
-            raw = (resp.choices[0].message.content or "").strip()
+        raw = (resp.content or "").strip()
         step.attrs["raw_critique"] = raw   # for tracing / debugging
 
         verdict_matches = list(_VERDICT_RE.finditer(raw))
@@ -310,7 +336,7 @@ class OngiiniReviewer:
                 "sure citations are present where search was used."
             )
 
-        _, tool_block = self._tool_summary(prior_steps)
+        _, tool_block = self._tool_summary(prior_steps, policy)
         available_urls = _extract_available_urls(prior_steps)
         user_question = (msg.text or "").strip()
 
@@ -329,30 +355,35 @@ class OngiiniReviewer:
         # output?" — see scripts/review_revises.py.
         step.attrs["compose_draft"] = draft
 
+        messages: list[dict[str, Any]] = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({
+            "role": "user",
+            "content": _REVISE_PROMPT.format(
+                reasons=reasons,
+                available_urls=urls_block,
+                tool_results=tool_block or "(no tool calls this turn)",
+                draft=draft,
+                user_question=user_question,
+            ),
+        })
+        req = ModelRequest(
+            messages=messages,
+            temperature=0.4,
+            # Same visible-reply budget as the compose call: the revised
+            # text replaces the draft, so it must fit the same shape.
+            max_tokens=policy.max_reply_tokens or _REVISE_DEFAULT_MAX_TOKENS,
+        )
         revise_started = time.monotonic()
         try:
-            resp = await self._client.chat.completions.create(
-                model=self.model_id,
-                messages=[{
-                    "role": "user",
-                    "content": _REVISE_PROMPT.format(
-                        reasons=reasons,
-                        available_urls=urls_block,
-                        tool_results=tool_block or "(no tool calls this turn)",
-                        draft=draft,
-                        user_question=user_question,
-                    ),
-                }],
-                temperature=0.4,
-                max_tokens=1200,
-            )
+            resp = await self._model.complete(req)
         except Exception as exc:                       # noqa: BLE001 — soft-fail
-            # Real failures (network drop, model crash) still flow
-            # through here. v1.6.2 removed the wait_for budget cap:
+            # Real failures (network drop, model crash, the adapter's
+            # request timeout). v1.6.2 removed the wait_for budget cap:
             # silently shipping the original ungrounded draft after a
             # 20s budget was masking the very confabulation critique
-            # had just caught. The AsyncOpenAI client's default 600s
-            # timeout is the real backstop.
+            # had just caught.
             log.warning("revise failed (%s) — falling back to original draft", exc)
             step.attrs["error"] = str(exc)
             step.attrs["revised_reply"] = draft
@@ -367,14 +398,11 @@ class OngiiniReviewer:
                 elapsed, self.perf_budget_s,
             )
 
-        billable_in, completion, cached = _billable(resp.usage)
-        step.tokens_in = billable_in
-        step.tokens_out = completion
-        step.cached_tokens = cached
+        step.tokens_in = resp.tokens_in
+        step.tokens_out = resp.tokens_out
+        step.cached_tokens = resp.cached_tokens
 
-        revised = ""
-        if resp.choices:
-            revised = (resp.choices[0].message.content or "").strip()
+        revised = (resp.content or "").strip()
 
         if not revised:
             # Empty revise output → keep the original draft. The
@@ -387,15 +415,18 @@ class OngiiniReviewer:
         return step
 
     @staticmethod
-    def _tool_summary(prior_steps: list[Step]) -> tuple[str, str]:
+    def _tool_summary(prior_steps: list[Step], policy: Policy | None = None) -> tuple[str, str]:
         """Build (names_csv, results_block) from the act-loop steps.
 
         Returns ("", "") if no tools fired this turn — caller swaps in
         a friendlier placeholder for the prompt.
 
         Two truncation passes:
-          - Per-step: each tool's body is capped at _TOOL_RESULT_TRUNCATION
-            (8000 chars) so a single huge fetch can't dominate.
+          - Per-step: each tool's body is capped at the policy's
+            ``tool_result_message_caps`` for that tool — the SAME cap the
+            composer saw, so "is this claim in the results?" is judged on
+            the evidence the writer actually had — falling back to
+            _TOOL_RESULT_TRUNCATION (8000 chars).
           - Aggregate: the assembled block is capped at
             _TOOL_BLOCK_AGGREGATE_CAP (24000 chars) so a multi-query
             fan-out (5+ ToolSteps × 8000) can't blow the critique
@@ -410,8 +441,10 @@ class OngiiniReviewer:
                 continue
             names.append(s.tool_name)
             result = (s.attrs.get("result") or "")
-            if len(result) > _TOOL_RESULT_TRUNCATION:
-                result = result[:_TOOL_RESULT_TRUNCATION] + " […truncated]"
+            caps = policy.tool_result_message_caps if policy is not None else {}
+            cap = caps.get(s.tool_name) or _TOOL_RESULT_TRUNCATION
+            if len(result) > cap:
+                result = result[:cap] + " […truncated]"
             chunk = f"--- {s.tool_name} ({s.result_len} chars) ---\n{result}"
             # Aggregate cap: if adding this chunk would push us past
             # the budget, drop it (and all subsequent chunks).
@@ -428,7 +461,7 @@ class OngiiniReviewer:
 
 # ----------- helpers -----------
 
-def _extract_available_urls(prior_steps: list[Step]) -> list[str]:
+def _extract_available_urls(prior_steps: list[Step], limit: int | None = 10) -> list[str]:
     """Walk the act-loop's ToolSteps for deep URLs the revise call
     can cite from. Sources:
 
@@ -453,7 +486,7 @@ def _extract_available_urls(prior_steps: list[Step]) -> list[str]:
                 if isinstance(u, str) and u and u not in seen:
                     seen.add(u)
                     out.append(u)
-                    if len(out) >= 10:
+                    if limit is not None and len(out) >= limit:
                         return out
         # Fetch tool results carry URLs inline; extract them with a
         # cheap regex match. The result format is documented in
@@ -468,8 +501,22 @@ def _extract_available_urls(prior_steps: list[Step]) -> list[str]:
                 if url and url not in seen:
                     seen.add(url)
                     out.append(url)
-                    if len(out) >= 10:
+                    if limit is not None and len(out) >= limit:
                         return out
+    return out
+
+
+def _unlisted_urls(draft: str, prior_steps: list[Step]) -> list[str]:
+    """URLs in ``draft`` that no tool returned this turn. Only judged when
+    tools returned URLs at all (no evidence, no verdict)."""
+    allowed = {canonical_url(u) for u in _extract_available_urls(prior_steps, limit=None)}
+    if not allowed:
+        return []
+    out: list[str] = []
+    for raw in URL_RE.findall(draft or ""):
+        url = _strip_trailing_punct_balanced(raw)
+        if canonical_url(url) not in allowed and url not in out:
+            out.append(url)
     return out
 
 
@@ -485,19 +532,6 @@ def _strip_trailing_punct_balanced(url: str) -> str:
     if url.endswith(")") and url.count("(") < url.count(")"):
         url = url[:-1]
     return url
-
-
-def _billable(usage_obj: Any) -> tuple[int, int, int]:
-    if usage_obj is None:
-        return 0, 0, 0
-    prompt_tokens = int(getattr(usage_obj, "prompt_tokens", 0) or 0)
-    completion_tokens = int(getattr(usage_obj, "completion_tokens", 0) or 0)
-    cached = 0
-    details = getattr(usage_obj, "prompt_tokens_details", None)
-    if details is not None:
-        cached = int(getattr(details, "cached_tokens", 0) or 0)
-    return max(0, prompt_tokens - cached), completion_tokens, cached
-
 
 _REASON_PREFIXES = ("FAIL:", "ISSUE:", "PROBLEM:", "FAILS:", "NO:")
 

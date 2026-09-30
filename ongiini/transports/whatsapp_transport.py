@@ -4,17 +4,17 @@ This is the only place in the codebase that knows about Meta's
 ``graph.facebook.com`` endpoint and the 25s typing-window constraint.
 The Owela executor only sees ``transport.acknowledge(msg)``,
 ``transport.send_interstitial(user_id, policy)``, and
-``transport.send(user_id, body, policy)``.
+``transport.send(user_id, body, policy, ctx)``.
 
-Transport-internal reply hygiene (anti-confabulation):
-  1. **Dead-URL HEAD check** — strip lines containing 404/410 URLs
-     before sending. Saves the user from clicking citation links that
-     go nowhere.
-  2. **HTML-fragment URL filter** — Tavily sometimes returns URLs
-     with embedded HTML tag fragments; treat those as broken too.
-  3. **Char cap** — WhatsApp's per-message limit is 4096; the truncation
-     happens at the API layer anyway, but cap deliberately so we don't
-     produce orphaned half-citations.
+Transport-internal reply hygiene (see ``reply_hygiene``):
+  1. **Truncated drafts** are trimmed to the last sentence/paragraph and
+     get a one-line offer to continue.
+  2. **Markdown → WhatsApp** formatting, deterministic.
+  3. **URL allowlist** on citation turns — URLs the tools did not return
+     this turn are removed (plus HTML-fragment URLs).
+  4. **Policy notice** — ``policy.reply_notice`` (e.g. "search is down")
+     is appended in italics.
+  5. **Char cap** at a boundary inside WhatsApp's 4096 limit.
 """
 
 from __future__ import annotations
@@ -22,11 +22,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import Any
 
-import httpx
+from owela import InboundMessage, Policy, ReplyContext, SendResult
 
-from owela import InboundMessage, Policy
+from . import reply_hygiene
 
 # We delegate the actual Meta HTTP calls to the existing low-level helpers
 # in ``webhook.app.whatsapp`` so the retry policy, signature checks, and
@@ -37,10 +36,6 @@ from ..whatsapp import send_text as _send_text
 
 log = logging.getLogger("ongiini.transports.whatsapp")
 
-
-# Match a full https?:// URL up to the first whitespace or closing
-# bracket. Trailing punctuation is trimmed at use sites.
-_URL_RE = re.compile(r"https?://[^\s)>\"]+")
 
 # Markdown-table helpers used by ``WhatsAppTransport._tables_to_bullets``.
 # Kept module-private to avoid surfacing them outside this file.
@@ -129,12 +124,14 @@ class WhatsAppTransport:
             "the answer is grounded."
         ),
         followup_delay_s: float = 15.0,
-        dead_url_check_timeout_s: float = 2.0,
+        empty_reply_text: str = "Sorry, I couldn't come up with a reply.",
+        continue_offer_text: str = "Want the rest? Reply *more*.",
     ) -> None:
         self.interstitial_text = interstitial_text
         self.followup_interstitial_text = followup_interstitial_text
         self.followup_delay_s = followup_delay_s
-        self.dead_url_check_timeout_s = dead_url_check_timeout_s
+        self.empty_reply_text = empty_reply_text
+        self.continue_offer_text = continue_offer_text
         # In-flight followup tasks, keyed by user_id. The send() method
         # cancels these when the real reply lands. If two consecutive
         # turns from the same user fire send_interstitial in close
@@ -195,29 +192,23 @@ class WhatsAppTransport:
         user_id: str,
         body: str,
         policy: Policy,
-        *,
-        used_search: bool = False,
-    ) -> bool:
+        ctx: ReplyContext,
+    ) -> SendResult:
         """Post-process and deliver the final reply.
 
         Steps, in order:
-          1. trim whitespace
+          1. trim; a truncated draft is cut to a boundary + continue offer
           2. normalise Markdown → WhatsApp formatting (deterministic)
-          3. if used_search: dead-URL strip (HEAD-check every URL in parallel)
-          4. cap at ``max_message_chars``
-          5. send via the underlying WhatsApp helper
+          3. on citation turns: drop URLs the tools didn't return
+          4. append ``policy.reply_notice``
+          5. cap at ``max_message_chars`` on a boundary
+          6. send via the underlying WhatsApp helper
 
-        Markdown normalisation runs BEFORE dead-URL strip so that
-        Markdown links like ``[The Namibian](https://...)`` become
-        ``The Namibian (https://...)`` first, leaving a bare URL the
-        HEAD-check can actually probe.
+        Markdown normalisation runs BEFORE the URL check so that links
+        like ``[The Namibian](https://...)`` are bare URLs by then.
 
-        Dead-URL stripping is gated on ``used_search`` — non-search
-        turns should not pay the 2s HEAD-check latency or risk stripping
-        legitimately-quoted URLs the model wrote from its own context.
-
-        Returns True on successful send. Transport-side failures bubble
-        up as RuntimeError; the executor catches and records ReplyStep.sent=False.
+        Transport-side failures bubble up; the executor records
+        ReplyStep.sent=False.
         """
         # Cancel any pending follow-up interstitial — the real reply is
         # arriving, no need for "still working" any more.
@@ -225,35 +216,38 @@ class WhatsAppTransport:
         if pending is not None and not pending.done():
             pending.cancel()
 
+        attrs: dict[str, object] = {}
         cleaned = (body or "").strip()
+        if cleaned and ctx.truncated:
+            cleaned = reply_hygiene.trim_to_boundary(cleaned)
+            cleaned = f"{cleaned}\n\n{self.continue_offer_text}"
+            attrs["trimmed_at_boundary"] = True
         if not cleaned:
-            cleaned = "Sorry, I couldn't come up with a reply."
+            cleaned = self.empty_reply_text
+            attrs["empty_fallback"] = True
 
-        # Deterministic Markdown → WhatsApp formatting transform.
-        # Gemma 4 has a strong tendency to emit **double-asterisk** bold
-        # and `# heading` Markdown that doesn't render in WhatsApp. We
-        # convert these to the equivalent WhatsApp syntax server-side
-        # instead of asking the critique LLM to enforce the rule — much
-        # cheaper (no LLM round-trip) and deterministic.
+        # Gemma 4 emits **double-asterisk** bold and `# heading` Markdown
+        # that WhatsApp shows literally; convert deterministically.
         cleaned = self._normalise_markdown_for_whatsapp(cleaned)
 
-        if used_search:
-            cleaned = await self._strip_dead_urls(cleaned)
-            # If the strip removed every line (all URLs were dead), the
-            # cleaned body might be empty or just whitespace. Fall back
-            # to a graceful explanation rather than sending an empty
-            # WhatsApp message body (Meta 400s on those).
-            if not cleaned.strip():
-                cleaned = (
-                    "I had sources for this but they didn't come back as "
-                    "live links right now. Want me to search again with "
-                    "different terms?"
-                )
-        if len(cleaned) > self.max_message_chars:
-            cleaned = cleaned[: self.max_message_chars]
+        if reply_hygiene.cites_tools(ctx.used_tools):
+            cleaned, dropped = reply_hygiene.drop_unlisted_urls(cleaned, ctx.allowed_urls)
+            attrs["urls_dropped"] = dropped
+            if dropped:
+                log.info("dropped %d URL(s) not returned by this turn's tools", dropped)
+            if not cleaned:
+                cleaned = self.empty_reply_text
+                attrs["empty_fallback"] = True
+
+        notice = f"\n\n_{policy.reply_notice}_" if policy.reply_notice else ""
+        limit = self.max_message_chars - len(notice)
+        if len(cleaned) > limit:
+            cleaned = reply_hygiene.cap_at_boundary(cleaned, limit)
+            attrs["chars_capped"] = True
+        cleaned += notice
 
         await _send_text(user_id, cleaned)
-        return True
+        return SendResult(sent=True, attrs=attrs)
 
     # ----------- internal hygiene -----------
 
@@ -402,79 +396,3 @@ class WhatsAppTransport:
             out.append(lines[i])
             i += 1
         return "\n".join(out)
-
-    async def _strip_dead_urls(self, reply: str) -> str:
-        """HEAD-check every URL in the reply; remove lines containing a
-        definitely-dead URL (404 / 410) or a malformed URL (embedded
-        HTML fragment). Soft-fail: timeouts and other errors keep the
-        URL.
-
-        Empty replies / no URLs short-circuit. URLs are checked in
-        parallel via ``asyncio.gather`` to bound extra latency to one
-        round-trip.
-        """
-        if not reply:
-            return reply
-
-        raw_urls = _URL_RE.findall(reply)
-        # Trim trailing punctuation that snuck into the match.
-        urls = [u.rstrip(".,;:!?)") for u in raw_urls]
-
-        # URLs with embedded HTML tag fragments come from Tavily snippets
-        # that didn't strip an <i> or </a>. HEAD-check will not catch
-        # these (httpx percent-encodes the brackets and the server
-        # typically returns 200 + a redirect to the homepage).
-        malformed = {u for u in urls if "<" in u or ">" in u}
-        for u in malformed:
-            log.info("stripping malformed URL (embedded HTML): %s", u)
-
-        urls = [u for u in urls if u not in malformed]
-        urls = list(dict.fromkeys(urls))   # dedupe, preserve order
-
-        cleaned = reply
-
-        if malformed:
-            cleaned = self._drop_lines_containing(cleaned, malformed)
-
-        if urls:
-            dead = await self._head_check_for_dead(urls)
-            if dead:
-                for u in dead:
-                    log.info("stripping dead URL (404/410): %s", u)
-                cleaned = self._drop_lines_containing(cleaned, dead)
-
-        return cleaned
-
-    async def _head_check_for_dead(self, urls: list[str]) -> set[str]:
-        timeout = self.dead_url_check_timeout_s
-
-        async def _check(url: str) -> tuple[str, bool]:
-            try:
-                async with httpx.AsyncClient(
-                    timeout=timeout, follow_redirects=True,
-                ) as client:
-                    r = await client.head(url)
-                    if r.status_code == 405:
-                        # Some servers reject HEAD — fall back to a range
-                        # GET that we don't read.
-                        r = await client.get(url, headers={"Range": "bytes=0-0"})
-                    alive = r.status_code not in (404, 410)
-                    return url, alive
-            except Exception:                  # noqa: BLE001 — soft-fail keeps URL
-                return url, True
-
-        results = await asyncio.gather(*[_check(u) for u in urls])
-        return {u for u, alive in results if not alive}
-
-    @staticmethod
-    def _drop_lines_containing(text: str, bad: set[str] | list[str]) -> str:
-        bad_set = set(bad)
-        out_lines: list[str] = []
-        for line in text.split("\n"):
-            if any(b in line for b in bad_set):
-                continue
-            out_lines.append(line)
-        cleaned = "\n".join(out_lines)
-        # Collapse any 3+ blank-line runs introduced by line removal.
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-        return cleaned.strip()

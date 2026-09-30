@@ -24,10 +24,11 @@ from owela.policy import (
 from owela.router import Classifier, ClassifierResult
 from owela.runtime import Runtime
 from owela.step import (
-    ModelCallStep, PlanStep, QueryVariant, ReplyStep, RouterStep, ToolStep,
+    DegradeStep, ErrorStep, ModelCallStep, PlanStep, QueryVariant, ReplyStep,
+    RouterStep, ToolStep,
 )
 from owela.tools import ToolContext, ToolRegistry, tool
-from owela.transport import InboundMessage, Transport
+from owela.transport import InboundMessage, ReplyContext, SendResult, Transport
 
 
 # ---------- Fakes ----------
@@ -49,10 +50,10 @@ class FakeTransport:
     async def send_interstitial(self, user_id, policy):
         self.interstitials.append(user_id)
 
-    async def send(self, user_id, body, policy, *, used_search: bool = False) -> bool:
+    async def send(self, user_id, body, policy, ctx: ReplyContext) -> SendResult:
         self.sent.append((user_id, body))
-        self.last_used_search = used_search
-        return True
+        self.last_ctx = ctx
+        return SendResult(sent=True)
 
 
 class FakeClassifier:
@@ -307,46 +308,67 @@ async def test_max_steps_truncates_with_fallback_reply():
         model=model, tools=[loop_tool],
         policies=PolicyTable().set(
             VERDICT_NONE, DEPTH_SHALLOW,
-            Policy(name="capped", first_tool=AUTO, max_steps=3),
+            Policy(name="capped", first_tool=AUTO, max_steps=3,
+                   fallback_reply="cannot finish"),
         ),
     )
     result = await Agent(rt).handle(_msg())
-    assert "trouble answering" in result.reply_text
+    assert result.reply_text == "cannot finish"
+    reply = result.steps[-1]
+    assert isinstance(reply, ReplyStep) and reply.reason == "max_steps"
     # Exactly max_steps model calls.
     assert sum(1 for s in result.steps if isinstance(s, ModelCallStep)) == 3
 
 
 @pytest.mark.asyncio
-async def test_reasoning_enabled_after_long_tool_result():
-    # Tool returns a "long" result -> next model call should have enable_thinking=True.
-    @tool(name="big_tool_test")
-    async def big_tool() -> str:
-        """Returns a big result."""
+async def test_model_request_carries_policy_budget_and_thinking():
+    """The policy's reply budget, temperature and thinking mode reach
+    every model call; the thinking budget is only sent when thinking is on."""
+    @tool(name="budget_tool_test")
+    async def budget_tool() -> str:
+        """Returns a result."""
         return "x" * 2000
 
     model = ScriptedModel([
         _ScriptedResponse(
             content="",
             tool_calls=[{"id": "1", "type": "function",
-                         "function": {"name": "big_tool_test", "arguments": "{}"}}],
+                         "function": {"name": "budget_tool_test", "arguments": "{}"}}],
             finish_reason="tool_calls",
         ),
         _ScriptedResponse(content="digested it"),
     ])
     rt = _make_runtime(
-        model=model, tools=[big_tool],
+        model=model, tools=[budget_tool],
         policies=PolicyTable().set(
             VERDICT_NONE, DEPTH_SHALLOW,
-            Policy(name="reason", first_tool=AUTO,
-                   long_result_threshold_chars=1000,
-                   enable_thinking_after_long_results=True),
+            Policy(name="budgeted", max_reply_tokens=300, temperature=0.2,
+                   thinking="low", max_thinking_tokens=256),
+        ),
+    )
+    result = await Agent(rt).handle(_msg())
+    for req in model.calls:
+        assert req.max_tokens == 300
+        assert req.temperature == 0.2
+        assert req.thinking == "low"
+        assert req.thinking_budget == 256
+    calls = [s for s in result.steps if isinstance(s, ModelCallStep)]
+    assert all(c.thinking == "low" and c.max_tokens == 300 for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_thinking_budget_omitted_when_thinking_off():
+    model = ScriptedModel([_ScriptedResponse(content="ok")])
+    rt = _make_runtime(
+        model=model,
+        policies=PolicyTable().set(
+            VERDICT_NONE, DEPTH_SHALLOW,
+            Policy(name="quiet", thinking="off", max_thinking_tokens=500),
         ),
     )
     await Agent(rt).handle(_msg())
-    # First call: no reasoning. Second call: reasoning ON because prior tool
-    # result exceeded the threshold.
-    assert model.calls[0].enable_thinking is False
-    assert model.calls[1].enable_thinking is True
+    assert model.calls[0].thinking == "off"
+    assert model.calls[0].thinking_budget is None
 
 
 @pytest.mark.asyncio
@@ -380,8 +402,8 @@ async def test_memory_recording_hook_skips_unsent_replies():
     NOT persist the turn — otherwise the user's history shows replies
     they never received."""
     class FailingTransport(FakeTransport):
-        async def send(self, user_id, body, policy, *, used_search: bool = False) -> bool:
-            return False
+        async def send(self, user_id, body, policy, ctx) -> SendResult:
+            return SendResult(sent=False)
 
     model = ScriptedModel([_ScriptedResponse(content="undelivered")])
     memory = FakeMemory()
@@ -447,42 +469,58 @@ async def test_v1_flags_are_noop_without_components():
 
 
 @pytest.mark.asyncio
-async def test_used_search_hint_set_when_search_tool_fires():
-    """Executor passes used_search=True to transport.send when any
-    search-shaped tool fired during the turn. Transports use this to
-    gate dead-URL hygiene."""
-    @tool(name="search_used_hint_test")
-    async def fake_search() -> str:
-        """fake."""
-        return "result"
-
-    @tool(name="web_search")
-    async def web_search() -> str:
-        """real-name search."""
-        return "result"
+async def test_reply_context_used_tools_passed_to_transport():
+    """The executor tells the transport which tools ran and which URLs
+    they returned; the transport decides what that means for hygiene.
+    The framework itself holds no tool names (anti-trap #8)."""
+    @tool(name="ctx_search_test")
+    async def ctx_search() -> tuple[str, dict]:
+        """fake search."""
+        return "result", {"urls": ["https://a.example/x", "https://b.example/y"]}
 
     model = ScriptedModel([
         _ScriptedResponse(
             content="",
             tool_calls=[{"id": "1", "type": "function",
-                         "function": {"name": "web_search", "arguments": "{}"}}],
+                         "function": {"name": "ctx_search_test", "arguments": "{}"}}],
             finish_reason="tool_calls",
         ),
-        _ScriptedResponse(content="ok"),
+        _ScriptedResponse(content="ok", finish_reason="length"),
     ])
     transport = FakeTransport()
-    rt = _make_runtime(model=model, transport=transport, tools=[web_search])
-    await Agent(rt).handle(_msg())
-    assert transport.last_used_search is True
+    rt = _make_runtime(model=model, transport=transport, tools=[ctx_search])
+    result = await Agent(rt).handle(_msg())
+    ctx = transport.last_ctx
+    assert ctx.used_tools == ("ctx_search_test",)
+    assert ctx.allowed_urls == ("https://a.example/x", "https://b.example/y")
+    assert ctx.truncated is True
+    assert ctx.reason == "ok"
+    assert result.steps[-1].truncated is True
 
 
 @pytest.mark.asyncio
-async def test_used_search_hint_false_when_no_search_tool():
+async def test_reply_context_empty_when_no_tools():
     model = ScriptedModel([_ScriptedResponse(content="just chatting")])
     transport = FakeTransport()
     rt = _make_runtime(model=model, transport=transport)
     await Agent(rt).handle(_msg())
-    assert transport.last_used_search is False
+    assert transport.last_ctx.used_tools == ()
+    assert transport.last_ctx.allowed_urls == ()
+    assert transport.last_ctx.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_send_result_attrs_land_on_reply_step():
+    class HygieneTransport(FakeTransport):
+        async def send(self, user_id, body, policy, ctx) -> SendResult:
+            return SendResult(sent=True, attrs={"urls_dropped": 2})
+
+    model = ScriptedModel([_ScriptedResponse(content="hi")])
+    rt = _make_runtime(model=model, transport=HygieneTransport())
+    result = await Agent(rt).handle(_msg())
+    reply = result.steps[-1]
+    assert reply.sent is True
+    assert reply.attrs["urls_dropped"] == 2
 
 
 @pytest.mark.asyncio
@@ -680,8 +718,8 @@ async def test_executor_synthesises_multi_query_fanout_from_plan_step():
             first_tool=force_tool("web_search_q_fan"),
             max_steps=6,
             enable_planner=True,
-            planner_query_tool="web_search_q_fan",
-            planner_query_arg="query",
+            synth_tool="web_search_q_fan",
+            synth_arg="query",
         ),
     )
     planner = FakePlanner(queries=[
@@ -720,7 +758,7 @@ async def test_executor_synthesises_multi_query_fanout_from_plan_step():
 
 
 @pytest.mark.asyncio
-async def test_planner_query_default_args_merged_into_synthesised_calls():
+async def test_synth_default_args_merged_into_synthesised_calls():
     """v1.3.1: Policy.planner_query_default_args provides policy-level
     tool kwargs that the executor merges into EVERY synthesised
     planner-fan-out tool call. Variant.extra overrides; the primary
@@ -747,9 +785,9 @@ async def test_planner_query_default_args_merged_into_synthesised_calls():
             first_tool=AUTO,
             max_steps=4,
             enable_planner=True,
-            planner_query_tool="ws_defaults",
-            planner_query_arg="query",
-            planner_query_default_args={"include_raw_content": False},
+            synth_tool="ws_defaults",
+            synth_arg="query",
+            synth_default_args={"include_raw_content": False},
         ),
     )
     planner = FakePlanner(queries=[
@@ -916,8 +954,8 @@ async def test_url_pool_dedup_and_host_diversity():
             first_tool=AUTO,
             max_steps=6,
             enable_planner=True,
-            planner_query_tool="ws_div",
-            planner_query_arg="q",
+            synth_tool="ws_div",
+            synth_arg="q",
             auto_followup_after="ws_div",
             auto_followup_tool="fu_div",
         ),
@@ -966,8 +1004,8 @@ async def test_synthesised_phases_do_not_count_toward_max_steps():
             first_tool=AUTO,
             max_steps=2,    # only 2 model-driven turns allowed
             enable_planner=True,
-            planner_query_tool="ws_max",
-            planner_query_arg="q",
+            synth_tool="ws_max",
+            synth_arg="q",
             auto_followup_after="ws_max",
             auto_followup_tool="fu_max",
         ),
@@ -1011,7 +1049,7 @@ async def test_synthesised_phases_do_not_count_toward_max_steps():
 
 
 @pytest.mark.asyncio
-async def test_no_fanout_when_planner_query_tool_is_none():
+async def test_no_fanout_when_synth_tool_is_none():
     """Safe skip: planner emits PlanStep.queries but the policy did
     NOT declare a planner_query_tool. The executor should fall back
     to normal model-driven turn 1 and HONOUR ``policy.first_tool``."""
@@ -1138,8 +1176,8 @@ async def test_search_deep_end_to_end_planner_to_fanout_to_followup():
             first_tool=force_tool("e2e_search"),
             max_steps=4,
             enable_planner=True,
-            planner_query_tool="e2e_search",
-            planner_query_arg="query",
+            synth_tool="e2e_search",
+            synth_arg="query",
             auto_followup_after="e2e_search",
             auto_followup_tool="e2e_fetch",
             auto_followup_attr="urls",

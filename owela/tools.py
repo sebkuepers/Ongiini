@@ -27,6 +27,7 @@ from typing import (
 )
 
 from .errors import ToolError
+from .health import CircuitBreaker
 from .step import ToolStep
 from .transport import InboundMessage
 
@@ -206,9 +207,19 @@ class ToolRegistry:
     Construct with an explicit list of tools (preferred for tests) or
     call ``.from_global()`` to pick up everything ``@tool``-registered
     at import time.
+
+    Pass a ``CircuitBreaker`` to stop calling tools that keep failing:
+    while a tool's breaker is open, ``execute`` returns an errored
+    ToolStep immediately instead of waiting on a dead dependency.
     """
-    def __init__(self, tools: list[ToolSpec | Callable] | None = None) -> None:
+    def __init__(
+        self,
+        tools: list[ToolSpec | Callable] | None = None,
+        *,
+        breaker: CircuitBreaker | None = None,
+    ) -> None:
         self._tools: dict[str, ToolSpec] = {}
+        self.breaker = breaker
         for t in (tools or []):
             self.add(t)
 
@@ -230,6 +241,16 @@ class ToolRegistry:
 
     def names(self) -> list[str]:
         return list(self._tools.keys())
+
+    def unavailable(self, names: tuple[str, ...]) -> tuple[str, ...]:
+        """The subset of ``names`` that cannot be called right now:
+        unregistered, or circuit breaker open."""
+        missing = tuple(n for n in names if n not in self._tools)
+        if self.breaker is None:
+            return missing
+        return missing + tuple(
+            n for n in self.breaker.unavailable(names) if n not in missing
+        )
 
     def schemas(self, expose: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
         """Return the OpenAI tool-list shape. ``expose=None`` returns all;
@@ -285,6 +306,18 @@ class ToolRegistry:
             step.ended_at = time.monotonic()
             return step
 
+        if self.breaker is not None:
+            step.breaker_state = self.breaker.state(name)
+            if not self.breaker.allow(name):
+                step.error = "circuit_open"
+                step.attrs["result"] = (
+                    f"Tool error: {name} is temporarily unavailable "
+                    f"(repeated failures; not called)."
+                )
+                step.result_len = len(step.attrs["result"])
+                step.ended_at = time.monotonic()
+                return step
+
         try:
             args = json.loads(raw_args)
         except json.JSONDecodeError:
@@ -333,6 +366,8 @@ class ToolRegistry:
 
         step.result_len = len(step.attrs["result"])
         step.ended_at = time.monotonic()
+        if self.breaker is not None:
+            step.attrs["breaker_tripped"] = self.breaker.record(name, ok=step.error is None)
         return step
 
     async def execute_parallel(

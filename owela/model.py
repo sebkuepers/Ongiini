@@ -8,10 +8,15 @@ Gemma + vLLM serves and that's what every other major engine will
 serve too.
 
 Why an explicit protocol rather than just using ``AsyncOpenAI`` directly:
-the Gemma-on-vLLM call carries Owela-specific extras the bare client
-doesn't model — selective ``enable_thinking``, ``reasoning_budget``,
-prefix-cache–aware token reporting via ``cached_tokens``. The adapter
-hides those behind a uniform contract.
+the call carries engine knobs the bare client doesn't model — a thinking
+mode with its own budget, prefix-cache–aware token reporting via
+``cached_tokens``, output sanitising. The adapter hides those behind a
+uniform contract.
+
+``ModelRequest`` is self-describing: everything the adapter needs is on
+the request, so the same ``complete`` path serves the act loop AND
+auxiliary calls (classifier, planner, reviewer, summariser). One adapter,
+one output-sanitising path.
 """
 
 from __future__ import annotations
@@ -19,17 +24,30 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from .policy import Policy, ToolChoice
+from .policy import AUTO, THINKING_OFF, Policy, ToolChoice
 
 
 @dataclass
 class ModelRequest:
-    """All inputs to one chat.completions.create call."""
+    """All inputs to one chat.completions.create call.
+
+    ``max_tokens`` bounds the visible reply; when ``thinking`` is not
+    "off" the adapter adds ``thinking_budget`` on top so reasoning cannot
+    consume the answer. ``response_format`` is "json_object" or None.
+    ``timeout_s`` is a per-request ceiling (None = adapter default).
+    ``policy`` is metadata for adapters that want it — nothing an adapter
+    needs to build the call may live only there.
+    """
     messages: list[dict[str, Any]]
-    tools: list[dict[str, Any]]
-    tool_choice: ToolChoice
-    policy: Policy
-    enable_thinking: bool = False
+    tools: list[dict[str, Any]] = field(default_factory=list)
+    tool_choice: ToolChoice = AUTO
+    max_tokens: int | None = None
+    temperature: float | None = None
+    thinking: str = THINKING_OFF
+    thinking_budget: int | None = None
+    response_format: str | None = None
+    timeout_s: float | None = None
+    policy: Policy | None = None
 
 
 @dataclass

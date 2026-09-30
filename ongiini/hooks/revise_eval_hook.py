@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -61,9 +62,13 @@ class ReviseEvalCaptureHook:
             return
         try:
             self._base_dir.mkdir(parents=True, exist_ok=True)
-            # msg_id is unique per inbound WhatsApp message. Safe-ish
-            # filename — strip anything weird just in case.
-            safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in payload["msg_id"])[:128]
+            # The WhatsApp handlers pass msg_id="" (read receipts are
+            # sent on webhook receipt), which used to make every capture
+            # overwrite ".json". Fall back to a timestamp + random suffix.
+            key = payload["msg_id"] or (
+                datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
+            )
+            safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in key)[:128]
             path = self._base_dir / f"{safe}.json"
             tmp = path.with_suffix(path.suffix + ".tmp")
             tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2))

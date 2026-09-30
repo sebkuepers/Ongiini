@@ -48,6 +48,16 @@ class Settings:
     # fold the user has plenty of immediate context.
     memory_summary_threshold: int = 70
     memory_keep_recent: int = 40
+    # Long-term facts injected per turn: mem0 similarity must reach
+    # mem0_min_score (cosine, MiniLM-L6) and at most mem0_inject_limit
+    # facts are shown. Irrelevant "facts" in context get woven into
+    # answers; fewer, relevant ones help.
+    mem0_min_score: float = float(os.getenv("ONGIINI_MEM0_MIN_SCORE", "0.3"))
+    mem0_inject_limit: int = int(os.getenv("ONGIINI_MEM0_INJECT_LIMIT", "3"))
+    # WhatsApp number (digits, with country code) that receives capability
+    # alerts from HealthAlertHook — e.g. "web search is down". Empty = log
+    # only.
+    operator_msisdn: str = os.getenv("ONGIINI_OPERATOR_MSISDN", "")
     # Free-tier monthly token allowance per user. Surfaced via the
     # my_token_usage tool and quoted on the website's "Free, with a fair
     # limit" section.

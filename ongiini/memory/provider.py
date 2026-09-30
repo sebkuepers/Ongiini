@@ -8,13 +8,22 @@ Wraps the two existing memory tiers:
     extracted by an LLM, retrieved by similarity to the current query
 
 ``assemble_messages`` is the single point that builds the model's view
-of context for one turn. The order is:
+of context for one turn. The order is chosen for vLLM's prefix cache —
+everything that is stable across a user's turns comes first, everything
+that changes every turn comes last:
 
-  1. SYSTEM_PROMPT (constant per-app)
-  2. mem0 long-term memory block (only if non-empty; injected as its
-     own system message to keep the static SYSTEM_PROMPT prefix-cached)
+  1. system prompt: core + the policy's ``prompt_sections`` (+ the
+     first-turn section when the history has no assistant message yet)
+  2. skill manifest (always-loaded skills) + any ``skill:<name>``
+     sections the policy asks for
   3. conversation history (passed in via InboundMessage.history)
-  4. the current user message (text or multipart)
+  4. ONE turn-context system message: date/time anchor, relevant mem0
+     facts, planner context, previously cited sources, degrade note
+  5. the current user message (text or multipart)
+
+Before 2026-09-30 the minute-precision date anchor sat between the
+system prompt and the history, so the whole history was re-prefilled on
+every turn.
 
 ``record_turn`` writes to both tiers. Long-term mem0 calls go through
 ``asyncio.to_thread`` because mem0's API is synchronous and the
@@ -26,8 +35,8 @@ tests can substitute simple fakes. Production wires the real
 
 Summarisation (folding old turns into a rolling system summary when
 history grows large) is NOT done here — the application is responsible
-for calling ``llm.maybe_summarize`` on the history BEFORE passing it as
-``InboundMessage.history``. Pragmatic choice: summarisation needs a
+for calling ``summary.maybe_summarize`` on the history BEFORE passing it
+as ``InboundMessage.history``. Pragmatic choice: summarisation needs a
 model call, and threading the Model through the MemoryProvider couples
 two responsibilities. v1 may promote it to a Hook; for now it stays
 where it is in the FastAPI handler.
@@ -40,7 +49,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
-from owela import InboundMessage, PlanStep, Policy, SkillRegistry, Step
+from owela import DegradeStep, InboundMessage, PlanStep, Policy, SkillRegistry, Step
 
 log = logging.getLogger("ongiini.memory_provider")
 
@@ -50,6 +59,10 @@ log = logging.getLogger("ongiini.memory_provider")
 # present "today" to the model — otherwise after 22:00 CAT we'd already
 # be on tomorrow's UTC date.
 _NAMIBIA_TZ = timezone(timedelta(hours=2))
+
+
+SECTION_FIRST_TURN = "first_turn"
+SKILL_SECTION_PREFIX = "skill:"
 
 
 def _today_in_namibia_prompt() -> str:
@@ -107,20 +120,30 @@ class OngiiniMemoryProvider:
 
     def __init__(
         self,
-        system_prompt: str,
+        system_prompt: str = "",
         *,
+        prompt_builder: Callable[[frozenset[str]], str] | None = None,
         short_term: ShortTermBackend,
         long_term: LongTermBackend,
         mem0_search_limit: int = 5,
+        mem0_inject_limit: int = 3,
+        mem0_min_score: float = 0.3,
         source_index_loader: Callable[[str], list[dict[str, Any]]] | None = None,
         source_index_formatter: Callable[[list[dict[str, Any]]], str] | None = None,
         source_index_deleter: Callable[[str], bool] | None = None,
         skills: SkillRegistry | None = None,
     ) -> None:
+        if not system_prompt and prompt_builder is None:
+            raise ValueError("OngiiniMemoryProvider needs system_prompt or prompt_builder")
         self.system_prompt = system_prompt
+        # prompt_builder(sections) → system prompt text for this turn.
+        # Wins over the static ``system_prompt`` when given.
+        self._prompt_builder = prompt_builder
         self._short = short_term
         self._long = long_term
         self.mem0_search_limit = mem0_search_limit
+        self.mem0_inject_limit = mem0_inject_limit
+        self.mem0_min_score = mem0_min_score
         # v1.6-B source-index: optional third memory tier that persists
         # cited URLs across turns. Injected as callables so tests can
         # substitute fakes without touching the on-disk store; None
@@ -139,75 +162,103 @@ class OngiiniMemoryProvider:
         policy: Policy,
         prior_steps: list[Step],
     ) -> list[dict[str, Any]]:
-        # Long-term vector search. ``mem.search`` returns [] on any
-        # error, so the assembled list still works if mem0 is down or
-        # warming up.
-        relevant = await asyncio.to_thread(
-            self._long.search, msg.user_id, msg.text, self.mem0_search_limit,
-        )
-        memory_block = self._long.format_relevant(relevant)
+        sections = set(policy.prompt_sections)
+        if not any(m.get("role") == "assistant" for m in msg.history):
+            # No reply from us yet: the EU AI Act disclosure + welcome line.
+            sections.add(SECTION_FIRST_TURN)
 
-        # Pick the right user content shape. For image-bearing turns the
-        # OpenAI multipart list is what the model needs to see; for text
-        # only we send a plain string so prompts stay maximally cacheable.
+        # --- stable prefix: system prompt, skills, history ---------------
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": self._system_prompt_for(sections)},
+        ]
+        for block in self._skill_blocks(sections):
+            messages.append({"role": "system", "content": block})
+        messages.extend(msg.history)
+
+        # --- per-turn context, directly before the user message ----------
+        context = await self._turn_context(msg, prior_steps)
+        messages.append({"role": "system", "content": context})
+
+        # Image-bearing turns need the multipart list; text-only turns send
+        # a plain string.
         if msg.has_image and msg.content_parts:
             user_content: Any = msg.content_parts
         else:
             user_content = msg.text
-
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self.system_prompt},
-        ]
-        # Welcome A/B/C experiment for FB-ad arrivers concluded
-        # 2026-05-30: variant B (concrete-suggestion copy) won at 66%
-        # engagement vs 53%/53% for the alternatives. Promoted to the
-        # static system-prompt default for ALL arrivals (FB + organic).
-        # Experiment injection removed; welcome_experiment.py module
-        # and the historical log file stay for future A/B rounds.
-        # Skill manifest — lists registered skills (name + description)
-        # and inlines the content of any ``load: always`` skills. Goes
-        # after SYSTEM_PROMPT and before the date anchor so the static
-        # prompt stays prefix-cached; the manifest changes only when a
-        # skill is added/removed at startup, so it's cache-stable across
-        # turns within a deploy.
-        if self._skills is not None:
-            manifest = self._skills.manifest()
-            if manifest:
-                messages.append({"role": "system", "content": manifest})
-        # Today's date as its own short system message. Goes AFTER the
-        # static system prompt so the prefix cache still hits everything
-        # above it. The date itself rotates daily — fine, the cache miss
-        # cost on ~80 tokens is negligible.
-        messages.append({"role": "system", "content": _today_in_namibia_prompt()})
-        if memory_block:
-            # Separate system message rather than concatenated into
-            # SYSTEM_PROMPT — the per-user mem0 block is the only
-            # variable here, so the static system stays prefix-cached.
-            messages.append({"role": "system", "content": memory_block})
-
-        # Plan injection — if the executor ran the Planner phase BEFORE
-        # the act loop (only happens on SEARCH_DEEP turns when
-        # policy.enable_planner is True), surface the plan as its own
-        # system message so the model enters the act loop with the
-        # decomposition in scope. We look at prior_steps rather than
-        # taking the plan as a separate parameter so this provider stays
-        # decoupled from the Planner protocol.
-        plan_msg = self._extract_plan_message(prior_steps)
-        if plan_msg:
-            messages.append({"role": "system", "content": plan_msg})
-
-        # v1.6-B: surface URLs cited in earlier turns of this conversation
-        # so "give me sources" requests work even past the short-term
-        # rolling-summary horizon. Best-effort: any failure silently
-        # drops the block — chat still works, model just can't replay
-        # buried citations.
-        si_msg = self._format_source_index_message(msg.user_id)
-        if si_msg:
-            messages.append({"role": "system", "content": si_msg})
-
-        messages.extend(msg.history)
         messages.append({"role": "user", "content": user_content})
         return messages
+
+    def _system_prompt_for(self, sections: set[str]) -> str:
+        if self._prompt_builder is not None:
+            return self._prompt_builder(frozenset(sections))
+        return self.system_prompt
+
+    def _skill_blocks(self, sections: set[str]) -> list[str]:
+        """The manifest of always-loaded skills (static, cache-stable),
+        then the full content of every ``skill:<name>`` section the policy
+        requests. On-demand skills are not advertised: no policy exposes a
+        ``load_skill`` tool, so the policy decides when a skill is needed."""
+        if self._skills is None:
+            return []
+        blocks: list[str] = []
+        manifest = self._skills.manifest(include_on_demand=False)
+        if manifest:
+            blocks.append(manifest)
+        for section in sorted(sections):
+            if not section.startswith(SKILL_SECTION_PREFIX):
+                continue
+            skill = self._skills.get(section[len(SKILL_SECTION_PREFIX):])
+            if skill is not None and skill.load != "always":
+                blocks.append(f"## Skill: {skill.name}\n\n{skill.content}")
+        return blocks
+
+    async def _turn_context(self, msg: InboundMessage, prior_steps: list[Step]) -> str:
+        """Everything that changes turn to turn, as one system message."""
+        parts = [_today_in_namibia_prompt()]
+        facts = await self._relevant_facts(msg)
+        if facts:
+            parts.append(facts)
+        plan_msg = self._extract_plan_message(prior_steps)
+        if plan_msg:
+            parts.append(plan_msg)
+        # v1.6-B: URLs cited in earlier turns, so "give me sources" works
+        # past the rolling-summary horizon.
+        si_msg = self._format_source_index_message(msg.user_id)
+        if si_msg:
+            parts.append(si_msg)
+        degrade_msg = self._extract_degrade_message(prior_steps)
+        if degrade_msg:
+            parts.append(degrade_msg)
+        return "\n\n".join(parts)
+
+    async def _relevant_facts(self, msg: InboundMessage) -> str:
+        """Top mem0 facts for this message: similarity above
+        ``mem0_min_score``, at most ``mem0_inject_limit``. Hits without a
+        score (backends that don't report one) are kept. ``search``
+        returns [] on any error, so a down mem0 just means no facts."""
+        hits = await asyncio.to_thread(
+            self._long.search, msg.user_id, msg.text, self.mem0_search_limit,
+        )
+        kept = [
+            h for h in hits
+            if not isinstance(h, dict)
+            or not isinstance(h.get("score"), (int, float))
+            or h["score"] >= self.mem0_min_score
+        ][: self.mem0_inject_limit]
+        return self._long.format_relevant(kept)
+
+    @staticmethod
+    def _extract_degrade_message(prior_steps: list[Step]) -> str:
+        for step in prior_steps:
+            if isinstance(step, DegradeStep):
+                tools = ", ".join(step.missing_tools) or "a required tool"
+                return (
+                    f"Live tools unavailable this turn ({tools}). Answer from "
+                    "general knowledge, keep it short, say plainly that you "
+                    "could not check current information, and never present "
+                    "prices, dates, schedules or other changing facts as current."
+                )
+        return ""
 
     def _format_source_index_message(self, user_id: str) -> str:
         """Read the per-user source index and format it as a system

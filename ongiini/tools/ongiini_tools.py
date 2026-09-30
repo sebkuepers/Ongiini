@@ -40,6 +40,10 @@ log = logging.getLogger("ongiini.tools")
 # Tools cap fetch_urls at 5 for prompt-budget reasons (Tavily's /extract
 # accepts up to 20 per batch — see ongiini/search.py).
 _FETCH_URLS_CAP = 5
+# Shared text budget across all pages of one fetch_urls call; matches the
+# model-visible cap the search policies set for this tool.
+_FETCH_URLS_BUDGET_CHARS = 12_000
+_FETCH_URLS_MIN_PER_PAGE = 2_000
 
 
 # ----------------------------- search tools -----------------------------
@@ -119,8 +123,12 @@ async def web_search(
     ),
     params={"url": "The full URL to fetch (must start with http:// or https://)."},
 )
-async def fetch_url(url: str) -> str:
-    return await _fetch_url_impl(url)
+async def fetch_url(url: str) -> tuple[str, dict]:
+    text = await _fetch_url_impl(url)
+    # Report the URL only when the page actually came back, so the
+    # transport's allowlist accepts citations of it.
+    ok = text.startswith("Fetched: ")
+    return text, {"urls": [url.strip()] if ok else []}
 
 
 @tool(
@@ -141,26 +149,38 @@ async def fetch_url(url: str) -> str:
         ),
     },
 )
-async def fetch_urls(urls: list[str]) -> str:
+async def fetch_urls(urls: list[str]) -> tuple[str, dict]:
     """Batched fetch — ONE Tavily ``/extract`` call returns all results.
 
     Saves N-1 HTTP round trips vs the old asyncio.gather-per-URL
     approach. Tavily handles parallelism server-side. Per-URL failures
     land as inline ``[fetch failed: ...]`` markers so the model can
     work with whichever pages came back.
+
+    The pages share one budget (``_FETCH_URLS_BUDGET_CHARS``, the size of
+    the model-visible cap on this tool): each page gets an equal slice,
+    at least ``_FETCH_URLS_MIN_PER_PAGE``. Without this, the message cap
+    cut the concatenation after the first page and the model never saw
+    pages two to five.
     """
     if not urls:
-        return "No URLs supplied."
+        return "No URLs supplied.", {"urls": []}
     if len(urls) > _FETCH_URLS_CAP:
         urls = urls[:_FETCH_URLS_CAP]    # cap silently — model gets the top N
 
     results = await _extract_urls_impl(urls)
 
+    per_page = max(_FETCH_URLS_MIN_PER_PAGE, _FETCH_URLS_BUDGET_CHARS // len(urls))
     parts: list[str] = []
+    fetched: list[str] = []
     for url in urls:
         body = results.get(url, f"[fetch failed: no result for {url}]")
+        if body.startswith("Fetched: "):
+            fetched.append(url)
+        if len(body) > per_page:
+            body = body[:per_page] + f"\n[page truncated at {per_page} chars]"
         parts.append(f"## {url}\n{body}")
-    return "\n\n".join(parts)
+    return "\n\n".join(parts), {"urls": fetched}
 
 
 # ----------------------------- admin tools -----------------------------

@@ -41,17 +41,24 @@ WhatsApp webhook POST
   → agent.handle(msg)                          [owela/agent.py]
     → execute_turn(runtime, msg)               [owela/executor.py]
       → classifier.classify(msg)               [ongiini/routers/]
-      → policies.lookup(verdict, depth)        [ongiini/runtime.py builds the table]
+      → policies.lookup(verdict, depth)        [ongiini/policies.py builds the table]
+      → degrade if a required tool is down     [breaker on the ToolRegistry, runtime.py]
       → memory.assemble_messages(...)          [ongiini/memory/provider.py]
+      → synthesised calls (docs, contribute)   [Policy.synth_*]
       → for turn in 1..max_steps:
           → model.complete(req)                [ongiini/models/vllm_gemma.py]
           → tools.execute_parallel(...)        [ongiini/tools/]
-      → transport.send(...)                    [ongiini/transports/whatsapp_transport.py]
+      → transport.send(..., ReplyContext)      [ongiini/transports/whatsapp_transport.py]
       → hooks.on_turn_complete(...)            [ongiini/hooks/]
-        → BillingHook  → ongiini/usage.py
-        → TracingHook  → /data/trace.jsonl
+        → BillingHook      → ongiini/usage.py
+        → TracingHook      → /data/trace.jsonl
+        → HealthAlertHook  → log + operator WhatsApp when a tool's breaker trips
         → MemoryRecordingHook → memory/provider.record_turn
 ```
+
+The classifier, planner, reviewer and summariser all call the SAME
+`VLLMGemmaModel` adapter, so every model output goes through one
+sanitising path and one 90 s request timeout.
 
 Every file in `ongiini/` is somewhere on that diagram. If you can't
 place it, stop and figure out where it goes before adding more.
@@ -94,12 +101,16 @@ quirks to `owela/`; add them here, in the right module.
 | Gemma 4 vision pooler needs image dims as multiples of 48 | `api/main.py::_resize_for_gemma4` |
 | WhatsApp typing-indicator timeout is 25s (Meta-side hard limit) | `transports/whatsapp_transport.py` |
 | WhatsApp max message length is 4096 chars | `transports/whatsapp_transport.py` |
-| Selective reasoning with `reasoning_budget=500` | `models/vllm_gemma.py` + per-policy in `runtime.py` |
+| Thinking per policy (`thinking` off/low/on) with its own budget on top of the reply budget | `models/vllm_gemma.py` + `policies.py` |
+| Reply length budget per policy (`max_reply_tokens`); NONE split into SHALLOW/DEEP by the classifier | `policies.py` + `routers/gemma_classifier.py` |
+| Per-turn context after the history (prefix cache) | `memory/provider.py::assemble_messages` |
+| System prompt sections per policy | `system_prompt.py::build_system_prompt` |
 | Date/time anchor in Namibia CAT timezone | `memory/provider.py::_today_in_namibia_prompt` |
 | PII scrub at write time (LLM sees raw, disk sees redacted) | `pii.py` + `hooks/memory_recording_hook.py` |
 | Image bytes never persisted to either memory tier | `memory/provider.py::record_image_turn` + `tools/ongiini_tools.py` |
-| Dead-URL HEAD-check on search-grounded replies | `transports/whatsapp_transport.py::_strip_dead_urls` |
-| Caption-router for admin-intent on image messages | `api/main.py::_caption_is_admin_intent` |
+| URL allowlist on citation turns (only URLs the tools returned) | `transports/reply_hygiene.py` |
+| Truncated drafts trimmed to a sentence + "Reply *more*" offer | `transports/reply_hygiene.py` |
+| Search provider failure → `ToolError` → breaker → degraded turn | `search.py` + `policies.py::search_degraded` |
 | 1M-tokens-per-user-per-month allowance | `usage.py` + `tools/ongiini_tools.py::my_token_usage` |
 | Namibia-only filter (+264 country code) | `filters.py::is_allowed` |
 | Common Intelligence Foundation / Spark / German number context | `system_prompt.py` |
@@ -137,11 +148,11 @@ load: always  # or 'on_demand' (default)
 ```
 
 - `load: always` — full content embedded in the system prompt every
-  turn. Use for small skills (~1k tokens) needed unpredictably (e.g.
-  greetings).
-- `load: on_demand` — only the manifest entry (name + description) goes
-  in the system prompt; full content fetched via `load_skill(name)`.
-  Use for large skills (~5k+ tokens) needed only occasionally.
+  turn. Use for skills needed unpredictably (e.g. greetings).
+- `load: on_demand` — not advertised in the prompt. A policy that needs
+  it lists `"skill:<name>"` in `prompt_sections`, and the provider
+  inlines the content on those turns only (e.g. `contribute` on the
+  `contribute_*` policies). No policy exposes `load_skill`.
 
 **Where the wiring lives:**
 
@@ -271,10 +282,21 @@ Target: ≥96% existing accuracy preserved, ≥85% on the new axis.
 
 ## Touching the system prompt
 
-The whole prompt is `system_prompt.py::SYSTEM_PROMPT`. Sections:
-LANGUAGES, FIRST-MESSAGE DISCLOSURE, TONE & FORMAT, CAUTIONS,
-WHEN TO SEARCH, HONESTY WHEN SEARCH DOESN'T HELP, CITATIONS, MEMORY,
-TOOL DISPATCH FOR DATA/USAGE/SELF, NAMIBIA CONTEXT, BOUNDARIES.
+`system_prompt.py` holds the prompt as named blocks; `SYSTEM_PROMPT` is
+all of them. `build_system_prompt(sections)` renders the core plus the
+sections a policy lists in `prompt_sections`:
+
+- core (always): identity, LANGUAGES, TONE & FORMAT, CAUTIONS, MEMORY,
+  re-listing sources on request, WHO YOU ARE, NAMIBIA CONTEXT, BOUNDARIES
+- `first_turn`: FIRST-MESSAGE DISCLOSURE + WELCOME (added by the
+  provider when the history has no assistant message)
+- `grounding`: GROUNDING + WHEN TO SEARCH (search policies)
+- `citations`: CITATIONS (search policies)
+- `admin`: TOOL DISPATCH + NEVER FAKE STATE-CHANGING ACTIONS (chat,
+  admin, docs, contribute policies)
+
+Put a new rule in the section of the turns that need it, not in the
+core.
 
 Small edits land directly. Anything bigger (new section,
 restructure) should be eval-tested via the `eval.py` /
@@ -313,7 +335,8 @@ Bug fixes there don't typically need agent-loop tests.
 Run:
 
 ```sh
-pytest owela/tests ongiini/tests   # 149 unit tests, no live stack
+pytest owela/tests ongiini/tests scripts/test_trace_query.py   # no live stack
+python3 scripts/trace_query.py health --window=24h            # on the Spark
 ```
 
 ---

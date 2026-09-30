@@ -78,7 +78,7 @@ async def test_fetch_urls_batches_via_extract_endpoint():
         "ongiini.tools.ongiini_tools._extract_urls_impl",
         new=AsyncMock(side_effect=fake_extract),
     ) as mock_extract:
-        result = await fetch_urls(["https://a.example", "https://b.example"])
+        result, _attrs = await fetch_urls(["https://a.example", "https://b.example"])
     # One batched call, not two.
     assert mock_extract.call_count == 1
     assert mock_extract.call_args.args[0] == ["https://a.example", "https://b.example"]
@@ -110,8 +110,9 @@ async def test_fetch_urls_caps_at_five():
 
 @pytest.mark.asyncio
 async def test_fetch_urls_empty_list_returns_friendly_message():
-    out = await fetch_urls([])
+    out, attrs = await fetch_urls([])
     assert "no urls" in out.lower()
+    assert attrs == {"urls": []}
 
 
 @pytest.mark.asyncio
@@ -129,9 +130,34 @@ async def test_fetch_urls_per_url_failure_inlined_in_result():
         "ongiini.tools.ongiini_tools._extract_urls_impl",
         new=AsyncMock(side_effect=fake_extract),
     ):
-        result = await fetch_urls(["https://good.example", "https://bad.example"])
+        result, _attrs = await fetch_urls(["https://good.example", "https://bad.example"])
     assert "body of https://good.example" in result
     assert "Failed to fetch https://bad.example" in result
+
+
+@pytest.mark.asyncio
+async def test_fetch_urls_reports_fetched_urls_and_shares_budget():
+    """Only pages that actually came back are reported as citable URLs,
+    and every page gets a slice of the budget (before, the message cap
+    kept only the first page)."""
+    long_body = "Fetched: {u}\n\n" + ("word " * 5000)
+
+    async def fake_extract(urls):
+        out = {u: long_body.format(u=u) for u in urls[:-1]}
+        out[urls[-1]] = f"Failed to fetch {urls[-1]}: timeout"
+        return out
+
+    urls = [f"https://p{i}.example/page" for i in range(4)]
+    with patch(
+        "ongiini.tools.ongiini_tools._extract_urls_impl",
+        new=AsyncMock(side_effect=fake_extract),
+    ):
+        text, attrs = await fetch_urls(urls)
+    assert attrs == {"urls": urls[:-1]}
+    for u in urls[:-1]:
+        assert f"## {u}" in text
+        assert f"Fetched: {u}" in text
+    assert len(text) < 12_000 + 1_000              # the shared budget holds
 
 
 # ---------- delete_my_data ----------
@@ -274,7 +300,17 @@ async def test_fetch_url_delegates_to_impl():
     ) as mock:
         result = await fetch_url("https://example.com/x")
     mock.assert_awaited_once_with("https://example.com/x")
-    assert result == "page body"
+    assert result == ("page body", {"urls": []})   # not a successful fetch
+
+
+@pytest.mark.asyncio
+async def test_fetch_url_reports_url_when_page_came_back():
+    with patch(
+        "ongiini.tools.ongiini_tools._fetch_url_impl",
+        new=AsyncMock(return_value="Fetched: https://example.com/x\n\ntext"),
+    ):
+        _text, attrs = await fetch_url("https://example.com/x")
+    assert attrs == {"urls": ["https://example.com/x"]}
 
 
 # ---------- my_token_usage ----------

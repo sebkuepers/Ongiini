@@ -23,10 +23,42 @@ def test_policy_defaults():
     assert p.max_steps == 6
     assert p.enable_planner is False
     assert p.enable_critique is False
-    assert p.enable_interstitial is False
-    assert p.reasoning_budget == 500
-    assert p.long_result_threshold_chars == 1000
+    assert p.thinking == "off"
+    assert p.max_reply_tokens is None
+    assert p.max_thinking_tokens is None
+    assert p.deadline_s is None
+    assert p.interstitial_after_s is None
+    assert p.requires_tools == ()
+    assert p.on_unavailable is None
+    assert p.fallback_reply == ""
+    assert p.synth_tool is None
     assert p.expose_tools is None
+
+
+def test_policy_rejects_unknown_thinking_mode():
+    with pytest.raises(ValueError):
+        Policy(name="x", thinking="medium")
+
+
+def test_forced_tool_name():
+    from owela.policy import forced_tool_name
+    assert forced_tool_name(force_tool("web_search")) == "web_search"
+    assert forced_tool_name(AUTO) is None
+    assert forced_tool_name("required") is None
+
+
+def test_policy_table_add_and_by_name():
+    from owela.errors import PolicyNotFound
+    table = PolicyTable()
+    degraded = Policy(name="search_degraded")
+    table.add(degraded)
+    table.set(VERDICT_SEARCH, DEPTH_DEEP, Policy(name="search_deep"))
+    assert table.by_name("search_degraded") is degraded
+    assert table.by_name("search_deep").name == "search_deep"
+    # Name-only policies are not reachable by verdict lookup.
+    assert all(p.name != "search_degraded" for p in table.all().values())
+    with pytest.raises(PolicyNotFound):
+        table.by_name("nope")
 
 
 def test_force_tool_shape():

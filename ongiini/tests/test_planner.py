@@ -314,8 +314,8 @@ async def test_planner_prompt_includes_recent_history_block_when_present():
     )
     await planner.plan(msg, Policy(name="search_deep"), [])
     sent = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
-    assert "PREVIOUS USER: How many datacenters in Namibia?" in sent
-    assert "PREVIOUS REPLY:" in sent
+    assert "USER: How many datacenters in Namibia?" in sent
+    assert "REPLY:" in sent
     assert "Paratus" in sent
     # And the actual question is still in the prompt.
     assert "compare them" in sent

@@ -31,6 +31,8 @@ from typing import Any, Callable
 
 from owela import InboundMessage, PlanStep, Policy, SkillRegistry, Step
 
+from .provider import SECTION_FIRST_TURN, SKILL_SECTION_PREFIX, OngiiniMemoryProvider
+
 log = logging.getLogger("ongiini.memory.session")
 
 
@@ -243,13 +245,21 @@ class SessionMemoryProvider:
 
     def __init__(
         self,
-        system_prompt: str,
+        system_prompt: str = "",
         *,
+        prompt_builder: Callable[[frozenset[str]], str] | None = None,
         store: SessionStore,
         skills: SkillRegistry | None = None,
         pii_sanitiser: Callable[[str], str] | None = None,
+        max_history_entries: int = 60,
     ) -> None:
+        if not system_prompt and prompt_builder is None:
+            raise ValueError("SessionMemoryProvider needs system_prompt or prompt_builder")
         self.system_prompt = system_prompt
+        self._prompt_builder = prompt_builder
+        # Sessions have no summariser; keep the most recent entries so a
+        # long browser session can't outgrow the model's context window.
+        self.max_history_entries = max_history_entries
         self._store = store
         self._skills = skills
         # PII sanitiser is optional — for sessions the user accepts
@@ -268,36 +278,55 @@ class SessionMemoryProvider:
     ) -> list[dict[str, Any]]:
         """Build the OpenAI-style messages list for this turn.
 
-        Order matches the WhatsApp provider as far as practical so the
-        model sees an identical preamble between the two transports
-        (cache-friendly for vLLM prefix-cache):
+        Same order as the WhatsApp provider — stable prefix first,
+        per-turn context last (cache-friendly for vLLM's prefix cache):
 
-          1. SYSTEM_PROMPT
-          2. Skill manifest (when skills are registered)
-          3. Today's date anchor
-          4. Plan injection (if SEARCH_DEEP fired the planner)
-          5. msg.history (the session's rolling conversation)
-          6. Current user message
+          1. system prompt: core + the policy's prompt sections (+ the
+             first-turn section when the session has no reply yet)
+          2. skill manifest (always-loaded skills) + ``skill:<name>``
+             sections the policy requests
+          3. msg.history (the session's most recent entries)
+          4. one turn-context system message: date anchor, planner
+             context, degrade note
+          5. current user message
         """
         if msg.has_image and msg.content_parts:
             user_content: Any = msg.content_parts
         else:
             user_content = msg.text
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self.system_prompt},
-        ]
+        history = msg.history[-self.max_history_entries:] if self.max_history_entries else msg.history
+        sections = set(policy.prompt_sections) if policy is not None else set()
+        if not any(m.get("role") == "assistant" for m in history):
+            sections.add(SECTION_FIRST_TURN)
+        prompt = (
+            self._prompt_builder(frozenset(sections))
+            if self._prompt_builder is not None else self.system_prompt
+        )
+
+        messages: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
         if self._skills is not None:
-            manifest = self._skills.manifest()
+            manifest = self._skills.manifest(include_on_demand=False)
             if manifest:
                 messages.append({"role": "system", "content": manifest})
-        messages.append({"role": "system", "content": _today_in_namibia_prompt()})
+            for section in sorted(sections):
+                if section.startswith(SKILL_SECTION_PREFIX):
+                    skill = self._skills.get(section[len(SKILL_SECTION_PREFIX):])
+                    if skill is not None and skill.load != "always":
+                        messages.append({
+                            "role": "system",
+                            "content": f"## Skill: {skill.name}\n\n{skill.content}",
+                        })
+        messages.extend(history)
 
+        context = [_today_in_namibia_prompt()]
         plan_msg = self._extract_plan_message(prior_steps)
         if plan_msg:
-            messages.append({"role": "system", "content": plan_msg})
-
-        messages.extend(msg.history)
+            context.append(plan_msg)
+        degrade_msg = OngiiniMemoryProvider._extract_degrade_message(prior_steps)
+        if degrade_msg:
+            context.append(degrade_msg)
+        messages.append({"role": "system", "content": "\n\n".join(context)})
         messages.append({"role": "user", "content": user_content})
         return messages
 

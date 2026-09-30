@@ -53,6 +53,33 @@ class InboundMessage:
     raw_payload: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class ReplyContext:
+    """What the executor knows about the draft it hands to ``send``.
+
+    ``used_tools`` lists every tool that ran this turn, so the transport
+    decides which ones make citation hygiene worthwhile (the framework
+    holds no tool names). ``allowed_urls`` are the URLs that appeared in
+    this turn's tool results — a transport may drop reply lines citing
+    URLs outside this set. ``truncated`` means the final model call hit
+    its token limit; ``reason`` mirrors ``ReplyStep.reason``.
+    """
+    used_tools: tuple[str, ...] = ()
+    allowed_urls: tuple[str, ...] = ()
+    truncated: bool = False
+    degraded: bool = False
+    deadline_exceeded: bool = False
+    reason: str = "ok"
+
+
+@dataclass
+class SendResult:
+    """Outcome of ``Transport.send``. ``attrs`` carries transport hygiene
+    counts (e.g. urls_dropped, chars_capped) into ``ReplyStep.attrs``."""
+    sent: bool
+    attrs: dict[str, Any] = field(default_factory=dict)
+
+
 @runtime_checkable
 class Transport(Protocol):
     """The outbound side of the transport — everything that sends bytes
@@ -75,8 +102,9 @@ class Transport(Protocol):
         ...
 
     async def send_interstitial(self, user_id: str, policy: Policy) -> None:
-        """Send a "still working" interstitial during long turns. Only
-        called when ``policy.enable_interstitial`` is True (v1 feature)."""
+        """Send a "still working" message during a long turn. The executor
+        calls it once the turn has run for ``policy.interstitial_after_s``
+        (capped at ``typing_window_s``). Soft-fail: should never raise."""
         ...
 
     async def send(
@@ -84,18 +112,12 @@ class Transport(Protocol):
         user_id: str,
         body: str,
         policy: Policy,
-        *,
-        used_search: bool = False,
-    ) -> bool:
+        ctx: ReplyContext,
+    ) -> SendResult:
         """Deliver the final reply. The transport is free (and expected)
-        to post-process the body — dead-URL strip, format normalisation,
-        char cap. Returns True if the recipient's transport accepted the
-        payload.
-
-        ``used_search`` is a hint set by the executor when any
-        web_search / fetch_url / fetch_urls tool fired during the turn.
-        Transports use it to gate expensive reply-hygiene checks (e.g.
-        dead-URL HEAD probing) that are only meaningful when the model
-        is citing tool output, not when it's chatting plainly.
+        to post-process the body — format normalisation, URL hygiene,
+        trimming a truncated draft to a clean boundary, appending
+        ``policy.reply_notice``, char cap. Returns whether the
+        recipient's transport accepted the payload, plus hygiene counts.
         """
         ...

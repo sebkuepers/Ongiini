@@ -5,9 +5,8 @@ steps: router → (plan) → act → tool(s) → (critique) → reply. Loop
 shape is decided UPFRONT by an explicit Policy table driven by a
 classifier, not by the model's emergent behaviour.
 
-See the plan at
-``~/.claude/plans/lets-improve-the-website-lexical-island.md``
-for the architectural rationale and anti-trap principles.
+See ``owela/CLAUDE.md`` for the architectural rationale and the
+anti-trap principles.
 
 Quick start for application code::
 
@@ -44,26 +43,29 @@ from __future__ import annotations
 from .agent import Agent, HandleResult
 from .errors import ModelError, OwelaError, PolicyNotFound, ToolError
 from .executor import execute_turn
+from .health import BreakerConfig, CircuitBreaker
 from .hooks import Hook, HookRegistry, TurnContext
 from .hooks_builtin import MemoryRecordingHook
 from .memory import MemoryProvider
 from .model import Model, ModelRequest, ModelResponse
 from .policy import (
-    ALL_DEPTHS, ALL_VERDICTS, AUTO, DEPTH_DEEP, DEPTH_SHALLOW, Policy,
-    PolicyTable, ToolChoice, VERDICT_ADMIN, VERDICT_DOCS, VERDICT_NONE,
-    VERDICT_SEARCH, force_tool,
+    ALL_DEPTHS, ALL_THINKING, ALL_VERDICTS, AUTO, DEPTH_DEEP, DEPTH_SHALLOW,
+    THINKING_LOW, THINKING_OFF, THINKING_ON, Policy, PolicyTable, ToolChoice,
+    VERDICT_ADMIN, VERDICT_DOCS, VERDICT_NONE, VERDICT_SEARCH, force_tool,
+    forced_tool_name,
 )
 from .router import Classifier, ClassifierResult
 from .runtime import Planner, Reviewer, Runtime
 from .skills import Skill, SkillRegistry
 from .step import (
-    CritiqueStep, ModelCallStep, PlanStep, QueryVariant, ReplyStep,
-    ReviseStep, RouterStep, Step, ToolStep,
+    REPLY_DEADLINE, REPLY_ERROR, REPLY_MAX_STEPS, REPLY_OK, TOOL_URLS_ATTR,
+    CritiqueStep, DegradeStep, ErrorStep, ModelCallStep, PlanStep,
+    QueryVariant, ReplyStep, ReviseStep, RouterStep, Step, ToolStep,
 )
 from .tools import (
     ToolContext, ToolRegistry, ToolSpec, reset_global_registry, tool,
 )
-from .transport import InboundMessage, Transport
+from .transport import InboundMessage, ReplyContext, SendResult, Transport
 
 __all__ = [
     # Agent / Runtime / Executor
@@ -93,6 +95,11 @@ __all__ = [
     "ToolChoice",
     "AUTO",
     "force_tool",
+    "forced_tool_name",
+    "THINKING_OFF",
+    "THINKING_LOW",
+    "THINKING_ON",
+    "ALL_THINKING",
     "VERDICT_NONE",
     "VERDICT_ADMIN",
     "VERDICT_DOCS",
@@ -111,6 +118,16 @@ __all__ = [
     "CritiqueStep",
     "ReviseStep",
     "ReplyStep",
+    "DegradeStep",
+    "ErrorStep",
+    "REPLY_OK",
+    "REPLY_MAX_STEPS",
+    "REPLY_ERROR",
+    "REPLY_DEADLINE",
+    "TOOL_URLS_ATTR",
+    # Health
+    "BreakerConfig",
+    "CircuitBreaker",
     # Skills
     "Skill",
     "SkillRegistry",
@@ -122,6 +139,8 @@ __all__ = [
     "reset_global_registry",
     # Transport
     "InboundMessage",
+    "ReplyContext",
+    "SendResult",
     # Errors
     "OwelaError",
     "ToolError",

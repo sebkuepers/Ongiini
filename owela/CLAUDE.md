@@ -89,10 +89,10 @@ Owela that hold per-request state.
 ### 7. No god-functions
 
 `execute_turn` is the only orchestrator. The function body is
-currently ~160 LOC (the surrounding file is ~210 LOC including
-imports and the module docstring). If the body grows past 250 LOC,
-that's the signal a new abstraction wants to come out — maybe a
-Hook, maybe a new Step kind, maybe a new Policy field.
+currently ~130 LOC; routing, degrade, request building, synthesis and
+the reply path live in small helpers below it. If the body grows past
+250 LOC, that's the signal a new abstraction wants to come out —
+maybe a Hook, maybe a new Step kind, maybe a new Policy field.
 
 ### 8. Owela is pure library
 
@@ -110,15 +110,17 @@ wrong directory. Open `ongiini/` instead.
 
 ## The Step model
 
-| Step type | Produced by | Key fields | v0 / v1? |
-|---|---|---|---|
-| `RouterStep` | Classifier (wrapped by executor) | `verdict`, `depth`, tokens | v0 |
-| `PlanStep` | Planner | `plan_text` | v1 (slot exists) |
-| `ModelCallStep` | Each model.complete() call | `turn`, `enable_thinking`, `reasoning_budget`, `finish_reason`, `tool_calls`, tokens | v0 |
-| `ToolStep` | Each tool execution | `tool_name`, `tool_call_id`, `args_len`, `result_len`, `error` | v0 |
-| `CritiqueStep` | Reviewer.critique() | `verdict` (`PASS`/`REVISE`), `reasons` | v1 (slot exists) |
-| `ReviseStep` | Reviewer.revise() | `attrs["revised_reply"]` | v1 (slot exists) |
-| `ReplyStep` | Transport.send | `reply_len`, `sent`, `dead_urls_stripped` | v0 |
+| Step type | Produced by | Key fields |
+|---|---|---|
+| `RouterStep` | Classifier (wrapped by executor) | `verdict`, `depth`, `fallback_reason`, tokens |
+| `DegradeStep` | Executor, when a `requires_tools` tool is unavailable or errors | `from_policy`, `to_policy`, `missing_tools`, `trigger` |
+| `PlanStep` | Planner | `plan_text`, `queries` |
+| `ModelCallStep` | Each model.complete() call, or a synthesised dispatch | `turn`, `thinking`, `thinking_budget`, `max_tokens`, `finish_reason`, `tool_calls`, `forced_tool`, `forced_tool_honoured`, `synthesized`, tokens |
+| `ToolStep` | Each tool execution | `tool_name`, `tool_call_id`, `args_len`, `result_len`, `error`, `breaker_state` |
+| `CritiqueStep` | Reviewer.critique() | `verdict` (`PASS`/`REVISE`), `reasons` |
+| `ReviseStep` | Reviewer.revise() | `attrs["revised_reply"]` |
+| `ErrorStep` | Executor, when a phase raises | `phase`, `exc_type`, `message` |
+| `ReplyStep` | Transport.send | `reply_len`, `sent`, `reason`, `truncated`, `degraded`, `deadline_exceeded`; transport hygiene counts in `attrs` |
 
 All steps inherit from `Step` and carry the common fields
 (`started_at`, `ended_at`, `tokens_in`, `tokens_out`, `cached_tokens`,
@@ -138,22 +140,57 @@ extension work:
 @dataclass(frozen=True)
 class Policy:
     name: str
-    first_tool: ToolChoice              # AUTO | force_tool("name")
+    first_tool: ToolChoice = AUTO       # AUTO | force_tool("name")
     max_steps: int = 6
 
-    # v1 flags — keep False until the corresponding component is wired
-    enable_planner: bool = False
-    enable_critique: bool = False
-    enable_interstitial: bool = False
+    enable_planner: bool = False        # needs runtime.planner
+    enable_critique: bool = False       # needs runtime.reviewer
 
-    # Reasoning knobs (engine-specific; the Model adapter consumes them)
-    reasoning_budget: int | None = 500
-    enable_thinking_after_long_results: bool = True
-    long_result_threshold_chars: int = 1000
+    # Output budget. Thinking gets its own budget on top of the reply's.
+    max_reply_tokens: int | None = None
+    temperature: float | None = None
+    thinking: str = "off"               # "off" | "low" | "on"
+    max_thinking_tokens: int | None = None
 
-    # Tool exposure — None = all, tuple = whitelist
-    expose_tools: tuple[str, ...] | None = None
+    expose_tools: tuple[str, ...] | None = None   # None = all
+    prompt_sections: tuple[str, ...] = ()         # opaque to Owela
+
+    # Capability requirements → degrade
+    requires_tools: tuple[str, ...] = ()
+    on_unavailable: str | None = None   # name of a fallback Policy
+    reply_notice: str = ""              # transport may append it
+
+    # Turn guarantees
+    deadline_s: float | None = None     # soft: past it, compose without tools
+    interstitial_after_s: float | None = None
+    fallback_reply: str = ""            # max_steps / error reply
+
+    # Deterministic synthesis (no LLM call)
+    synth_tool: str | None = None
+    synth_arg: str = "query"            # "" = no text argument
+    synth_default_args: dict = {}
+    synth_first_call_from_message: bool = False
+    auto_followup_after / auto_followup_tool / ...   # search → fetch
+    tool_result_message_caps: dict[str, int] = {}
 ```
+
+Forcing a tool (`first_tool=force_tool(...)`) depends on the inference
+engine honouring a named `tool_choice`; some engines accept it and
+silently ignore it. The executor therefore verifies every forced call
+(`ModelCallStep.forced_tool_honoured`) and, when the policy also sets
+`synth_tool` to the same tool, discards the prose and dispatches the
+call from the message text instead. For tools that take no arguments,
+skip the model entirely: `synth_first_call_from_message=True`,
+`synth_arg=""`.
+
+Degrade: if a `requires_tools` tool has an open circuit breaker
+(`ToolRegistry(..., breaker=CircuitBreaker())`) before the turn, or
+errors during it, the executor records a `DegradeStep`, rebinds
+`ctx.policy` to `on_unavailable` (registered with
+`PolicyTable.add(...)`), and skips critique. The MemoryProvider sees
+the DegradeStep in `prior_steps` and can tell the model; the
+transport sees `ReplyContext.degraded` and can render
+`policy.reply_notice`. One degrade per turn.
 
 **Worked example: enable the planner only on SEARCH_DEEP turns.**
 
@@ -194,11 +231,14 @@ Two events:
 - `on_step(step, ctx)` — fired after each step is appended to the
   step list
 - `on_turn_complete(steps, ctx)` — fired once at the end, after the
-  ReplyStep lands
+  ReplyStep lands. Guaranteed: even when the model or another phase
+  raises, the executor records an `ErrorStep`, sends
+  `policy.fallback_reply` and still fires this.
 
 `ctx: TurnContext` carries `msg`, `policy`, `runtime`. Treat the
 runtime as a service locator (read components out of it); never
-mutate it.
+mutate it. `ctx.policy` is rebound by the executor when a turn
+degrades — read it at event time, don't cache it.
 
 Common hook patterns:
 - Billing → subscribe to `on_turn_complete`, walk the step list,
@@ -221,14 +261,18 @@ executor asks of each:
   round-trip. No internal retries. Surface engine knobs (cached_tokens,
   reasoning) on the response.
 - **`Transport`** — `acknowledge(msg)`, `send_interstitial(...)`,
-  `send(user_id, body, policy, *, used_search=False)`. Owns reply
-  hygiene + transport metadata (`typing_window_s`, `max_message_chars`,
-  `format`).
+  `send(user_id, body, policy, ctx: ReplyContext) -> SendResult`.
+  Owns reply hygiene + transport metadata (`typing_window_s`,
+  `max_message_chars`, `format`). `ReplyContext` says which tools ran,
+  which URLs they returned (`allowed_urls`), and whether the draft is
+  truncated / degraded / past deadline.
 - **`MemoryProvider`** — `assemble_messages(msg, policy, steps) ->
   list[dict]` is the ONE function that decides what the model sees.
   Plus `record_turn`, `delete_all`, `list_all`, `format_facts`.
 - **`Classifier`** — `classify(msg) -> ClassifierResult`. Fail-safe:
-  any error returns `ClassifierResult(verdict="NONE", depth="SHALLOW")`.
+  any error returns a fallback verdict with `fallback_reason` set. If it
+  raises anyway, the executor routes to the default policy with
+  `fallback_reason="exception:<Type>"`.
 - **`Planner`** (v1) — `plan(msg, policy, prior_steps) -> PlanStep`.
 - **`Reviewer`** (v1) — `critique(msg, draft, prior_steps, policy)`
   and `revise(msg, draft, critique, prior_steps, policy)`.
@@ -278,10 +322,16 @@ and shouldn't be in the executor.
 ### Add a new model engine
 
 Implement the `Model` protocol. The job is to:
-1. Convert `ModelRequest` into your engine's call shape.
-2. Surface engine-specific knobs via the request's `policy` field
-   (read `reasoning_budget`, `enable_thinking`).
-3. Convert the response back to `ModelResponse`, including the
+1. Convert `ModelRequest` into your engine's call shape. The request is
+   self-describing (`max_tokens`, `temperature`, `thinking`,
+   `thinking_budget`, `response_format`, `timeout_s`); don't reach into
+   `req.policy` for anything you need.
+2. Give thinking its own budget: `max_tokens + thinking_budget` when
+   thinking is on, so reasoning cannot eat the reply.
+3. Sanitise output in ONE place (leaked reasoning, control tokens) —
+   auxiliary callers (classifier, planner, reviewer) go through the same
+   `complete`.
+4. Convert the response back to `ModelResponse`, including the
    prefix-cache-aware `tokens_in`, `tokens_out`, `cached_tokens`
    tuple — these are what make billing honest.
 
@@ -391,10 +441,13 @@ rediscover them.
   complete `ModelResponse`; there's no incremental-yield API.
   Reasonable for messenger transports where replies are atomic;
   would matter for a hypothetical web-UI transport.
-- **No durable execution / checkpointing.** A crashed turn loses
-  state. Acceptable when the underlying transport (WhatsApp) retries
-  the inbound webhook on our 500. Would need work for shapes where
-  partial work is expensive (long research turns).
+- **No durable execution / checkpointing.** A crashed phase yields an
+  `ErrorStep` and the fallback reply, but partial work is not resumed.
+  Would need work for shapes where partial work is expensive (long
+  research turns).
+- **Deadline is soft.** `deadline_s` stops new optional work; it does
+  not cancel an in-flight model call. The hard ceiling is the model
+  adapter's per-request timeout.
 
 ---
 

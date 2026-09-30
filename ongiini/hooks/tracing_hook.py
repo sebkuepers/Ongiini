@@ -12,6 +12,18 @@ Privacy contract (unchanged from the old code):
   - no tool args verbatim
   - no tool result content
 Only: lengths, names, counts, durations, status flags.
+
+Failure signals (2026-09-30 — the Tavily outage stayed invisible for five
+weeks because none of these existed or they were always false):
+  - ``router.fallback_reason``  classifier could not decide
+  - ``degraded`` / ``degrade``  a required tool was down → policy swapped
+  - ``calls[].forced_tool_honoured``  engine ignored a named tool_choice
+  - ``tool_results[].error`` / ``breaker_state``
+  - ``reply_reason`` ∈ ok / max_steps / error / deadline
+  - ``truncated``  final model call hit its token limit
+  - ``error``  a phase raised (the turn still replied)
+  - ``reply_attrs``  transport hygiene: urls_dropped, chars_capped, …
+  - ``wall_ms``  router start → reply sent (tool time included)
 """
 
 from __future__ import annotations
@@ -23,8 +35,13 @@ from pathlib import Path
 from typing import Any
 
 from owela import (
-    CritiqueStep, ModelCallStep, PlanStep, ReplyStep, ReviseStep, RouterStep,
-    Step, ToolStep, TurnContext,
+    CritiqueStep, DegradeStep, ErrorStep, ModelCallStep, PlanStep, ReplyStep,
+    ReviseStep, RouterStep, Step, ToolStep, TurnContext,
+)
+
+# Transport hygiene keys copied from ReplyStep.attrs (counts/flags only).
+_REPLY_ATTR_KEYS = (
+    "urls_dropped", "chars_capped", "trimmed_at_boundary", "empty_fallback", "send_error",
 )
 
 log = logging.getLogger("ongiini.hooks.tracing")
@@ -57,6 +74,8 @@ class TracingHook:
     def _build(self, steps: list[Step], ctx: TurnContext) -> dict[str, Any]:
         router = next((s for s in steps if isinstance(s, RouterStep)), None)
         reply = next((s for s in reversed(steps) if isinstance(s, ReplyStep)), None)
+        degrade = next((s for s in steps if isinstance(s, DegradeStep)), None)
+        error = next((s for s in steps if isinstance(s, ErrorStep)), None)
 
         calls = []
         # phases: the v1 pre-/post-loop steps (planner, critique, revise).
@@ -76,9 +95,14 @@ class TracingHook:
                     "tokens_in": s.tokens_in,
                     "tokens_out": s.tokens_out,
                     "cached_tokens": s.cached_tokens,
-                    "enable_thinking": s.enable_thinking,
-                    "reasoning_budget": s.reasoning_budget,
+                    "enable_thinking": s.thinking != "off",
+                    "thinking": s.thinking,
+                    "reasoning_budget": s.thinking_budget,
+                    "max_tokens": s.max_tokens,
                     "finish_reason": s.finish_reason,
+                    "forced_tool": s.forced_tool,
+                    "forced_tool_honoured": s.forced_tool_honoured,
+                    "truncated_thinking_blocked": bool(s.attrs.get("truncated_thinking_blocked")),
                     "latency_ms": s.latency_ms(),
                     "tool_calls": [
                         {
@@ -137,6 +161,7 @@ class TracingHook:
                     "reasons_count": len(s.reasons),
                     "latency_ms": s.latency_ms(),
                     "error": s.attrs.get("error"),
+                    "mode": s.attrs.get("mode"),
                 }
                 if self.include_critique_detail:
                     # Extracted reasons + raw critique body. The raw
@@ -179,6 +204,8 @@ class TracingHook:
                         "args_len": s.args_len,
                         "result_len": s.result_len,
                         "error": s.error,
+                        "breaker_state": s.breaker_state,
+                        "breaker_tripped": bool(s.attrs.get("breaker_tripped")),
                         "latency_ms": s.latency_ms(),
                         "synthesized_by_policy": s.attrs.get("synthesized_by_policy"),
                         "decision_source": s.attrs.get("decision_source"),
@@ -203,11 +230,18 @@ class TracingHook:
             "history_len": len(ctx.msg.history),
             "policy": ctx.policy.name,
             "router": {
-                "verdict": router.verdict if router else None,
-                "depth": router.depth if router else None,
-                "tokens_in": router.tokens_in if router else 0,
-                "tokens_out": router.tokens_out if router else 0,
-                "latency_ms": router.latency_ms() if router else 0,
+                "verdict": router.verdict,
+                "depth": router.depth,
+                "fallback_reason": router.fallback_reason,
+                "confidence": router.attrs.get("confidence"),
+                "verdict_raw": router.attrs.get("verdict_raw"),
+                "redirected_from": router.attrs.get("redirected_from"),
+                "redirect_reason": router.attrs.get("redirect_reason"),
+                "skipped": router.attrs.get("skipped"),
+                "tokens_in": router.tokens_in,
+                "tokens_out": router.tokens_out,
+                "cached_tokens": router.cached_tokens,
+                "latency_ms": router.latency_ms(),
             } if router else None,
             "calls": calls,
             "phases": phases,
@@ -217,5 +251,23 @@ class TracingHook:
             "total_tokens_out": total_tokens_out,
             "total_latency_ms": total_latency_ms,
             "used_search": used_search,
-            "truncated": reply is None,    # no ReplyStep = loop fell through
+            "wall_ms": (
+                int((reply.ended_at - router.started_at) * 1000)
+                if reply is not None and router is not None and reply.ended_at is not None
+                else None
+            ),
+            "reply_reason": reply.reason if reply else None,
+            "truncated": bool(reply and reply.truncated),
+            "deadline_exceeded": bool(reply and reply.deadline_exceeded),
+            "degraded": degrade is not None,
+            "degrade": {
+                "from": degrade.from_policy,
+                "to": degrade.to_policy,
+                "missing_tools": list(degrade.missing_tools),
+                "trigger": degrade.trigger,
+            } if degrade is not None else None,
+            "error": f"{error.phase}:{error.exc_type}" if error is not None else None,
+            "reply_attrs": {
+                k: reply.attrs[k] for k in _REPLY_ATTR_KEYS if reply and k in reply.attrs
+            },
         }

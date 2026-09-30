@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .executor import execute_turn
 from .runtime import Runtime
-from .step import ReplyStep, Step
+from .step import ErrorStep, ReplyStep, Step
 from .transport import InboundMessage
 
 
@@ -22,6 +22,9 @@ class HandleResult:
     sent: bool
     reply_text: str
     steps: list[Step]
+    # "<phase>:<ExceptionType>" of the first ErrorStep, if a phase raised.
+    # The turn still produced a ReplyStep (fallback reply) and a trace.
+    error: str | None = None
 
 
 class Agent:
@@ -44,8 +47,10 @@ class Agent:
             (s for s in reversed(steps) if isinstance(s, ReplyStep)),
             None,
         )
+        err = next((s for s in steps if isinstance(s, ErrorStep)), None)
         return HandleResult(
             sent=bool(reply and reply.sent),
             reply_text=(reply.attrs.get("reply_text", "") if reply else ""),
             steps=steps,
+            error=f"{err.phase}:{err.exc_type}" if err else None,
         )

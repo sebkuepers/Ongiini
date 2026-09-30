@@ -301,3 +301,90 @@ def test_critique_timeout_rate_empty():
     r = trace_query.cmd_critique_timeout_rate(None, [])
     assert r["critique_runs"] == 0
     assert r["timeout_rate_pct"] == 0.0
+
+
+# ---------- Owela v2 health commands ----------
+
+def _v2_entry(*, policy="search_shallow", tool_error=None, degraded=False,
+              fallback_reason=None, forced_honoured=None, deadline=False,
+              wall_ms=12000, reply_len=500, minutes_ago=5) -> dict:
+    call = {"turn": 1, "tool_results": [{"name": "web_search", "error": tool_error}]}
+    if forced_honoured is not None:
+        call["forced_tool"] = "web_search"
+        call["forced_tool_honoured"] = forced_honoured
+    return {
+        "ts": _now_iso(-minutes_ago),
+        "policy": policy,
+        "router": {"verdict": "SEARCH", "fallback_reason": fallback_reason},
+        "calls": [call],
+        "phases": [],
+        "degraded": degraded,
+        "degrade": {"trigger": "tool_error"} if degraded else None,
+        "deadline_exceeded": deadline,
+        "wall_ms": wall_ms,
+        "reply_len": reply_len,
+        "reply_reason": "ok",
+    }
+
+
+def _args(**kw):
+    import argparse
+    return argparse.Namespace(by="policy", **kw)
+
+
+def test_tool_errors_reports_rate_and_prefixes():
+    traces = [_v2_entry(tool_error="Web search is temporarily unavailable (provider returned HTTP 402)")] * 3
+    traces += [_v2_entry()]
+    out = trace_query.cmd_tool_errors(_args(), traces)
+    ws = out["by_tool"]["web_search"]
+    assert (ws["calls"], ws["errors"], ws["error_rate_pct"]) == (4, 3, 75.0)
+    assert list(ws["top_errors"].values()) == [3]
+
+
+def test_health_flags_a_dead_search_provider():
+    """The Aug–Sep 2026 shape: every search errors → breach, exit 1."""
+    traces = [_v2_entry(tool_error="HTTP 402", degraded=True) for _ in range(25)]
+    out = trace_query.cmd_health(_args(), traces)
+    assert out["_exit"] == 1
+    assert any("tool web_search" in b for b in out["breaches"])
+    assert any("degraded_rate_pct" in b for b in out["breaches"])
+
+
+def test_health_is_quiet_when_healthy():
+    traces = [_v2_entry() for _ in range(30)]
+    out = trace_query.cmd_health(_args(), traces)
+    assert out["breaches"] == []
+    assert out["_exit"] == 0
+
+
+def test_health_ignores_low_volume():
+    traces = [_v2_entry(tool_error="boom", degraded=True) for _ in range(5)]
+    out = trace_query.cmd_health(_args(), traces)
+    assert out["breaches"] == []
+
+
+def test_router_fallback_and_forced_tool_miss_rates():
+    traces = [_v2_entry(fallback_reason="timeout", forced_honoured=False),
+              _v2_entry(forced_honoured=True), _v2_entry(), _v2_entry()]
+    rf = trace_query.cmd_router_fallback_rate(_args(), traces)
+    assert rf["router_fallback_rate_pct"] == 25.0
+    assert rf["by_reason"] == {"timeout": 1}
+    ft = trace_query.cmd_forced_tool_miss_rate(_args(), traces)
+    assert (ft["forced_calls"], ft["not_honoured"]) == (2, 1)
+
+
+def test_wall_latency_uses_wall_ms_and_falls_back_to_model_time():
+    traces = [_v2_entry(wall_ms=30000), _v2_entry(wall_ms=10000)]
+    legacy = _v2_entry()
+    legacy.pop("wall_ms")
+    legacy["total_latency_ms"] = 5000
+    out = trace_query.cmd_wall_latency(_args(), traces + [legacy])
+    assert out["over_25s_pct"] == 33.3
+    assert out["by_policy"]["search_shallow"]["n"] == 3
+
+
+def test_health_cli_exit_code(tmp_path):
+    p = _write_traces(tmp_path, [_v2_entry(tool_error="HTTP 402") for _ in range(25)])
+    assert trace_query.main(["health", "--path", str(p), "--window", "24h"]) == 1
+    p2 = _write_traces(tmp_path, [_v2_entry() for _ in range(25)])
+    assert trace_query.main(["health", "--path", str(p2), "--window", "24h"]) == 0

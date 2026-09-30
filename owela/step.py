@@ -44,8 +44,13 @@ class Step:
 class RouterStep(Step):
     """Classifier output. Determines which Policy drives the rest of the turn."""
     kind: str = "router"
-    verdict: str = "NONE"        # NONE / ADMIN / DOCS / SEARCH
-    depth: str = "SHALLOW"        # SHALLOW / DEEP — only meaningful for SEARCH
+    verdict: str = "NONE"        # application-defined label, e.g. NONE / SEARCH
+    depth: str = "SHALLOW"        # SHALLOW / DEEP
+    # Set when the classifier could not decide and returned its fallback
+    # verdict (timeout, exception, unparseable output). None means the
+    # verdict is a real decision. Lets traces tell "classifier said NONE"
+    # apart from "classifier failed".
+    fallback_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -57,8 +62,7 @@ class QueryVariant:
     on turn 1, instead of relying on the model to pick a single
     query. The executor materialises each variant into a tool call:
     ``query`` becomes the primary kwarg (name configured by
-    ``Policy.planner_query_arg``), and ``extra`` is spread as
-    additional kwargs.
+    ``Policy.synth_arg``), and ``extra`` is spread as additional kwargs.
 
     ``extra`` is opaque to Owela — Owela just forwards it to the
     application's tool implementation. Engine-specific knobs (search
@@ -83,7 +87,7 @@ class PlanStep(Step):
     compat / context priming).
 
     ``queries`` is the structured fan-out signal. When non-empty AND
-    ``policy.planner_query_tool`` is set, the executor synthesises one
+    ``policy.synth_tool`` is set, the executor synthesises one
     parallel tool call per variant on turn 1. Empty list = soft-fail
     or single-query case; executor falls back to letting the model
     pick the query.
@@ -112,27 +116,64 @@ class ModelCallStep(Step):
     model calls. Set True by the executor's synthesis helpers; left
     False for normal calls. Hooks filtering "real model turns" should
     check this flag rather than relying on ``turn`` values.
+
+    ``forced_tool`` is the tool name the request tried to force (named
+    ``tool_choice``), or None. ``forced_tool_honoured`` records whether
+    the response actually called it — some inference engines accept a
+    named tool_choice and silently ignore it.
     """
     kind: str = "model_call"
     turn: int = 0
     finish_reason: str = ""
-    enable_thinking: bool = False
-    reasoning_budget: int | None = None
+    thinking: str = "off"                # "off" | "low" | "on"
+    thinking_budget: int | None = None
+    max_tokens: int | None = None
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     synthesized: bool = False
+    forced_tool: str | None = None
+    forced_tool_honoured: bool | None = None
+
+
+# Conventional ToolStep.attrs key: a list of URLs the tool's result cites.
+# The executor collects these into ReplyContext.allowed_urls, and the
+# default auto-followup attr uses the same name.
+TOOL_URLS_ATTR = "urls"
 
 
 @dataclass
 class ToolStep(Step):
-    """One tool execution. ``result_len`` is used by the executor to decide
-    whether the NEXT turn should enable reasoning (long results need
-    deliberation to digest + cite)."""
+    """One tool execution. ``breaker_state`` is the tool's circuit-breaker
+    state when the call was attempted (None when no breaker is wired).
+    Tools may attach ``attrs[TOOL_URLS_ATTR]`` (a list of URL strings)."""
     kind: str = "tool"
     tool_name: str = ""
     tool_call_id: str = ""
     args_len: int = 0
     result_len: int = 0
     error: str | None = None
+    breaker_state: str | None = None
+
+
+@dataclass
+class DegradeStep(Step):
+    """The executor swapped the turn's Policy because a capability it
+    ``requires_tools`` is unavailable (breaker open) or failed mid-turn.
+    ``to_policy`` equals ``from_policy`` when no fallback was declared."""
+    kind: str = "degrade"
+    from_policy: str = ""
+    to_policy: str = ""
+    missing_tools: tuple[str, ...] = ()
+    trigger: str = ""                    # "breaker_open" | "tool_error"
+
+
+@dataclass
+class ErrorStep(Step):
+    """A phase raised. The executor still sends the policy's fallback reply
+    and fires ``on_turn_complete``, so every turn leaves a trace."""
+    kind: str = "error"
+    phase: str = ""                      # "router" | "turn"
+    exc_type: str = ""
+    message: str = ""
 
 
 @dataclass
@@ -149,12 +190,28 @@ class ReviseStep(Step):
     kind: str = "revise"
 
 
+REPLY_OK = "ok"
+REPLY_MAX_STEPS = "max_steps"
+REPLY_ERROR = "error"
+REPLY_DEADLINE = "deadline"
+
+
 @dataclass
 class ReplyStep(Step):
     """The terminal step. ``sent`` is True iff the transport accepted the
-    payload. ``dead_urls_stripped`` is a transport-internal count for
-    visibility into how often citation hygiene fires."""
+    payload.
+
+    ``reason`` says how the draft came about: ``ok`` (the model finished),
+    ``max_steps`` (loop budget exhausted, fallback reply), ``error`` (a
+    phase raised, fallback reply) or ``deadline`` (the turn ran out of
+    time and composed without further tools). ``truncated`` means the
+    final model call stopped on its token limit. Transport-side hygiene
+    counts (URLs dropped, chars capped) arrive via ``SendResult.attrs``
+    and are merged into ``attrs``."""
     kind: str = "reply"
     reply_len: int = 0
     sent: bool = False
-    dead_urls_stripped: int = 0
+    reason: str = REPLY_OK
+    truncated: bool = False
+    degraded: bool = False
+    deadline_exceeded: bool = False

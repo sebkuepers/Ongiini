@@ -102,14 +102,17 @@ async def test_assemble_messages_with_history_and_mem0():
     )
     result = await provider.assemble_messages(msg, Policy(name="p"), [])
 
+    # Stable prefix first (system prompt, history), then ONE per-turn
+    # context message (date anchor + facts), then the user message — so
+    # the minute-precision date no longer breaks the prefix cache.
     assert result[0] == {"role": "system", "content": "SYS"}
-    # result[1] is the today-date system message.
-    assert "Right now in Namibia" in result[1]["content"]
-    assert result[2]["role"] == "system"
-    assert "Lives in Oshakati" in result[2]["content"]
-    assert result[3] == {"role": "user", "content": "earlier"}
-    assert result[4] == {"role": "assistant", "content": "reply"}
-    assert result[5] == {"role": "user", "content": "weather?"}
+    assert result[1] == {"role": "user", "content": "earlier"}
+    assert result[2] == {"role": "assistant", "content": "reply"}
+    assert result[3]["role"] == "system"
+    assert "Right now in Namibia" in result[3]["content"]
+    assert "Lives in Oshakati" in result[3]["content"]
+    assert result[4] == {"role": "user", "content": "weather?"}
+    assert len(result) == 5
 
     long.search.assert_called_once_with("u", "weather?", 5)
 

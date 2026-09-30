@@ -321,7 +321,7 @@ async def test_tracing_writes_one_jsonl_per_turn(tmp_path: Path):
         ModelCallStep(
             started_at=start + 0.01, ended_at=end,
             turn=1, tokens_in=100, tokens_out=50,
-            cached_tokens=200, enable_thinking=False,
+            cached_tokens=200, thinking="off",
             finish_reason="stop", tool_calls=[],
         ),
         ReplyStep(reply_len=120, sent=True),
@@ -361,7 +361,7 @@ async def test_tracing_attributes_tool_results_to_parent_call(tmp_path: Path):
     # query_variant_index) — all None for model-chosen tools.
     assert entry["calls"][0].get("tool_results") == [
         {"name": "web_search", "args_len": 0, "result_len": 2000,
-         "error": None, "latency_ms": 0,
+         "error": None, "breaker_state": None, "breaker_tripped": False, "latency_ms": 0,
          "synthesized_by_policy": None, "decision_source": None,
          "query_variant_index": None},
     ]
@@ -370,14 +370,52 @@ async def test_tracing_attributes_tool_results_to_parent_call(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_tracing_truncated_when_no_reply_step(tmp_path: Path):
-    """Loop fell through max_steps → no ReplyStep. Trace marks truncated."""
+async def test_tracing_records_reply_reason_and_truncation(tmp_path: Path):
+    """The executor always appends a ReplyStep now; truncation and the
+    reason come from it (the old ``reply is None`` field was always false)."""
+    from owela import ReplyStep
     hook = TracingHook(trace_path=tmp_path / "t.jsonl")
-    steps = [ModelCallStep(turn=1, tokens_in=5, tokens_out=5)]
+    reply = ReplyStep(reply_len=10, sent=True, reason="max_steps", truncated=True)
+    reply.attrs["urls_dropped"] = 2
+    reply.attrs["reply_text"] = "must never be traced"
+    steps = [RouterStep(verdict="NONE"), ModelCallStep(turn=1), reply]
     await hook.on_turn_complete(steps, _ctx())
     entry = json.loads((tmp_path / "t.jsonl").read_text().strip())
     assert entry["truncated"] is True
-    assert entry["sent"] is False
+    assert entry["reply_reason"] == "max_steps"
+    assert entry["reply_attrs"] == {"urls_dropped": 2}
+    assert "must never be traced" not in (tmp_path / "t.jsonl").read_text()
+
+
+@pytest.mark.asyncio
+async def test_tracing_records_failure_signals(tmp_path: Path):
+    from owela import DegradeStep, ErrorStep, ReplyStep, ToolStep
+    hook = TracingHook(trace_path=tmp_path / "t.jsonl")
+    router = RouterStep(verdict="NONE", depth="DEEP", fallback_reason="timeout")
+    router.attrs["confidence"] = "low"
+    call = ModelCallStep(turn=1, forced_tool="web_search", forced_tool_honoured=False,
+                         thinking="low", max_tokens=450)
+    tool = ToolStep(tool_name="web_search", error="circuit_open", breaker_state="open")
+    degrade = DegradeStep(from_policy="search_shallow", to_policy="search_degraded",
+                          missing_tools=("web_search",), trigger="tool_error")
+    err = ErrorStep(phase="turn", exc_type="RuntimeError", message="boom")
+    reply = ReplyStep(reply_len=5, sent=True, reason="error", degraded=True,
+                      deadline_exceeded=True)
+    reply.ended_at = router.started_at + 3.5
+    await hook.on_turn_complete([router, call, tool, degrade, err, reply], _ctx())
+    entry = json.loads((tmp_path / "t.jsonl").read_text().strip())
+    assert entry["router"]["fallback_reason"] == "timeout"
+    assert entry["router"]["confidence"] == "low"
+    c = entry["calls"][0]
+    assert (c["forced_tool"], c["forced_tool_honoured"], c["thinking"], c["max_tokens"]) == (
+        "web_search", False, "low", 450)
+    assert c["tool_results"][0]["breaker_state"] == "open"
+    assert entry["degraded"] is True
+    assert entry["degrade"] == {"from": "search_shallow", "to": "search_degraded",
+                                "missing_tools": ["web_search"], "trigger": "tool_error"}
+    assert entry["error"] == "turn:RuntimeError"
+    assert entry["deadline_exceeded"] is True
+    assert entry["wall_ms"] == 3500
 
 
 @pytest.mark.asyncio

@@ -48,6 +48,8 @@ import ipaddress
 import logging
 import time
 from typing import Any
+
+from owela import ToolError
 from urllib.parse import urlparse
 
 import httpx
@@ -247,12 +249,17 @@ async def web_search(
 
     ``include_raw_content`` defaults True (helpful for SEARCH_SHALLOW
     where no fetch_urls follow-up runs). SEARCH_DEEP sets this False
-    via ``Policy.planner_query_default_args`` — the auto-followup to
-    fetch_urls supplies real depth, so embedding raw_content in the
-    search response too is redundant ~10× tokens.
+    via ``Policy.synth_default_args`` — the auto-followup to fetch_urls
+    supplies real depth, so embedding raw_content in the search response
+    too is redundant ~10× tokens.
+
+    Provider failures (not configured, HTTP 4xx/5xx such as the 402 of
+    Aug–Sep 2026, network errors) raise ``ToolError``: the ToolStep then
+    carries ``error``, the circuit breaker counts it, and the executor
+    degrades the turn instead of composing over an error string.
     """
     if not settings.tavily_api_key:
-        return "Web search is not configured.", []
+        raise ToolError(_SEARCH_UNAVAILABLE.format(reason="not configured"))
 
     topic = topic if topic in _VALID_TOPICS else "general"
     if time_range not in _VALID_TIME_RANGES:
@@ -295,10 +302,17 @@ async def web_search(
     if time_range is not None:
         payload["time_range"] = time_range
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.post(TAVILY_SEARCH_URL, json=payload)
-        r.raise_for_status()
-        data = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(TAVILY_SEARCH_URL, json=payload)
+            r.raise_for_status()
+            data = r.json()
+    except httpx.HTTPStatusError as exc:
+        raise ToolError(_SEARCH_UNAVAILABLE.format(
+            reason=f"provider returned HTTP {exc.response.status_code}",
+        )) from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ToolError(_SEARCH_UNAVAILABLE.format(reason=type(exc).__name__)) from exc
 
     text = _format_search_results(data, max_results=max_results)
     urls: list[str] = []
@@ -340,6 +354,15 @@ def _format_search_results(data: dict[str, Any], *, max_results: int) -> str:
 
 
 # --------------------------------- /extract ---------------------------------
+
+# Model-facing text for a failed search. The model reads it in the tool
+# result, so it says what to do, not just what broke.
+_SEARCH_UNAVAILABLE = (
+    "Web search is temporarily unavailable ({reason}). Tell the user you "
+    "could not check current information right now; do not invent "
+    "Namibian specifics, prices, dates or names."
+)
+
 
 async def extract_urls(urls: list[str]) -> dict[str, str]:
     """Batched /extract: fetch the cleaned full text of N URLs in ONE

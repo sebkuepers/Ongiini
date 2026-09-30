@@ -99,9 +99,13 @@ class SkillRegistry:
         """Names of all registered skills."""
         return list(self._by_name.keys())
 
-    def manifest(self) -> str:
+    def manifest(self, *, include_on_demand: bool = True) -> str:
         """Render the system-message block: a manifest plus the inline
         content of every ``always``-loaded skill.
+
+        ``include_on_demand=False`` leaves on-demand skills out of the
+        manifest — for applications that inject them per turn themselves
+        instead of exposing a ``load_skill`` tool.
 
         Format::
 
@@ -120,12 +124,16 @@ class SkillRegistry:
         If no skills are registered, returns an empty string so the
         caller can safely skip injecting the block.
         """
-        if not self._by_name:
+        listed = [
+            s for s in self._by_name.values()
+            if include_on_demand or s.load == "always"
+        ]
+        if not listed:
             return ""
 
         lines: list[str] = ["AVAILABLE SKILLS:"]
         always_loaded: list[Skill] = []
-        for s in self._by_name.values():
+        for s in listed:
             entry = f"- **{s.name}**: {s.description}"
             if s.load == "always":
                 always_loaded.append(s)

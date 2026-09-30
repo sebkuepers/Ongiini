@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from owela import InboundMessage, Policy
+from owela import InboundMessage, Policy, ReplyContext
 from ongiini.transports.web_chat_transport import WebChatTransport
 
 
@@ -16,8 +16,8 @@ def _policy() -> Policy:
 @pytest.mark.asyncio
 async def test_send_captures_body():
     t = WebChatTransport()
-    ok = await t.send("session-id", "hello world", _policy())
-    assert ok is True
+    ok = await t.send("session-id", "hello world", _policy(), ReplyContext())
+    assert ok.sent is True
     assert t.reply_received is True
     reply = await t.await_reply()
     assert reply == "hello world"
@@ -26,7 +26,7 @@ async def test_send_captures_body():
 @pytest.mark.asyncio
 async def test_send_strips_whitespace():
     t = WebChatTransport()
-    await t.send("session-id", "  spaced  ", _policy())
+    await t.send("session-id", "  spaced  ", _policy(), ReplyContext())
     reply = await t.await_reply()
     assert reply == "spaced"
 
@@ -34,7 +34,7 @@ async def test_send_strips_whitespace():
 @pytest.mark.asyncio
 async def test_send_default_when_empty():
     t = WebChatTransport()
-    await t.send("session-id", "", _policy())
+    await t.send("session-id", "", _policy(), ReplyContext())
     reply = await t.await_reply()
     assert "Sorry" in reply
 
@@ -42,10 +42,11 @@ async def test_send_default_when_empty():
 @pytest.mark.asyncio
 async def test_send_caps_at_max_message_chars():
     t = WebChatTransport()
-    huge = "x" * 20_000
-    await t.send("session-id", huge, _policy())
+    huge = "word " * 5_000
+    await t.send("session-id", huge, _policy(), ReplyContext())
     reply = await t.await_reply()
-    assert len(reply) == t.max_message_chars
+    assert len(reply) <= t.max_message_chars
+    assert reply.endswith("word")                  # cut on a word boundary
 
 
 @pytest.mark.asyncio
@@ -53,10 +54,10 @@ async def test_double_send_ignored_with_warning(caplog):
     """Owela's contract is one send per turn. A double-call must NOT
     silently overwrite the first reply."""
     t = WebChatTransport()
-    await t.send("session-id", "first", _policy())
+    await t.send("session-id", "first", _policy(), ReplyContext())
     with caplog.at_level("WARNING"):
-        ok = await t.send("session-id", "second", _policy())
-    assert ok is True
+        ok = await t.send("session-id", "second", _policy(), ReplyContext())
+    assert ok.sent is True
     # First reply wins
     reply = await t.await_reply()
     assert reply == "first"
@@ -95,7 +96,7 @@ async def test_fail_unblocks_await_reply_with_exception():
 @pytest.mark.asyncio
 async def test_fail_ignored_after_successful_send(caplog):
     t = WebChatTransport()
-    await t.send("session-id", "all good", _policy())
+    await t.send("session-id", "all good", _policy(), ReplyContext())
     with caplog.at_level("WARNING"):
         t.fail(RuntimeError("late failure"))
     # await_reply still returns the original body, not the exception
@@ -120,7 +121,7 @@ async def test_concurrent_send_and_await():
 
     async def producer():
         await asyncio.sleep(0.01)
-        await t.send("session-id", "from executor", _policy())
+        await t.send("session-id", "from executor", _policy(), ReplyContext())
 
     async def consumer():
         return await t.await_reply()
@@ -130,16 +131,31 @@ async def test_concurrent_send_and_await():
 
 
 @pytest.mark.asyncio
-async def test_dead_url_strip_is_gated_on_used_search():
-    """Dead-URL HEAD-check costs latency; only runs when used_search
-    is True. With it off, every URL stays in the body verbatim
-    regardless of liveness."""
+async def test_url_allowlist_only_on_citation_turns():
+    """Without a citation tool every URL stays; with one, URLs the tools
+    didn't return are removed."""
+    body = "Check this: https://invented.example/page"
     t = WebChatTransport()
-    body = "Check this: https://this-domain-does-not-exist-12345.invalid/page"
-    await t.send("session-id", body, _policy(), used_search=False)
+    await t.send("session-id", body, _policy(), ReplyContext())
+    assert "invented.example" in await t.await_reply()
+
+    t2 = WebChatTransport()
+    ctx = ReplyContext(used_tools=("web_search",), allowed_urls=("https://real.example/a",))
+    result = await t2.send("session-id", body + "\nhttps://real.example/a", _policy(), ctx)
+    reply = await t2.await_reply()
+    assert "invented.example" not in reply
+    assert "https://real.example/a" in reply
+    assert result.attrs["urls_dropped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_truncated_draft_trimmed_with_offer():
+    t = WebChatTransport()
+    await t.send("session-id", "One sentence. Two sentence. Three cut", _policy(),
+                 ReplyContext(truncated=True))
     reply = await t.await_reply()
-    # URL preserved because used_search=False
-    assert "this-domain-does-not-exist-12345" in reply
+    assert "Three cut" not in reply
+    assert reply.endswith(t.continue_offer_text)
 
 
 @pytest.mark.asyncio
@@ -147,7 +163,7 @@ async def test_send_preserves_markdown_unchanged():
     """The web frontend renders markdown — unlike WhatsAppTransport,
     we don't flatten ** to *."""
     t = WebChatTransport()
-    await t.send("session-id", "**bold** and [link](https://ex.com)", _policy())
+    await t.send("session-id", "**bold** and [link](https://ex.com)", _policy(), ReplyContext())
     reply = await t.await_reply()
     assert "**bold**" in reply
     assert "[link](https://ex.com)" in reply

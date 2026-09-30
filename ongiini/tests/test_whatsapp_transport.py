@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 
-from owela import InboundMessage, Policy
+from owela import InboundMessage, Policy, ReplyContext
 from ongiini.transports.whatsapp_transport import WhatsAppTransport
 
 
@@ -60,53 +59,101 @@ async def test_send_interstitial_sends_configured_text():
     mock_send.assert_awaited_once_with("+264user", "hold on")
 
 
-# ---------- send (no URLs to check) ----------
+# ---------- send ----------
+
+SEARCH_CTX = ReplyContext(
+    used_tools=("web_search",),
+    allowed_urls=("https://www.namibian.com.na/national/story-1",),
+)
+
 
 @pytest.mark.asyncio
 async def test_send_basic():
     t = WhatsAppTransport()
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        ok = await t.send("+264user", "hello world", Policy(name="x"))
-    assert ok is True
+        result = await t.send("+264user", "hello world", Policy(name="x"), ReplyContext())
+    assert result.sent is True
     mock_send.assert_awaited_once_with("+264user", "hello world")
 
 
 @pytest.mark.asyncio
-async def test_send_skips_dead_url_check_when_no_search():
-    """Parity: dead-URL HEAD-check is gated on used_search=True. Plain
-    chat replies that happen to contain a URL must NOT incur HEAD latency."""
+async def test_send_leaves_urls_alone_without_citation_tools():
+    """No citation tool ran → URLs came from the conversation or the
+    model's own knowledge; the transport doesn't judge them."""
     t = WhatsAppTransport()
-    body = "https://example.com/somepath is a thing"
+    body = "See https://example.com/page for the details."
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        # If a HEAD check is performed, the patched httpx call will fail
-        # the test. Don't patch httpx — verify no call is made.
-        await t.send("+264user", body, Policy(name="x"), used_search=False)
-    # URL still present — no stripping happened.
-    assert "https://example.com/somepath" in mock_send.call_args.args[1]
+        result = await t.send("+264user", body, Policy(name="x"), ReplyContext())
+    mock_send.assert_awaited_once_with("+264user", body)
+    assert "urls_dropped" not in result.attrs
 
 
 @pytest.mark.asyncio
-async def test_send_falls_back_when_dead_url_strip_empties_body():
-    """If every URL line gets stripped (all dead), the body could be
-    empty. Send a graceful fallback instead of an empty WhatsApp message
-    (which Meta 400s)."""
+async def test_send_drops_urls_the_tools_did_not_return():
     t = WhatsAppTransport()
-    body = "— source: https://dead1.example.com/a\n— source: https://dead2.example.com/b"
-
-    async def fake_head(self, url, **kwargs):
-        return httpx.Response(404)
-
+    body = (
+        "The story is here.\n\n"
+        "— source: https://www.namibian.com.na/national/story-1\n"
+        "— source: https://invented.example.org/made-up-path"
+    )
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        with patch("httpx.AsyncClient.head", new=fake_head):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
+        result = await t.send("+264user", body, Policy(name="x"), SEARCH_CTX)
+    sent = mock_send.await_args.args[1]
+    assert "https://www.namibian.com.na/national/story-1" in sent
+    assert "invented.example.org" not in sent
+    assert "— source:" in sent                     # the real citation line survives
+    assert sent.count("— source:") == 1            # the empty stub line is gone
+    assert result.attrs["urls_dropped"] == 1
 
-    sent = mock_send.call_args.args[1]
-    assert "dead1" not in sent and "dead2" not in sent
-    assert sent.strip() != ""           # NOT empty
-    assert "different terms" in sent.lower() or "search again" in sent.lower()
+
+@pytest.mark.asyncio
+async def test_send_url_match_ignores_www_trailing_slash_and_fragment():
+    t = WhatsAppTransport()
+    body = "Details: https://namibian.com.na/national/story-1/#top."
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock()) as mock_send:
+        result = await t.send("+264user", body, Policy(name="x"), SEARCH_CTX)
+    assert "namibian.com.na/national/story-1" in mock_send.await_args.args[1]
+    assert result.attrs["urls_dropped"] == 0
+
+
+@pytest.mark.asyncio
+async def test_send_strips_malformed_html_url():
+    t = WhatsAppTransport()
+    body = "Info\n— source: https://www.namibian.com.na/national/story-1<i>x</i>"
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock()) as mock_send:
+        result = await t.send("+264user", body, Policy(name="x"), SEARCH_CTX)
+    sent = mock_send.await_args.args[1]
+    assert "<i>" not in sent
+    assert result.attrs["urls_dropped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_send_with_citation_tool_but_no_urls_only_drops_malformed():
+    """A search that failed returns no URLs; nothing is verifiable, so only
+    malformed URLs go (user-supplied links must survive)."""
+    t = WhatsAppTransport()
+    body = "You mentioned https://user-shared.example/page earlier."
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock()) as mock_send:
+        await t.send("+264user", body, Policy(name="x"),
+                     ReplyContext(used_tools=("web_search",)))
+    assert "user-shared.example" in mock_send.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_send_falls_back_when_url_strip_empties_body():
+    t = WhatsAppTransport()
+    body = "https://invented.example.org/a\nhttps://invented.example.org/b"
+    with patch("ongiini.transports.whatsapp_transport._send_text",
+               new=AsyncMock()) as mock_send:
+        result = await t.send("+264user", body, Policy(name="x"), SEARCH_CTX)
+    assert mock_send.await_args.args[1] == t.empty_reply_text
+    assert result.attrs["empty_fallback"] is True
 
 
 @pytest.mark.asyncio
@@ -114,106 +161,61 @@ async def test_send_empty_body_uses_fallback():
     t = WhatsAppTransport()
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        await t.send("+264user", "", Policy(name="x"))
-    body = mock_send.call_args.args[1]
-    assert "couldn't come up with a reply" in body.lower()
+        result = await t.send("+264user", "", Policy(name="x"), ReplyContext())
+    mock_send.assert_awaited_once_with("+264user", "Sorry, I couldn't come up with a reply.")
+    assert result.attrs["empty_fallback"] is True
 
 
 @pytest.mark.asyncio
-async def test_send_caps_at_max_chars():
+async def test_send_caps_at_max_chars_on_a_boundary():
     t = WhatsAppTransport()
-    big = "x" * 5000
+    big = ("This is one sentence of a very long reply. " * 200).strip()
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        await t.send("+264user", big, Policy(name="x"))
-    body = mock_send.call_args.args[1]
-    assert len(body) == 4096
-
-
-# ---------- dead URL stripping ----------
-
-@pytest.mark.asyncio
-async def test_send_strips_malformed_html_url():
-    """A URL with an embedded <i> tag is broken — must not reach the user."""
-    t = WhatsAppTransport()
-    body = (
-        "Here's the answer.\n"
-        "\n"
-        "— source: https://example.com/path</i>\n"
-        "— source: https://good.example.com/article\n"
-    )
-    with patch("ongiini.transports.whatsapp_transport._send_text",
-               new=AsyncMock()) as mock_send:
-        # No HEAD check runs because the good URL stays; the malformed
-        # one is filtered before HEAD. But we still need to avoid network.
-        with patch("httpx.AsyncClient.head",
-                   new=AsyncMock(return_value=httpx.Response(200))):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
-    sent = mock_send.call_args.args[1]
-    assert "example.com/path</i>" not in sent
-    assert "good.example.com/article" in sent
+        result = await t.send("+264user", big, Policy(name="x"), ReplyContext())
+    sent = mock_send.await_args.args[1]
+    assert len(sent) <= 4096
+    assert sent.endswith(".")
+    assert result.attrs["chars_capped"] is True
 
 
 @pytest.mark.asyncio
-async def test_send_strips_404_url_lines():
+async def test_truncated_draft_is_trimmed_to_sentence_and_offers_more():
     t = WhatsAppTransport()
-    body = (
-        "Here's the news.\n"
-        "\n"
-        "— source: https://dead.example.com/gone\n"
-        "— source: https://good.example.com/article\n"
-    )
-
-    async def fake_head(self, url, **kwargs):
-        if "dead" in url:
-            return httpx.Response(404)
-        return httpx.Response(200)
-
+    body = "First full sentence here. Second full sentence here. Third one stops mid"
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        with patch("httpx.AsyncClient.head", new=fake_head):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
-
-    sent = mock_send.call_args.args[1]
-    assert "dead.example.com/gone" not in sent
-    assert "good.example.com/article" in sent
+        result = await t.send("+264user", body, Policy(name="x"),
+                              ReplyContext(truncated=True))
+    sent = mock_send.await_args.args[1]
+    assert "stops mid" not in sent
+    assert sent.startswith("First full sentence here. Second full sentence here.")
+    assert sent.endswith(t.continue_offer_text)
+    assert result.attrs["trimmed_at_boundary"] is True
 
 
 @pytest.mark.asyncio
-async def test_send_keeps_403_and_401_urls():
-    """Gated / paywalled URLs (401, 403) are real pages — keep them."""
+async def test_reply_notice_is_appended_in_italics():
     t = WhatsAppTransport()
-    body = "Check this: https://paywalled.example.com/x"
-
-    async def fake_head(self, url, **kwargs):
-        return httpx.Response(403)
-
+    policy = Policy(name="search_degraded", reply_notice="Live search is down.")
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        with patch("httpx.AsyncClient.head", new=fake_head):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
-
-    sent = mock_send.call_args.args[1]
-    assert "paywalled.example.com" in sent
+        await t.send("+264user", "Answer.", policy, ReplyContext(degraded=True))
+    assert mock_send.await_args.args[1] == "Answer.\n\n_Live search is down._"
 
 
 @pytest.mark.asyncio
-async def test_send_keeps_url_when_head_fails_softly():
-    """Network errors during the HEAD check must not strip URLs —
-    transient failures shouldn't make us silently drop citations."""
+async def test_reply_notice_survives_the_char_cap():
     t = WhatsAppTransport()
-    body = "Source: https://maybe-up.example.com/x"
-
-    async def fake_head(self, url, **kwargs):
-        raise httpx.ConnectError("connection refused")
-
+    policy = Policy(name="p", reply_notice="Notice.")
+    big = ("Sentence number one. " * 400).strip()
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        with patch("httpx.AsyncClient.head", new=fake_head):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
+        await t.send("+264user", big, policy, ReplyContext())
+    sent = mock_send.await_args.args[1]
+    assert len(sent) <= 4096
+    assert sent.endswith("_Notice._")
 
-    sent = mock_send.call_args.args[1]
-    assert "maybe-up.example.com" in sent
 
 
 # ---------- Markdown → WhatsApp normalisation ----------
@@ -264,41 +266,16 @@ def test_normalise_leaves_whatsapp_native_syntax_alone():
 
 @pytest.mark.asyncio
 async def test_send_applies_markdown_normalisation():
-    """End-to-end: a reply with **bold** + a Markdown link arrives at
-    WhatsApp as *bold* + a bare-URL link."""
+    """Markdown links become 'text (url)' before the URL check, so a
+    cited Markdown link to an allowed URL survives."""
     t = WhatsAppTransport()
-    body = "Today the BoN rate is **N$18.42** per [USD](https://example.com/usd-rate)."
-
-    async def fake_head(self, url, **kwargs):
-        return httpx.Response(200)
-
+    body = "**Key:** see [The Namibian](https://www.namibian.com.na/national/story-1)"
     with patch("ongiini.transports.whatsapp_transport._send_text",
                new=AsyncMock()) as mock_send:
-        with patch("httpx.AsyncClient.head", new=fake_head):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
-    sent = mock_send.call_args.args[1]
-    assert "*N$18.42*" in sent
-    assert "**" not in sent
-    assert "USD (https://example.com/usd-rate)" in sent
-    assert "[USD]" not in sent
+        await t.send("+264user", body, Policy(name="x"), SEARCH_CTX)
+    sent = mock_send.await_args.args[1]
+    assert sent == "*Key:* see The Namibian (https://www.namibian.com.na/national/story-1)"
 
-
-@pytest.mark.asyncio
-async def test_send_handles_url_with_trailing_punctuation():
-    """Tavily snippets often have 'see https://example.com/x.' — trailing
-    period should not break the HEAD check or leak from the regex match."""
-    t = WhatsAppTransport()
-    body = "See https://example.com/x."
-
-    async def fake_head(self, url, **kwargs):
-        # Verify URL is cleaned of trailing punct.
-        assert not url.endswith(".")
-        return httpx.Response(200)
-
-    with patch("ongiini.transports.whatsapp_transport._send_text",
-               new=AsyncMock()):
-        with patch("httpx.AsyncClient.head", new=fake_head):
-            await t.send("+264user", body, Policy(name="x"), used_search=True)
 
 
 # ---------- v1.3 second interstitial ----------
@@ -356,7 +333,7 @@ async def test_send_cancels_pending_followup_task():
             await t.send_interstitial("+264user", Policy(name="x"))
             assert sent == ["first"]
             # Reply arrives BEFORE the 1s followup_delay elapses.
-            await t.send("+264user", "real reply", Policy(name="x"))
+            await t.send("+264user", "real reply", Policy(name="x"), ReplyContext())
             # Give the cancelled task a chance to settle.
             await asyncio.sleep(0.02)
     # Only "first" interstitial + "real reply" — no follow-up.
