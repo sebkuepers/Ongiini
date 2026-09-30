@@ -36,8 +36,8 @@ from pathlib import Path
 from docx import Document
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_TSV = ROOT / "data/oshiwambo_eval_v2.tsv"
-PRIVATE_TSV = ROOT / "data/private/oshiwambo_eval_v2.tsv"
+PUBLIC_TSVS = (ROOT / "data/oshiwambo_eval_v2.tsv", ROOT / "data/oshiwambo_eval_v3.tsv")
+PRIVATE_TSV = ROOT / "data/private/oshiwambo_eval_v3.tsv"
 
 HEADER = re.compile(r"^Phrase \d+ of \d+\s*·\s*id #(\d+)")
 NOTE = re.compile(r"^(NB|N\.B\.)\s*[:.]", re.I)
@@ -46,11 +46,41 @@ def clean(s: str) -> str:
     return re.sub(r"\s+", " ", s.replace("\xa0", " ")).strip()
 
 
+NA = re.compile(r"^n\s*/?\s*a\b", re.I)
+
+
+def parse_tables(doc) -> dict[int, dict]:
+    """v3 layout: one 2-column table per phrase, rows labelled ID /
+    English / Oshindonga / Oshikwanyama / Note."""
+    blocks: dict[int, dict] = {}
+    for table in doc.tables:
+        cells = {row.cells[0].text.strip().lower(): row.cells[1].text.strip()
+                 for row in table.rows if len(row.cells) >= 2}
+        m = re.search(r"\d+", cells.get("id", ""))
+        if not m:
+            continue
+        note = cells.get("note", "")
+        b = {"english": cells.get("english", ""), "notes": [note] if note else [],
+             "stray": [], "na": set()}
+        for key, label in (("odg", "oshindonga"), ("okw", "oshikwanyama")):
+            text = cells.get(label, "")
+            if NA.match(text):
+                b["notes"].append(f"{label}: {text}")
+                b["na"].add(key)
+                text = ""
+            b[key] = [text] if text else []
+        blocks[int(m[0])] = b
+    return blocks
+
+
 def parse(path: Path) -> dict[int, dict]:
+    doc = Document(str(path))
+    if doc.tables:
+        return parse_tables(doc)
     blocks: dict[int, dict] = {}
     cur: dict | None = None
     field: str | None = None
-    for raw in (p.text for p in Document(str(path)).paragraphs):
+    for raw in (p.text for p in doc.paragraphs):
         s = raw.strip()
         m = HEADER.match(s)
         if m:
@@ -89,15 +119,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--translator", required=True,
                     help="Column prefix, e.g. kaarina → kaarina_oshindonga")
     ap.add_argument("--tsv", type=Path, default=PRIVATE_TSV)
+    ap.add_argument("--partial", action="store_true",
+                    help="Import what is filled in and skip untranslated items "
+                         "(for interim returns)")
     args = ap.parse_args(argv)
 
-    if args.tsv.resolve() == PUBLIC_TSV.resolve():
+    if args.tsv.resolve() in {p.resolve() for p in PUBLIC_TSVS}:
         print("ERROR: refusing to write references into the tracked TSV",
               file=sys.stderr)
         return 1
     if not args.tsv.exists():
-        args.tsv.parent.mkdir(parents=True, exist_ok=True)
-        args.tsv.write_bytes(PUBLIC_TSV.read_bytes())
+        print(f"ERROR: {args.tsv} missing — run build_eval_v3.py first", file=sys.stderr)
+        return 1
 
     fixes_path = args.docx.with_suffix(".fixes.json")
     fixes = ({int(k): v for k, v in json.loads(fixes_path.read_text()).items()}
@@ -115,21 +148,35 @@ def main(argv: list[str] | None = None) -> int:
 
     blocks = parse(args.docx)
     ids = {int(r["id"]) for r in rows}
-    if set(blocks) != ids:
-        print(f"ERROR: id mismatch — missing {sorted(ids - set(blocks))}, "
-              f"extra {sorted(set(blocks) - ids)}", file=sys.stderr)
+    if not set(blocks) <= ids:
+        print(f"ERROR: ids not in the TSV: {sorted(set(blocks) - ids)}",
+              file=sys.stderr)
         return 1
 
     errors = []
+    n_done = n_skipped = 0
     for r in rows:
         i = int(r["id"])
+        if i not in blocks:
+            continue
         b = blocks[i]
+        if "english" in b and clean(b["english"]) != clean(r["english"]):
+            errors.append(f"id {i}: English in the doc differs from the TSV")
+            continue
         fix = fixes.get(i, {})
         odg = fix.get("odg") or (b["odg"][0] if len(b["odg"]) == 1 else None)
         okw = fix.get("okw") or (b["okw"][0] if len(b["okw"]) == 1 else None)
         # Stray text is only tolerated when a fix covers the item, or when
         # it is the English source retyped by the translator.
         stray = [s for s in b["stray"] if clean(s) != clean(r["english"])]
+        if args.partial and not b["odg"] and not b["okw"] and not fix:
+            n_skipped += 1
+            continue
+        # A dialect marked n/a gets an empty reference; the note says why.
+        if "odg" in b.get("na", ()):
+            odg = ""
+        if "okw" in b.get("na", ()):
+            okw = ""
         if odg is None or okw is None or (stray and not fix):
             errors.append(f"id {i}: odg={b['odg']} okw={b['okw']} stray={stray}")
             continue
@@ -138,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         r[f"{t}_oshikwanyama"] = clean(okw)
         r[f"{t}_oshindonga_notes"] = clean(notes)
         r[f"{t}_oshikwanyama_notes"] = clean(notes)
+        n_done += 1
 
     if errors:
         print(f"ERROR: unresolved blocks (resolve them in {fixes_path.name}):", file=sys.stderr)
@@ -149,9 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         w = csv.DictWriter(f, fieldnames=cols, delimiter="\t")
         w.writeheader()
         w.writerows(rows)
-    n_notes = sum(1 for r in rows if r[f"{t}_oshindonga_notes"])
-    print(f"imported {len(rows)} items ({n_notes} with notes) into "
-          f"{args.tsv.relative_to(ROOT)}", file=sys.stderr)
+    n_notes = sum(1 for r in rows if int(r["id"]) in blocks and r[f"{t}_oshindonga_notes"])
+    print(f"imported {n_done} items ({n_notes} with notes, {n_skipped} not yet "
+          f"translated) into {args.tsv}", file=sys.stderr)
     return 0
 
 

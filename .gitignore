@@ -27,4 +27,5 @@ data/*
 !data/eval_v2_retained_v1.tsv
 !data/oshiwambo_eval/
 !data/oshiwambo_eval_v2.tsv
+!data/oshiwambo_eval_v3.tsv
 !data/oshiwambo_eval_v*_seeds.md

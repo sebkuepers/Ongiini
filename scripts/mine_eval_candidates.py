@@ -14,9 +14,16 @@ This is the unblocker for the "real WhatsApp samples" bucket
 
 Run inside the webhook container:
 
-    docker exec -i ongiini-webhook python3 /data/mine_eval_candidates.py
-        --target 300
-        --out /data/eval_v2_real_candidates.tsv
+    docker exec -i ongiini-webhook python3 /data/mine_eval_candidates.py \
+        --target 120 \
+        --prior /data/private/eval_v2_real_candidates.tsv \
+        --out /data/private/eval_v3_real_candidates.tsv
+
+The output holds verbatim user messages, so it may only be written under
+a private/ directory (gitignored); the script refuses anything else.
+Users listed in /data/objections.txt (Art. 21 GDPR research objection)
+are skipped entirely. --prior carries the per-user cap and the
+already-mined messages over from an earlier run.
 
 (The script is copied to /data because the container has read-only
 rootfs and /data is the writable bind-mount.)
@@ -163,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Per-user JSON dir (default /data inside container).",
     )
     ap.add_argument(
-        "--out", default="/data/eval_v2_real_candidates.tsv",
+        "--out", default="/data/private/eval_v3_real_candidates.tsv",
         help="Output TSV path.",
     )
     ap.add_argument(
@@ -183,6 +190,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Max word count for a candidate. Default 40.",
     )
     ap.add_argument(
+        "--objections", default="/data/objections.txt",
+        help="MSISDNs that objected to research processing — skipped.",
+    )
+    ap.add_argument(
+        "--prior", default=None,
+        help="Earlier candidates TSV: its approved rows count toward the "
+             "per-user cap and none of its messages are mined again.",
+    )
+    ap.add_argument(
         "--seed", type=int, default=42,
         help="RNG seed for reproducible selection.",
     )
@@ -190,6 +206,19 @@ def main(argv: list[str] | None = None) -> int:
 
     data_dir = Path(args.data_dir)
     out_path = Path(args.out)
+    if out_path.resolve().parent.name != "private":
+        print(f"ERROR: {out_path} is not directly inside a private/ directory — "
+              "candidates contain verbatim user messages", file=sys.stderr)
+        return 1
+
+    objections: set[str] = set()
+    obj_path = Path(args.objections)
+    if obj_path.exists():
+        for line in obj_path.read_text(encoding="utf-8").splitlines():
+            digits = re.sub(r"\D", "", line.split("#", 1)[0])
+            if digits:
+                objections.add(digits)
+    print(f"{len(objections)} research objections loaded", file=sys.stderr)
 
     files = sorted(data_dir.glob("264*.json"))
     print(f"Scanning {len(files)} per-user JSON files…", file=sys.stderr)
@@ -197,12 +226,22 @@ def main(argv: list[str] | None = None) -> int:
     seen_norm: set[str] = set()
     per_user_count: dict[str, int] = defaultdict(int)
     by_domain: dict[str, list[dict]] = defaultdict(list)
+    prior_msgs: set[tuple[str, int]] = set()
+    if args.prior:
+        with Path(args.prior).open() as f:
+            for r in csv.DictReader(f, delimiter="\t"):
+                prior_msgs.add((r["src_user_hash"], int(r["src_msg_idx"])))
+                seen_norm.add(normalize_for_dedup(r["english"]))
+                if r.get("sebastian_approved") == "y":
+                    per_user_count[r["src_user_hash"]] += 1
+        print(f"{len(prior_msgs)} prior candidates excluded", file=sys.stderr)
 
     counters = {
         "scanned": 0, "user_turns": 0, "kept": 0,
         "skip_short": 0, "skip_long": 0, "skip_not_en": 0,
         "skip_other_lang": 0, "skip_image": 0, "skip_canned": 0,
         "skip_dupe": 0, "skip_per_user_cap": 0, "skip_pii_dense": 0,
+        "skip_objection": 0, "skip_prior": 0,
     }
 
     for f in files:
@@ -217,12 +256,18 @@ def main(argv: list[str] | None = None) -> int:
         # because we just need a per-user collision-free tag for the
         # per-user cap; the hash is opaque to the consumer.
         user_hash = hashlib.sha256(f.stem.encode()).hexdigest()[:12]
+        if re.sub(r"\D", "", f.stem) in objections:
+            counters["skip_objection"] += 1
+            continue
         for i, t in enumerate(turns):
             if not isinstance(t, dict):
                 continue
             if t.get("role") != "user":
                 continue
             counters["user_turns"] += 1
+            if (user_hash, i) in prior_msgs:
+                counters["skip_prior"] += 1
+                continue
             text = (t.get("content") or "").strip()
             if not text:
                 continue
