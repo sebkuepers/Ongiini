@@ -68,7 +68,7 @@ There is no public way to measure how badly. This dataset provides one.
 
 The 423 source items are sampled from the actual register that a free WhatsApp-based AI helper for Namibians sees in production — daily questions about jobs, school, health, government services, family, religion — plus deliberately crafted items probing specific linguistic phenomena where MT models systematically fail (negation, noun-class agreement, code-switching, idioms, pronoun coreference, polysemy, multi-sentence cohesion).
 
-Reference translations for all 423 items, in both dialects, are by **Kaarina Shoozi**, a native speaker from northern Namibia. **Elizabeth Hamukwaya** translated a few dozen items in an early first pass.
+Reference translations are a collaboration between **Kaarina Shoozi** and **Elizabeth Hamukwaya**, native speakers from northern Namibia. Each item has one shared reference per dialect.
 
 ## Composition
 
@@ -156,8 +156,8 @@ The full design rationale — length distribution research, phenomenon coverage 
 
 Quick summary:
 1. **Source items** (143 real-mined + 110 crafted + 20 formal + 150 retained) were assembled and PII-scrubbed before any translation work began.
-2. The **translator was shown only English source items** in randomised order via a phone-friendly Word document. No machine translations (Claude, Gemma, NLLB) were shown — the translator's work is unbiased reference, not error-correction.
-3. **Validation pass** before sending to the translator: each phenomenon tag ≥10 items, length distribution within ±8% of target, domain mix within ±10% of target, no duplicate English strings, no digit-leak PII heuristic flags.
+2. The **translators were shown only English source items** in randomised order via a phone-friendly Word document. No machine translations (Claude, Gemma, NLLB) were shown — the translators' work is unbiased reference, not error-correction.
+3. **Validation pass** before sending to the translators: each phenomenon tag ≥10 items, length distribution within ±8% of target, domain mix within ±10% of target, no duplicate English strings, no digit-leak PII heuristic flags.
 4. After translation: **back-import → spot-check 10 random items per language → compute baseline machine translations (Claude, Gemma 4 26B)** for downstream comparison.
 
 ## Provenance and ethics
@@ -173,7 +173,7 @@ The Common Intelligence Foundation operates Ongiini AI under a privacy policy th
 
 ## Known limitations
 
-1. **One reference translator.** Oshindonga and Oshikwanyama have regional variation. All references represent the varieties spoken by one translator. Document this when reporting. Inter-translator agreement is planned for v1.0, not measured here.
+1. **One shared reference, not independent ones.** Oshindonga and Oshikwanyama have regional variation. The references were produced collaboratively and represent the varieties of our two translators. There is one reference per item and dialect, so inter-translator agreement is not measured here — it is planned for v1.0. Document this when reporting.
 
 2. **No back-translation verification.** A more rigorous protocol would have each reference back-translated to English by an independent translator. Future versions may add this.
 
@@ -233,7 +233,6 @@ See [`LICENSE`](LICENSE) for full text.
 
 ## Acknowledgements
 
-- **Kaarina Shoozi** — for the reference translations of all 423 items into both Oshindonga and Oshikwanyama. This dataset doesn't exist without your work.
-- **Elizabeth Hamukwaya** — for the early first-pass translations.
+- **Kaarina Shoozi** and **Elizabeth Hamukwaya** — for the reference translations into both Oshindonga and Oshikwanyama. This dataset doesn't exist without your work.
 - The MT-eval literature that shaped our methodology — FLORES-200 (Goyal et al.), NTREX-128 (Federmann et al.), MAFAND-MT (Adelani et al.), AfriCOMET (Wang et al.), AfroBench (2025), ACES challenge sets (Amrhein et al.), and the chat-MT work by Farinha et al. (TACL 2024).
 - The real Namibian users of Ongiini AI whose conversational patterns shaped the source distribution. (Their messages are not in this dataset; their distribution is.)
