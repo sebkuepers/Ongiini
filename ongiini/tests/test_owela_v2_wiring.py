@@ -89,13 +89,11 @@ def test_argumentless_tools_are_dispatched_without_a_model_call():
     assert "skill:contribute" in save.prompt_sections
 
 
-def test_thinking_only_on_search():
-    table, named = _all_policies()
-    assert table.lookup(VERDICT_SEARCH, DEPTH_SHALLOW).thinking == "low"
-    assert table.lookup(VERDICT_SEARCH, DEPTH_DEEP).thinking == "on"
-    for name, p in named.items():
-        if not name.startswith("search_") or name == "search_degraded":
-            assert p.thinking == "off", name
+def test_thinking_is_off_everywhere():
+    """Thinking leaked reasoning into content on search compose calls
+    (eval 2026-09-30); off until an eval shows it helps."""
+    _, named = _all_policies()
+    assert all(p.thinking == "off" for p in named.values())
 
 
 def test_admin_policy_exposes_data_tools_only():

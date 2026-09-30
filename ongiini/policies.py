@@ -8,7 +8,7 @@ and model stacks) so the table can be imported and tested on its own.
 from __future__ import annotations
 
 from owela import (
-    DEPTH_DEEP, DEPTH_SHALLOW, Policy, PolicyTable, THINKING_LOW, THINKING_ON,
+    DEPTH_DEEP, DEPTH_SHALLOW, Policy, PolicyTable,
     VERDICT_ADMIN, VERDICT_DOCS, VERDICT_NONE, VERDICT_SEARCH, force_tool,
 )
 
@@ -50,6 +50,13 @@ def build_policy_table() -> PolicyTable:
     possible. The classifier's depth splits casual chat into SHALLOW
     (short answers) and DEEP (translations, CVs, homework explanations —
     the top tasks — which need room).
+
+    Thinking is OFF everywhere. The 2026-09-30 eval showed that on this
+    stack (vLLM 0.20, gemma4 reasoning parser) a thinking compose call
+    after search results writes its reasoning into ``content``; with a
+    real reply budget it runs out of tokens and the leak guard has to
+    drop the whole reply. Re-enable per policy only with an eval that
+    shows reasoning separated cleanly AND better answers.
 
     Phase gating:
       - **Planner** only on SEARCH_DEEP.
@@ -131,7 +138,7 @@ def build_policy_table() -> PolicyTable:
             first_tool=force_tool("web_search"),
             max_steps=4,
             enable_critique=_critique_on(),
-            max_reply_tokens=450, thinking=THINKING_LOW, max_thinking_tokens=256,
+            max_reply_tokens=450,
             deadline_s=24.0,
             requires_tools=_SEARCH_REQUIRES, on_unavailable="search_degraded",
             synth_tool="web_search", synth_arg="query",
@@ -148,7 +155,7 @@ def build_policy_table() -> PolicyTable:
     # planner query variants → parallel web_search fan-out → auto
     # fetch_urls on the consolidated URLs. ``first_tool`` forces
     # web_search if the planner soft-fails. Thinking ON for the compose
-    # call over several sources, with its own budget.
+    # call over several sources (see the thinking note above).
     table.set(
         VERDICT_SEARCH, DEPTH_DEEP,
         Policy(
@@ -157,7 +164,7 @@ def build_policy_table() -> PolicyTable:
             max_steps=6,
             enable_planner=_planner_on(),
             enable_critique=_critique_on(),
-            max_reply_tokens=700, thinking=THINKING_ON, max_thinking_tokens=400,
+            max_reply_tokens=700,
             deadline_s=45.0,
             interstitial_after_s=18.0 if _interstitial_on() else None,
             requires_tools=_SEARCH_REQUIRES, on_unavailable="search_degraded",
