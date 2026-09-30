@@ -193,7 +193,8 @@ def build_policy_table() -> PolicyTable:
     # answer plus the notice the transport appends.
     table.add(
         Policy(
-            name="search_degraded", max_steps=1,
+            # 2 steps: a mid-turn swap has already used one on the failed search.
+            name="search_degraded", max_steps=2,
             max_reply_tokens=320, deadline_s=20.0,
             expose_tools=(), prompt_sections=("grounding",),
             reply_notice=_DEGRADED_SEARCH_NOTICE, fallback_reply=_FALLBACK_SEARCH,

@@ -256,7 +256,10 @@ class OngiiniMemoryProvider:
                     f"Live tools unavailable this turn ({tools}). Answer from "
                     "general knowledge, keep it short, say plainly that you "
                     "could not check current information, and never present "
-                    "prices, dates, schedules or other changing facts as current."
+                    "prices, dates, schedules or other changing facts as current. "
+                    "Your general knowledge can be more than a year old: compare "
+                    "any date you recall with today's date above and treat "
+                    "events before today as past."
                 )
         return ""
 
