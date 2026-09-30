@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-06-02. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-09-30. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Why Ongiini (vs ChatGPT)
 
@@ -321,6 +321,186 @@ We store your translation, the English source sentence, the dialect, and a one-w
 
 Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting geskommelde ID van jou WhatsApp-nommer. Ons stoor nie die nommer self langs vertalings nie, en ons vee outomaties persoonlike data (e-posse, ID's, rekeningnommers) skoon voordat ons stoor. Regsgrondslag: Art. 6 (1) (a) AVO (jou toestemming, gegee deur in te dien nadat jy die permanensie-nota gelees het) en Art. 89 AVO / § 27 BDSG. Volle besonderhede in ons [privaatheidsbeleid](/privacy/).
 
+## Research (Ongiini-Eval-OW translation benchmark)
+
+Research · Ongiini-Eval-OW
+Nobody could say — there was no way to measure it. Ongiini-Eval-OW is an open benchmark for English → Oshindonga and English → Oshikwanyama translation, with references written by native speakers and sentences in the English Namibians actually write.
+
+[Read the paper →](https://arxiv.org/abs/2609.31727) [Submit a system →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md) 600English source sentences 2Dialects — Oshindonga and Oshikwanyama 11Linguistic phenomena, ≥ 30 items each 180Blind sentences, held back for the leaderboard
+Why this exists
+
+### Half of Namibia's homes speak it. No benchmark did.
+
+Oshiwambo is the home language of roughly half of Namibian households. Yet its two written standards, **Oshindonga** and **Oshikwanyama**, are missing from FLORES-200, NLLB-200, MADLAD-400 and the major commercial translation services. Large language models will happily produce text that looks like Oshiwambo — and there was no public way to check whether it is.
+
+We run [Ongiini AI](/), a free AI assistant for people in Namibia. Our users keep asking for Oshiwambo. Before we can offer it responsibly, we have to be able to measure it. So we built the yardstick, and we are making it open for everyone who works on these languages.
+
+The benchmark
+
+### 600 sentences, built to find where translation breaks.
+
+The English is plain second-language English, the way Namibians write on WhatsApp — questions about school, jobs, health, government services and family life. The difficulty sits in the target language, not in the English. Sentences inspired by real conversations are rewritten in full: no user's words, names or details are in the dataset.
+
+#### Where the sentences come from
+
+050100150200250Paraphrased from real conversations: 180 items — Inspired by what people actually ask Ongiini AI — rewritten in full, no user textParaphrased from real conversations180Written for a phenomenon: 210 items — Each targets one of the eleven phenomena belowWritten for a phenomenon210Everyday phrasebook: 150 items — Short and medium conversational itemsEveryday phrasebook150Formal and institutional: 60 items — Notices, letters and announcementsFormal and institutional60 Table viewSourceItemsParaphrased from real conversations180Written for a phenomenon210Everyday phrasebook150Formal and institutional60
+#### Linguistic phenomena
+
+**Development split**Blind split 0102030405060Negation: 38 items — 26 development, 12 blindNegation38Noun-class agreement: 31 items — 22 development, 9 blindNoun-class agreement31Pronoun coreference: 30 items — 19 development, 11 blindPronoun coreference30Tense and aspect: 34 items — 24 development, 10 blindTense and aspect34Numbers and dates: 58 items — 40 development, 18 blindNumbers and dates58Named entities: 39 items — 28 development, 11 blindNamed entities39Loanwords: 31 items — 22 development, 9 blindLoanwords31Politeness register: 36 items — 24 development, 12 blindPoliteness register36Figurative language: 30 items — 21 development, 9 blindFigurative language30Polysemy: 30 items — 21 development, 9 blindPolysemy30Multi-sentence: 36 items — 26 development, 10 blindMulti-sentence36 Table viewPhenomenonDevelopmentBlindTotalNegation261238Noun-class agreement22931Pronoun coreference191130Tense and aspect241034Numbers and dates401858Named entities281139Loanwords22931Politeness register241236Figurative language21930Polysemy21930Multi-sentence261036
+#### Register
+
+050100150200250Everyday chat: 213 itemsEveryday chat213Phenomenon items: 181 itemsPhenomenon items181Formal: 138 itemsFormal138Family and community: 50 itemsFamily and community50Faith: 18 itemsFaith18 Table viewDomainItemsEveryday chat213Phenomenon items181Formal138Family and community50Faith18
+Lengths follow machine-translation practice: 24% short (up to six words), 51% medium, 25% long (19 words or more). 420 sentences form the **development split** — use them freely for prompts and tuning. 180 (30%) form the **blind split**, stratified by phenomenon, length and register, and are only for final reporting.
+
+What it tests
+
+### One sentence per phenomenon.
+
+Each item is tagged with the phenomena that make it hard. A few English sources from the set:
+
+Negation
+“I never received the confirmation message you mentioned.”
+
+single and double negation, scope
+
+Noun-class agreement
+“Those two old men sat under the tree near the river.”
+
+concord across noun, verb, adjective and numeral
+
+Pronoun coreference
+“The nurse phoned the mother because she was worried.”
+
+which person or thing a pronoun points to
+
+Tense and aspect
+“It has been raining since morning.”
+
+recent past, perfect, habitual, progressive
+
+Numbers and dates
+“Visiting hours are from 14:00 to 16:00 daily.”
+
+amounts in N$, dates, times
+
+Named entities
+“Is the combi to Ondangwa full?”
+
+Namibian places, ministries, institutions
+
+Loanwords
+“My data bundle is finished.”
+
+English words that stay English in everyday Oshiwambo
+
+Politeness register
+“Kuku, did you sleep well?”
+
+Tate, Meme, Kuku — elder, peer and child address
+
+Figurative language
+“Money is tight this month, so we cannot buy new clothes.”
+
+everyday non-literal expressions
+
+Polysemy
+“Do you have a match to light the fire?”
+
+one English word, several Oshiwambo words
+
+Multi-sentence
+“The bus broke down halfway. We had to walk for almost two hours in the heat. By the time we arrived, the meeting was already over.”
+
+cohesion across two to four sentences
+
+Leaderboard
+
+### Scores arrive with v1.0.
+
+End of 2026
+The first public leaderboard launches together with the full dataset. Headline scores are chrF++ on the blind split, broken down by phenomenon, length and register, with a human evaluation by native speakers to follow.
+
+**Frontier models**Claude, GPT, Gemini, DeepSeek, Kimi, GLM, Mistral, Muse Spark **Open-weight models**Gemma, Llama, Mistral Small, Qwen — sizes that fit a single machine **Dedicated translation**NLLB-200 and MADLAD-400 as controls; Oshiwambo-specific systems are invited to submit
+Take part
+
+### Three ways to join in.
+
+1
+#### Submit a system
+
+Translate the 600 public English sentences into both dialects and send us the files. We score them privately against the references and send the results back. Submissions made before the release are, by construction, free of test-set contamination. [How to submit →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md)
+
+2
+#### Speak Oshiwambo? Help with translations
+
+Native speakers can add sentence pairs through WhatsApp, one sentence at a time. [Contribute →](/contribute/)
+
+3
+#### Work with us
+
+Researchers, universities and teams building for Namibian languages — we would like to hear from you. [hi@ongiini.ai](mailto:hi@ongiini.ai)
+
+Roadmap
+
+### Where we are.
+
+✓
+September 2026 Done
+
+#### Concept paper and first 423 references
+
+Design published on arXiv; the first 423 sentences are translated into both dialects.
+
+→
+Autumn 2026 Now
+
+#### 600-sentence source set, translation under way
+
+All 600 English sources are final and public; the new sentences are with our translator.
+
+3
+End of 2026
+
+#### Dataset v1.0 and leaderboard
+
+References and scores published on Hugging Face under CC BY 4.0.
+
+4
+2027
+
+#### Human evaluation
+
+Native-speaker volunteers rate adequacy and fluency, so the automatic scores can be checked against people.
+
+People
+
+### Who makes it.
+
+#### Kaarina Shoozi
+
+Reference translator, Oshindonga and Oshikwanyama
+
+#### Elizabeth Hamukwaya
+
+Reference translator, Oshindonga and Oshikwanyama
+
+#### Sebastian Küpers
+
+Benchmark design · Common Intelligence Foundation
+
+Cite
+
+### If you use the benchmark.
+
+The dataset will be released under CC BY 4.0, the code is MIT-licensed.
+
+@misc{kuepers2026ongiinievalow, author = {Küpers, Sebastian}, title = {The {Ongiini-Eval-OW} Benchmark: A Concept Paper for the Planned Benchmarking of Machine Translation and Large Language Models on {Oshindonga} and {Oshikwanyama}}, year = 2026, eprint = {2609.31727}, archivePrefix = {arXiv}, primaryClass = {cs.CL}, doi = {10.48550/arXiv.2609.31727} }
+### Measure it, then build it.
+
+An open yardstick is the first step towards AI that really speaks Oshiwambo — for Ongiini AI and for everyone after us.
+
+[Read the paper →](https://arxiv.org/abs/2609.31727) [Open on GitHub →](https://github.com/sebkuepers/Ongiini)
+
 ## Privacy policy (full text)
 
 How Ongiini handles your data — last updated 2 June 2026
@@ -420,6 +600,20 @@ Photos you attach in the web chat are processed the same way as on WhatsApp: the
 **IP-based rate-limit.** To prevent abuse of the open endpoint, we apply a sliding-window rate-limit per source IP address (read from the `CF-Connecting-IP` header set by Cloudflare). The limit state is kept only in working memory and is lost when the server restarts. Beyond rate-limiting, your source IP is not stored, logged on disk, or analysed.
 
 **Legal basis:** Art. 6 (1) (b) GDPR (performance of the service you requested by opening the chat) for the conversation flow itself, and Art. 6 (1) (f) GDPR (legitimate interest in keeping the open endpoint available and safe from abuse) for the IP-based rate-limit.
+
+#### Adaptive learning surface (learn.ongiini.ai)
+
+The learning surface at [learn.ongiini.ai](https://learn.ongiini.ai) is a prototype that turns Ongiini into a personal coach for one specific topic — currently Afrikaans, with more topics planned. To make it useful across sessions, this surface stores more about you than the anonymous browser chat does.
+
+**What's stored.** A learner identifier (either a random UUID v4 generated by your browser on first visit, or a salted hash of your phone number if you upgrade via a magic link from WhatsApp); the four intake fields you provide on first visit (name, age, current Afrikaans level, your stated objective); the curriculum outline the AI authors for you; each card the AI generates; and each attempt you make at a card — with your typed answer PII-scrubbed before storage. All of this lives in a dedicated SQLite database on the same server as the rest of the service; none of it flows into the long-term *mem0* facts used by the WhatsApp / chat channels.
+
+**How long.** Indefinitely while you keep learning. There is a "Delete my data" button at the top of the learning page that wipes your learner row and cascades to every card, attempt, and progress record. If you stop using the surface, the row stays until you delete it or until the server's LRU cap evicts it.
+
+**Purpose.** To make a real learning experience possible — spaced repetition, progress tracking across sessions, a curriculum the AI can revise as you progress.
+
+**Legal basis.** Art. 6 (1) (b) GDPR — performance of the service you requested by starting an intake on the learning surface. Where you provide the optional WhatsApp number for the magic-link upgrade, that is processed under Art. 6 (1) (a) GDPR — your explicit consent.
+
+**What is NOT stored.** No source IP beyond rate-limiting (same posture as the chat surface). No conversation excerpts from the WhatsApp / chat channels are copied across unless we say so explicitly here; for the current prototype, the learning surface does not read from mem0 or short-term WhatsApp memory.
 
 ### 3. Who else sees your data (processors and third parties)
 
@@ -544,7 +738,7 @@ Under the EU AI Act (Reg. 2024/1689), Ongiini is classified as a **limited-risk 
 
 ### 1. Acceptance and scope
 
-These Terms of Service ("Terms") govern your use of Ongiini, an AI assistant offered through two channels: **(a) WhatsApp**, at the number published on [ongiini.ai](https://ongiini.ai) (restricted to Namibian numbers, +264), and **(b) the anonymous web chat at [chat.ongiini.ai](https://chat.ongiini.ai)**, which is open globally and works without an account or sign-up (together, "the Service"). These Terms and the [Privacy Policy](/privacy/) are continuously available on this website. Both the WhatsApp Business profile and the web chat link to this website, giving you the opportunity to review the Terms before initiating use. By sending a message to the Service — whether on WhatsApp or in the web chat — you confirm that you have had that opportunity and that you accept these Terms. If you do not accept them, do not use the Service.
+These Terms of Service ("Terms") govern your use of Ongiini, an AI assistant offered through three channels: **(a) WhatsApp**, at the number published on [ongiini.ai](https://ongiini.ai) (restricted to Namibian numbers, +264); **(b) the anonymous web chat at [chat.ongiini.ai](https://chat.ongiini.ai)**, which is open globally and works without an account or sign-up; and **(c) the adaptive learning surface at [learn.ongiini.ai](https://learn.ongiini.ai)**, a prototype personal-coach experience that stores per-learner progress to make spaced repetition possible (together, "the Service"). These Terms and the [Privacy Policy](/privacy/) are continuously available on this website. Both the WhatsApp Business profile and the web chat link to this website, giving you the opportunity to review the Terms before initiating use. By sending a message to the Service — whether on WhatsApp or in the web chat — you confirm that you have had that opportunity and that you accept these Terms. If you do not accept them, do not use the Service.
 
 The Service is operated by Sebastian Küpers (Hibiskusweg 17b, 13089 Berlin, Germany) as the first project of the [Common Intelligence Foundation](https://common-intelligence.org), currently being formally established as a non-profit foundation in Estonia. The Service is provided **free of charge** and is **not operated for profit**. Once the foundation is registered, it will become the operator; we will update these Terms accordingly and notify you of the change.
 
