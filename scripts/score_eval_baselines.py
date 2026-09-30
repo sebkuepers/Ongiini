@@ -45,6 +45,20 @@ def load_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
+def load_system(paths: list[Path]) -> dict[int, dict]:
+    """Accept both the baselines format (one line per item with
+    <dialect>_output) and the public submission schema (one line per
+    item and dialect with `dialect` + `translation`)."""
+    outs: dict[int, dict] = {}
+    for o in (o for path in paths for o in load_jsonl(path)):
+        if "translation" in o:
+            outs.setdefault(int(o["id"]), {"id": int(o["id"])})[
+                f"{o['dialect']}_output"] = o["translation"]
+        else:
+            outs.setdefault(int(o["id"]), {"id": int(o["id"])}).update(o)
+    return outs
+
+
 def score(pairs: list[tuple[str, str, str]]) -> dict:
     """pairs: (english, hypothesis, reference)."""
     hyps = [h for _, h, _ in pairs]
@@ -71,15 +85,22 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refs", type=Path, default=DEFAULT_REFS)
     ap.add_argument("--system", action="append", required=True,
-                    help="name=path/to/baseline.jsonl (repeatable)")
+                    help="name=file.jsonl[,file2.jsonl] — e.g. one file per "
+                         "dialect (repeatable)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args(argv)
 
     items = {r["id"]: r for r in load_jsonl(args.refs)}
     systems = {}
     for spec in args.system:
-        name, path = spec.split("=", 1)
-        outs = {o["id"]: o for o in load_jsonl(Path(path))}
+        name, paths = spec.split("=", 1)
+        outs = load_system([Path(p) for p in paths.split(",")])
+        missing = [f"{i}/{d}" for i in items for d in DIALECTS
+                   if f"{d}_output" not in outs.get(i, {})]
+        if missing:
+            print(f"ERROR: {name} lacks {len(missing)} outputs, e.g. {missing[:3]}",
+                  file=sys.stderr)
+            return 1
         if set(outs) != set(items):
             print(f"ERROR: {name} covers {len(outs)} ids, refs have {len(items)}",
                   file=sys.stderr)

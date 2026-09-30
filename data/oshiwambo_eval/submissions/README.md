@@ -31,8 +31,10 @@ details in the dataset README).
 
 ## JSONL format
 
-One JSON object per line. One line per item in the eval set. Order
-matches `data/en.txt` (one item per line, line N = id N).
+One JSON object per line. One line per item in the eval set, in id
+order. The v1.0 English sources (ids 1..600) are in
+[`data/oshiwambo_eval_v3.tsv`](../../oshiwambo_eval_v3.tsv); the
+v0.1 files under `data/` cover ids 1..423.
 
 ### Required fields
 
@@ -49,7 +51,7 @@ matches `data/en.txt` (one item per line, line N = id N).
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | int | Eval-set item ID, 1..423 (matches the dataset). |
+| `id` | int | Eval-set item ID, 1..600 in v1.0 (1..423 in v0.1). |
 | `dialect` | enum | `"oshindonga"` or `"oshikwanyama"`. One file per dialect. |
 | `model_id` | string | Stable model identifier. Recommended format: `<vendor>/<model-name>[:version]`. Examples: `anthropic/claude-opus-5`, `meta/llama-4-405b`, `google/madlad400-7b-mt`. |
 | `prompt_template_id` | string | Identifier for the prompt template used. Default: `ongiini-eval-ow-v1-zeroshot` (Appendix C of the concept paper). |

@@ -4,9 +4,10 @@ The production application — a free WhatsApp AI assistant for people
 in Namibia, built on the [Owela](../owela/README.md) framework.
 
 This README is the technical/developer-facing guide for the
-application package. For the foundation, operator manual, deploy
-recipe, and AI Act compliance statement see the repo-root
-[`README.md`](../README.md). For the framework that powers the loop
+application package. For the project overview and the benchmark see
+the repo-root [`README.md`](../README.md); for the operator manual,
+deploy recipe and AI Act compliance statement see
+[`docs/operations.md`](../docs/operations.md). For the framework that powers the loop
 see [`owela/README.md`](../owela/README.md).
 
 ---
@@ -167,7 +168,7 @@ the live stack; outside the container the import path needs
 
 ## Running in production
 
-See the [root README](../README.md) for the full deploy recipe:
+See the [operator manual](../docs/operations.md) for the full deploy recipe:
 Docker compose stack, DGX Spark host setup, vLLM startup flags,
 Cloudflare Tunnel routing, Meta WhatsApp configuration.
 
@@ -330,8 +331,9 @@ Examples:
   to add a tool/policy/etc.).
 - [`../owela/README.md`](../owela/README.md) — the framework that
   powers all this.
-- [`../README.md`](../README.md) — operator manual, deploy recipe,
-  foundation context, EU AI Act compliance.
+- [`../README.md`](../README.md) — project and benchmark overview.
+- [`../docs/operations.md`](../docs/operations.md) — operator manual,
+  deploy recipe, EU AI Act compliance.
 - [`../docs/statistics.md`](../docs/statistics.md) — the transparency
   reporting framework + LLM-as-analyst design.
 - [`../SECURITY.md`](../SECURITY.md) — privacy posture, container

@@ -36,152 +36,109 @@ configs:
         path: data/development_split.jsonl
 ---
 
-# Ongiini AI Oshindonga + Oshikwanyama Machine Translation Evaluation Set
+# Ongiini-Eval-OW — Oshindonga + Oshikwanyama MT Evaluation Set
 
-A 423-item evaluation set for machine translation between **English ↔ Oshindonga and English ↔ Oshikwanyama** — two Namibian Bantu dialects of the Oshiwambo cluster that are absent from FLORES-200, MAFAND-MT, NLLB-200, Madlad-400, Aya-23, and every major commercial translation API (Google, Azure, Amazon, DeepL, Cohere) as of mid-2026.
+An English → **Oshindonga** and English → **Oshikwanyama** evaluation set for machine translation and large language models. Both are written standards of Oshiwambo, the home language of roughly half of Namibian households, and both are absent from FLORES-200, MAFAND-MT, NLLB-200, MADLAD-400, Aya-23 and the major commercial translation services as of 2026.
 
-The benchmark design is described in the concept paper: [arXiv:2609.31727](https://arxiv.org/abs/2609.31727).
+The design is described in the concept paper: **[arXiv:2609.31727](https://arxiv.org/abs/2609.31727)**. To our knowledge this is the first evaluation benchmark for these languages. An earlier Oshindonga ↔ English training corpus exists ("Participatory Translations of Oshiwambo", AfricaNLP 2022) but is not built for evaluation.
 
-This is, to our knowledge, the **first published MT evaluation benchmark for these languages**, with native-speaker reference translations and a deterministic blind split. An earlier Oshindonga ↔ English training corpus exists ("Participatory Translations of Oshiwambo", AfricaNLP, ICLR 2022) but is not structured as an evaluation set.
-
-## Quick use
-
-```python
-from datasets import load_dataset
-
-ds = load_dataset("CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval")
-
-for row in ds["full"]:
-    en   = row["english"]
-    odg  = row["oshindonga_reference"]
-    okw  = row["oshikwanyama_reference"]
-    # Compare your system's outputs against odg / okw
-```
-
-For reproducible benchmarking, report scores on the `blind` split only (see [Splits](#splits) below).
+> **Status — pre-release (September 2026).**
+> The 600 English sources of v1.0 are public in [`../oshiwambo_eval_v3.tsv`](../oshiwambo_eval_v3.tsv), so systems can be prepared now. **Reference translations are not published yet**: the 423 v0.1 references are complete and held back, and the 177 items added in v1.0 are with the translator. Dataset, references and a public leaderboard are planned for release on Hugging Face at the end of 2026. The files under `data/` below are the v0.1 package with empty reference columns.
 
 ## Why this dataset exists
 
-Generative AI for African languages is rapidly improving but Namibian indigenous languages — Oshindonga, Oshikwanyama, Otjiherero, Khoekhoegowab, Rukwangali, Silozi — remain almost entirely uncovered. Foundation models trained on web-scraped corpora generate fluent-looking but **fabricated** output in these languages: invented words, broken grammar, hallucinated meaning.
+Generative AI for African languages is improving fast, but Namibian languages — Oshindonga, Oshikwanyama, Otjiherero, Khoekhoegowab, Rukwangali, Silozi — remain almost entirely uncovered. Models trained on web-scraped text produce fluent-looking but fabricated output in these languages: invented words, broken grammar, wrong meaning. There has been no public way to measure how badly. This dataset provides one.
 
-There is no public way to measure how badly. This dataset provides one.
+The sources follow the register that [Ongiini AI](https://ongiini.ai), a free AI assistant for people in Namibia, sees in practice — questions about jobs, school, health, government services, family and faith — plus items crafted to probe the phenomena where translation systems fail.
 
-The 423 source items are sampled from the actual register that a free WhatsApp-based AI helper for Namibians sees in production — daily questions about jobs, school, health, government services, family, religion — plus deliberately crafted items probing specific linguistic phenomena where MT models systematically fail (negation, noun-class agreement, code-switching, idioms, pronoun coreference, polysemy, multi-sentence cohesion).
+## Composition (v1.0)
 
-Reference translations are a collaboration between **Kaarina Shoozi** and **Elizabeth Hamukwaya**, native speakers from northern Namibia. Each item has one shared reference per dialect.
+| Source | v0.1 | v1.0 | Description |
+|---|---|---|---|
+| `v1_retained` | 150 | 150 | Phrasebook-style items from the first draft, curated towards longer constructions |
+| `mined_paraphrased` | 143 | 180 | Inspired by production conversations, then fully **paraphrased** by the dataset team. No verbatim user text, no names, numbers or other identifying details; at most three items per user |
+| `crafted` | 110 | 210 | Written to probe 11 phenomena, at least 30 items each |
+| `formal_drafted` | 20 | 60 | Notices, letters and announcements in the register of Namibian government, clinics, schools, councils and utilities |
+| **Total** | **423** | **600** | |
 
-## Composition
+**Source style.** The English is plain second-language English, as Namibians write it on WhatsApp; the difficulty is meant to sit in the target language, not in the English. Formal items keep authentic Namibian officialese. Crafted and formal items were drafted with LLM assistance; the translator flags any source that sounds unnatural before translating it.
 
-The 423 items come from four deliberately balanced sources:
+**Length** (v1.0): 24 % short (1–6 words), 51 % medium (7–18), 25 % long (19+).
+**Domain** (v1.0): 36 % chat, 30 % challenge, 23 % formal, 8 % community, 3 % religious.
 
-| Source | Items | Description |
-|---|---|---|
-| Retained from v1 | 150 | First-pass authored items (English source by the dataset team), curated to drop trivials and prefer longer constructions |
-| Real WhatsApp-mined | 143 | Stratified sample from a production WhatsApp AI helper's logs, PII-scrubbed, then **paraphrased** into clean natural English while preserving register and intent. No verbatim user content. |
-| Crafted challenge subset | 110 | Authored to probe 11 specific linguistic phenomena (see [Phenomenon coverage](#phenomenon-coverage)). Each phenomenon has ≥10 items so per-slice scores are statistically meaningful. |
-| Formal / institutional | 20 | Longer items in the register of Namibian government, health, school, and bank communications |
+## Phenomenon coverage (v1.0)
 
-### Length distribution
-
-Designed against FLORES-200 / NTREX-128 / Europarl conventions (mean ~21 words/sentence; deliberately exclude very-short fragments where BLEU/chrF/COMET are noisy):
-
-- **24% short** (1–6 words) — greetings, acks, intent triggers (kept as real-traffic signal)
-- **49% medium** (7–18 words) — full user questions, single-turn replies (the meat)
-- **27% long** (19+ words) — multi-clause replies and instructions where Bantu morphology stresses the model
-
-### Domain mix
-
-- 47% conversational chat (WhatsApp helper register)
-- 22% phenomenon-tagged challenge items
-- 20% formal / institutional
-- 8% community (family / village / community organising)
-- 3% religious
-
-## Phenomenon coverage
-
-Each phenomenon has ≥10 items so per-slice scoring is statistically meaningful. Items can carry multiple phenomenon tags (e.g. "She didn't bring the 12 forms by Friday" → `negation;numbers_dates;tense_aspect`).
+Items can carry several tags. A tag is only assigned where that phenomenon is the real translation difficulty of the item.
 
 | Tag | Items | What it probes |
 |---|---|---|
-| `negation` | 22 | Single, double, scope ambiguity — #1 MT failure mode (Hossain et al. 2020) |
-| `numbers_dates` | 40 | Currency (N$), dates, times, phone numbers, IDs |
-| `named_entities` | 24 | Namibian places, ministries, common Namibian names |
-| `tense_aspect` | 23 | Perfect vs recent past vs habitual — Bantu makes finer distinctions than EN |
-| `code_switch` | 17 | EN loanwords embedded in Oshiwambo (WhatsApp, ID, grant, Ministry) |
-| `pronoun_coreference` | 15 | Ambiguous antecedents → Bantu noun-class pronouns force disambiguation |
-| `idiom_nonliteral` | 12 | EN idioms (translator either matches local idiom or paraphrases) |
-| `politeness_register` | 12 | Tate/Meme/Kuku honorifics, elder/peer/child address forms |
-| `noun_class_agreement` | 10 | Chains across subject prefix → verb → object marker → adjective concord (Bantu-specific) |
-| `polysemy` | 10 | "bank", "right", "school" — context decides the Oshindonga lexeme |
-| `multi_sentence` | 10 | 2–4 sentence mini-paragraphs testing discourse cohesion |
+| `negation` | 38 | Single and double negation, scope |
+| `numbers_dates` | 58 | Currency (N$), dates, times, quantities |
+| `named_entities` | 39 | Namibian places, ministries, institutions |
+| `tense_aspect` | 34 | Recent past, perfect, habitual, progressive — Oshiwambo marks finer distinctions than English |
+| `code_switch` | 31 | English loanwords normally kept in Oshiwambo (WhatsApp, PDF, NSFAF, airtime, portal) |
+| `pronoun_coreference` | 30 | Antecedents that must be resolved to pick the Oshiwambo pronoun |
+| `politeness_register` | 36 | Tate / Meme / Kuku honorifics, elder, peer and child address, official address |
+| `idiom_nonliteral` | 30 | Figurative language. v0.1 has 12 native-speaker idioms; v1.0 adds everyday figurative expressions ("my phone is dead", "money is tight") |
+| `noun_class_agreement` | 31 | Concord across subject prefix, verb, object marker, adjective, numeral, demonstrative |
+| `polysemy` | 30 | Ambiguous English words — bank, right, charge, light, match, cell — where context decides the lexeme |
+| `multi_sentence` | 36 | Two to four sentences — discourse cohesion, pronouns and tense across sentence boundaries |
 
 ## Schema
 
-The TSV at `data/eval_set.tsv` has these columns:
+`data/eval_set.tsv` (and `eval_set.jsonl`):
 
 | Column | Type | Description |
 |---|---|---|
-| `id` | int | Stable identifier, 1..423 |
+| `id` | int | Stable identifier — 1..423 in v0.1, 1..600 in v1.0 |
 | `length_bucket` | enum | `S` (≤6 words), `M` (7–18), `L` (19+) |
 | `domain` | enum | `chat`, `formal`, `religious`, `community`, `challenge` |
-| `phenomenon_tags` | str | Semicolon-separated phenomenon tags, e.g. `negation;numbers_dates` |
-| `provenance` | enum | `v1_retained`, `real_mined`, `crafted`, `formal_drafted` |
-| `english` | str | The EN source sentence |
-| `oshindonga_reference` | str | Gold-standard Oshindonga translation |
-| `oshikwanyama_reference` | str | Gold-standard Oshikwanyama translation |
-| `oshindonga_translator_notes` | str | Optional notes (register / dialect / cultural) |
-| `oshikwanyama_translator_notes` | str | Optional notes |
-| `in_blind_split` | bool | True for the held-back 20% (see [Splits](#splits)) |
+| `phenomenon_tags` | str | Semicolon-separated tags, e.g. `negation;numbers_dates` |
+| `provenance` | enum | `v1_retained`, `mined_paraphrased` (`real_mined` in v0.1), `crafted`, `formal_drafted` |
+| `english` | str | English source |
+| `oshindonga_reference` | str | Oshindonga reference (empty until release) |
+| `oshikwanyama_reference` | str | Oshikwanyama reference (empty until release) |
+| `oshindonga_translator_notes` | str | Translator notes — mostly on loanwords kept on purpose |
+| `oshikwanyama_translator_notes` | str | Translator notes |
+| `in_blind_split` | bool | True for the held-back 20 % |
 
-Plaintext per-language files are also provided at `data/en.txt`, `data/oshindonga.txt`, `data/oshikwanyama.txt` — one segment per line, indexed by line number = `id` (so `line 1` of all three files is the same item). Use these for tools that expect parallel plaintext (mosesdecoder, fairseq, sentencepiece).
+Parallel plaintext files (`data/en.txt`, `data/oshindonga.txt`, `data/oshikwanyama.txt`, line N = id N) are provided for tools such as sacrebleu, fairseq and sentencepiece.
 
 ## Splits
 
-The 423 items are tagged with a **`blind` split flag** that holds back 84 items (≈20%) chosen by deterministic random sampling (seed=42).
+A fixed 20 % of items form the **blind** split (v0.1: 84 of 423; v1.0: 119 of 600). Every item keeps its split when the set grows — v1.0 only adds items.
 
-- **`full` split**: all 423 items. Use for development, prompt tuning, exploratory analysis.
-- **`development` split**: 339 items where `in_blind_split=false`. Use for any model-development work.
-- **`blind` split**: 84 items where `in_blind_split=true`. **Use this split only for final reporting.** Per ACL Reproducibility Checklist conventions, do not look at blind-split items during prompt engineering or model selection.
+- `development` — use freely for prompt design and system development.
+- `blind` — use only for final reporting; do not look at blind items while tuning.
+- Report headline, per-phenomenon and per-length scores on the blind split.
 
-We recommend reporting:
-- Headline scores (chrF, BLEU, COMET, manual 1–5) on the **`blind` split only**
-- Per-phenomenon scores on the **`blind` split only**
-- Per-length-bucket scores on the **`blind` split only**
+## Baselines and scoring
 
-Using the `full` split is fine for system development but should not be reported as a benchmark score.
+Scores are corpus chrF++ (primary) and BLEU from sacrebleu, plus a **derailment rate**: the share of outputs that run away (looping text to the token limit) or narrate instead of translating. Scoring script: [`scripts/score_eval_baselines.py`](../../scripts/score_eval_baselines.py).
+
+`data/baselines/claude.jsonl` holds Claude Opus 4.7 zero-shot outputs for v0.1. Gemma 4 26B outputs exist internally; Gemma derailed on 31 % of first attempts on v0.1, and derailed outputs are regenerated with unchanged decoding (up to five attempts, every attempt logged, first-pass rate reported alongside). Baselines for all 600 items and further systems come with the v1.0 release. They are system outputs, **not** alternative references.
+
+To submit a system, see [`submissions/`](submissions/) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Methodology
 
-The full design rationale — length distribution research, phenomenon coverage justification, source-mix arguments, literature review — is at [`docs/design.md`](docs/design.md).
-
-Quick summary:
-1. **Source items** (143 real-mined + 110 crafted + 20 formal + 150 retained) were assembled and PII-scrubbed before any translation work began.
-2. The **translators were shown only English source items** in randomised order via a phone-friendly Word document. No machine translations (Claude, Gemma, NLLB) were shown — the translators' work is unbiased reference, not error-correction.
-3. **Validation pass** before sending to the translators: each phenomenon tag ≥10 items, length distribution within ±8% of target, domain mix within ±10% of target, no duplicate English strings, no digit-leak PII heuristic flags.
-4. After translation: **back-import → spot-check 10 random items per language → compute baseline machine translations (Claude, Gemma 4 26B)** for downstream comparison.
+1. Sources from the four streams are assembled, tagged and checked before any translation starts: exact duplicates and tag floors by script, near-duplicates against earlier items by review, length and domain mix.
+2. The translator sees **only the English**, in randomised order, in a phone-editable Word document — no machine translations, so the references are independent, not post-edits.
+3. Returned documents are imported by script, translator notes are kept, and irregular entries are resolved by hand and logged.
+4. Design rationale and the literature behind it: [`docs/design.md`](docs/design.md) and the [concept paper](https://arxiv.org/abs/2609.31727).
 
 ## Provenance and ethics
 
-**Real-mined items have been paraphrased.** They are *inspired by* the topical distribution of real WhatsApp queries to Ongiini AI, but the English source you see is rewritten — never the user's verbatim text. We did this in two passes:
-
-1. Aggressive PII-scrub (regex for emails / phones / IDs / specific village + business + church names + specific personal names) eliminated items with identifying information.
-2. **Full rewrite pass**: every retained real-mined item was rewritten by the dataset team into clean natural English while preserving intent, register, and length bucket. The rewriting also removes residual user voice that could be attributed to individuals.
-
-The Common Intelligence Foundation operates Ongiini AI under a privacy policy that permits derived non-attributable use of aggregate signals for the explicit purpose of improving the helper. See [https://ongiini.ai/privacy/](https://ongiini.ai/privacy/).
-
-**No verbatim user content from production is present in this dataset.**
+Items marked `mined_paraphrased` are inspired by the topics and register of real messages to Ongiini AI, never copied from them. Candidates were drawn only from users who had not objected to research use, filtered for personal data, reviewed by hand, and then rewritten in full by the dataset team — generalising names, places, ages, quantities and other details that could point to a person. **No verbatim user content is in this dataset.** Ongiini AI's [privacy policy](https://ongiini.ai/privacy/) covers derived, non-attributable use for improving the service.
 
 ## Known limitations
 
-1. **One shared reference, not independent ones.** Oshindonga and Oshikwanyama have regional variation. The references were produced collaboratively and represent the varieties of our two translators. There is one reference per item and dialect, so inter-translator agreement is not measured here — it is planned for v1.0. Document this when reporting.
-
-2. **No back-translation verification.** A more rigorous protocol would have each reference back-translated to English by an independent translator. Future versions may add this.
-
-3. **Conversational register dominates.** This matches the deployment surface (a WhatsApp helper) but may underrepresent formal-document and literary registers. The `formal` and `multi_sentence` slices partially compensate.
-
-4. **No long-form text.** Multi-sentence items are 2–4 sentences. Document-level translation (paragraphs, full letters) is not tested here. Future versions could add a `document_level` slice.
-
-5. **PRELIMINARY: Claude and Gemma 4 26B baselines are included as a convenience for benchmarking, but were generated by the dataset team — they are NOT alternative gold references.** Treat them strictly as system outputs to score against the translator's reference.
+1. **One shared reference per item and dialect.** v0.1 references were produced collaboratively by two translators; there is no second independent reference, so chrF++ measures closeness to one phrasing, and inter-translator agreement is not yet measured (planned as a 30-item agreement set).
+2. **Regional variation.** Both dialects vary regionally; the references reflect the varieties of the translators from northern Namibia.
+3. **No back-translation check.**
+4. **English as the source.** Items are authored in English and translated into Oshiwambo, not the other way round, which can favour English structures.
+5. **Conversational register dominates**, matching the deployment; formal and multi-sentence slices only partly compensate. No document-level items.
+6. **Short items are noisy.** chrF++ and BLEU are unstable on 1–6 word segments; per-slice results for short-heavy phenomena should be read with care.
 
 ## Citation
 
@@ -228,8 +185,8 @@ See [`LICENSE`](LICENSE) for full text.
 ## Contact
 
 - **About the eval set**: open an issue at [github.com/sebkuepers/Ongiini](https://github.com/sebkuepers/Ongiini)
-- **About Ongiini AI** (the WhatsApp helper this eval set is built for): [https://ongiini.ai](https://ongiini.ai)
-- **About the Common Intelligence Foundation**: [pending — link when foundation site is live]
+- **About Ongiini AI** (the AI assistant this eval set is built for): [https://ongiini.ai](https://ongiini.ai)
+- **About the Common Intelligence Foundation**: [https://common-intelligence.org](https://common-intelligence.org)
 
 ## Acknowledgements
 

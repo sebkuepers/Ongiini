@@ -25,13 +25,14 @@ foundation/    Foundation site (gitignored)
 deploy/        DGX Spark host scripts (vLLM restart, wifi watchdog)
 docs/          Architecture + ops markdown
 scripts/       Repo scripts (product knowledge builder, pre-commit hook)
-data/          Bind-mount target for runtime data (gitignored)
+data/          Runtime bind-mount (allowlisted in .gitignore; private refs in data/private/)
 Dockerfile     Webhook container — repo root build context
 docker-compose.yml   webhook + website services
 ```
 
-Read the [root README](./README.md) for the operator manual,
-deployment recipe, and AI Act compliance posture.
+Read the [root README](./README.md) for the project and benchmark
+overview, and [`docs/operations.md`](./docs/operations.md) for the
+operator manual, deployment recipe, and AI Act compliance posture.
 
 ---
 

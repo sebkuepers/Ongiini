@@ -341,8 +341,10 @@ against.
   how to run it.
 - [`../owela/CLAUDE.md`](../owela/CLAUDE.md) — the eight anti-trap
   principles in their canonical form + framework extension guide.
-- [`../README.md`](../README.md) — root README with the operator
-  manual + AI Act compliance + foundation context.
+- [`../README.md`](../README.md) — root README: project + benchmark
+  overview, foundation context.
+- [`../docs/operations.md`](../docs/operations.md) — operator manual +
+  AI Act compliance.
 - [`../SECURITY.md`](../SECURITY.md) — privacy + container
   hardening posture.
 - [`../docs/statistics.md`](../docs/statistics.md) — transparency
