@@ -14,11 +14,17 @@ the most useful:
      fluent, correct-language, wrong meaning (expected verdict: wrong)
 
 Candidates are shuffled into opaque task ids; raters never learn which
-is human, which is a model and which is a control.
+is human, which is a model and which is a control. Sentences where a
+model output is derailed (looping or narrating, see
+retry_derailed_baselines.is_derailed) are skipped: an obviously broken
+answer teaches nothing and costs scarce rater time. Derailment is already
+reported by the automatic scores.
 
-Output (private): data/private/rating_tasks_round1.json
+Output (private): data/private/rating_tasks_round1.json — one screen per
+sentence with the reference and both models side by side; on every 8th
+screen the last model is swapped for a control.
 
-    python3 scripts/build_rating_tasks.py [--sample 30] [--controls 12]
+    python3 scripts/build_rating_tasks.py [--sample 60]
 """
 from __future__ import annotations
 
@@ -27,7 +33,11 @@ import csv
 import hashlib
 import json
 import random
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from retry_derailed_baselines import is_derailed  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 TSV = ROOT / "data/private/oshiwambo_eval_v3.tsv"
@@ -52,9 +62,12 @@ def tid(*parts) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--translator", default="kaarina")
-    ap.add_argument("--sample", type=int, default=30, help="Random references per dialect")
-    ap.add_argument("--controls", type=int, default=12, help="Controls per dialect")
+    ap.add_argument("--sample", type=int, default=60, help="Random references per dialect")
+    ap.add_argument("--control-every", type=int, default=8,
+                    help="On every n-th screen one model candidate is replaced by a control")
+    ap.add_argument("--round", default="r1")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args(argv)
 
     with TSV.open() as f:
@@ -65,38 +78,40 @@ def main(argv=None) -> int:
         flags[(o["id"], o["dialect"])] = o["verdict"]
 
     rng = random.Random(args.seed)
-    tasks, summary = [], {}
+    screens, summary = [], {}
     for d in DIALECTS:
         ref = lambda i: rows[i][f"{args.translator}_{d}"].strip()
         dev = [i for i, r in rows.items() if r["in_blind_split"] == "false" and ref(i)]
         models = {name: outputs(Path(str(p).format(d=d))) for name, p in MODELS}
-        usable = [i for i in dev if all(models[m].get(i) for m in models)]
+        usable = [i for i in dev if all(models[m].get(i) and not is_derailed(rows[i]["english"], models[m][i])
+                                        for m in models)]
         flagged = sorted(i for i in usable if flags.get((i, d)) == "major")
         rest = [i for i in usable if i not in flagged]
-        sample = sorted(rng.sample(rest, min(args.sample, len(rest))))
-        chosen = flagged + sample
-        for i in chosen:
-            en = rows[i]["english"].strip()
-            tasks.append({"task_id": tid("r1", d, i, "ref"), "round": "r1", "item_id": i, "dialect": d,
-                          "english": en, "text": ref(i), "kind": "ref", "source": args.translator,
-                          "priority": 1 if i in flagged else 2, "target": 2 if i in flagged else 1})
-            for name in models:
-                tasks.append({"task_id": tid("r1", d, i, name), "round": "r1", "item_id": i,
-                              "dialect": d, "english": en, "text": models[name][i].strip(),
-                              "kind": "model", "source": name, "priority": 3, "target": 1})
-        pool = [i for i in dev if i not in chosen]
-        for i in rng.sample(pool, min(args.controls, len(pool))):
-            j = rng.choice([k for k in dev if k != i])
-            tasks.append({"task_id": tid("r1", d, i, "control", j), "round": "r1", "item_id": i,
-                          "dialect": d, "english": rows[i]["english"].strip(), "text": ref(j),
-                          "kind": "control", "source": f"{args.translator}-ref-of-{j}",
-                          "priority": 9, "target": 99, "expected": "wrong"})
-        summary[d] = {"flagged_major": len(flagged), "random": len(sample),
-                      "model_candidates": len(chosen) * len(models), "controls": args.controls,
-                      "ratings_needed": 2 * len(flagged) + len(sample) + len(chosen) * len(models)}
-    OUT.write_text(json.dumps(tasks, ensure_ascii=False, indent=1))
+        chosen = flagged + sorted(rng.sample(rest, min(args.sample, len(rest))))
+        controls = 0
+        for n, i in enumerate(chosen, start=1):
+            sid = tid(args.round, d, i)
+            cands = [{"cand_id": tid(sid, "ref"), "text": ref(i), "kind": "ref", "source": args.translator}]
+            names = list(models)
+            if n % args.control_every == 0:          # swap the last model for a control
+                j = rng.choice([k for k in dev if k != i])
+                cands.append({"cand_id": tid(sid, "ctl", j), "text": ref(j), "kind": "control",
+                              "source": f"{args.translator}-ref-of-{j}", "expected": "no"})
+                names = names[:-1]
+                controls += 1
+            for name in names:
+                cands.append({"cand_id": tid(sid, name), "text": models[name][i].strip(),
+                              "kind": "model", "source": name})
+            screens.append({"screen_id": sid, "round": args.round, "item_id": i, "dialect": d,
+                            "english": rows[i]["english"].strip(),
+                            "priority": 1 if i in flagged else 2,
+                            "target": 2 if i in flagged else 1, "candidates": cands})
+        summary[d] = {"screens": len(chosen), "flagged_major": len(flagged),
+                      "random": len(chosen) - len(flagged), "with_control": controls,
+                      "ratings_to_fill": len(chosen) + len(flagged)}
+    args.out.write_text(json.dumps(screens, ensure_ascii=False, indent=1))
     print(json.dumps(summary, indent=1))
-    print(f"wrote {OUT.relative_to(ROOT)} ({len(tasks)} tasks)")
+    print(f"wrote {args.out} ({len(screens)} screens)")
     return 0
 
 

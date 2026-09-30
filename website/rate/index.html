@@ -65,6 +65,25 @@
     .fine a { color: var(--ink-soft); }
     .progress { height: 4px; background: var(--rule-faint); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
     .progress div { height: 100%; background: var(--terracotta); width: 0; transition: width .3s; }
+    .cand { background: var(--bone); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 14px 12px; margin-top: 12px; }
+    .cand-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .cand-letter { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.1em; color: var(--terracotta-deep); font-weight: 500; }
+    .cand .tgt { font-size: 23px; margin: 4px 0 12px; }
+    .seg3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .seg3 button, .choice button { appearance: none; border: 1px solid var(--rule); background: var(--bone-deep); color: var(--ink);
+      border-radius: 10px; padding: 10px 6px; font: 500 14px 'Geist', ui-sans-serif, system-ui; cursor: pointer; min-height: 46px; }
+    .seg3 button[aria-pressed="true"][data-v="send"] { background: var(--good); border-color: var(--good); color: #fff; }
+    .seg3 button[aria-pressed="true"][data-v="fix"] { background: var(--warn); border-color: var(--warn); color: #fff; }
+    .seg3 button[aria-pressed="true"][data-v="no"] { background: var(--bad); border-color: var(--bad); color: #fff; }
+    .flag { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); margin-top: 10px; cursor: pointer; }
+    .flag input { width: 16px; height: 16px; accent-color: var(--terracotta-deep); }
+    .q { margin: 22px 0 8px; color: var(--ink); font-weight: 600; }
+    .choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .choice button.wide { grid-column: span 3; }
+    .choice button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bone); }
+    .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .skip { background: none; border: 0; color: var(--ink-soft); text-decoration: underline; font: 14px 'Geist', sans-serif; cursor: pointer; padding: 8px 0; }
     .hidden { display: none !important; }
     .err { color: var(--bad); }
   </style>
@@ -83,14 +102,12 @@
     <section id="v-welcome" class="hidden">
       <p class="eyebrow">Rate translations · <span id="w-dialect"></span></p>
       <h1>Tangi unene, <em id="w-name"></em>.</h1>
-      <p>You'll see an English sentence and a translation into <strong id="w-dialect2"></strong>. Tell us, as a native speaker, whether the translation is right. Some translations were made by people, some by computers — judge each one on its own.</p>
+      <p>For each English sentence you'll see two or three translations into <strong id="w-dialect2"></strong>. Some were made by people, some by computers — you won't know which. As a native speaker, tell us two things:</p>
       <ul class="steps">
-        <li><span class="n">1</span><span><strong>Correct</strong> — the meaning is right and it sounds natural.</span></li>
-        <li><span class="n">2</span><span><strong>Small mistakes</strong> — the meaning is mostly right, but a word, spelling or phrasing is off.</span></li>
-        <li><span class="n">3</span><span><strong>Wrong</strong> — the meaning is wrong, something important is missing, or it isn't really <span class="w-d"></span>.</span></li>
-        <li><span class="n">4</span><span><strong>Can't judge</strong> — fine to use whenever you are unsure.</span></li>
+        <li><span class="n">1</span><span><strong>For each translation: would you send it as it is?</strong><br>✓ <em>Yes, as it is</em> · ~ <em>Only after fixing something</em> · ✗ <em>No</em>. Tick <em>wrong dialect</em> if it isn't really <span class="w-d"></span>.</span></li>
+        <li><span class="n">2</span><span><strong>Which one would you send?</strong> Pick one, say several are equally good, or choose <em>none</em> and — if you like — write how you would say it.</span></li>
       </ul>
-      <p>If you know a better way to say it, you can write it down — that helps us a lot. A few translations are wrong on purpose, to check that the system works. Take breaks whenever you like; your progress is saved.</p>
+      <p>If the English sentence itself sounds strange, tick the box — that helps too. A few translations are wrong on purpose, to check that the system works. Skip any sentence you're unsure about. Take breaks whenever you like; your progress is saved.</p>
       <div class="row"><button class="btn" id="start">Start <span>→</span></button></div>
       <p class="fine" style="margin-top:22px">We store your ratings and suggestions under the name on your invite, nothing else — no phone number. <a href="/privacy/">Privacy policy</a></p>
     </section>
@@ -98,23 +115,22 @@
     <!-- task -->
     <section id="v-task" class="hidden">
       <div class="progress"><div id="bar"></div></div>
-      <div class="card">
+      <div class="card" style="margin-bottom:6px">
         <div class="label">English</div>
-        <p class="src" id="t-en"></p>
-        <div class="label" id="t-dl"></div>
-        <p class="tgt" id="t-text"></p>
+        <p class="src" id="t-en" style="margin:0"></p>
       </div>
-      <p style="margin:0;color:var(--ink)"><strong>Is this a correct, natural translation?</strong></p>
-      <div class="answers" role="group" aria-label="Your rating">
-        <button class="answer" data-v="correct"><span class="icon i-good">✓</span><span><strong>Correct</strong><small>Right meaning, sounds natural</small></span></button>
-        <button class="answer" data-v="minor"><span class="icon i-warn">~</span><span><strong>Small mistakes</strong><small>Mostly right, something is off</small></span></button>
-        <button class="answer" data-v="wrong"><span class="icon i-bad">✗</span><span><strong>Wrong</strong><small>Wrong meaning or not really this language</small></span></button>
-        <button class="answer" data-v="cant_judge"><span class="icon i-skip">?</span><span><strong>Can't judge</strong><small>Skip this one</small></span></button>
-      </div>
-      <div id="suggest" class="hidden" style="margin-top:16px">
+      <p class="q">Would you send this translation as it is?</p>
+      <div id="cands"></div>
+      <p class="q">Which one would you send?</p>
+      <div class="choice" id="choice"></div>
+      <label class="flag" style="margin-top:14px"><input type="checkbox" id="en-strange" /> The English sentence itself is strange</label>
+      <div id="suggest" style="margin-top:14px">
         <div class="label">How would you say it? (optional)</div>
-        <textarea id="s-text" placeholder="Write the better translation here"></textarea>
-        <div class="row"><button class="btn" id="s-send">Next <span>→</span></button></div>
+        <textarea id="s-text" placeholder="Write a better translation here"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn" id="next" disabled>Next <span>→</span></button>
+        <button class="skip" id="skip">I can't judge this sentence</button>
       </div>
       <p class="err" id="t-err"></p>
     </section>
@@ -132,15 +148,16 @@
 (function () {
   var API = location.hostname === "localhost" ? "http://localhost:8766/v1/rate" : "https://api.ongiini.ai/v1/rate";
   var NAMES = { oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama" };
-  var token = null, task = null, verdict = null, shownAt = 0, session = 0;
+  var LETTERS = ["A", "B", "C", "D"];
+  var token = null, screen = null, state = null, shownAt = 0, session = 0;
   var $ = function (id) { return document.getElementById(id); };
   function show(id) { ["v-msg", "v-welcome", "v-task", "v-break"].forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); }
   function msg(title, text) { $("msg-title").textContent = title; $("msg-text").textContent = text || ""; show("v-msg"); }
-  function count(n) { $("count").textContent = n + " rated"; }
+  function count(n) { $("count").textContent = n + " done"; }
+  function el(tag, attrs, text) { var e = document.createElement(tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
 
-  // Token: from #t=… once, then localStorage; strip it from the address bar.
   var m = location.hash.match(/t=([A-Za-z0-9_\-]+)/);
-  try { if (m) { localStorage.setItem("ongiini.rate.token", m[1]); } token = localStorage.getItem("ongiini.rate.token"); }
+  try { if (m) localStorage.setItem("ongiini.rate.token", m[1]); token = localStorage.getItem("ongiini.rate.token"); }
   catch (e) { token = m ? m[1] : null; }
   var go = /[?&]go\b/.test(location.search);
   if (m) history.replaceState(null, "", location.pathname + location.search);
@@ -150,55 +167,85 @@
     return fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) { if (r.status === 401) throw new Error("invite"); if (!r.ok) throw new Error("server"); return r.json(); });
   }
-  function render(t) {
-    task = t; verdict = null; shownAt = Date.now();
-    document.querySelectorAll(".answer").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
-    $("suggest").classList.add("hidden"); $("s-text").value = ""; $("t-err").textContent = "";
-    if (!t) { $("b-title").textContent = "That's everything for now."; $("b-text").textContent = "Tangi unene! We'll let you know when there are new sentences to rate."; $("b-actions").classList.add("hidden"); show("v-break"); return; }
-    $("t-en").textContent = t.english; $("t-text").textContent = t.text;
-    $("t-dl").textContent = NAMES[t.dialect] || t.dialect;
-    $("bar").style.width = (session % 10) * 10 + "%";
-    show("v-task"); window.scrollTo(0, 0);
+  function complete() {
+    return screen && screen.candidates.every(function (c) { return state.verdicts[c.cid]; }) && state.choice;
   }
-  function send(v, suggestion) {
-    document.querySelectorAll(".answer, #s-send").forEach(function (b) { b.disabled = true; });
-    post("/answer", { token: token, task_id: task.task_id, verdict: v, suggestion: suggestion || null, duration_ms: Date.now() - shownAt })
+  function refresh() { $("next").disabled = !complete(); }
+
+  function render(s) {
+    screen = s; state = { verdicts: {}, wrong: {}, choice: null }; shownAt = Date.now();
+    $("t-err").textContent = ""; $("s-text").value = ""; $("en-strange").checked = false;
+    if (!s) { $("b-title").textContent = "That's everything for now."; $("b-text").textContent = "Tangi unene! We'll let you know when there are new sentences to rate."; $("b-actions").classList.add("hidden"); show("v-break"); return; }
+    $("t-en").textContent = s.english;
+    $("bar").style.width = (session % 10) * 10 + "%";
+    var host = $("cands"); host.innerHTML = "";
+    s.candidates.forEach(function (c, i) {
+      var box = el("div", { "class": "cand" });
+      var head = el("div", { "class": "cand-head" }); head.appendChild(el("span", { "class": "cand-letter" }, LETTERS[i] + " · " + (NAMES[s.dialect] || s.dialect)));
+      box.appendChild(head); box.appendChild(el("p", { "class": "tgt" }, c.text));
+      var seg = el("div", { "class": "seg3", role: "group", "aria-label": "Translation " + LETTERS[i] });
+      [["send", "✓ Yes, as is"], ["fix", "~ Fix first"], ["no", "✗ No"]].forEach(function (o) {
+        var b = el("button", { type: "button", "data-v": o[0], "aria-pressed": "false" }, o[1]);
+        b.addEventListener("click", function () {
+          state.verdicts[c.cid] = o[0];
+          seg.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          refresh();
+        });
+        seg.appendChild(b);
+      });
+      box.appendChild(seg);
+      var lab = el("label", { "class": "flag" }); var cb = el("input", { type: "checkbox" });
+      cb.addEventListener("change", function () { state.wrong[c.cid] = cb.checked; });
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(" Wrong dialect")); box.appendChild(lab);
+      host.appendChild(box);
+    });
+    var ch = $("choice"); ch.innerHTML = "";
+    var opts = s.candidates.map(function (c, i) { return [c.cid, LETTERS[i], ""]; })
+      .concat([["several", "Several are equally good", "wide"], ["none", "None — I'd say it differently", "wide"]]);
+    opts.forEach(function (o) {
+      var b = el("button", { type: "button", "aria-pressed": "false", "class": o[2] }, o[1]);
+      b.addEventListener("click", function () {
+        state.choice = o[0];
+        ch.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        if (o[0] === "none") $("s-text").focus();
+        refresh();
+      });
+      ch.appendChild(b);
+    });
+    refresh(); show("v-task"); window.scrollTo(0, 0);
+  }
+  function send(payload) {
+    $("next").disabled = true;
+    post("/answer", Object.assign({ token: token, screen_id: screen.screen_id, duration_ms: Date.now() - shownAt }, payload))
       .then(function (r) {
         session += 1; count(r.progress.done);
-        document.querySelectorAll(".answer, #s-send").forEach(function (b) { b.disabled = false; });
-        if (session % 10 === 0 && r.task) {
+        if (session % 10 === 0 && r.screen) {
           $("b-title").textContent = session + " sentences — tangi unene!"; $("b-text").textContent = "Take a break, or carry on. Your progress is saved.";
-          $("b-actions").classList.remove("hidden"); show("v-break"); task = r.task; return;
+          $("b-actions").classList.remove("hidden"); show("v-break"); screen = r.screen; return;
         }
-        render(r.task);
+        render(r.screen);
       })
-      .catch(function () { document.querySelectorAll(".answer, #s-send").forEach(function (b) { b.disabled = false; });
-        $("t-err").textContent = "That didn't save — please check your connection and try again."; });
+      .catch(function () { refresh(); $("t-err").textContent = "That didn't save — please check your connection and try again."; });
   }
-  document.querySelectorAll(".answer").forEach(function (b) {
-    b.addEventListener("click", function () {
-      verdict = b.dataset.v;
-      document.querySelectorAll(".answer").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
-      if (verdict === "minor" || verdict === "wrong") { $("suggest").classList.remove("hidden"); $("s-text").focus(); }
-      else send(verdict);
-    });
+  $("next").addEventListener("click", function () {
+    if (!complete()) return;
+    send({ verdicts: state.verdicts, choice: state.choice,
+           wrong_dialect: Object.keys(state.wrong).filter(function (k) { return state.wrong[k]; }),
+           english_strange: $("en-strange").checked, suggestion: $("s-text").value || null });
   });
-  $("s-send").addEventListener("click", function () { if (verdict) send(verdict, $("s-text").value); });
-  $("b-more").addEventListener("click", function () { render(task); });
-  $("start").addEventListener("click", function () { try { localStorage.setItem("ongiini.rate.welcomed", "1"); } catch (e) {} render(task); });
-  document.addEventListener("keydown", function (e) {
-    if ($("v-task").classList.contains("hidden") || e.target.tagName === "TEXTAREA") return;
-    var k = { "1": "correct", "2": "minor", "3": "wrong", "4": "cant_judge" }[e.key];
-    if (k) document.querySelector('.answer[data-v="' + k + '"]').click();
+  $("skip").addEventListener("click", function () {
+    send({ skipped: true, english_strange: $("en-strange").checked, suggestion: $("s-text").value || null });
   });
+  $("b-more").addEventListener("click", function () { render(screen); });
+  $("start").addEventListener("click", function () { try { localStorage.setItem("ongiini.rate.welcomed", "1"); } catch (e) {} render(screen); });
 
   post("/session", { token: token }).then(function (s) {
     var d = s.dialects.map(function (x) { return NAMES[x] || x; }).join(" and ");
     $("w-name").textContent = s.label; $("w-dialect").textContent = d; $("w-dialect2").textContent = d;
     document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
-    count(s.progress.done); task = s.task;
+    count(s.progress.done); screen = s.screen;
     var welcomed = false; try { welcomed = localStorage.getItem("ongiini.rate.welcomed") === "1"; } catch (e) {}
-    if ((welcomed && s.progress.done > 0) || go) render(task); else show("v-welcome");
+    if ((welcomed && s.progress.done > 0) || go) render(screen); else show("v-welcome");
   }).catch(function (e) {
     if (e.message === "invite") { try { localStorage.removeItem("ongiini.rate.token"); } catch (x) {}
       msg("This invite link doesn't work.", "It may have been replaced. Please ask us for a new link on WhatsApp."); }
