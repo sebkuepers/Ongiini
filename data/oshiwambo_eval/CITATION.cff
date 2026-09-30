@@ -58,3 +58,24 @@ preferred-citation:
   version: 1.0.0
   license: CC-BY-4.0
   url: 'https://huggingface.co/datasets/CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval'
+
+references:
+  - type: article
+    authors:
+      - given-names: 'Sebastian'
+        family-names: 'Küpers'
+        affiliation: 'Common Intelligence Foundation'
+    title: >-
+      The Ongiini-Eval-OW Benchmark: A Concept Paper for the Planned
+      Benchmarking of Machine Translation and Large Language Models
+      on Oshindonga and Oshikwanyama
+    year: 2026
+    date-published: '2026-09-22'
+    journal: 'arXiv preprint'
+    identifiers:
+      - type: doi
+        value: '10.48550/arXiv.2609.31727'
+      - type: other
+        value: 'arXiv:2609.31727'
+    url: 'https://arxiv.org/abs/2609.31727'
+    license: CC-BY-4.0

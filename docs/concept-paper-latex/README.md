@@ -67,6 +67,11 @@ Options:
 
 ## arXiv submission notes
 
+**Published:** [arXiv:2609.31727](https://arxiv.org/abs/2609.31727)
+(cs.CL, v1 submitted 22 September 2026). A v2 with final numbers and
+the live HuggingFace URL is planned for Q1 2027 — submit it as a
+replacement of the same arXiv ID, not as a new paper.
+
 - Submit to **cs.CL** (Computation and Language) as the primary
   category.
 - Optional cross-listing: not needed for a benchmark paper.

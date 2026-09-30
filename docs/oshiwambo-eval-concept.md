@@ -17,7 +17,7 @@ Bantu languages · evaluation · large language models
 > as: *Küpers, S. (2026). The Ongiini-Eval-OW Benchmark: A concept
 > paper for the planned benchmarking of machine translation and large
 > language models on Oshindonga and Oshikwanyama. arXiv preprint
-> arXiv:[ID].*
+> [arXiv:2609.31727](https://arxiv.org/abs/2609.31727).*
 
 ---
 

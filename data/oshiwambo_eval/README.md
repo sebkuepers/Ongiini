@@ -40,6 +40,8 @@ configs:
 
 A 423-item evaluation set for machine translation between **English ↔ Oshindonga and English ↔ Oshikwanyama** — two Namibian Bantu dialects of the Oshiwambo cluster that are absent from FLORES-200, MAFAND-MT, NLLB-200, Madlad-400, Aya-23, and every major commercial translation API (Google, Azure, Amazon, DeepL, Cohere) as of mid-2026.
 
+The benchmark design is described in the concept paper: [arXiv:2609.31727](https://arxiv.org/abs/2609.31727).
+
 This is, to our knowledge, the **first published MT evaluation benchmark for these languages**, with native-speaker reference translations and a deterministic blind split. An earlier Oshindonga ↔ English training corpus exists ("Participatory Translations of Oshiwambo", AfricaNLP, ICLR 2022) but is not structured as an evaluation set.
 
 ## Quick use
@@ -154,8 +156,8 @@ The full design rationale — length distribution research, phenomenon coverage 
 
 Quick summary:
 1. **Source items** (143 real-mined + 110 crafted + 20 formal + 150 retained) were assembled and PII-scrubbed before any translation work began.
-2. The **translator was shown only English source items** in randomised order via a phone-friendly Word document. No machine translations (Claude, Gemma, NLLB) were shown — translator's work is unbiased reference, not error-correction.
-3. **Validation pass** before sending to translator: each phenomenon tag ≥10 items, length distribution within ±8% of target, domain mix within ±10% of target, no duplicate English strings, no digit-leak PII heuristic flags.
+2. The **translators were shown only English source items** in randomised order via a phone-friendly Word document. No machine translations (Claude, Gemma, NLLB) were shown — the translators' work is unbiased reference, not error-correction.
+3. **Validation pass** before sending to the translators: each phenomenon tag ≥10 items, length distribution within ±8% of target, domain mix within ±10% of target, no duplicate English strings, no digit-leak PII heuristic flags.
 4. After translation: **back-import → spot-check 10 random items per language → compute baseline machine translations (Claude, Gemma 4 26B)** for downstream comparison.
 
 ## Provenance and ethics
@@ -171,9 +173,9 @@ The Common Intelligence Foundation operates Ongiini AI under a privacy policy th
 
 ## Known limitations
 
-1. **One translator, one dialect.** Oshindonga and Oshikwanyama have regional variation. The reference translations represent the variety spoken by our translator. Document this when reporting: "Claude scored X on \[Translator]-Oshindonga reference".
+1. **Two translators, regional variation.** Oshindonga and Oshikwanyama have regional variation. The reference translations represent the varieties spoken by our two translators from northern Namibia. Document this when reporting.
 
-2. **No back-translation verification.** A more rigorous protocol would have a second translator back-translate each reference to English. Budget went into language depth (two languages) instead of dual-annotator validation. Future versions may add this.
+2. **No back-translation verification.** A more rigorous protocol would have each reference back-translated to English by an independent translator. Future versions may add this.
 
 3. **Conversational register dominates.** This matches the deployment surface (a WhatsApp helper) but may underrepresent formal-document and literary registers. The `formal` and `multi_sentence` slices partially compensate.
 
@@ -185,7 +187,7 @@ The Common Intelligence Foundation operates Ongiini AI under a privacy policy th
 
 ```bibtex
 @dataset{ongiini_oshiwambo_mt_eval_2026,
-  author       = {[Translator family name], [Translator first name] and
+  author       = {Shoozi, Kaarina and Hamukwaya, Elizabeth and
                   Küpers, Sebastian},
   title        = {Ongiini AI Oshindonga + Oshikwanyama Machine
                   Translation Evaluation Set},
@@ -195,6 +197,23 @@ The Common Intelligence Foundation operates Ongiini AI under a privacy policy th
   license      = {CC-BY-4.0},
   url          = {https://huggingface.co/datasets/CommonIntelligenceFoundation/ongiini-oshiwambo-mt-eval},
   doi          = {[pending Zenodo registration at publication]}
+}
+```
+
+To cite the benchmark design, cite the concept paper:
+
+```bibtex
+@misc{kuepers2026ongiinievalow,
+  author        = {Küpers, Sebastian},
+  title         = {The {Ongiini-Eval-OW} Benchmark: A Concept Paper for the
+                   Planned Benchmarking of Machine Translation and Large
+                   Language Models on {Oshindonga} and {Oshikwanyama}},
+  year          = 2026,
+  eprint        = {2609.31727},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL},
+  doi           = {10.48550/arXiv.2609.31727},
+  url           = {https://arxiv.org/abs/2609.31727}
 }
 ```
 
@@ -214,6 +233,6 @@ See [`LICENSE`](LICENSE) for full text.
 
 ## Acknowledgements
 
-- **Kaarina Shoozi** — for the reference translations into both Oshindonga and Oshikwanyama. This dataset doesn't exist without your work.
+- **Kaarina Shoozi** and **Elizabeth Hamukwaya** — for the reference translations into both Oshindonga and Oshikwanyama. This dataset doesn't exist without your work.
 - The MT-eval literature that shaped our methodology — FLORES-200 (Goyal et al.), NTREX-128 (Federmann et al.), MAFAND-MT (Adelani et al.), AfriCOMET (Wang et al.), AfroBench (2025), ACES challenge sets (Amrhein et al.), and the chat-MT work by Farinha et al. (TACL 2024).
 - The real Namibian users of Ongiini AI whose conversational patterns shaped the source distribution. (Their messages are not in this dataset; their distribution is.)
