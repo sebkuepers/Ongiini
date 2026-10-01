@@ -46,7 +46,7 @@ native-speaker references, built from the register Ongiini AI actually sees.
 | **Composition** | 150 retained phrasebook items · 180 paraphrased from production conversations · 210 crafted for 11 linguistic phenomena · 60 formal / institutional |
 | **Phenomena** | negation, noun-class agreement, pronoun coreference, tense/aspect, numbers and dates, named entities, code-switching, politeness register, figurative language, polysemy, multi-sentence cohesion — at least 30 items each |
 | **Splits** | 420 development / 180 blind (30 %), stratified by phenomenon, length and domain (seed 42) |
-| **Metrics** | chrF++ (primary) and BLEU via sacrebleu, a derailment rate for runaway outputs, and a planned human evaluation of adequacy and fluency |
+| **Metrics** | chrF++ (primary) and BLEU via sacrebleu, a derailment rate for runaway outputs, and human evaluation by native speakers on [ongiini.ai/rate](https://ongiini.ai/rate/) (running; before v1.0) |
 | **References** | Kaarina Shoozi and Elizabeth Hamukwaya, native speakers from northern Namibia |
 | **Reference check** | Native-speaker volunteers rate the references on [ongiini.ai/rate](https://ongiini.ai/rate/), blind and mixed with machine translations and planted errors; protocol fixed in advance in [`docs/rating-protocol.md`](docs/rating-protocol.md) |
 
@@ -56,7 +56,7 @@ native-speaker references, built from the register Ongiini AI actually sees.
 |---|---|
 | **v0.1** — 423 items | References complete in both dialects, held back until the v1.0 release |
 | **v1.0** — 600 items | English sources final and public ([`data/oshiwambo_eval_v3.tsv`](data/oshiwambo_eval_v3.tsv)); the 177 new items are with the translator |
-| **Reference check** | Under way since October 2026 — native speakers check the references on [ongiini.ai/rate](https://ongiini.ai/rate/) |
+| **Human evaluation** | Under way since October 2026 on [ongiini.ai/rate](https://ongiini.ai/rate/) — first the references (with Claude Opus 5 and Gemma 4), then the baselines; done before v1.0 |
 | **Release** | Dataset, references and a public leaderboard on Hugging Face (CC BY 4.0), planned for the end of 2026 |
 
 The English sources are public now so that anyone can prepare a submission.
