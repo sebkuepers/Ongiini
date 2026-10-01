@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens mirror website/statistics + website/contribute (ongiini.ai).
+   Chart hues are the site's teal / terracotta / olive, re-stepped to pass
+   the CVD + normal-vision checks on the bone surface. Light only, like the site. */
+:root {
+  --bone: #f5efe4; --bone-deep: #ede5d6; --sand: #e8dfcd; --sand-deep: #ddd1ba;
+  --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+  --terracotta: #c46c3f; --terracotta-deep: #9a4f2d;
+  --rule: #d1c8b9; --rule-faint: #ddd5c6;
+  --series-1: #00769c; --series-2: #c46c3f; --series-3: #a4b64f;
+  --band: rgba(106, 98, 93, 0.14);
+  --seq-100:#d7ecf5; --seq-200:#afd5e4; --seq-300:#84bad0; --seq-400:#539db9; --seq-500:#1880a0; --seq-600:#006585; --seq-700:#004b66;
+  --gutter: 22px; --maxw-wide: 960px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { background: var(--bone); }
+body { margin: 0; background: var(--bone); color: var(--ink);
+  font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 16px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased; }
+.ct-bar { position: sticky; top: 0; z-index: 5; background: color-mix(in oklab, var(--bone) 86%, transparent);
+  backdrop-filter: saturate(140%) blur(10px); -webkit-backdrop-filter: saturate(140%) blur(10px); border-bottom: 1px solid var(--rule-faint); }
+.ct-bar-inner { max-width: var(--maxw-wide); margin: 0 auto; padding: 0 var(--gutter); height: 60px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ct-wordmark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.ct-wordmark img { width: 28px; height: 28px; display: block; }
+.ct-wordmark-text { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 18px; letter-spacing: -0.01em; }
+.ct-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
+.pill { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--terracotta-deep); border: 1px solid var(--terracotta); border-radius: 999px; padding: 5px 11px; }
+.hero { max-width: var(--maxw-wide); margin: 0 auto; padding: 56px var(--gutter) 20px; }
+.eyebrow, .section-eyebrow { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--terracotta-deep); margin: 0 0 16px; }
+.section-eyebrow { font-size: 10.5px; letter-spacing: 0.18em; margin-bottom: 10px; }
+h1 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(40px, 6.5vw, 64px); line-height: 1.03;
+  letter-spacing: -0.02em; margin: 0 0 18px; }
+h1 em { font-style: italic; color: var(--terracotta-deep); }
+.lede { font-size: clamp(17px, 1.6vw, 20px); line-height: 1.45; color: var(--ink-soft); max-width: 60ch; margin: 0; }
+h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(28px, 3.6vw, 36px); line-height: 1.1;
+  letter-spacing: -0.015em; margin: 0 0 10px; }
+p { margin: 0 0 12px; }
+.tiles { max-width: var(--maxw-wide); margin: 28px auto 0; padding: 0 var(--gutter);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.tile { padding: 22px 20px; background: var(--bone-deep); border: 1px solid var(--rule-faint); border-radius: 14px; }
+.tile .value { font-family: 'Instrument Serif', serif; font-size: clamp(36px, 4.6vw, 46px); line-height: 1; color: var(--terracotta-deep); margin-bottom: 8px; }
+.tile .label { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.tile .sub { font-size: 13.5px; color: var(--ink-soft); margin-top: 6px; }
+.section { max-width: var(--maxw-wide); margin: 0 auto; padding: 56px var(--gutter) 0; }
+.band { background: var(--sand); margin-top: 64px; padding: 8px 0 60px; }
+.desc { color: var(--ink-soft); font-size: 15px; max-width: 70ch; margin-bottom: 18px; }
+.card { background: var(--bone-deep); border: 1px solid var(--rule-faint); border-radius: 14px; padding: 22px 22px 18px; }
+.band .card { background: var(--bone); }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--ink-soft); margin: 0 0 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw.band-sw { background: var(--band); border: 1px solid var(--rule); }
+.multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 28px; }
+.panel-title { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+svg text { fill: var(--ink-soft); font-size: 12.5px; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; }
+svg .tick { fill: var(--ink-faint); font-size: 10.5px; font-family: 'Geist Mono', ui-monospace, monospace; }
+svg .val { fill: var(--ink); font-size: 12.5px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 18px; font-size: 14px; color: var(--ink-soft); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; background: var(--bone); }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--ink-soft); cursor: pointer;
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 14px; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bone); }
+details { margin-top: 14px; } summary { cursor: pointer; color: var(--terracotta-deep); font-size: 13px; font-weight: 500; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin-top: 10px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--rule-faint); }
+th { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.heat { border-collapse: separate; border-spacing: 2px; width: 100%; margin: 0; }
+.heat th { border: 0; padding: 4px; vertical-align: bottom; text-transform: none; letter-spacing: 0; font-family: 'Geist', sans-serif; font-size: 12px; }
+.heat th .muted { font-family: 'Geist Mono', monospace; font-size: 10px; }
+.heat th.sys { text-align: left; white-space: nowrap; color: var(--ink); font-size: 13px; }
+.heat td { border: 0; padding: 0; text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; height: 30px; border-radius: 4px; min-width: 46px; }
+.muted { color: var(--ink-faint); }
+.tip { position: fixed; pointer-events: none; background: var(--bone); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 9px 11px; font-size: 13px; line-height: 1.45; box-shadow: 0 12px 30px -12px rgba(42,37,34,0.35);
+  opacity: 0; transition: opacity .08s; max-width: 270px; z-index: 10; }
+.notes { padding-left: 1.2em; } .notes li { margin-bottom: 8px; color: var(--ink-soft); font-size: 15px; }
+.pending { font-size: 13px; color: var(--ink-faint); margin: 12px 0 0; }
+footer { margin-top: 72px; padding: 36px var(--gutter); text-align: center; font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px; letter-spacing: 0.06em; color: var(--ink-faint); border-top: 1px solid var(--rule-faint); }
+@media (max-width: 560px) { .multiples { grid-template-columns: 1fr; } .card { padding: 16px 14px; } }
+
+.tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+  border:1px solid var(--rule); border-radius:999px; padding:1px 7px; color:var(--ink-soft); margin-left:6px; }
+.cl { font-family:'Geist Mono',monospace; font-size:11px; color:var(--ink-faint); }
+.warn { color: var(--terracotta-deep); }
+.kv { display:grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size:14px; }
+.kv dt { color: var(--ink-soft); } .kv dd { margin:0; font-family:'Geist Mono',monospace; font-size:12.5px; word-break: break-all; }
+</style>
+</head>
+<body>
+<header class="ct-bar"><div class="ct-bar-inner">
+  <a class="ct-wordmark" href="https://ongiini.ai/"><img src="../../../../website/assets/ongiini-icon-72.png" alt="" width="28" height="28"><span class="ct-wordmark-text">Ongiini<span class="dot">.</span></span></a>
+  <span class="pill">Internal · not for publication</span>
+</div></header>
+<section class="hero">
+  <p class="eyebrow">Research · Ongiini-Eval-OW · automatic evaluation</p>
+  <h1>How well do machines translate into <em>Oshiwambo?</em></h1>
+  <p class="lede" id="scope"></p>
+</section>
+<div class="tiles" id="tiles"></div>
+
+<section class="section">
+  <p class="section-eyebrow">Headline · development split</p>
+  <h2>Translation quality by system</h2>
+  <p class="desc">Corpus chrF++ with paired-bootstrap 95 % intervals. The number on the left is the significance cluster (paired approximate randomisation, Holm-corrected): systems in the same cluster cannot be told apart. The shaded band spans the floor — English copied, a wrong sentence. Reference points (dedicated MT into Tswana / Umbundu) are not ranked.</p>
+  <div class="card">
+    <div class="multiples" id="headline"></div>
+    <details><summary>Table view (all metrics)</summary><div class="scroll" id="headline-table"></div></details>
+    <p class="pending" id="blind"></p>
+  </div>
+</section>
+
+<div class="band">
+<section class="section">
+  <p class="section-eyebrow">Failures</p>
+  <h2>What did not come back as a translation</h2>
+  <p class="desc">Empty, derailed (runaway or meta-commentary), English copied, and the language GlotLID v3 assigns. The last column scores outputs in a foreign language as 0. GlotLID recognises text that <em>looks</em> like Oshiwambo, not correct Oshiwambo — read it together with chrF++.</p>
+  <div class="filters"><span>Dialect</span><div class="seg" id="fail-seg"></div></div>
+  <div class="card"><div class="scroll" id="failures"></div><p class="pending" id="lidcal"></p></div>
+</section>
+
+<section class="section" style="padding-top:40px">
+  <p class="section-eyebrow">Diagnostics</p>
+  <h2>Where systems struggle</h2>
+  <p class="desc">chrF++ per slice (development split). Faded cells have fewer than 15 items — read patterns across rows, not single cells.</p>
+  <div class="filters"><span>Dialect</span><div class="seg" id="heat-dseg"></div><span>Slice</span><div class="seg" id="heat-kseg"></div></div>
+  <div class="card"><div class="scroll" id="heatmap"></div><div class="legend" id="heat-legend" style="margin:14px 0 0"></div></div>
+</section>
+</div>
+
+<section class="section">
+  <p class="section-eyebrow">Learned metric · exploratory</p>
+  <h2>SSA-COMET next to chrF++</h2>
+  <p class="desc">SSA-COMET-MTL (its encoder saw Kwanyama in pretraining; no human-scored Oshiwambo data) and COMET-22 (does not cover Oshiwambo). Use for comparing systems only, never as an absolute quality score.</p>
+  <div class="card"><div class="scroll" id="comet"></div></div>
+</section>
+
+<section class="section">
+  <p class="section-eyebrow">Similarity · exploratory</p>
+  <h2>Which systems write alike?</h2>
+  <p class="desc">Pairwise chrF++ between system outputs (development split), ordered by clustering. "Shared errors" restricts to items both systems got wrong (chrF++ &lt; 30 vs the reference) and subtracts what their closeness to the reference alone predicts — a hint at shared sources or strategies, not evidence about training data.</p>
+  <div class="filters"><span>Dialect</span><div class="seg" id="sim-dseg"></div><span>Measure</span><div class="seg" id="sim-mseg"></div></div>
+  <div class="card"><div class="scroll" id="sim"></div><p class="pending" id="selfsim"></p></div>
+</section>
+
+<section class="section" id="robust-sec">
+  <p class="section-eyebrow">Prompt robustness</p>
+  <h2>Does the ranking depend on the prompt?</h2>
+  <div class="card"><div class="scroll" id="robust"></div></div>
+</section>
+
+<section class="section">
+  <p class="section-eyebrow">Appendix</p>
+  <h2>Diagnostics and spot checks</h2>
+  <div class="card"><div class="scroll" id="appendix"></div></div>
+</section>
+
+<section class="section">
+  <p class="section-eyebrow">Method</p>
+  <h2>How these numbers were made</h2>
+  <dl class="kv" id="method"></dl>
+  <ul class="notes" id="deviations" style="margin-top:18px"></ul>
+</section>
+<footer>Ongiini AI · Common Intelligence Foundation · internal · <span id="gen"></span></footer>
+<div class="tip" id="tip"></div>
+<script>
+const DATA = /*__DATA__*/null;
+const D = ["oshindonga", "oshikwanyama"], DN = {oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama"};
+const SYS = Object.fromEntries(DATA.manifest.systems.map(s => [s.label, s]));
+SYS["anchor:english-copy"] = {name: "English copied", role: "anchor"};
+SYS["anchor:wrong-sentence"] = {name: "Wrong sentence", role: "anchor"};
+const nm = k => (SYS[k] || {name: k}).name;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tip = $("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function hideTip() { tip.style.opacity = 0; }
+function seg(id, opts, cur, on) {
+  const el = $(id); el.innerHTML = "";
+  opts.forEach(([v, l]) => { const b = document.createElement("button"); b.textContent = l; b.setAttribute("aria-pressed", v === cur);
+    b.onclick = () => { [...el.children].forEach(x => x.setAttribute("aria-pressed", x === b)); on(v); }; el.appendChild(b); });
+}
+const SEQ = ["--seq-100","--seq-200","--seq-300","--seq-400","--seq-500","--seq-600","--seq-700"].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const seqColor = (v, lo, hi) => SEQ[Math.max(0, Math.min(6, Math.floor((v - lo) / (hi - lo) * 7)))];
+const ink = v => v >= 4 ? "#f5efe4" : "#2a2522";
+function table(cols, rows) {
+  return "<table><thead><tr>" + cols.map(c => `<th class="${c.num ? "num" : ""}">${c.h}</th>`).join("") + "</tr></thead><tbody>" +
+    rows.map(r => "<tr>" + cols.map(c => `<td class="${c.num ? "num" : ""}">${r[c.k] ?? "–"}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
+}
+
+// scope + tiles
+$("scope").textContent = `${DATA.protocol}. Development split n = ${DATA.n_dev.oshindonga} per dialect; blind split (internal headline only) n = ${DATA.n_blind.oshindonga}. References ${DATA.reference_fingerprint}.`;
+const tiles = [];
+D.forEach(d => { const dev = DATA.dialects[d].dev, top = dev.ranking[0];
+  tiles.push([dev.systems[top]["chrf++"], `Best · ${DN[d]}`, `${nm(top)} · chrF++`]); });
+tiles.push([DATA.manifest.systems.filter(s => s.role === "main").length, "Systems ranked", "plus reference points and floors"]);
+tiles.push([DATA.n_dev.oshindonga, "Items scored", "development split, per dialect"]);
+$("tiles").innerHTML = tiles.map(([v, l, s]) => `<div class="tile"><div class="value">${v}</div><div class="label">${l}</div><div class="sub">${s}</div></div>`).join("");
+$("gen").textContent = DATA.generated;
+
+// headline
+function headline() {
+  const host = $("headline"); host.innerHTML = "";
+  D.forEach(d => {
+    const dev = DATA.dialects[d].dev, cl = {};
+    dev.significance.clusters.forEach((c, i) => c.forEach(x => cl[x] = i + 1));
+    const rest = Object.keys(dev.systems).filter(k => !dev.ranking.includes(k)).sort((a, b) => dev.systems[b]["chrf++"] - dev.systems[a]["chrf++"]);
+    const order = [...dev.ranking, ...rest];
+    const anchors = order.filter(k => k.startsWith("anchor:")).map(k => dev.systems[k]["chrf++"]);
+    const W = 440, rowH = 24, L = 190, R = 40, H = order.length * rowH + 30, x = v => L + v / 70 * (W - L - R);
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="chrF++ ${DN[d]}">`;
+    if (anchors.length) svg += `<rect x="${x(Math.min(...anchors))}" y="0" width="${x(Math.max(...anchors)) - x(Math.min(...anchors)) + 2}" height="${H - 24}" fill="var(--band)"/>`;
+    [0, 20, 40, 60].forEach(t => svg += `<line x1="${x(t)}" x2="${x(t)}" y1="0" y2="${H - 24}" stroke="var(--rule-faint)"/><text class="tick" x="${x(t)}" y="${H - 8}" text-anchor="middle">${t}</text>`);
+    order.forEach((k, i) => {
+      const s = dev.systems[k], y = i * rowH + 14, role = (SYS[k] || {}).role;
+      const col = role === "main" ? "var(--series-1)" : role === "reference-point" ? "var(--series-2)" : "var(--ink-faint)";
+      svg += `<text class="cl" x="4" y="${y + 4}">${cl[k] || "·"}</text><text x="20" y="${y + 4}">${esc(nm(k))}</text>`;
+      svg += `<line x1="${x(s["chrf++_ci"][0])}" x2="${x(s["chrf++_ci"][1])}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2"/>`;
+      svg += `<circle cx="${x(s["chrf++"])}" cy="${y}" r="5" fill="${col}" stroke="var(--bone)" stroke-width="2" data-k="${k}" data-d="${d}"/>`;
+      svg += `<text class="val" x="${x(s["chrf++_ci"][1]) + 6}" y="${y + 4}">${s["chrf++"]}</text>`;
+    });
+    host.insertAdjacentHTML("beforeend", `<div><div class="panel-title">${DN[d]}</div>${svg}</svg></div>`);
+  });
+  host.querySelectorAll("circle").forEach(c => { c.onmousemove = e => { const s = DATA.dialects[c.dataset.d].dev.systems[c.dataset.k];
+    showTip(e, `<b>${esc(nm(c.dataset.k))}</b><br>chrF++ ${s["chrf++"]} (${s["chrf++_ci"].join("–")})<br>spBLEU ${s.spbleu} · chrF ${s.chrf}`); }; c.onmouseleave = hideTip; });
+  const rows = [];
+  D.forEach(d => { const dev = DATA.dialects[d].dev, cl = {};
+    dev.significance.clusters.forEach((c, i) => c.forEach(x => cl[x] = i + 1));
+    Object.entries(dev.systems).sort((a, b) => b[1]["chrf++"] - a[1]["chrf++"]).forEach(([k, s]) => rows.push({
+      d: DN[d], c: cl[k] || "·", n: esc(nm(k)), cat: (SYS[k] || {}).category || "floor", reg: (SYS[k] || {}).region || "",
+      a: `${s["chrf++"]} (${s["chrf++_ci"].join("–")})`, b: s.spbleu, f: s.chrf })); });
+  $("headline-table").innerHTML = table([{h:"Dialect",k:"d"},{h:"Cluster",k:"c"},{h:"System",k:"n"},{h:"Category",k:"cat"},{h:"Region",k:"reg"},{h:"chrF++ (95 % CI)",k:"a",num:1},{h:"spBLEU",k:"b",num:1},{h:"chrF",k:"f",num:1}], rows);
+  $("blind").innerHTML = "Blind split, internal only: " + D.map(d => { const b = DATA.dialects[d].blind;
+    return `<b>${DN[d]}</b> (n = ${b.n}) ` + b.ranking.slice(0, 6).map(k => `${esc(nm(k))} ${b.systems[k]["chrf++"]}`).join(", "); }).join(" · ");
+}
+
+// failures
+function failures(d) {
+  const dev = DATA.dialects[d].dev;
+  const rows = Object.entries(dev.systems).filter(([k]) => !k.startsWith("anchor:")).sort((a, b) => b[1]["chrf++"] - a[1]["chrf++"]).map(([k, s]) => {
+    const lid = s.lid || {}, osh = (lid.Oshindonga || 0) + (lid.Oshikwanyama || 0);
+    const other = Object.entries(lid).filter(([g]) => !["Oshindonga", "Oshikwanyama"].includes(g)).map(([g, v]) => `${g} ${v}`).join(", ");
+    return {n: esc(nm(k)), e: s.empty_pct, r: s.derailed_pct, c: s.english_copy_pct, o: lid ? osh.toFixed(1) : "–", x: esc(other || ""), z: s["chrf++_foreign_zero"] ?? "–", a: s["chrf++"]};
+  });
+  $("failures").innerHTML = table([{h:"System",k:"n"},{h:"Empty %",k:"e",num:1},{h:"Derailed %",k:"r",num:1},{h:"Copy %",k:"c",num:1},{h:"Oshiwambo % (LID)",k:"o",num:1},{h:"Other languages %",k:"x"},{h:"chrF++",k:"a",num:1},{h:"chrF++, foreign = 0",k:"z",num:1}], rows);
+  const cal = DATA.lid_calibration || {};
+  $("lidcal").innerHTML = "GlotLID calibration on the human references: " + D.map(x => cal[x] ? `${DN[x]} ${Math.round(100 * cal[x].correct_rate)} % recognised as its own dialect` : "").join(" · ") +
+    (DATA.lid_dialect_level_ok === false ? ` — <span class="warn">below the 85 % threshold, so dialect confusion is reported only as Oshiwambo vs foreign.</span>` : "");
+}
+
+// heatmap
+let heatD = "oshikwanyama", heatK = "phenomenon_tags";
+function heatmap() {
+  const dev = DATA.dialects[heatD].dev, sl = dev.slices[heatK], cols = Object.keys(sl);
+  let h = `<table class="heat"><thead><tr><th></th>` + cols.map(c => `<th>${esc(c.replace(/_/g, " "))}<br><span class="muted">n ${sl[c].n}</span></th>`).join("") + "</tr></thead><tbody>";
+  dev.ranking.forEach(k => { h += `<tr><th class="sys">${esc(nm(k))}</th>` + cols.map(c => { const v = sl[c].systems[k]; if (!v) return "<td></td>";
+    const col = seqColor(v["chrf++"], 10, 65), i = SEQ.indexOf(col);
+    return `<td style="background:${col};color:${ink(i)};opacity:${sl[c].small ? .45 : 1}" data-t="${esc(nm(k))} · ${esc(c)}<br>chrF++ ${v["chrf++"]} (${v.ci.join("–")}) · n ${sl[c].n}">${v["chrf++"]}</td>`; }).join("") + "</tr>"; });
+  $("heatmap").innerHTML = h + "</tbody></table>";
+  $("heatmap").querySelectorAll("td[data-t]").forEach(td => { td.onmousemove = e => showTip(e, td.dataset.t); td.onmouseleave = hideTip; });
+  $("heat-legend").innerHTML = SEQ.map((c, i) => `<span><span class="sw" style="background:${c}"></span>${Math.round(10 + i * 55 / 7)}</span>`).join("") + `<span class="muted">faded: n &lt; 15</span>`;
+}
+
+// comet
+function comet() {
+  const rows = [];
+  D.forEach(d => { const dev = DATA.dialects[d].dev;
+    Object.entries(dev.systems).filter(([, s]) => s.comet).sort((a, b) => b[1]["chrf++"] - a[1]["chrf++"]).forEach(([k, s]) =>
+      rows.push({d: DN[d], n: esc(nm(k)), a: s["chrf++"], s: (s.comet["ssa-comet-mtl"] || {}).mean, c: (s.comet["comet-22"] || {}).mean})); });
+  $("comet").innerHTML = rows.length ? table([{h:"Dialect",k:"d"},{h:"System",k:"n"},{h:"chrF++",k:"a",num:1},{h:"SSA-COMET ×100",k:"s",num:1},{h:"COMET-22 ×100",k:"c",num:1}], rows)
+    : `<p class="pending">Not computed in this run.</p>`;
+}
+
+// similarity
+let simD = "oshikwanyama", simM = "raw";
+function sim() {
+  const s = DATA.dialects[simD].dev.similarity, order = s.order;
+  const get = (a, b) => s.pairs[`${a}|${b}`] || s.pairs[`${b}|${a}`];
+  let h = `<table class="heat"><thead><tr><th></th>` + order.map(k => `<th style="writing-mode:vertical-rl;transform:rotate(180deg);height:120px">${esc(nm(k))}</th>`).join("") + "</tr></thead><tbody>";
+  order.forEach(a => { h += `<tr><th class="sys">${esc(nm(a))}</th>` + order.map(b => { if (a === b) return `<td style="background:var(--bone)"></td>`;
+    const p = get(a, b), v = simM === "raw" ? p.raw : p.excess;
+    if (v === undefined) return `<td class="muted" data-t="${esc(nm(a))} × ${esc(nm(b))}<br>too few shared wrong items (${p.n_both_wrong})">·</td>`;
+    const col = simM === "raw" ? seqColor(v, 10, 70) : seqColor(v, -5, 25), i = SEQ.indexOf(col);
+    return `<td style="background:${col};color:${ink(i)}" data-t="${esc(nm(a))} × ${esc(nm(b))}<br>raw ${p.raw}${p.excess !== undefined ? ` · shared errors ${p.shared_errors} (expected ${p.expected}, n ${p.n_both_wrong})` : ""}">${Math.round(v)}</td>`; }).join("") + "</tr>"; });
+  $("sim").innerHTML = h + "</tbody></table>";
+  $("sim").querySelectorAll("td[data-t]").forEach(td => { td.onmousemove = e => showTip(e, td.dataset.t); td.onmouseleave = hideTip; });
+  const ss = DATA.dialect_self_similarity || {};
+  $("selfsim").innerHTML = `How alike each system's Oshindonga and Oshikwanyama outputs are (chrF++; the human references: <b>${DATA.dialect_self_similarity_references}</b>): ` +
+    Object.entries(ss).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(nm(k))} ${v}`).join(", ");
+}
+
+// robustness
+function robust() {
+  const r = DATA.robustness;
+  if (!r) { $("robust").innerHTML = `<p class="pending">Not run yet (scripts/prompt_robustness.py).</p>`; return; }
+  let h = "";
+  D.forEach(d => { const t = r[d]["chrf++"], temps = Object.keys(t); const labels = [...new Set(temps.flatMap(x => Object.keys(t[x])))];
+    h += `<div class="panel-title">${DN[d]}</div>` + table([{h:"System",k:"n"}, ...temps.map(x => ({h: x, k: x, num: 1}))],
+      labels.map(l => Object.assign({n: esc(nm(l))}, ...temps.map(x => ({[x]: t[x][l]}))))) +
+      `<p class="pending">Kendall τ: ${Object.entries(r[d].kendall_tau).map(([k, v]) => `${k} ${v}`).join(" · ") || "–"}</p>`; });
+  $("robust").innerHTML = h;
+}
+
+// appendix
+function appendix() {
+  let h = "";
+  const dg = DATA.diagnostic || {};
+  if (Object.keys(dg).length) h += `<div class="panel-title">5-shot diagnostics (own item set, prompt examples excluded)</div>` +
+    table([{h:"System",k:"n"},{h:"Dialect",k:"d"},{h:"n",k:"c",num:1},{h:"chrF++",k:"a",num:1},{h:"spBLEU",k:"b",num:1}],
+      Object.entries(dg).flatMap(([k, ds]) => Object.entries(ds).map(([d, s]) => ({n: esc(nm(k)), d: DN[d], c: s.n, a: s["chrf++"], b: s.spbleu}))));
+  const o = DATA.okamt;
+  if (o) h += `<div class="panel-title" style="margin-top:22px">OkaMT spot check · ${o.n} Oshikwanyama development sentences (unpublished)</div>` +
+    table([{h:"System",k:"n"},{h:"chrF++ on the same items",k:"a",num:1}], Object.entries(o.systems).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({n: esc(k), a: v})));
+  $("appendix").innerHTML = h || `<p class="pending">Nothing.</p>`;
+}
+
+// method
+function method() {
+  const m = [["Protocol", DATA.protocol + " — docs/eval-protocol.md"], ["References", DATA.reference_fingerprint],
+    ...Object.entries(DATA.signatures).map(([k, v]) => [k, v]), ["Decoding", DATA.manifest.decoding_note],
+    ["Excluded", Object.entries(DATA.manifest.excluded).map(([k, v]) => `${k}: ${v}`).join("; ")]];
+  if (DATA.problems && DATA.problems.length) m.push(["Skipped (incomplete)", DATA.problems.join("; ")]);
+  $("method").innerHTML = m.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  $("deviations").innerHTML = [
+    "Frontier and open-weight models were run through OpenRouter (Muse Spark through Meta's API), not each provider's native API or the DGX Spark.",
+    "Mistral Large 3 dropped (throttled, 62 of 600 items); DeepSeek-R1-Distill-Llama-70B not run.",
+    "Empty outputs from reasoning models (budget 4096 used up) were regenerated once with max_tokens 16384; derailed outputs re-asked up to 5 times.",
+    "MADLAD-400 has a Kwanyama tag <2kj>; NLLB-200 and MADLAD into Tswana / Umbundu are zero-shot-transfer reference points, not Oshiwambo scores.",
+    "Single reference per item and dialect (one translator); the planned second-translator overlap is still open."].map(x => `<li>${esc(x)}</li>`).join("");
+}
+
+headline();
+seg("fail-seg", D.map(d => [d, DN[d]]), "oshikwanyama", failures); failures("oshikwanyama");
+seg("heat-dseg", D.map(d => [d, DN[d]]), heatD, v => { heatD = v; heatmap(); });
+seg("heat-kseg", [["phenomenon_tags","Phenomenon"],["length_bucket","Length"],["domain","Domain"],["provenance","Source"]], heatK, v => { heatK = v; heatmap(); });
+heatmap(); comet();
+seg("sim-dseg", D.map(d => [d, DN[d]]), simD, v => { simD = v; sim(); });
+seg("sim-mseg", [["raw","All items"],["excess","Shared errors"]], simM, v => { simM = v; sim(); });
+sim(); robust(); appendix(); method();
+</script>
+</body>
+</html>
