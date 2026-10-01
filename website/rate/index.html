@@ -321,13 +321,22 @@
   }
   // Round-done reward: badge + confetti, a star per round, the shared goal.
   var GOAL = 300;
-  // {n} = the rater's total (the badge number); rounds count this visit.
+  // One cheer per round, by the rater's TOTAL rounds (floor(done / 5)), so
+  // returning raters carry on where they stopped. {n} = the badge number.
+  // Oshiwambo only in short phrases valid in both dialects.
   var CHEERS = [
     ["Great — {n} done!", "You're good at this. You can do 5 more!"],
     ["{n} done — you're on a roll!", "Every sentence you check makes the test set better."],
-    ["{n}! Language hero.", "5 more?"],
-    ["{n} checked — amazing!", "You're one of our top checkers."],
+    ["Tangi unene!", "{n} sentences checked. 5 more?"],
+    ["{n}! Language hero.", "Native speakers like you are exactly what this needs."],
+    ["Nawa unene — {n}!", "Five rounds. Amazing."],
+    ["{n} checked — amazing!", "You're helping Oshiwambo get the AI it deserves."],
+    ["Keep going — {n}!", "Every check makes Ongiini AI better at Oshiwambo."],
+    ["Tangi unene — {n}!", "Your eye for detail matters. 5 more?"],
+    ["{n} — incredible!", "Almost 50. Can you make it?"],
+    ["Nawa unene — {n}!", "Ten rounds. You're a true Oshiwambo champion."],
   ];
+  var CHEERS_LATER = [1, 5, 6, 7];          // after round 10, cycle the general ones
   function confetti() {
     var colors = ["#c46c3f", "#2f7d4f", "#a8761c", "#9a4f2d", "#e8dfcd"];
     for (var i = 0; i < 26; i++) {
@@ -339,7 +348,7 @@
     }
   }
   function reward(kind) {
-    var rounds = Math.max(1, Math.floor(session / ROUND)), badge = $("b-badge");
+    var rounds = Math.max(1, Math.floor(prog.done / ROUND)), badge = $("b-badge");
     badge.innerHTML = ""; badge.appendChild(document.createTextNode(String(prog.done)));
     var lbl = document.createElement("small"); lbl.textContent = "checked"; badge.appendChild(lbl);
     if (kind === "done") {
@@ -347,16 +356,19 @@
       $("b-text").textContent = "Tangi unene — we'll let you know when there are new ones.";
       $("b-actions").classList.add("hidden");
     } else {
-      var cheer = CHEERS[Math.min(rounds, CHEERS.length) - 1] || CHEERS[0];
-      if (rounds > CHEERS.length) cheer = [prog.done + " checked — incredible!", "You're making Ongiini AI better at Oshiwambo."];
+      var cheer = rounds <= CHEERS.length ? CHEERS[rounds - 1]
+        : CHEERS[CHEERS_LATER[(rounds - CHEERS.length - 1) % CHEERS_LATER.length]];
       $("b-eyebrow").textContent = "Round " + rounds + " done";
-      $("b-title").textContent = cheer[0].replace("{n}", prog.done); $("b-text").textContent = cheer[1];
+      $("b-title").textContent = cheer[0].replace("{n}", prog.done); $("b-text").textContent = cheer[1].replace("{n}", prog.done);
       $("b-actions").classList.remove("hidden");
     }
     var stars = $("b-stars"); stars.innerHTML = "";
-    for (var i = 0; i < Math.max(rounds + 1, 4) && i < 10; i++) {
-      var st = document.createElement("span"); st.textContent = "★"; if (i < rounds) st.className = "on"; stars.appendChild(st);
+    var earned = Math.floor(prog.done / ROUND);                     // one star per 5, all visits
+    for (var i = 0; i < Math.min(Math.max(earned + 1, 5), 10); i++) {
+      var st = document.createElement("span"); st.textContent = "★"; if (i < earned) st.className = "on"; stars.appendChild(st);
     }
+    if (earned > 10) { var more = document.createElement("span"); more.className = "on"; more.style.fontSize = "16px";
+      more.textContent = "+" + (earned - 10); stars.appendChild(more); }
     var goal = GOAL; while (prog.everyone >= goal) goal += 100;
     $("b-together-text").textContent = prog.everyone + " of " + goal + " sentences checked by everyone";
     $("b-meter").style.width = "0";
