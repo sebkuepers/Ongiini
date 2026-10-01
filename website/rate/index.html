@@ -63,8 +63,15 @@
     .steps .n { font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--terracotta); line-height: 1; width: 22px; flex: none; }
     .fine { font-size: 13px; color: var(--ink-faint); }
     .fine a { color: var(--ink-soft); }
-    .progress { height: 4px; background: var(--rule-faint); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
-    .progress div { height: 100%; background: var(--terracotta); width: 0; transition: width .3s; }
+    .stepbar { display: flex; gap: 4px; margin-bottom: 8px; }
+    .stepbar span { flex: 1; height: 6px; border-radius: 999px; background: var(--rule-faint); transition: background .3s; }
+    .stepbar span.p.done, .stepbar span.p.cur { background: var(--ink-faint); }
+    .stepbar span.r.done { background: var(--terracotta); }
+    .stepbar span.r.cur { background: color-mix(in oklab, var(--terracotta) 45%, var(--rule-faint)); }
+    .stepbar span.r.first { margin-left: 10px; }
+    .steplabel { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink-soft); margin: 0 0 18px; }
+    .steplabel.practice { color: var(--ink-faint); }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .chip { appearance: none; border: 1px solid var(--rule); background: var(--bone); color: var(--ink); border-radius: 999px;
       padding: 9px 14px; font: 500 14px 'Geist', ui-sans-serif, system-ui; cursor: pointer; min-height: 40px; }
@@ -82,6 +89,31 @@
     .feedback strong { display: block; margin-bottom: 4px; }
     .tag { display: inline-block; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
       color: var(--terracotta-deep); border: 1px solid var(--terracotta); border-radius: 999px; padding: 3px 10px; margin-bottom: 14px; }
+    /* round-done reward */
+    #v-break { text-align: center; position: relative; }
+    #v-break p { margin-left: auto; margin-right: auto; max-width: 30ch; }
+    .badge { width: 112px; height: 112px; margin: 18px auto 20px; border-radius: 999px; display: grid; place-items: center;
+      background: var(--terracotta); color: #fff; font: 400 54px/1 'Instrument Serif', serif;
+      box-shadow: 0 0 0 8px color-mix(in oklab, var(--terracotta) 18%, var(--bone)); }
+    .badge small { display: block; font: 500 10px 'Geist Mono', monospace; letter-spacing: .16em; text-transform: uppercase; margin-top: 4px; opacity: .85; }
+    .badge.pop { animation: pop .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+    @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .stars { display: flex; justify-content: center; gap: 6px; margin: 4px 0 22px; font-size: 22px; color: var(--rule); }
+    .stars .on { color: var(--warn); }
+    .together { background: var(--bone-deep); border: 1px solid var(--rule-faint); border-radius: 14px; padding: 14px 16px; margin: 0 0 22px; text-align: left; }
+    .together .meter { height: 8px; border-radius: 999px; background: var(--rule-faint); overflow: hidden; margin: 8px 0 6px; }
+    .together .meter div { height: 100%; background: var(--good); width: 0; transition: width 1s ease-out .3s; }
+    .together small { color: var(--ink-soft); font-size: 13.5px; }
+    #v-break .row { justify-content: center; }
+    .btn.big { padding: 16px 30px; font-size: 17px; }
+    .confetti { position: absolute; top: 60px; left: 50%; width: 8px; height: 12px; border-radius: 2px; pointer-events: none;
+      animation: burst 1.1s ease-out forwards; }
+    @keyframes burst { from { transform: translate(0, 0) rotate(0); opacity: 1; }
+      to { transform: translate(var(--dx), var(--dy)) rotate(var(--r)); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .badge.pop, .confetti { animation: none; } .confetti { display: none; } }
+    .answers.chosen .answer[aria-pressed="false"] { display: none; }
+    .change { background: none; border: 0; padding: 0 0 12px; color: var(--ink-soft); text-decoration: underline;
+      font: 14px 'Geist', sans-serif; cursor: pointer; }
     .hidden { display: none !important; }
     .err { color: var(--bad); }
   </style>
@@ -138,7 +170,8 @@
 
     <!-- tip after practice -->
     <section id="v-tip" class="hidden">
-      <p class="eyebrow">Ready</p>
+      <div class="stepbar" id="tip-bar"></div>
+      <p class="steplabel" id="tip-label"></p>
       <h1>Compare it <em>with the English.</em></h1>
       <p>A translation can sound perfect and still say something different. Check numbers, names, and whether every part of the English is there.</p>
       <p>Some translations are wrong on purpose, to check that the system works.</p>
@@ -147,8 +180,8 @@
 
     <!-- task (also used for practice) -->
     <section id="v-task" class="hidden">
-      <div class="progress"><div id="bar"></div></div>
-      <span class="tag hidden" id="t-practice">Practice</span>
+      <div class="stepbar" id="bar"></div>
+      <p class="steplabel" id="bar-label"></p>
       <div class="card" style="margin-bottom:10px">
         <div class="label">English</div>
         <p class="src" id="t-en" style="margin:0"></p>
@@ -169,6 +202,7 @@
         <div class="row"><button class="btn" id="p-next">Next <span>→</span></button></div></div>
 
       <div class="panel hidden" id="follow">
+        <button class="change" type="button" data-change>← Change answer</button>
         <div class="label">What is off? (optional)</div>
         <div class="chips" id="issues">
           <button class="chip" type="button" data-i="word_choice" aria-pressed="false">Word choice</button>
@@ -182,6 +216,7 @@
       </div>
 
       <div class="panel hidden" id="cant">
+        <button class="change" type="button" data-change>← Back</button>
         <div class="label">Why not? (tap one)</div>
         <div class="chips">
           <button class="chip" type="button" data-c="english">I didn't understand the English</button>
@@ -195,10 +230,20 @@
 
     <!-- break / done -->
     <section id="v-break" class="hidden">
+      <div class="badge" id="b-badge"></div>
       <p class="eyebrow" id="b-eyebrow">Tangi unene!</p>
       <h1 id="b-title"></h1>
       <p id="b-text"></p>
-      <div class="row" id="b-actions"><button class="btn" id="b-more">Five more <span>→</span></button></div>
+      <div class="stars" id="b-stars" aria-hidden="true"></div>
+      <div class="together" id="b-together">
+        <strong>Together</strong>
+        <div class="meter"><div id="b-meter"></div></div>
+        <small id="b-together-text"></small>
+      </div>
+      <div class="row" id="b-actions">
+        <button class="btn big" id="b-more">5 more <span>→</span></button>
+        <button class="skip" id="b-pause" type="button">Take a break</button>
+      </div>
     </section>
   </main>
 
@@ -208,7 +253,7 @@
   var NAMES = { oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama" };
   var ROUND = 5, FAST_MS = 2000;
   var token = null, item = null, next = null, verdict = null, shownAt = 0, session = 0, busy = false;
-  var fastRun = 0, slowShown = false, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
+  var practiced = false, fastRun = 0, slowShown = false, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ["v-msg", "v-start", "v-profile", "v-welcome", "v-tip", "v-task", "v-break"];
   function show(id) { VIEWS.forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); window.scrollTo(0, 0); }
@@ -233,33 +278,101 @@
       .then(function (r) { if (r.status === 401) throw new Error("invite"); if (!r.ok) throw new Error("server"); return r.json(); });
   }
 
+  // After ~/✗ (or can't judge) the other answers fold away and the page
+  // scrolls so the choice sits under the header with the follow-up below it
+  // — on a phone the panel must be visible without the user scrolling.
+  function focusOn(el) {
+    var top = el.getBoundingClientRect().top + window.pageYOffset - 72;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
+  function unchoose() {
+    verdict = null; press($("answers"), ".answer", null); $("answers").classList.remove("chosen");
+    ["follow", "cant"].forEach(function (id) { $(id).classList.add("hidden"); });
+    $("cant-row").classList.remove("hidden");
+    focusOn($("t-en").parentNode);
+  }
   function reset() {
     verdict = null; busy = false; $("t-err").textContent = ""; $("s-text").value = "";
     press($("answers"), ".answer", null); press($("issues"), ".chip", null);
+    $("answers").classList.remove("chosen"); $("cant-row").classList.remove("hidden");
     ["follow", "cant", "p-feedback", "slow"].forEach(function (id) { $(id).classList.add("hidden"); });
     $("answers").querySelectorAll(".answer").forEach(function (b) { b.disabled = false; });
   }
+  // Segmented bar: first round = practice segments, a gap, then ROUND real ones.
+  function stepbar(barId, labelId, P, cur, label, isPractice) {
+    var bar = $(barId); bar.innerHTML = "";
+    for (var i = 0; i < P + ROUND; i++) {
+      var seg = document.createElement("span");
+      seg.className = (i < P ? "p" : "r") + (i === P && P ? " first" : "") + (i < cur ? " done" : i === cur ? " cur" : "");
+      bar.appendChild(seg);
+    }
+    $(labelId).textContent = label; $(labelId).classList.toggle("practice", isPractice);
+  }
   function fill(it, isPractice) {
     reset();
-    $("t-practice").classList.toggle("hidden", !isPractice);
     $("cant-row").classList.toggle("hidden", isPractice);
     $("t-en").textContent = it.english; $("t-text").textContent = it.text;
     $("t-lang").textContent = NAMES[it.dialect] || it.dialect;
-    $("bar").style.width = isPractice ? ((pIdx + 1) / practice.length * 100) + "%" : ((session % ROUND) / ROUND * 100) + "%";
+    var P = isPractice || (practiced && session < ROUND) ? practice.length : 0;
+    if (isPractice) stepbar("bar", "bar-label", P, pIdx, "Practice " + (pIdx + 1) + " of " + P, true);
+    else stepbar("bar", "bar-label", P, P + session % ROUND, "Sentence " + (session % ROUND + 1) + " of " + ROUND, false);
     if (!isPractice && fastRun >= 3 && !slowShown) { $("slow").classList.remove("hidden"); slowShown = true; fastRun = 0; }
     shownAt = Date.now(); show("v-task");
+  }
+  // Round-done reward: badge + confetti, a star per round, the shared goal.
+  var GOAL = 300;
+  var CHEERS = [
+    ["Great — your first 5!", "You're good at this. You can do 5 more!"],
+    ["10 done — you're on a roll!", "Every sentence you check makes the test set better."],
+    ["15! Language hero.", "Just 5 more and you reach 20."],
+    ["20 checked — amazing!", "You're one of our top checkers."],
+  ];
+  function confetti() {
+    var colors = ["#c46c3f", "#2f7d4f", "#a8761c", "#9a4f2d", "#e8dfcd"];
+    for (var i = 0; i < 26; i++) {
+      var c = document.createElement("span"); c.className = "confetti";
+      var a = Math.random() * Math.PI * 2, d = 90 + Math.random() * 110;
+      c.style.setProperty("--dx", Math.cos(a) * d + "px"); c.style.setProperty("--dy", Math.sin(a) * d + 40 + "px");
+      c.style.setProperty("--r", (Math.random() * 720 - 360) + "deg"); c.style.background = colors[i % colors.length];
+      $("v-break").appendChild(c); setTimeout(function (el) { el.remove(); }.bind(null, c), 1300);
+    }
+  }
+  function reward(kind) {
+    var rounds = Math.floor(prog.done / ROUND), badge = $("b-badge");
+    badge.innerHTML = ""; badge.appendChild(document.createTextNode(String(prog.done)));
+    var lbl = document.createElement("small"); lbl.textContent = "checked"; badge.appendChild(lbl);
+    if (kind === "done") {
+      $("b-eyebrow").textContent = "All done"; $("b-title").textContent = "That's every sentence for now!";
+      $("b-text").textContent = "Tangi unene — we'll let you know when there are new ones.";
+      $("b-actions").classList.add("hidden");
+    } else {
+      var cheer = CHEERS[Math.min(rounds, CHEERS.length) - 1] || CHEERS[0];
+      if (rounds > CHEERS.length) cheer = [prog.done + " checked — incredible!", "You're making Ongiini AI better at Oshiwambo."];
+      $("b-eyebrow").textContent = "Round " + rounds + " done";
+      $("b-title").textContent = cheer[0]; $("b-text").textContent = cheer[1];
+      $("b-actions").classList.remove("hidden");
+    }
+    var stars = $("b-stars"); stars.innerHTML = "";
+    for (var i = 0; i < Math.max(rounds + 1, 4) && i < 10; i++) {
+      var st = document.createElement("span"); st.textContent = "★"; if (i < rounds) st.className = "on"; stars.appendChild(st);
+    }
+    var goal = GOAL; while (prog.everyone >= goal) goal += 100;
+    $("b-together-text").textContent = prog.everyone + " of " + goal + " sentences checked by everyone";
+    $("b-meter").style.width = "0";
+    show("v-break");
+    badge.classList.remove("pop"); void badge.offsetWidth; badge.classList.add("pop");
+    setTimeout(function () { $("b-meter").style.width = Math.min(100, prog.everyone / goal * 100) + "%"; }, 30);
+    confetti();
   }
   function render(it) {
     item = it; pIdx = -1;
     if (!it) {
-      $("b-eyebrow").textContent = "Tangi unene!"; $("b-title").textContent = "That's everything for now.";
-      $("b-text").textContent = "You've checked " + prog.done + " · together " + prog.everyone + ". We'll let you know when there are new sentences.";
-      $("b-actions").classList.add("hidden"); show("v-break"); return;
+      reward("done"); return;
     }
     fill(it, false);
   }
   function startPractice() {
-    if (!practice.length) { show("v-tip"); return; }
+    if (!practice.length) { stepbar("tip-bar", "tip-label", 0, 0, ROUND + " sentences", false); show("v-tip"); return; }
     pIdx = 0; fill(practice[0], true);
   }
 
@@ -271,9 +384,7 @@
       .then(function (r) {
         session += 1; prog = r.progress; count(); $("next").disabled = false;
         if (session % ROUND === 0 && r.item) {
-          $("b-eyebrow").textContent = "Round done"; $("b-title").textContent = "Tangi unene!";
-          $("b-text").textContent = "You've checked " + prog.done + " · together " + prog.everyone + ". Carry on, or take a break — your progress is saved.";
-          $("b-actions").classList.remove("hidden"); item = r.item; show("v-break"); return;
+          item = r.item; reward("round"); return;
         }
         render(r.item);
       })
@@ -294,9 +405,10 @@
       }
       if (verdict === "good") { send({ verdict: "good" }); return; }
       $("follow").classList.remove("hidden");
-      $("follow").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      $("answers").classList.add("chosen"); $("follow").classList.remove("hidden"); focusOn(b);
     });
   });
+  document.querySelectorAll("[data-change]").forEach(function (b) { b.addEventListener("click", unchoose); });
   $("issues").querySelectorAll(".chip").forEach(function (b) {
     b.addEventListener("click", function () { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true"); });
   });
@@ -306,7 +418,8 @@
   });
   $("skip").addEventListener("click", function () {
     $("follow").classList.add("hidden"); press($("answers"), ".answer", null); verdict = null;
-    $("cant").classList.remove("hidden"); $("cant").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    $("answers").classList.add("chosen"); $("cant").classList.remove("hidden"); $("cant-row").classList.add("hidden");
+    focusOn($("cant"));
   });
   $("cant").querySelectorAll(".chip").forEach(function (b) {
     b.addEventListener("click", function () { send({ verdict: "cant_judge", cant_reason: b.getAttribute("data-c") }); });
@@ -314,11 +427,20 @@
   $("p-next").addEventListener("click", function () {
     pIdx += 1;
     if (pIdx < practice.length) fill(practice[pIdx], true);
-    else { pIdx = -1; store("ongiini.rate.practiced", "1"); show("v-tip"); }
+    else {
+      pIdx = -1; practiced = true; store("ongiini.rate.practiced", "1");
+      stepbar("tip-bar", "tip-label", practice.length, practice.length, "Practice done — now " + ROUND + " real sentences", false);
+      show("v-tip");
+    }
   });
   $("start").addEventListener("click", startPractice);
   $("go").addEventListener("click", function () { render(item); });
   $("b-more").addEventListener("click", function () { render(item); });
+  $("b-pause").addEventListener("click", function () {
+    $("b-eyebrow").textContent = "See you soon"; $("b-title").textContent = "Tangi unene!";
+    $("b-text").textContent = "Come back any time — your link keeps working and your progress is saved.";
+    $("b-actions").classList.add("hidden"); window.scrollTo(0, 0);
+  });
 
   function begin(s) {
     prog = s.progress; count();
