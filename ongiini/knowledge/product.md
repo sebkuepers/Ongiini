@@ -462,7 +462,7 @@ Leaderboard
 ### Scores arrive with v1.0.
 
 End of 2026
-The first public leaderboard launches together with the full dataset. Headline scores are chrF++ on the blind split, broken down by phenomenon, length and register, with a human evaluation by native speakers to follow.
+The first public leaderboard launches together with the full dataset. Headline scores are chrF++ on the blind split, broken down by phenomenon, length and register, with human ratings from native speakers alongside.
 
 **Frontier models**Claude, GPT, Gemini, DeepSeek, Kimi, GLM, Mistral, Muse Spark **Open-weight models**Gemma, Llama, Mistral Small, Qwen — sizes that fit a single machine **Dedicated translation**NLLB-200 and MADLAD-400 as controls; Oshiwambo-specific systems are invited to submit
 Quality control
@@ -473,7 +473,7 @@ A benchmark is only as good as its references. Before v1.0, native-speaker volun
 
 Raters see our references and machine translations mixed, never which is which. Planted errors show whether a rater compares carefully, and the same person also judges a strong machine translation of sentences whose reference they rated — so we learn whether the references are at least as good as the systems they will measure. Raters join through WhatsApp; we store a scrambled ID, never the phone number.
 
-The protocol — samples, qualification rule and analysis — was fixed before the first rating: [docs/rating-protocol.md](https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md). The same platform will carry the human evaluation of the systems.
+The protocol — samples, qualification rule and analysis — was fixed before the first rating: [docs/rating-protocol.md](https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md). The same raters then judge the systems on the leaderboard, so the automatic scores can be checked against people.
 
 [Check translations →](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations)
 Take part
@@ -514,25 +514,18 @@ Autumn 2026 Now
 All 600 English sources are final and public; the new sentences are with our translator.
 
 →
-October 2026 Now
+Since October 2026 Now
 
-#### Reference check by native speakers
+#### Human evaluation by native speakers
 
-Volunteers rate the references against strong machine translations on [ongiini.ai/rate](/rate/); confirmed errors go back to the translator.
+Volunteers rate translations on [ongiini.ai/rate](/rate/). The first round checks our references side by side with Claude Opus 5 and Gemma 4, and confirmed errors go back to the translator. Then the baseline systems, so the leaderboard launches with human scores next to chrF++.
 
-3
+4
 End of 2026
 
 #### Dataset v1.0 and leaderboard
 
-References and scores published on Hugging Face under CC BY 4.0.
-
-4
-2027
-
-#### Human evaluation
-
-Native-speaker volunteers rate the systems on the same platform, so the automatic scores can be checked against people.
+Checked references, automatic and human scores published on Hugging Face under CC BY 4.0. Systems submitted later are rated the same way.
 
 People
 

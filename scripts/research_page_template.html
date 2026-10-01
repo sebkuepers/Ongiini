@@ -153,7 +153,7 @@
     <h2 class="ct-h2">Scores arrive with v1.0.</h2>
     <div class="rs-lb">
       <div class="ct-stat-num">End of 2026</div>
-      <p>The first public leaderboard launches together with the full dataset. Headline scores are chrF++ on the blind split, broken down by phenomenon, length and register, with a human evaluation by native speakers to follow.</p>
+      <p>The first public leaderboard launches together with the full dataset. Headline scores are chrF++ on the blind split, broken down by phenomenon, length and register, with human ratings from native speakers alongside.</p>
       <div class="rs-systems">
         <div><strong>Frontier models</strong>Claude, GPT, Gemini, DeepSeek, Kimi, GLM, Mistral, Muse Spark</div>
         <div><strong>Open-weight models</strong>Gemma, Llama, Mistral Small, Qwen — sizes that fit a single machine</div>
@@ -167,7 +167,7 @@
     <h2 class="ct-h2">Native speakers check the references.</h2>
     <p>A benchmark is only as good as its references. Before v1.0, native-speaker volunteers check them on <a href="/rate/">ongiini.ai/rate</a>: one English sentence, one translation, one question — <em>does it say the same?</em> Yes, almost, or no, with an optional better translation.</p>
     <p>Raters see our references and machine translations mixed, never which is which. Planted errors show whether a rater compares carefully, and the same person also judges a strong machine translation of sentences whose reference they rated — so we learn whether the references are at least as good as the systems they will measure. Raters join through WhatsApp; we store a scrambled ID, never the phone number.</p>
-    <p>The protocol — samples, qualification rule and analysis — was fixed before the first rating: <a href="https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md" target="_blank" rel="noopener noreferrer">docs/rating-protocol.md</a>. The same platform will carry the human evaluation of the systems.</p>
+    <p>The protocol — samples, qualification rule and analysis — was fixed before the first rating: <a href="https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md" target="_blank" rel="noopener noreferrer">docs/rating-protocol.md</a>. The same raters then judge the systems on the leaderboard, so the automatic scores can be checked against people.</p>
     <div class="ct-hero-cta">
       <a class="ct-cta" href="https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations" target="_blank" rel="noopener noreferrer">Check translations <span class="ct-cta-arrow">→</span></a>
     </div>
@@ -209,19 +209,14 @@
         <p>All {{N_ITEMS}} English sources are final and public; the new sentences are with our translator.</p>
       </div></div>
       <div class="ct-step"><div class="ct-step-num">→</div><div class="ct-step-body">
-        <p class="rs-when">October 2026 <span class="rs-state rs-state--now">Now</span></p>
-        <h3>Reference check by native speakers</h3>
-        <p>Volunteers rate the references against strong machine translations on <a href="/rate/">ongiini.ai/rate</a>; confirmed errors go back to the translator.</p>
-      </div></div>
-      <div class="ct-step"><div class="ct-step-num">3</div><div class="ct-step-body">
-        <p class="rs-when">End of 2026</p>
-        <h3>Dataset v1.0 and leaderboard</h3>
-        <p>References and scores published on Hugging Face under CC BY 4.0.</p>
+        <p class="rs-when">Since October 2026 <span class="rs-state rs-state--now">Now</span></p>
+        <h3>Human evaluation by native speakers</h3>
+        <p>Volunteers rate translations on <a href="/rate/">ongiini.ai/rate</a>. The first round checks our references side by side with Claude Opus 5 and Gemma 4, and confirmed errors go back to the translator. Then the baseline systems, so the leaderboard launches with human scores next to chrF++.</p>
       </div></div>
       <div class="ct-step"><div class="ct-step-num">4</div><div class="ct-step-body">
-        <p class="rs-when">2027</p>
-        <h3>Human evaluation</h3>
-        <p>Native-speaker volunteers rate the systems on the same platform, so the automatic scores can be checked against people.</p>
+        <p class="rs-when">End of 2026</p>
+        <h3>Dataset v1.0 and leaderboard</h3>
+        <p>Checked references, automatic and human scores published on Hugging Face under CC BY 4.0. Systems submitted later are rated the same way.</p>
       </div></div>
     </div>
   </section>
