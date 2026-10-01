@@ -42,6 +42,8 @@ OUT = ROOT / "data/private/experiments/dictionary"
 LEX_URL = "https://raw.githubusercontent.com/okalai-ai/moimoe/main/data/DictionaryNCR/{L}/{s}_NCR_{L}.txt"
 LEX_LANG = {"oshindonga": "NDONGA", "oshikwanyama": "KWANYAMA"}
 TEMPLATE_ID = "exp-glossary-okalai-ncr-v1"
+TEMPLATE_V2_ID = "exp-glossary-okalai-ncr-v2-guided"
+DEFINITIONS: dict[tuple[str, str, str], str] = {}      # (dialect, english, word) → dictionary meaning
 MAX_ENTRIES, MAX_PER_WORD = 12, 2
 
 
@@ -60,7 +62,8 @@ def lexicon(dialect: str) -> dict[str, list[tuple[str, str]]]:
             parts = [x.strip() for x in line.split("|||")]
             if len(parts) != 5 or not parts[0] or not parts[3]:
                 continue
-            en, _, _, word, cls = parts
+            en, definition, _, word, cls = parts
+            DEFINITIONS.setdefault((dialect, en.lower(), word), definition)
             entries = out.setdefault(en.lower(), [])
             if (word, cls) not in entries:
                 entries.append((word, cls))
@@ -103,11 +106,97 @@ def glossary(english: str, lex: dict[str, list[tuple[str, str]]]) -> list[tuple[
     return found[:MAX_ENTRIES]
 
 
-def prompt(dialect: str, english: str, gloss: list[tuple[str, str, str]]) -> str:
+# The examples use words that occur in no eval-set sentence (checked 2026-10-01).
+GUIDE_V2 = """\
+Glossary: {name} nouns from a dictionary that may help. Each entry gives the \
+English word, the {name} noun, its noun class and the dictionary's meaning.
+
+How to use it:
+- Use an entry only if its meaning matches how the word is used in this \
+sentence. A dictionary lists one sense; the sentence may mean another. \
+Example: "crane" glossed as "a large wading bird" does not fit "the crane \
+lifted the steel beams", which means a machine, so leave that entry out.
+- An English word can be a verb in the sentence while the entry is a noun. \
+Example: in "they hammer the nails" hammer is a verb, so a noun entry for \
+"hammer" does not apply.
+- Entries are singular. Change number and agreement (class prefix, \
+concords) as the sentence needs.
+- When two entries share an English word, pick the one whose meaning fits.
+- A natural {name} sentence comes first. It is fine to use none of the entries.
+
+Entries:
+{lines}
+
+"""
+
+
+_NLP, _EMB, _EMB_CACHE = None, None, {}
+
+
+def _models():
+    global _NLP, _EMB
+    if _NLP is None:
+        import spacy
+        from sentence_transformers import SentenceTransformer
+        _NLP = spacy.load("en_core_web_sm")
+        _EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return _NLP, _EMB
+
+
+def _embed(texts: list[str]):
+    _, emb = _models()
+    new = [t for t in texts if t not in _EMB_CACHE]
+    if new:
+        for t, v in zip(new, emb.encode(new, normalize_embeddings=True)):
+            _EMB_CACHE[t] = v
+    return [_EMB_CACHE[t] for t in texts]
+
+
+def glossary_v3(english: str, lex: dict[str, list[tuple[str, str]]], dialect: str) -> list[tuple[str, str, str]]:
+    """Selection v3: only words the tagger reads as nouns in this sentence;
+    the surface form first (the lexicon has plural entries), then the
+    lemma; among several entries for a word, the two whose dictionary
+    meaning is closest to the sentence (MiniLM cosine)."""
+    nlp, _ = _models()
+    doc = nlp(english)
+    sent = _embed([english])[0]
+    found: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    toks = list(doc)
+    keys: list[str] = []
+    for a, b in zip(toks, toks[1:]):                                  # noun compounds
+        if b.pos_ == "NOUN" and a.pos_ in ("NOUN", "ADJ"):
+            keys += [f"{a.text.lower()} {b.text.lower()}", f"{a.lemma_.lower()} {b.lemma_.lower()}",
+                     f"{a.text.lower()}-{b.text.lower()}"]
+    for t in toks:
+        if t.pos_ == "NOUN":
+            keys += [t.text.lower(), t.lemma_.lower()]
+    for key in keys:
+        if key in seen or key not in lex:
+            continue
+        if any(key in k.split() for k in seen if " " in k):           # part of a matched compound
+            continue
+        seen.add(key)
+        cands = lex[key]
+        if len(cands) > 2:
+            defs = [f"{key}: {DEFINITIONS.get((dialect, key, w), '')}" for w, _ in cands]
+            sims = [float(sent @ v) for v in _embed(defs)]
+            cands = [c for _, c in sorted(zip(sims, cands), key=lambda x: -x[0])][:2]
+        found += [(key, w, c) for w, c in cands[:2]]
+    return found[:MAX_ENTRIES]
+
+
+def prompt(dialect: str, english: str, gloss: list[tuple[str, str, str]], version: int = 1) -> str:
     name = DIALECT_NAMES[dialect]
     base = PAPER_ZEROSHOT.format(dialect=name, source=english)
     if not gloss:
         return base
+    if version == 2:
+        def meaning(en, w):
+            m = DEFINITIONS.get((dialect, en, w), "").strip().rstrip(".")
+            return (m[:117] + "…") if len(m) > 120 else m
+        lines = "\n".join(f'- {en}: {w} (class {c}), meaning: "{meaning(en, w)}"' for en, w, c in gloss)
+        return base.replace("English: ", GUIDE_V2.format(name=name, lines=lines) + "English: ", 1)
     lines = "\n".join(f"- {en}: {w} (noun class {c})" for en, w, c in gloss)
     block = (f"Glossary of {name} nouns from a dictionary (use them where they fit; "
              f"inflect them as the sentence needs):\n{lines}\n\n")
@@ -149,7 +238,8 @@ async def translate(args, jobs: list[dict]) -> None:
                 if text and not is_derailed(job["english"], text):
                     break
         rec = {"id": job["id"], "dialect": job["dialect"], "model_id": args.model,
-               "prompt_template_id": TEMPLATE_ID if job["gloss"] else PAPER_ZEROSHOT_ID, "translation": text, "raw_response": raw,
+               "prompt_template_id": ((TEMPLATE_V2_ID if args.prompt_version == 2 else TEMPLATE_ID)
+                               if job["gloss"] else PAPER_ZEROSHOT_ID), "translation": text, "raw_response": raw,
                "attempts": attempts, "finish_reason": finish, "glossary": job["gloss"],
                "reasoning_setting": args.reasoning, "max_tokens": args.max_tokens}
         async with lock:
@@ -189,6 +279,10 @@ def main(argv=None) -> int:
     ap.add_argument("--reasoning", choices=("default", "on", "off"), default="default")
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--no-glossary", action="store_true", help="same run without the glossary (a fresh baseline)")
+    ap.add_argument("--selection", choices=("v1", "v3"), default="v1",
+                    help="v3 = noun check, lemma, sense ranking by definition")
+    ap.add_argument("--prompt-version", type=int, choices=(1, 2), default=1,
+                    help="2 = glossary with meanings and usage guidance")
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--score-only", action="store_true")
     args = ap.parse_args(argv)
@@ -202,8 +296,15 @@ def main(argv=None) -> int:
         ids = sorted(i for i, r in items.items() if not r["in_blind_split"]
                      and (r.get(f"{d}_reference") or "").strip())
         gl = {i: glossary(items[i]["english"], lex) for i in ids}          # for the split, always
-        run_gl = {i: [] for i in ids} if args.no_glossary else gl
-        plan[d] = (ids, gl, run_gl)
+        if args.selection == "v3":
+            sel = {i: glossary_v3(items[i]["english"], lex, d) for i in ids}
+            run_gl = {i: [] for i in ids} if args.no_glossary else sel
+            gl_for_split = sel
+        else:
+            gl_for_split = gl
+        if args.selection != "v3":
+            run_gl = {i: [] for i in ids} if args.no_glossary else gl
+        plan[d] = (ids, gl_for_split, run_gl)
         report["dialects"][d] = {"lexicon_entries": sum(map(len, lex.values())),
                                  "items_with_glossary": sum(bool(g) for g in gl.values()),
                                  "mean_entries": round(float(np.mean([len(g) for g in gl.values()])), 2)}
@@ -213,7 +314,7 @@ def main(argv=None) -> int:
             p = OUT / f"{args.label}_{d}.jsonl"
             done = {json.loads(l)["id"] for l in p.read_text().splitlines() if l.strip()} if p.exists() else set()
             jobs += [{"id": i, "dialect": d, "english": items[i]["english"].strip(), "gloss": run_gl[i],
-                      "prompt": prompt(d, items[i]["english"].strip(), run_gl[i])}
+                      "prompt": prompt(d, items[i]["english"].strip(), run_gl[i], args.prompt_version)}
                      for i in ids if i not in done]
         print(f"{len(jobs)} translations to run", file=sys.stderr)
         asyncio.run(translate(args, jobs))
