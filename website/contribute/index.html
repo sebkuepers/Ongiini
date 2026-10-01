@@ -30,6 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-frame.css" />
 
   <style>
     :root {
@@ -45,7 +46,7 @@
       --rule-faint:     oklch(0.90  0.014 70);
       --gutter: 22px;
       --maxw-prose: 720px;
-      --maxw-wide:  920px;
+      --maxw-wide:  1180px;   /* = site frame (assets/site-frame.css) */
     }
     @supports not (color: oklch(0 0 0)) {
       :root {
@@ -78,72 +79,9 @@
     /* Sticky bar — minimal, mirrors the /statistics/ page chrome:
        small icon + italic wordmark on the left, ← Back + lang
        toggle on the right. */
-    .ct-bar {
-      background: color-mix(in oklab, var(--bone) 86%, transparent);
-      backdrop-filter: saturate(140%) blur(10px);
-      -webkit-backdrop-filter: saturate(140%) blur(10px);
-      border-bottom: 1px solid var(--rule-faint);
-      position: sticky; top: 0; z-index: 50;
-    }
-    .ct-bar-inner {
-      max-width: var(--maxw-wide); margin: 0 auto;
-      padding: 0 var(--gutter);
-      height: 60px;
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    }
-    .ct-wordmark {
-      display: inline-flex; align-items: center; gap: 10px;
-      text-decoration: none;
-      color: var(--ink);
-    }
-    .ct-wordmark img { width: 28px; height: 28px; display: block; }
-    .ct-wordmark-text {
-      font-family: 'Instrument Serif', serif;
-      font-style: italic; font-size: 18px; letter-spacing: -0.01em;
-    }
-    .ct-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
-    .ct-bar-right { display: inline-flex; align-items: center; gap: 14px; }
-    .ct-back {
-      font-family: 'Geist', ui-sans-serif, system-ui;
-      font-size: 13px; font-weight: 500;
-      color: var(--terracotta-deep); text-decoration: none;
-    }
-    .ct-back:hover { color: var(--terracotta); }
-    .ct-lang {
-      display: inline-flex; align-items: stretch;
-      border: 1px solid var(--rule); border-radius: 999px; overflow: hidden;
-      background: var(--bone);
-      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
-      letter-spacing: 0.14em;
-    }
-    .ct-lang-seg {
-      appearance: none; border: none; cursor: pointer;
-      padding: 6px 11px; background: transparent;
-      color: var(--ink-soft); display: inline-flex; align-items: center;
-      transition: background 160ms, color 160ms;
-    }
-    .ct-lang-seg + .ct-lang-seg { border-left: 1px solid var(--rule); }
-    .ct-lang-seg.is-active { background: var(--ink); color: var(--bone); }
-
-    /* ── EXPLORE NAV (contribute, research, statistics, slides) ──
-       Shared by the project pages; the home page keeps its own nav.
-       Darker bar + "Explore" label + pill group mark the area apart. */
-    .ct-bar.ex-bar { background: color-mix(in oklab, var(--bone-deep) 92%, transparent); }
-    .ex-bar .ct-bar-inner { flex-wrap: wrap; height: auto; min-height: 60px; row-gap: 0; padding-top: 10px; padding-bottom: 10px; }
-    .ex-left { display: inline-flex; align-items: center; gap: 14px; }
-    .ex-label { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .16em;
-      text-transform: uppercase; color: var(--terracotta-deep); padding-left: 14px; border-left: 1px solid var(--rule); line-height: 22px; }
-    .ex-nav { order: 3; flex-basis: 100%; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-top: 10px; padding: 3px;
-      border: 1px solid var(--rule); border-radius: 999px; background: var(--bone); width: max-content; max-width: 100%; }
-    .ex-nav::-webkit-scrollbar { display: none; }
-    .ex-nav a { flex: none; font-family: 'Geist', ui-sans-serif, system-ui; font-size: 13px; font-weight: 500; color: var(--ink-soft);
-      text-decoration: none; padding: 6px 13px; border-radius: 999px; transition: background 160ms, color 160ms; }
-    .ex-nav a:hover { color: var(--ink); background: var(--bone-deep); }
-    .ex-nav a[aria-current="page"] { background: var(--ink); color: var(--bone); }
-    @media (min-width: 880px) {
-      .ex-bar .ct-bar-inner { flex-wrap: nowrap; height: 64px; padding-top: 0; padding-bottom: 0; }
-      .ex-nav { order: 0; flex-basis: auto; margin: 0 auto; }
-    }
+    /* Same gutter as the home page / site frame */
+    @media (min-width: 880px) { :root { --gutter: 48px; } }
+    @media (max-width: 380px) { :root { --gutter: 18px; } }
 
     /* ── HERO ──────────────────────────────────────────────────── */
     .ct-hero {
@@ -228,11 +166,14 @@
 
     /* ── SECTIONS ─────────────────────────────────────────────── */
     .ct-section {
-      max-width: var(--maxw-prose);
+      max-width: var(--maxw-wide);
       margin: 0 auto;
       padding: 64px var(--gutter) 0;
     }
-    .ct-section--wide { max-width: var(--maxw-wide); }
+    /* Text keeps a reading width but stays on the frame's left edge. */
+    .ct-section:not(.ct-section--wide):not(.ct-section--sand) > *,
+    .ct-section--sand:not(.ct-section--wide) .ct-section-inner > *,
+    .ct-section--wide > p, .ct-section--wide .ct-section-inner > p { max-width: var(--maxw-prose); }
     .ct-section--sand {
       max-width: none;
       background: var(--sand);
@@ -240,10 +181,9 @@
       padding-top: 72px; padding-bottom: 72px;
     }
     .ct-section--sand .ct-section-inner {
-      max-width: var(--maxw-prose); margin: 0 auto;
+      max-width: var(--maxw-wide); margin: 0 auto;
       padding: 0 var(--gutter);
     }
-    .ct-section--sand.ct-section--wide .ct-section-inner { max-width: var(--maxw-wide); }
     .ct-section-eyebrow {
       font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
@@ -398,26 +338,23 @@
   </style>
 </head>
 <body>
-  <header class="ct-bar ex-bar">
-    <div class="ct-bar-inner">
-      <div class="ex-left">
-        <a class="ct-wordmark" href="/" aria-label="Ongiini AI — home">
-          <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
-          <span class="ct-wordmark-text">Ongiini<span class="dot">.</span></span>
+  <header class="og-bar">
+    <div class="og-bar-inner">
+      <div class="og-brand-group">
+        <a class="og-brand" href="/" aria-label="Ongiini AI — home">
+          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192-v2.png" alt="Ongiini" width="36" height="36" /></span>
         </a>
-        <span class="ex-label">Explore</span>
+        <span class="og-bar-label"><span data-en="i">Explore</span><span data-af="i">Verken</span></span>
       </div>
-      <nav class="ex-nav" aria-label="Explore">
-        <a href="/research/">Research</a>
-        <a href="/statistics/">Statistics</a>
-        <a href="/contribute/" aria-current="page">Contribute</a>
+      <nav class="og-bar-nav" aria-label="Explore">
+        <a href="/research/"><span data-en="i">Research</span><span data-af="i">Navorsing</span></a>
+        <a href="/statistics/"><span data-en="i">Statistics</span><span data-af="i">Statistieke</span></a>
+        <a href="/contribute/" aria-current="page"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
         <a href="/slides/">Slides</a>
       </nav>
-      <div class="ct-bar-right">
-        <div class="ct-lang" role="group" aria-label="Language">
-          <button type="button" class="ct-lang-seg is-active" data-set-locale="en">EN</button>
-          <button type="button" class="ct-lang-seg" data-set-locale="af">AF</button>
-        </div>
+      <div class="og-lang" role="group" aria-label="Language">
+        <button type="button" class="og-lang-seg is-active" data-set-locale="en">EN</button>
+        <button type="button" class="og-lang-seg" data-set-locale="af">AF</button>
       </div>
     </div>
   </header>
@@ -678,6 +615,8 @@
     <p>
       <a href="/">Ongiini</a> &nbsp;·&nbsp;
       <a href="/research/">Research</a> &nbsp;·&nbsp;
+      <a href="/statistics/">Statistics</a> &nbsp;·&nbsp;
+      <a href="/slides/">Slides</a> &nbsp;·&nbsp;
       <a href="/privacy/">Privacy</a> &nbsp;·&nbsp;
       <a href="/terms/">Terms</a> &nbsp;·&nbsp;
       <a href="/imprint/">Imprint</a> &nbsp;·&nbsp;

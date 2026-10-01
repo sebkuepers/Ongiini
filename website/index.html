@@ -33,6 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-frame.css" />
 
   <script type="application/ld+json">
   {
@@ -382,50 +383,7 @@
     .og-section--dark .og-body { color: var(--ink-faint); }
 
     /* Top bar */
-    .og-bar {
-      position: sticky; top: 0; z-index: 50;
-      background: var(--bone);
-      border-bottom: 1px solid var(--rule-faint);
-    }
-    @supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
-      .og-bar {
-        background: color-mix(in oklab, var(--bone) 86%, transparent);
-        backdrop-filter: saturate(140%) blur(10px);
-        -webkit-backdrop-filter: saturate(140%) blur(10px);
-      }
-    }
-    .og-bar-inner {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; height: 60px;
-    }
-    .og-brand { display: inline-flex; align-items: center; }
-    .og-brand-icon {
-      width: 36px; height: 36px;
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-    .og-brand-icon img { width: 36px; height: 36px; }
-    .og-bar-nav { display: none; gap: 28px; }
-    .og-bar-nav a {
-      font-size: 13.5px; color: var(--ink-soft); font-weight: 500;
-      letter-spacing: -0.005em; transition: color 160ms;
-    }
-    .og-bar-nav a:hover { color: var(--ink); }
-
-    .og-lang {
-      display: inline-flex; align-items: stretch;
-      border: 1px solid var(--rule); border-radius: 999px; overflow: hidden;
-      background: var(--bone);
-      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
-      letter-spacing: 0.14em;
-    }
-    .og-lang-seg {
-      appearance: none; border: none; cursor: pointer;
-      padding: 6px 11px; background: transparent;
-      color: var(--ink-soft); display: inline-flex; align-items: center;
-      transition: background 160ms, color 160ms;
-    }
-    .og-lang-seg + .og-lang-seg { border-left: 1px solid var(--rule); }
-    .og-lang-seg.is-active { background: var(--ink); color: var(--bone); }
+    /* Header bar + language switch: /assets/site-frame.css (shared with the project pages) */
     .og-lang-soon {
       cursor: default; background: var(--bone-deep);
       color: var(--ink-faint); gap: 4px;
@@ -1184,8 +1142,6 @@
     /* Desktop */
     @media (min-width: 880px) {
       :root { --gutter: 48px; }
-      .og-bar-nav { display: inline-flex; }
-      .og-bar-inner { height: 72px; }
       .og-section { padding: 96px 0; }
       .og-hero { padding: 64px 0 96px; }
       .og-hero-row {

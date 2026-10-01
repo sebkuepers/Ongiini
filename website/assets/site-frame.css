@@ -1,0 +1,79 @@
+/* Shared header + page frame for ongiini.ai.
+   The home page header is the reference; the project ("Explore") pages
+   use the same bar with their own links. Colours come from each page's
+   :root (--bone, --ink, --rule, …), which are identical across the site.
+   Pills are only for the language switch — navigation is plain text. */
+
+:root {
+  --frame-maxw: 1180px;
+  --frame-gutter: 22px;
+}
+@media (min-width: 880px) { :root { --frame-gutter: 48px; } }
+@media (max-width: 380px) { :root { --frame-gutter: 18px; } }
+
+.frame { width: 100%; max-width: var(--frame-maxw); margin: 0 auto; padding: 0 var(--frame-gutter); }
+
+/* ── header bar ─────────────────────────────────────────────── */
+.og-bar {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--bone);
+  border-bottom: 1px solid var(--rule-faint);
+}
+@supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
+  .og-bar {
+    background: color-mix(in oklab, var(--bone) 86%, transparent);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+  }
+}
+.og-bar-inner {
+  width: 100%; max-width: var(--frame-maxw); margin: 0 auto; padding: 0 var(--frame-gutter);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; height: 60px;
+}
+.og-brand-group { display: inline-flex; align-items: center; gap: 14px; }
+.og-brand { display: inline-flex; align-items: center; text-decoration: none; }
+.og-brand-icon {
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.og-brand-icon img { width: 36px; height: 36px; display: block; }
+.og-bar-label {
+  font-size: 13.5px; color: var(--ink-soft); font-weight: 500; letter-spacing: -0.005em;
+}
+.og-bar-nav { display: none; gap: 28px; }
+.og-bar-nav a {
+  font-size: 13.5px; color: var(--ink-soft); font-weight: 500;
+  letter-spacing: -0.005em; transition: color 160ms; text-decoration: none;
+}
+.og-bar-nav a:hover { color: var(--ink); }
+.og-bar-nav a[aria-current="page"] {
+  color: var(--ink);
+  text-decoration: underline; text-decoration-color: var(--terracotta);
+  text-decoration-thickness: 2px; text-underline-offset: 9px;
+}
+
+/* ── language switch (the only pill) ────────────────────────── */
+.og-lang {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--rule); border-radius: 999px; overflow: hidden;
+  background: var(--bone);
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px;
+  letter-spacing: 0.14em;
+}
+.og-lang-seg {
+  appearance: none; border: none; cursor: pointer;
+  padding: 6px 11px; background: transparent;
+  color: var(--ink-soft); display: inline-flex; align-items: center;
+  transition: background 160ms, color 160ms;
+  font: inherit;
+}
+.og-lang-seg + .og-lang-seg { border-left: 1px solid var(--rule); }
+.og-lang-seg.is-active { background: var(--ink); color: var(--bone); }
+/* keeps the nav where it sits on pages without a language switch */
+.og-lang-spacer { width: 78px; flex: none; }
+
+@media (min-width: 880px) {
+  .og-bar-nav { display: inline-flex; }
+  .og-bar-inner { height: 72px; }
+}
