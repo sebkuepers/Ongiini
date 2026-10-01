@@ -166,3 +166,35 @@ async def test_vague_phrases_are_not_top_topics(data_dir, monkeypatch):
     await nightly.run_once(FakeModel(topic="general inquiry").complete, _facts, frozenset())
     top = json.loads((data_dir / "synthesis-top_topics.json").read_text())
     assert top["labels"] == []
+
+
+@pytest.mark.asyncio
+async def test_one_bad_entry_does_not_drop_the_batch(data_dir):
+    _history(data_dir, "264810000001", ["what is photosynthesis exactly", "explain osmosis to me"])
+
+    async def half_bad(req):
+        body = {"labels": [{"i": "REDACTED", "cat": "school", "lang": "en", "topic": "x"},
+                           {"i": 2, "cat": "school", "lang": "en", "topic": "biology homework"}]}
+        return ModelResponse(content=json.dumps(body))
+
+    report = await nightly.run_once(half_bad, _facts, frozenset())
+    assert report["messages_new"] == 1
+
+
+@pytest.mark.asyncio
+async def test_small_talk_phrases_are_not_top_topics(data_dir, monkeypatch):
+    monkeypatch.setattr(settings, "stats_minimum_bucket", 1)
+    _history(data_dir, "264810000001", ["thank you so much my friend"])
+
+    async def thanks(req):
+        prompt = req.messages[0]["content"]
+        if "Messages:" in prompt:
+            body = {"labels": [{"i": 1, "cat": "chat", "lang": "en", "topic": "expressing gratitude"}]}
+        else:
+            body = {"users": []}
+        return ModelResponse(content=json.dumps(body))
+
+    await nightly.run_once(thanks, _facts, frozenset())
+    top = json.loads((data_dir / "synthesis-top_topics.json").read_text())
+    assert top["labels"] == []
+    assert _read(data_dir, "topics")["clusters"][0]["label"] == "Small talk"

@@ -66,6 +66,7 @@ _VAGUE_PHRASES = frozenset({
     "general inquiry", "general question", "question", "inquiry", "request",
     "help request", "assistance request", "general assistance", "information request",
     "greeting", "greetings", "small talk", "conversation", "chat",
+    "requesting assistance", "assistance", "help",
 })
 _LANG_LABELS = {"en": "English", "af": "Afrikaans", "ow": "Oshiwambo", "other": "Other"}
 
@@ -294,7 +295,13 @@ async def _ask_json(complete: Complete, prompt: str, key: str, max_tokens: int) 
     try:
         resp = await complete(req)
         data = json.loads(resp.content or "{}")
-        return {int(x["i"]): x for x in data.get(key, []) if isinstance(x, dict) and "i" in x}
+        out = {}
+        for x in data.get(key, []):
+            try:
+                out[int(x["i"])] = x
+            except (TypeError, KeyError, ValueError):     # one bad entry, not the whole batch
+                continue
+        return out
     except Exception as exc:                              # noqa: BLE001 — a bad batch is skipped, retried next night
         log.warning("nightly batch failed: %s", exc)
         return {}
@@ -381,7 +388,7 @@ def write_outputs(users_msgs: list[tuple[str, list[tuple[str, str]]]],
         for h, _ in msgs:
             if h in topic_cat:
                 cat_counts[cat_by_key.get(topic_cat[h], "Other")] += 1
-            if h in phrase:
+            if h in phrase and topic_cat.get(h) != "chat":   # thanks/greetings are not topics
                 phrase_counts[phrase[h]] += 1
             if h in lang:
                 user_langs[lang[h]] += 1
