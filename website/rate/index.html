@@ -92,10 +92,13 @@
     /* round-done reward */
     #v-break { text-align: center; position: relative; }
     #v-break p { margin-left: auto; margin-right: auto; max-width: 30ch; }
-    .badge { width: 112px; height: 112px; margin: 18px auto 20px; border-radius: 999px; display: grid; place-items: center;
-      background: var(--terracotta); color: #fff; font: 400 54px/1 'Instrument Serif', serif;
+    .badge { width: 112px; height: 112px; margin: 18px auto 20px; border-radius: 999px; display: flex;
+      align-items: center; justify-content: center; background: var(--terracotta); color: #fff;
       box-shadow: 0 0 0 8px color-mix(in oklab, var(--terracotta) 18%, var(--bone)); }
-    .badge small { display: block; font: 500 10px 'Geist Mono', monospace; letter-spacing: .16em; text-transform: uppercase; margin-top: 4px; opacity: .85; }
+    .badge-in { display: flex; flex-direction: column; align-items: center; }
+    .badge .num { font: 400 50px/0.82 'Instrument Serif', serif; }
+    .badge small { display: block; font: 500 9.5px/1 'Geist Mono', monospace; letter-spacing: .16em; text-transform: uppercase;
+      margin-top: 8px; padding-left: .16em; opacity: .85; }
     .badge.pop { animation: pop .55s cubic-bezier(.2, 1.6, .4, 1) both; }
     @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .stars { display: flex; justify-content: center; gap: 6px; margin: 4px 0 22px; font-size: 22px; color: var(--rule); }
@@ -354,8 +357,11 @@
   }
   function reward(kind) {
     var rounds = Math.max(1, Math.floor(prog.done / ROUND)), badge = $("b-badge");
-    badge.innerHTML = ""; badge.appendChild(document.createTextNode(String(prog.done)));
-    var lbl = document.createElement("small"); lbl.textContent = "checked"; badge.appendChild(lbl);
+    badge.innerHTML = "";
+    var inner = document.createElement("span"); inner.className = "badge-in";
+    var num = document.createElement("span"); num.className = "num"; num.textContent = String(prog.done);
+    var lbl = document.createElement("small"); lbl.textContent = "checked";
+    inner.appendChild(num); inner.appendChild(lbl); badge.appendChild(inner);
     if (kind === "done") {
       $("b-eyebrow").textContent = "All done"; $("b-title").textContent = "That's every sentence for now!";
       $("b-text").textContent = "Tangi unene — we'll let you know when there are new ones.";
