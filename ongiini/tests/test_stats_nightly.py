@@ -151,3 +151,18 @@ def test_aggregator_prefers_the_nightly_top_topics_file(data_dir):
     block = aggregator._top_topics_block()
     assert block["labels"] == [{"label": "cv improvement", "count": 9}]
     assert block["n_distinct"] == 40
+
+
+def test_catch_up_only_at_night():
+    assert nightly.in_night_window(datetime(2026, 10, 1, 23, 30, tzinfo=timezone.utc))
+    assert nightly.in_night_window(datetime(2026, 10, 2, 2, 0, tzinfo=timezone.utc))
+    assert not nightly.in_night_window(datetime(2026, 10, 1, 10, 0, tzinfo=timezone.utc))
+
+
+@pytest.mark.asyncio
+async def test_vague_phrases_are_not_top_topics(data_dir, monkeypatch):
+    monkeypatch.setattr(settings, "stats_minimum_bucket", 1)
+    _history(data_dir, "264810000001", ["hello can you help me with something"])
+    await nightly.run_once(FakeModel(topic="general inquiry").complete, _facts, frozenset())
+    top = json.loads((data_dir / "synthesis-top_topics.json").read_text())
+    assert top["labels"] == []

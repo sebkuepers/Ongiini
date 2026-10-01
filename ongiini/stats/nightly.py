@@ -60,6 +60,12 @@ _IMAGE_MARKER = "[image attached]"
 _VOICE_MARKER = "[voice note]"
 _MIN_LEN = 8
 LANGS = ("en", "af", "ow", "other")
+# Phrases that say nothing about the request; never shown as a top topic.
+_VAGUE_PHRASES = frozenset({
+    "general inquiry", "general question", "question", "inquiry", "request",
+    "help request", "assistance request", "general assistance", "information request",
+    "greeting", "greetings", "small talk", "conversation", "chat",
+})
 _LANG_LABELS = {"en": "English", "af": "Afrikaans", "ow": "Oshiwambo", "other": "Other"}
 
 
@@ -258,7 +264,8 @@ MESSAGE_PROMPT = (
     "  lang   en, af, ow (Oshiwambo: Oshindonga/Oshikwanyama) or other\n"
     "  topic  a SHORT GENERIC English phrase (2-6 words) for the type of request,\n"
     "         no specifics (e.g. 'grade 11 chemistry homework', 'cv improvement',\n"
-    "         'fever symptoms'); 'small talk' for greetings or thanks; 'REDACTED'\n"
+    "         'fever symptoms'), never vague ones like 'general inquiry'; 'small talk'\n"
+    "         for greetings or thanks; 'REDACTED'\n"
     "         if it cannot be said without identifying details.\n"
     'Return ONE JSON object: {"labels": [{"i": 1, "cat": "...", "lang": "...", "topic": "..."}, ...]}\n'
     "one entry per message, same numbering.\n\nMessages:\n"
@@ -312,7 +319,7 @@ async def classify_messages(complete: Complete, pending: list[tuple[str, str]]) 
             rows.append(("topic_category", h, x["cat"]))
             rows.append(("message_language", h, x.get("lang") if x.get("lang") in LANGS else "other"))
             phrase = sanitise_label(str(x.get("topic") or "").strip().lower())
-            if phrase:
+            if phrase and phrase not in _VAGUE_PHRASES:
                 rows.append(("topics", h, phrase))
             stored += 1
         if rows:
@@ -465,11 +472,21 @@ def seconds_until_next_run(now: datetime) -> float:
     return (target - now).total_seconds()
 
 
+def in_night_window(now: datetime) -> bool:
+    """23:00–04:00 UTC (01:00–06:00 in Namibia): low chat traffic."""
+    return now.hour >= 23 or now.hour < 4
+
+
 async def run_nightly_forever(complete: Complete, list_facts: Callable[[str], list],
                               load_excluded: Callable[[], frozenset[str]]) -> None:
-    """Catch up once if the last run is over a day old, then run nightly."""
+    """Run nightly at RUN_HOUR_UTC. If the process starts inside the night
+    window and the last run is over a day old (e.g. a restart missed it),
+    catch up straight away; never during the day — the first full run
+    takes hours of batch calls on the same vLLM that serves chat."""
     last = _last_run()
-    if last is None or datetime.now(timezone.utc) - last > timedelta(hours=26):
+    now = datetime.now(timezone.utc)
+    stale = last is None or now - last > timedelta(hours=26)
+    if stale and in_night_window(now):
         await asyncio.sleep(300)                        # let start-up traffic settle
         await _safe_run(complete, list_facts, load_excluded)
     while True:

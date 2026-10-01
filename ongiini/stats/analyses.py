@@ -772,7 +772,7 @@ async def run_forever() -> None:
     """Background task started by the webhook.
 
     Since 2026-10-01 this runs ``stats.nightly`` (fixed categories, one
-    run per night at 01:00 UTC, plus a catch-up shortly after start-up
+    run per night at 01:00 UTC, plus a catch-up after a night-time restart
     when the last run is over a day old). The emergent-clustering loop
     below is kept for reference but no longer started: its clusters were
     unreadable and its multi-minute synthesis calls stalled chat.
