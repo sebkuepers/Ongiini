@@ -546,6 +546,10 @@ Reference translator, Oshindonga and Oshikwanyama
 
 Reference translator, Oshindonga and Oshikwanyama
 
+#### Rauna Awene
+
+Quality control · community management · social media
+
 #### Sebastian Küpers
 
 Benchmark design · Common Intelligence Foundation
