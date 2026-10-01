@@ -38,6 +38,8 @@ def test_all_tools_register_in_registry():
         "contribute_decline", "contribute_stats",
         # broadcast opt-out — classifier-forced, not model-chosen
         "opt_out_broadcast",
+        # rating link — classifier-forced (RATE_INVITE)
+        "rate_link",
     }
 
 

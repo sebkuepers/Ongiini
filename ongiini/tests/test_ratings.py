@@ -210,3 +210,50 @@ def test_delete_round_and_rater(con):
     ratings.delete_rater(con, r["rater_id"])
     assert con.execute("SELECT COUNT(*) FROM ratings").fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM raters").fetchone()[0] == 0
+
+
+def test_whatsapp_link_new_returning_and_profile(con):
+    a = ratings.link_for_contributor(con, "hash-a")
+    assert a["status"] == "ok" and not a["returning"] and a["url"].startswith(ratings.RATE_URL + "#t=")
+    t1 = a["url"].split("#t=")[1]
+    r = ratings.rater_for(con, t1)
+    assert r["label"].startswith("wa-") and ratings.needs_profile(r)
+    assert ratings.next_item(con, r) is None                       # no dialect yet, nothing served
+    b = ratings.link_for_contributor(con, "hash-a")
+    t2 = b["url"].split("#t=")[1]
+    assert b["returning"] and ratings.rater_for(con, t1) is None   # old link stops working
+    assert ratings.rater_for(con, t2)["rater_id"] == r["rater_id"]
+    with pytest.raises(ValueError):
+        ratings.set_profile(con, r, ["oshindonga", "afrikaans"], "yes")
+    with pytest.raises(ValueError):
+        ratings.set_profile(con, r, ["oshindonga"], "maybe")
+    r = ratings.set_profile(con, r, ["oshikwanyama", "oshindonga"], "second")
+    assert r["dialects"] == "oshindonga,oshikwanyama" and not ratings.needs_profile(r)
+
+
+def test_blocked_number_gets_no_link(con):
+    ratings.block_contributor(con, "kaarina-hash")                 # before she ever asks
+    assert ratings.link_for_contributor(con, "kaarina-hash") == {"status": "blocked"}
+    c = ratings.link_for_contributor(con, "other")
+    token = c["url"].split("#t=")[1]
+    ratings.block_contributor(con, "other")                        # after: link stops working
+    assert ratings.rater_for(con, token) is None
+
+
+def test_migration_adds_columns_to_old_schema(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.sqlite"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE raters (rater_id INTEGER PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, "
+                "label TEXT NOT NULL, dialects TEXT NOT NULL, created_at REAL NOT NULL, "
+                "active INTEGER NOT NULL DEFAULT 1)")
+    old.execute("INSERT INTO raters (token_hash, label, dialects, created_at) VALUES ('h', 'Rauna', "
+                "'oshikwanyama', 0)")
+    old.commit()
+    old.close()
+    c = ratings.connect(path)
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(raters)")}
+    assert {"contributor_hash", "first_language", "blocked"} <= cols
+    row = c.execute("SELECT * FROM raters").fetchone()
+    assert row["blocked"] == 0 and ratings.needs_profile(row)      # admin raters answer once
+    c.close()

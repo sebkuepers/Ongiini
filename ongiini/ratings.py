@@ -26,9 +26,13 @@ tasks earlier, to measure consistency.
 Every session mixes the groups in fixed proportions (weighted round
 robin), so an early drop-out still leaves a usable random sample.
 
-Raters are invited by personal link; only sha256(token) is stored, plus a
-pseudonymous label and dialects. No phone numbers. Suggestions are
-PII-scrubbed. SQLite at <data_dir>/ratings.sqlite.
+Raters get a personal link — from the admin (rating_admin.py add-rater)
+or by asking Ongiini AI on WhatsApp (tools/rate.py → link_for_contributor).
+Only sha256(token) is stored; WhatsApp raters are recognised by the
+salted msisdn hash of contributions.hash_msisdn, never the number. On the
+first visit a rater gives their dialect(s) and whether it is their first
+language (set_profile). Suggestions are PII-scrubbed. SQLite at
+<data_dir>/ratings.sqlite.
 """
 from __future__ import annotations
 
@@ -44,6 +48,9 @@ from . import pii
 from .config import settings
 
 VERDICTS = ("good", "almost", "wrong", "cant_judge")
+DIALECTS = ("oshindonga", "oshikwanyama")
+FIRST_LANGUAGE = ("yes", "second")
+RATE_URL = "https://ongiini.ai/rate/"
 ISSUES = ("word_choice", "spelling_grammar", "unnatural", "other_dialect")
 CANT_REASONS = ("english", "unfamiliar_word", "other")
 PAIR_GAP = 5
@@ -100,11 +107,23 @@ def db_path() -> Path:
     return settings.data_dir / "ratings.sqlite"
 
 
+# Columns added after the first schema; connect() adds whichever are missing.
+_RATER_COLUMNS = {"contributor_hash": "TEXT", "first_language": "TEXT",
+                  "blocked": "INTEGER NOT NULL DEFAULT 0"}
+
+
 def connect(path: Path | None = None) -> sqlite3.Connection:
     con = sqlite3.connect(str(path or db_path()))
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
+    have = {r["name"] for r in con.execute("PRAGMA table_info(raters)")}
+    with con:
+        for col, decl in _RATER_COLUMNS.items():
+            if col not in have:
+                con.execute(f"ALTER TABLE raters ADD COLUMN {col} {decl}")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS raters_contributor "
+                    "ON raters(contributor_hash) WHERE contributor_hash IS NOT NULL")
     return con
 
 
@@ -121,6 +140,40 @@ def add_rater(con: sqlite3.Connection, label: str, dialects: list[str]) -> str:
         con.execute("INSERT INTO raters (token_hash, label, dialects, created_at) VALUES (?,?,?,?)",
                     (hash_token(token), label, ",".join(dialects), time.time()))
     return token
+
+
+def link_for_contributor(con: sqlite3.Connection, contributor_hash: str) -> dict:
+    """The WhatsApp path: a personal link for this (hashed) number.
+
+    A returning rater keeps their id and ratings but gets a NEW token —
+    only token hashes are stored, so the old link cannot be re-sent; it
+    stops working. Blocked numbers (e.g. the reference translator) get
+    no link."""
+    row = con.execute("SELECT * FROM raters WHERE contributor_hash = ?", (contributor_hash,)).fetchone()
+    if row is not None and (row["blocked"] or not row["active"]):
+        return {"status": "blocked"}
+    token = secrets.token_urlsafe(24)
+    with con:
+        if row is None:
+            cur = con.execute("INSERT INTO raters (token_hash, label, dialects, created_at, contributor_hash) "
+                              "VALUES (?,?,?,?,?)", (hash_token(token), "wa", "", time.time(), contributor_hash))
+            rater_id = cur.lastrowid
+            con.execute("UPDATE raters SET label = ? WHERE rater_id = ?", (f"wa-{rater_id}", rater_id))
+        else:
+            rater_id = row["rater_id"]
+            con.execute("UPDATE raters SET token_hash = ? WHERE rater_id = ?", (hash_token(token), rater_id))
+    return {"status": "ok", "url": f"{RATE_URL}#t={token}", "returning": row is not None,
+            "done": progress(con, rater_id)["done"]}
+
+
+def block_contributor(con: sqlite3.Connection, contributor_hash: str) -> None:
+    """Block a number before or after it asks for a link."""
+    with con:
+        if con.execute("UPDATE raters SET blocked = 1 WHERE contributor_hash = ?",
+                       (contributor_hash,)).rowcount == 0:
+            con.execute("INSERT INTO raters (token_hash, label, dialects, created_at, contributor_hash, blocked) "
+                        "VALUES (?,?,?,?,?,1)", (hash_token(secrets.token_urlsafe(24)), "blocked", "",
+                                                 time.time(), contributor_hash))
 
 
 def load_items(con: sqlite3.Connection, items: list[dict]) -> int:
@@ -149,8 +202,25 @@ def delete_rater(con: sqlite3.Connection, rater_id: int) -> None:
 # ── rater-facing ──────────────────────────────────────────────────────
 
 def rater_for(con: sqlite3.Connection, token: str) -> sqlite3.Row | None:
-    return con.execute("SELECT * FROM raters WHERE token_hash = ? AND active = 1",
+    return con.execute("SELECT * FROM raters WHERE token_hash = ? AND active = 1 AND blocked = 0",
                        (hash_token(token),)).fetchone()
+
+
+def needs_profile(rater: sqlite3.Row) -> bool:
+    return not rater["dialects"] or rater["first_language"] not in FIRST_LANGUAGE
+
+
+def set_profile(con: sqlite3.Connection, rater: sqlite3.Row, dialects: list[str],
+                first_language: str) -> sqlite3.Row:
+    ds = [d for d in DIALECTS if d in set(dialects)]
+    if not ds or len(ds) != len(set(dialects)):
+        raise ValueError("unknown dialect")
+    if first_language not in FIRST_LANGUAGE:
+        raise ValueError("unknown first_language")
+    with con:
+        con.execute("UPDATE raters SET dialects = ?, first_language = ? WHERE rater_id = ?",
+                    (",".join(ds), first_language, rater["rater_id"]))
+    return con.execute("SELECT * FROM raters WHERE rater_id = ?", (rater["rater_id"],)).fetchone()
 
 
 def progress(con: sqlite3.Connection, rater_id: int) -> dict:

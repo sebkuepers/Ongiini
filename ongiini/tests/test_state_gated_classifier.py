@@ -192,6 +192,14 @@ async def test_stats_always_passes():
     assert result.verdict == "CONTRIBUTE_STATS"
 
 
+@pytest.mark.asyncio
+async def test_rate_invite_always_passes():
+    inner = _FakeInner(ClassifierResult(verdict="RATE_INVITE", depth=DEPTH_SHALLOW))
+    gated = StateGatedClassifier(inner)
+    result = await gated.classify(_msg())
+    assert result.verdict == "RATE_INVITE"
+
+
 # ── Non-contribute verdicts always pass through ─────────────────
 
 

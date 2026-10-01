@@ -87,6 +87,9 @@ def test_argumentless_tools_are_dispatched_without_a_model_call():
     assert save.synth_tool == "contribute_save"
     assert save.synth_first_call_from_message
     assert "skill:contribute" in save.prompt_sections
+    rate = table.lookup("RATE_INVITE")
+    assert rate.synth_tool == "rate_link" and rate.synth_arg == ""
+    assert "skill:rate" in rate.prompt_sections and "skill:contribute" not in rate.prompt_sections
 
 
 def test_thinking_is_off_everywhere():

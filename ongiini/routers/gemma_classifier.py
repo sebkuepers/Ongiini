@@ -73,6 +73,7 @@ VERDICT_CONTRIB_SKIP     = "CONTRIBUTE_SKIP"
 VERDICT_CONTRIB_DECLINE  = "CONTRIBUTE_DECLINE"
 VERDICT_CONTRIB_STATS    = "CONTRIBUTE_STATS"
 VERDICT_OPT_OUT_BROADCAST = "OPT_OUT_BROADCAST"
+VERDICT_RATE_INVITE      = "RATE_INVITE"
 
 
 # All verdicts we accept back from Gemma. Anything else falls through
@@ -83,7 +84,7 @@ _VALID_VERDICTS: frozenset[str] = frozenset({
     VERDICT_CONTRIB_INVITE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_NEXT,
     VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP, VERDICT_CONTRIB_DECLINE,
     VERDICT_CONTRIB_STATS,
-    VERDICT_OPT_OUT_BROADCAST,
+    VERDICT_OPT_OUT_BROADCAST, VERDICT_RATE_INVITE,
 })
 
 
@@ -117,7 +118,7 @@ decide what kind of turn it is. The downstream policy table uses your verdict
 to choose which tools the model gets, what loop shape to run, and which reply
 style is appropriate.
 
-The 14 verdicts you can choose from are:
+The 15 verdicts you can choose from are:
 
 SEARCH_SHALLOW — the question needs the web AND the answer is a single fact,
 single business name, number, price, opening time, yes/no with brief context.
@@ -180,7 +181,7 @@ passage, writing or improving a CV, letter or essay, explaining homework or a
 concept step by step, a plan or list of 5+ items. Greetings, yes/no, quick
 facts and short follow-ups stay NONE.
 
-CONTRIBUTE_INVITE — the user is volunteering to help translate Oshiwambo OR
+CONTRIBUTE_INVITE — the user is volunteering to translate sentences into Oshiwambo OR
 asking whether/when Ongiini supports Oshiwambo OR using Oshiwambo for a real
 phrase (more than a one-word greeting like "Tangi" or "Ongiini"). If the
 state block shows recently_declined=true, lean toward NONE — they passed
@@ -224,6 +225,11 @@ CONTRIBUTE_STATS — the user is asking how many translations have been
 collected ("how many do you have?", "how's the dataset doing?", "how many
 contributors?"). Fires regardless of contribute state.
 
+RATE_INVITE — the user wants to help CHECK, rate or review translations that
+already exist ("I'd like to help check translations", "can I rate
+translations?", "send me the rating link"). Not translating sentences
+themselves (CONTRIBUTE_INVITE), and not asking how rating works (DOCS).
+
 OPT_OUT_BROADCAST — the user is asking to stop receiving proactive update or
 announcement messages from us ("stop messages", "unsubscribe", "opt out",
 "no more notifications", "stop boodskappe"). NOT for "delete my data" (that
@@ -260,6 +266,12 @@ Worked DOCS examples — questions about Ongiini-the-product itself.
     + memory / deletion.
   User: "hoe werk Ongiini?"  → DOCS. Same DOCS verdict in Afrikaans.
   User: "how does the Oshiwambo translation project work?"  → DOCS.
+
+Translating vs checking — two different flows:
+
+  User: "I want to help translate"  → CONTRIBUTE_INVITE.
+  User: "I'd like to help check translations"  → RATE_INVITE.
+  User: "my link for rating translations stopped working"  → RATE_INVITE.
 
 Worked CONTRIBUTE_* examples — these have caused production mistakes.
 
@@ -313,7 +325,7 @@ Tie-breakers when you're unsure:
 Output schema — return ONE JSON object, no surrounding prose:
 
 {{
-  "verdict":    one of the 14 labels above,
+  "verdict":    one of the 15 labels above,
   "confidence": "high" | "medium" | "low"
 }}
 

@@ -12,9 +12,12 @@ Writes a private markdown report with, per dialect:
      clear gap the acceptance numbers say nothing
   4. flagged sentences — confirmed (2× wrong), split (needs a third
      rater), cleared; with issue tags and suggestions
-  5. rater quality — control hits, repeat consistency, time per task;
-     raters with ≥2 planted errors marked ✓ are flagged, and (1) is
-     reported with and without them
+  5. rater quality — control hits, repeat consistency, time per task
+
+Main numbers use QUALIFIED raters only (rule fixed in advance,
+docs/rating-protocol.md): first language "yes" AND caught at least 2/3
+of the planted errors they saw, having seen at least 2. Section 1 also
+reports all raters.
 
 Only first ratings count for the estimates (repeats measure consistency);
 "can't judge" is excluded and counted.
@@ -35,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TSV = ROOT / "data/private/oshiwambo_eval_v3.tsv"
 CONTROLS = ("control_error", "control_wrong")
 FAST_MS = 3000
+MIN_PLANTED = 2
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float, float]:
@@ -79,7 +83,7 @@ def load(db: Path):
     con.row_factory = sqlite3.Row
     rows = [dict(r) for r in con.execute(
         "SELECT r.*, i.round, i.sentence_id, i.dialect, i.english, i.text, i.grp, i.kind, i.source, "
-        "i.expected, i.pair_of, i.severity, ra.label FROM ratings r JOIN items i USING (item_key) "
+        "i.expected, i.pair_of, i.severity, ra.label, ra.first_language FROM ratings r JOIN items i USING (item_key) "
         "JOIN raters ra USING (rater_id) ORDER BY r.rater_id, r.seq")]
     items = [dict(r) for r in con.execute("SELECT * FROM items")]
     return rows, items
@@ -96,7 +100,7 @@ def rater_qc(rows: list[dict]) -> dict[int, dict]:
         reps = [(firsts[r["item_key"]], r) for r in rs if r["is_repeat"] and r["item_key"] in firsts]
         durs = sorted(r["duration_ms"] for r in rs if r["duration_ms"] is not None)
         out[rid] = {
-            "label": rs[0]["label"], "n": len(rs),
+            "label": rs[0]["label"], "first_language": rs[0].get("first_language"), "n": len(rs),
             "controls": len(ctrl), "caught": sum(r["verdict"] == "wrong" for r in ctrl),
             "passed_as_good": sum(r["verdict"] == "good" for r in ctrl if r["grp"] == "control_error"),
             "repeats": len(reps), "same_verdict": sum(a["verdict"] == b["verdict"] for a, b in reps),
@@ -105,7 +109,11 @@ def rater_qc(rows: list[dict]) -> dict[int, dict]:
             "fast": sum(d < FAST_MS for d in durs),
             "cant": sum(r["verdict"] == "cant_judge" for r in rs),
         }
-        out[rid]["flagged"] = out[rid]["passed_as_good"] >= 2
+        planted = [r for r in ctrl if r["grp"] == "control_error"]
+        caught = sum(r["verdict"] == "wrong" for r in planted)
+        out[rid]["planted_seen"], out[rid]["planted_caught"] = len(planted), caught
+        out[rid]["qualified"] = (out[rid]["first_language"] == "yes" and len(planted) >= MIN_PLANTED
+                                 and caught * 3 >= 2 * len(planted))
     return out
 
 
@@ -128,15 +136,18 @@ def stratified(rand: list[dict], flag: list[dict], n_flag_items: int, n_total: i
     return p, max(0.0, p - 1.96 * se), min(1.0, p + 1.96 * se)
 
 
-def report(rows: list[dict], items: list[dict], exclude: set[int] = frozenset()) -> list[str]:
+def report(rows: list[dict], items: list[dict]) -> list[str]:
     qc = rater_qc(rows)
-    flagged_raters = {rid for rid, q in qc.items() if q["flagged"]}
+    qualified = {rid for rid, q in qc.items() if q["qualified"]}
     totals = dev_ref_counts()
     L = ["# Rating report — reference check", ""]
     L.append(f"{len(rows)} answers from {len(qc)} raters · {sum(r['is_repeat'] for r in rows)} repeats · "
              f"{sum(r['verdict'] == 'cant_judge' for r in rows)} can't judge")
+    L.append(f"Qualified raters (main numbers): {len(qualified)} of {len(qc)} — first language yes, "
+             f"≥ 2/3 of ≥ {MIN_PLANTED} planted errors caught.")
     L.append("")
-    firsts = [r for r in rows if not r["is_repeat"] and r["rater_id"] not in exclude]
+    every = [r for r in rows if not r["is_repeat"]]
+    firsts = [r for r in every if r["rater_id"] in qualified]
     for d in sorted({i["dialect"] for i in items}):
         F = [r for r in firsts if r["dialect"] == d]
         g = lambda name, rs=F: [r for r in rs if r["grp"] == name]
@@ -145,10 +156,8 @@ def report(rows: list[dict], items: list[dict], exclude: set[int] = frozenset())
         for name, label in (("random_ref", "random sample"), ("flagged_ref", "flagged top (back-translation)")):
             k, kg, n = acceptance(g(name))
             L.append(f"| {label} | {ci(k, n)} | {ci(kg, n)} |")
-        clean = [r for r in g("random_ref") if r["rater_id"] not in flagged_raters]
-        if flagged_raters:
-            k, kg, n = acceptance(clean)
-            L.append(f"| random, without flagged raters | {ci(k, n)} | {ci(kg, n)} |")
+        k, kg, n = acceptance([r for r in every if r["dialect"] == d and r["grp"] == "random_ref"])
+        L.append(f"| random sample, all raters | {ci(k, n)} | {ci(kg, n)} |")
         n_flag = sum(1 for i in items if i["dialect"] == d and i["grp"] == "flagged_ref")
         st = stratified(g("random_ref"), g("flagged_ref"), n_flag, totals.get(d))
         if st:
@@ -236,14 +245,14 @@ def report(rows: list[dict], items: list[dict], exclude: set[int] = frozenset())
         L.append("")
 
     # 5. raters
-    L += ["## 5. Raters", "", "| rater | answers | controls caught | planted ✓ | repeats same (wrong/not) "
-          "| median s | < 3 s | can't judge |", "|---|---|---|---|---|---|---|---|"]
+    L += ["## 5. Raters", "", "| rater | first language | answers | planted caught | controls caught | planted ✓ "
+          "| repeats same (wrong/not) | median s | < 3 s | can't judge |", "|---|---|---|---|---|---|---|---|---|---|"]
     for rid, q in sorted(qc.items()):
-        L.append(f"| {q['label']}{' ⚑' if q['flagged'] else ''} | {q['n']} | {q['caught']}/{q['controls']} | "
+        L.append(f"| {q['label']}{' ✓' if q['qualified'] else ''} | {q['first_language'] or '–'} | {q['n']} | "
+                 f"{q['planted_caught']}/{q['planted_seen']} | {q['caught']}/{q['controls']} | "
                  f"{q['passed_as_good']} | {q['same_verdict']}/{q['repeats']} ({q['same_wrong']}) | "
                  f"{q['median_s']:.0f} | {q['fast']} | {q['cant']} |")
-    if flagged_raters:
-        L += ["", "⚑ = marked ✓ Good on two or more planted errors; section 1 also shows results without them."]
+    L += ["", "✓ = qualified (counts in the main numbers)."]
     reasons = Counter(r["cant_reason"] for r in rows if r["verdict"] == "cant_judge")
     if reasons:
         L += ["", "Can't judge: " + ", ".join(f"{k} {v}" for k, v in reasons.most_common())]

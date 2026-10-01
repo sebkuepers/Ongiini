@@ -30,6 +30,7 @@ from .ongiini_tools import (
     whats_in_my_memory,
 )
 from .opt_out import opt_out_broadcast
+from .rate import rate_link
 from .skill_tools import load_skill
 
 # Canonical tool list passed to ToolRegistry at runtime build time.
@@ -49,7 +50,7 @@ _CONTRIBUTE_TOOLS = (
     contribute_decline,
     contribute_stats,
 )
-ALL_TOOLS = (*_PRODUCT_TOOLS, *_CONTRIBUTE_TOOLS, opt_out_broadcast, load_skill)
+ALL_TOOLS = (*_PRODUCT_TOOLS, *_CONTRIBUTE_TOOLS, rate_link, opt_out_broadcast, load_skill)
 
 __all__ = [
     "ALL_TOOLS",
@@ -67,6 +68,7 @@ __all__ = [
     "lookup_ongiini_docs",
     "my_token_usage",
     "opt_out_broadcast",
+    "rate_link",
     "web_search",
     "whats_in_my_memory",
 ]

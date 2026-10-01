@@ -74,6 +74,7 @@
     .tgt { overflow-wrap: anywhere; }
     .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
     .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    a.btn { text-decoration: none; }
     .skip { background: none; border: 0; color: var(--ink-soft); text-decoration: underline; font: 14px 'Geist', sans-serif; cursor: pointer; padding: 12px 0; }
     .feedback { border-radius: 14px; padding: 14px 16px; margin-top: 16px; color: var(--ink); }
     .feedback.ok { background: color-mix(in oklab, var(--good) 14%, var(--bone)); border: 1px solid color-mix(in oklab, var(--good) 40%, var(--bone)); }
@@ -95,14 +96,44 @@
     <!-- loading / invalid -->
     <section id="v-msg"><p class="eyebrow">Check translations</p><h1 id="msg-title">One moment…</h1><p id="msg-text"></p></section>
 
+    <!-- no link yet: start on WhatsApp -->
+    <section id="v-start" class="hidden">
+      <p class="eyebrow">Check translations</p>
+      <h1>Help check <em>Oshiwambo</em> translations.</h1>
+      <p id="start-note" class="hidden"></p>
+      <p>You see an English sentence and its Oshindonga or Oshikwanyama translation, and tap whether it says the same. <strong>5 sentences, about 2 minutes.</strong></p>
+      <p>Send us one message on WhatsApp and you get your personal link.</p>
+      <div class="row"><a class="btn" id="wa" href="https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations">Start on WhatsApp <span>→</span></a></div>
+      <p class="fine" style="margin-top:22px">Want to translate sentences yourself instead? <a href="/contribute/">Help translate</a> · <a href="/privacy/">Privacy policy</a></p>
+    </section>
+
+    <!-- first visit: dialect + first language -->
+    <section id="v-profile" class="hidden">
+      <p class="eyebrow">Two quick questions</p>
+      <h1>Tangi unene!</h1>
+      <p class="q">Which language do you check?</p>
+      <div class="chips" id="pf-dialect">
+        <button class="chip" type="button" data-v="oshindonga" aria-pressed="false">Oshindonga</button>
+        <button class="chip" type="button" data-v="oshikwanyama" aria-pressed="false">Oshikwanyama</button>
+        <button class="chip" type="button" data-v="both" aria-pressed="false">Both</button>
+      </div>
+      <p class="q">Is it your first language?</p>
+      <div class="chips" id="pf-first">
+        <button class="chip" type="button" data-v="yes" aria-pressed="false">Yes</button>
+        <button class="chip" type="button" data-v="second" aria-pressed="false">No, but I speak it well</button>
+      </div>
+      <div class="row" style="margin-top:22px"><button class="btn" id="pf-go" disabled>Continue <span>→</span></button></div>
+      <p class="err" id="pf-err"></p>
+    </section>
+
     <!-- welcome -->
     <section id="v-welcome" class="hidden">
       <p class="eyebrow">Check translations · <span class="w-d"></span></p>
-      <h1>Tangi unene, <em id="w-name"></em>.</h1>
+      <h1>Tangi unene<span id="w-name-wrap">, <em id="w-name"></em></span>.</h1>
       <p>Help us check <strong class="w-d"></strong> translations. You see an English sentence and a translation, and answer one question: <strong>does it say the same?</strong></p>
       <p><strong>5 sentences, about 2 minutes.</strong> First, two quick practice examples.</p>
       <div class="row"><button class="btn" id="start">Practice <span>→</span></button></div>
-      <p class="fine" style="margin-top:22px">We store your answers and suggestions under the name on your invite, nothing else — no phone number. <a href="/privacy/">Privacy policy</a></p>
+      <p class="fine" style="margin-top:22px">We store your answers under a random ID — never your phone number itself. <a href="/privacy/">Privacy policy</a></p>
     </section>
 
     <!-- tip after practice -->
@@ -179,7 +210,7 @@
   var token = null, item = null, next = null, verdict = null, shownAt = 0, session = 0, busy = false;
   var fastRun = 0, slowShown = false, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
   var $ = function (id) { return document.getElementById(id); };
-  var VIEWS = ["v-msg", "v-welcome", "v-tip", "v-task", "v-break"];
+  var VIEWS = ["v-msg", "v-start", "v-profile", "v-welcome", "v-tip", "v-task", "v-break"];
   function show(id) { VIEWS.forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); window.scrollTo(0, 0); }
   function msg(title, text) { $("msg-title").textContent = title; $("msg-text").textContent = text || ""; show("v-msg"); }
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
@@ -191,7 +222,11 @@
   token = store("ongiini.rate.token") || (m ? m[1] : null);
   var go = /[?&]go\b/.test(location.search);
   if (m) history.replaceState(null, "", location.pathname + location.search);
-  if (!token) { msg("This page needs an invite.", "Please open the personal link we sent you on WhatsApp."); return; }
+  function startPage(note) {
+    if (note) { $("start-note").textContent = note; $("start-note").classList.remove("hidden"); }
+    show("v-start");
+  }
+  if (!token) { startPage(); return; }
 
   function post(path, body) {
     return fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -285,18 +320,40 @@
   $("go").addEventListener("click", function () { render(item); });
   $("b-more").addEventListener("click", function () { render(item); });
 
-  post("/session", { token: token }).then(function (s) {
+  function begin(s) {
+    prog = s.progress; count();
+    if (s.needs_profile) { show("v-profile"); return; }
     var d = s.dialects.map(function (x) { return NAMES[x] || x; }).join(" and ");
-    $("w-name").textContent = s.label;
+    var named = !/^wa-/.test(s.label);
+    $("w-name").textContent = named ? s.label : ""; $("w-name-wrap").classList.toggle("hidden", !named);
     document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
-    prog = s.progress; count(); item = s.item;
+    item = s.item;
     practice = (s.practice || []).filter(function (p) { return p.dialect === s.dialects[0]; }).slice(0, 2);
     if (go || prog.done > 0) render(item); else show("v-welcome");
-  }).catch(function (e) {
+  }
+  function failed(e) {
     if (e.message === "invite") { try { localStorage.removeItem("ongiini.rate.token"); } catch (x) {}
-      msg("This invite link doesn't work.", "It may have been replaced. Please ask us for a new link on WhatsApp."); }
+      startPage("This link doesn't work any more — maybe you asked for a new one. Get a fresh link here:"); }
     else msg("We can't reach the server right now.", "Please try again in a few minutes.");
+  }
+  var pf = { dialect: null, first: null };
+  ["pf-dialect", "pf-first"].forEach(function (id) {
+    $(id).querySelectorAll(".chip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        press($(id), ".chip", b); pf[id === "pf-dialect" ? "dialect" : "first"] = b.getAttribute("data-v");
+        $("pf-go").disabled = !(pf.dialect && pf.first);
+      });
+    });
   });
+  $("pf-go").addEventListener("click", function () {
+    $("pf-go").disabled = true; $("pf-err").textContent = "";
+    var ds = pf.dialect === "both" ? ["oshindonga", "oshikwanyama"] : [pf.dialect];
+    post("/profile", { token: token, dialects: ds, first_language: pf.first }).then(begin)
+      .catch(function (e) { $("pf-go").disabled = false;
+        if (e.message === "invite") failed(e); else $("pf-err").textContent = "That didn't save — please try again."; });
+  });
+
+  post("/session", { token: token }).then(begin).catch(failed);
 })();
 </script>
 </body>

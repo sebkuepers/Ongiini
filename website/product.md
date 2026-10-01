@@ -1,6 +1,6 @@
 # Ongiini — Product Knowledge
 
-_Auto-generated from `website/*.html` on 2026-09-30. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
+_Auto-generated from `website/*.html` on 2026-10-01. Do not edit by hand: edit the source HTML and re-run `scripts/build_product_knowledge.py`. This file is consumed by the WhatsApp webhook's `lookup_ongiini_docs` tool so the assistant always answers questions about Ongiini itself from the same canonical copy that's on the website._
 
 ## Why Ongiini (vs ChatGPT)
 
@@ -503,7 +503,7 @@ An open yardstick is the first step towards AI that really speaks Oshiwambo — 
 
 ## Privacy policy (full text)
 
-How Ongiini handles your data — last updated 30 September 2026
+How Ongiini handles your data — last updated 1 October 2026
 
 **The short version.** Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).
 
@@ -617,15 +617,15 @@ The learning surface at [learn.ongiini.ai](https://learn.ongiini.ai) is a protot
 
 #### Translation ratings (ongiini.ai/rate)
 
-Native speakers we invite personally can help check translations for our Oshiwambo research at [ongiini.ai/rate](/rate/). You see an English sentence and a translation, and say whether it is correct; you can suggest a better translation.
+Native speakers can help check translations for our Oshiwambo research at [ongiini.ai/rate](/rate/). You ask Ongiini AI on WhatsApp for a rating link (or we send you one), then see an English sentence and a translation and say whether it says the same; you can suggest a better translation.
 
-**What's stored.** The name or nickname on your invite, the dialect(s) you rate, each rating you give, any better translation you type (automatically scrubbed of personal-data patterns before saving), and how long each rating took. Your invite link contains a random code; we store only a one-way hash of it. We do not store your phone number or IP address for this surface.
+**What's stored.** A salted one-way hash of your WhatsApp number (not the number itself) so we recognise you when you ask for a new link, the dialect(s) you rate, whether it is your first language, each rating you give, any better translation you type (automatically scrubbed of personal-data patterns before saving), and how long each rating took. Your link contains a random code; we store only a one-way hash of it. If we sent you the link ourselves, we also store the name or nickname on it. We do not store your phone number or IP address for this surface. Your WhatsApp message asking for the link is handled like any other message to Ongiini AI (see section 2).
 
-**How long.** For as long as the benchmark research runs. Ratings are published only in aggregate — never under your name — unless you ask to be credited by name. Ask us on WhatsApp or by email and we delete your ratings and invite.
+**How long.** For as long as the benchmark research runs. Ratings are published only in aggregate — never under your name — unless you ask to be credited by name. Ask us on WhatsApp or by email and we delete your ratings and link.
 
 **Purpose.** To check the quality of the reference translations and of machine translations for the Ongiini-Eval-OW benchmark (see [ongiini.ai/research](/research/)), and to improve Ongiini's Oshiwambo support.
 
-**Legal basis.** Art. 6 (1) (a) GDPR — your consent, given by opening your invite and rating — and Art. 89 GDPR / § 27 BDSG for the research use. You can withdraw at any time by simply stopping; ask us to delete what you have already submitted.
+**Legal basis.** Art. 6 (1) (a) GDPR — your consent, given by asking for a link and rating — and Art. 89 GDPR / § 27 BDSG for the research use. You can withdraw at any time by simply stopping; ask us to delete what you have already submitted.
 
 ### 3. Who else sees your data (processors and third parties)
 
@@ -732,7 +732,7 @@ Conversation data is stored on a single computer operated by us, in Germany, beh
 
 If we change this policy materially, we will update the date at the top and, for substantial changes (e.g. new categories of processing, new processors, change of controller upon foundation registration), notify users via the WhatsApp service or on the website.
 
-Last updated: 30 September 2026. Effective immediately.
+Last updated: 1 October 2026. Effective immediately.
 
 ## Terms of service (full text)
 

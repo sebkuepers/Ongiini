@@ -16,7 +16,7 @@ from .config import settings
 from .routers.gemma_classifier import (
     VERDICT_CONTRIB_DECLINE, VERDICT_CONTRIB_DIALECT, VERDICT_CONTRIB_INVITE,
     VERDICT_CONTRIB_NEXT, VERDICT_CONTRIB_SAVE, VERDICT_CONTRIB_SKIP,
-    VERDICT_CONTRIB_STATS, VERDICT_OPT_OUT_BROADCAST,
+    VERDICT_CONTRIB_STATS, VERDICT_OPT_OUT_BROADCAST, VERDICT_RATE_INVITE,
 )
 
 
@@ -232,6 +232,12 @@ def build_policy_table() -> PolicyTable:
         (VERDICT_CONTRIB_STATS, "contribute_stats", "contribute_stats"),
     ):
         table.set(verdict, DEPTH_SHALLOW, _state_tool(name, tool_name, contribute_sections))
+    # Checking translations (ongiini.ai/rate) is a separate flow from
+    # translating: its own verdict, tool and phrasing skill.
+    table.set(
+        VERDICT_RATE_INVITE, DEPTH_SHALLOW,
+        _state_tool("rate_invite", "rate_link", (*SECTIONS_CHAT, "skill:rate")),
+    )
     table.set(
         VERDICT_OPT_OUT_BROADCAST, DEPTH_SHALLOW,
         _state_tool("opt_out_broadcast", "opt_out_broadcast", SECTIONS_CHAT),

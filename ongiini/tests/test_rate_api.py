@@ -25,7 +25,14 @@ def test_session_and_answer_flow(tmp_path, monkeypatch):
     con.close()
 
     assert c.post("/v1/rate/session", json={"token": "x" * 20}).status_code == 401
-    s = c.post("/v1/rate/session", json={"token": token}).json()
+    first = c.post("/v1/rate/session", json={"token": token}).json()
+    assert first["needs_profile"] and "item" not in first
+    assert c.post("/v1/rate/profile", json={"token": token, "dialects": ["klingon"],
+                                            "first_language": "yes"}).status_code == 400
+    s = c.post("/v1/rate/profile", json={"token": token, "dialects": ["oshindonga"],
+                                         "first_language": "yes"}).json()
+    assert not s["needs_profile"]
+    assert c.post("/v1/rate/session", json={"token": token}).json()["needs_profile"] is False
     assert s["label"] == "Tester" and s["item"]["item_key"] == "a"
     assert s["practice"][0]["expected"] == "wrong"
     assert "kaarina" not in str(s["item"])

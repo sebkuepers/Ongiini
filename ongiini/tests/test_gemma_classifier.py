@@ -141,6 +141,15 @@ async def test_docs_parses_correctly():
 
 
 @pytest.mark.asyncio
+async def test_rate_invite_parses_and_is_distinct_from_contribute():
+    c = _make_classifier(_client_json("RATE_INVITE"))
+    result = await c.classify(_msg("I'd like to help check translations"))
+    assert result.verdict == "RATE_INVITE"
+    from ongiini.routers.gemma_classifier import CLASSIFIER_PROMPT
+    assert "RATE_INVITE" in CLASSIFIER_PROMPT and "The 15 verdicts" in CLASSIFIER_PROMPT
+
+
+@pytest.mark.asyncio
 async def test_admin_parses_correctly():
     c = _make_classifier(_client_json("ADMIN"))
     result = await c.classify(_msg("delete my data"))

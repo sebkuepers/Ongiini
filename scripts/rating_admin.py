@@ -9,6 +9,13 @@
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py delete-rater 3
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py delete-round demo
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py reset-test --yes
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py block 7
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py block-number 264811234567
+
+Most raters get their link themselves by asking Ongiini AI on WhatsApp
+(tools/rate.py). block / block-number keep someone out — e.g. the
+reference translator, who must not rate her own translations;
+block-number works before the number ever asks.
 
 delete-rater removes a rater and all their ratings; delete-round removes a
 round's items and their ratings; reset-test wipes everything (test phase
@@ -26,7 +33,7 @@ from pathlib import Path
 if Path("/app/ongiini").is_dir():
     sys.path.insert(0, "/app")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ongiini import ratings  # noqa: E402
+from ongiini import contributions, ratings  # noqa: E402
 
 BASE_URL = "https://ongiini.ai/rate/"
 
@@ -51,9 +58,17 @@ def main(argv: list[str]) -> int:
     elif cmd == "report":
         print(json.dumps(ratings.summary(con), indent=2))
     elif cmd == "raters":
-        for r in con.execute("SELECT rater_id, label, dialects, active, "
+        for r in con.execute("SELECT rater_id, label, dialects, first_language, active, blocked, "
+                             "CASE WHEN contributor_hash IS NULL THEN 'admin' ELSE 'whatsapp' END via, "
                              "(SELECT COUNT(*) FROM ratings x WHERE x.rater_id = raters.rater_id) n FROM raters"):
             print(dict(r))
+    elif cmd == "block" and len(args) == 1:
+        with con:
+            con.execute("UPDATE raters SET blocked = 1 WHERE rater_id = ?", (int(args[0]),))
+        print("blocked")
+    elif cmd == "block-number" and len(args) == 1:
+        ratings.block_contributor(con, contributions.hash_msisdn(args[0].lstrip("+").replace(" ", "")))
+        print("blocked (only the salted hash is stored)")
     elif cmd == "deactivate" and len(args) == 1:
         with con:
             con.execute("UPDATE raters SET active = 0 WHERE rater_id = ?", (int(args[0]),))
