@@ -122,6 +122,8 @@ async def main_async(args: argparse.Namespace) -> int:
     done = {d: {json.loads(l)["id"] for l in p.read_text().splitlines() if l.strip()}
             if p.exists() else set() for d, p in outs.items()}
     usage_path = out_dir / f"{args.label}.usage.jsonl"
+    # The models' visible reasoning, per attempt, for qualitative failure analysis.
+    reasoning_paths = {d: out_dir / f"{args.label}_{d}.reasoning.jsonl" for d in DIALECTS}
     sem = asyncio.Semaphore(args.concurrency)
     lock = asyncio.Lock()
     totals = {"calls": 0, "cost": 0.0, "prompt": 0, "completion": 0, "reasoning": 0,
@@ -131,7 +133,7 @@ async def main_async(args: argparse.Namespace) -> int:
         en = item["english"].strip()
         prompt = render(args.template, dialect, en)
         async with sem:
-            text, attempts, raw = "", 0, ""
+            text, attempts, raw, finish, thoughts = "", 0, "", None, []
             for attempts in range(1, MAX_ATTEMPTS + 1):
                 r = None
                 for wait in (0, 5, 15, 30, 60, 120, 240):   # rate limits / 5xx
@@ -157,7 +159,14 @@ async def main_async(args: argparse.Namespace) -> int:
                 totals["completion"] += r.usage.completion_tokens if r.usage else 0
                 details = getattr(r.usage, "completion_tokens_details", None)
                 totals["reasoning"] += getattr(details, "reasoning_tokens", 0) or 0
-                raw = r.choices[0].message.content or ""
+                msg = r.choices[0].message
+                raw = msg.content or ""
+                finish = r.choices[0].finish_reason
+                thinking = (msg.model_extra or {}).get("reasoning") or ""
+                if thinking:                            # kept apart from the outputs, see reasoning_path
+                    thoughts.append({"attempt": attempts, "finish_reason": finish,
+                                     "reasoning_tokens": getattr(details, "reasoning_tokens", 0) or 0,
+                                     "reasoning": thinking})
                 text = clean(raw, dialect)
                 bad = is_derailed(en, text) or not text
                 if attempts == 1 and bad:
@@ -171,10 +180,14 @@ async def main_async(args: argparse.Namespace) -> int:
         record = {"id": int(item["id"]), "dialect": dialect, "model_id": args.model,
                   "prompt_template_id": args.template, "translation": text,
                   "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                  "seed": extra.get("seed"), "raw_response": raw}
+                  "seed": extra.get("seed"), "raw_response": raw, "finish_reason": finish}
         async with lock:
             with outs[dialect].open("a") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            if thoughts:
+                with reasoning_paths[dialect].open("a") as f:
+                    f.write(json.dumps({"id": int(item["id"]), "dialect": dialect, "english": en,
+                                        "attempts": thoughts}, ensure_ascii=False) + "\n")
             with usage_path.open("a") as f:
                 f.write(json.dumps({"id": int(item["id"]), "dialect": dialect,
                                     "attempts": attempts, "max_tokens": max_tokens,
