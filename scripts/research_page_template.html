@@ -96,6 +96,7 @@
     <div class="ct-hero-cta">
       <a class="ct-cta" href="https://arxiv.org/abs/2609.31727" target="_blank" rel="noopener noreferrer">Read the paper <span class="ct-cta-arrow">→</span></a>
       <a class="ct-cta ct-cta--ghost" href="https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md" target="_blank" rel="noopener noreferrer">Submit a system <span class="ct-cta-arrow">→</span></a>
+      <a class="ct-cta ct-cta--ghost" href="https://github.com/sebkuepers/Ongiini" target="_blank" rel="noopener noreferrer">Code &amp; data on GitHub <span class="ct-cta-arrow">→</span></a>
     </div>
     <div class="ct-stats rs-stats">
       <div class="ct-stat"><div class="ct-stat-num">{{N_ITEMS}}</div><div class="ct-stat-label">English source sentences</div></div>
@@ -158,6 +159,17 @@
     </div>
   </section>
 
+  <section class="ct-section ct-section--wide" id="reference-check">
+    <p class="ct-section-eyebrow">Quality control</p>
+    <h2 class="ct-h2">Native speakers check the references.</h2>
+    <p>A benchmark is only as good as its references. Before v1.0, native-speaker volunteers check them on <a href="/rate/">ongiini.ai/rate</a>: one English sentence, one translation, one question — <em>does it say the same?</em> Yes, almost, or no, with an optional better translation.</p>
+    <p>Raters see our references and machine translations mixed, never which is which. Planted errors show whether a rater compares carefully, and the same person also judges a strong machine translation of sentences whose reference they rated — so we learn whether the references are at least as good as the systems they will measure. Raters join through WhatsApp; we store a scrambled ID, never the phone number.</p>
+    <p>The protocol — samples, qualification rule and analysis — was fixed before the first rating: <a href="https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md" target="_blank" rel="noopener noreferrer">docs/rating-protocol.md</a>. The same platform will carry the human evaluation of the systems.</p>
+    <div class="ct-hero-cta">
+      <a class="ct-cta" href="https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations" target="_blank" rel="noopener noreferrer">Check translations <span class="ct-cta-arrow">→</span></a>
+    </div>
+  </section>
+
   <section class="ct-section ct-section--sand">
     <div class="ct-section-inner">
       <p class="ct-section-eyebrow">Take part</p>
@@ -168,8 +180,8 @@
           <p>Translate the {{N_ITEMS}} public English sentences into both dialects and send us the files. We score them privately against the references and send the results back. Submissions made before the release are, by construction, free of test-set contamination. <a href="https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md" target="_blank" rel="noopener noreferrer">How to submit →</a></p>
         </div></div>
         <div class="ct-step"><div class="ct-step-num">2</div><div class="ct-step-body">
-          <h3>Speak Oshiwambo? Help with translations</h3>
-          <p>Native speakers can add sentence pairs through WhatsApp, one sentence at a time. <a href="/contribute/">Contribute →</a></p>
+          <h3>Speak Oshiwambo? Check translations</h3>
+          <p>Most needed right now: tell us whether translations say the same as the English — five sentences, about two minutes, started from WhatsApp. You can also add sentence pairs, one at a time. <a href="/contribute/">Contribute →</a></p>
         </div></div>
         <div class="ct-step"><div class="ct-step-num">3</div><div class="ct-step-body">
           <h3>Work with us</h3>
@@ -193,6 +205,11 @@
         <h3>{{N_ITEMS}}-sentence source set, translation under way</h3>
         <p>All {{N_ITEMS}} English sources are final and public; the new sentences are with our translator.</p>
       </div></div>
+      <div class="ct-step"><div class="ct-step-num">→</div><div class="ct-step-body">
+        <p class="rs-when">October 2026 <span class="rs-state rs-state--now">Now</span></p>
+        <h3>Reference check by native speakers</h3>
+        <p>Volunteers rate the references against strong machine translations on <a href="/rate/">ongiini.ai/rate</a>; confirmed errors go back to the translator.</p>
+      </div></div>
       <div class="ct-step"><div class="ct-step-num">3</div><div class="ct-step-body">
         <p class="rs-when">End of 2026</p>
         <h3>Dataset v1.0 and leaderboard</h3>
@@ -201,7 +218,7 @@
       <div class="ct-step"><div class="ct-step-num">4</div><div class="ct-step-body">
         <p class="rs-when">2027</p>
         <h3>Human evaluation</h3>
-        <p>Native-speaker volunteers rate adequacy and fluency, so the automatic scores can be checked against people.</p>
+        <p>Native-speaker volunteers rate the systems on the same platform, so the automatic scores can be checked against people.</p>
       </div></div>
     </div>
   </section>

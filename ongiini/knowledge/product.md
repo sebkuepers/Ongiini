@@ -370,7 +370,7 @@ Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting gesko
 Research · Ongiini-Eval-OW
 Nobody could say — there was no way to measure it. Ongiini-Eval-OW is an open benchmark for English → Oshindonga and English → Oshikwanyama translation, with references written by native speakers and sentences in the English Namibians actually write.
 
-[Read the paper →](https://arxiv.org/abs/2609.31727) [Submit a system →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md) 600English source sentences 2Dialects — Oshindonga and Oshikwanyama 11Linguistic phenomena, ≥ 30 items each 180Blind sentences, held back for the leaderboard
+[Read the paper →](https://arxiv.org/abs/2609.31727) [Submit a system →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md) [Code & data on GitHub →](https://github.com/sebkuepers/Ongiini) 600English source sentences 2Dialects — Oshindonga and Oshikwanyama 11Linguistic phenomena, ≥ 30 items each 180Blind sentences, held back for the leaderboard
 Why this exists
 
 ### Half of Namibia's homes speak it. No benchmark did.
@@ -465,6 +465,17 @@ End of 2026
 The first public leaderboard launches together with the full dataset. Headline scores are chrF++ on the blind split, broken down by phenomenon, length and register, with a human evaluation by native speakers to follow.
 
 **Frontier models**Claude, GPT, Gemini, DeepSeek, Kimi, GLM, Mistral, Muse Spark **Open-weight models**Gemma, Llama, Mistral Small, Qwen — sizes that fit a single machine **Dedicated translation**NLLB-200 and MADLAD-400 as controls; Oshiwambo-specific systems are invited to submit
+Quality control
+
+### Native speakers check the references.
+
+A benchmark is only as good as its references. Before v1.0, native-speaker volunteers check them on [ongiini.ai/rate](/rate/): one English sentence, one translation, one question — *does it say the same?* Yes, almost, or no, with an optional better translation.
+
+Raters see our references and machine translations mixed, never which is which. Planted errors show whether a rater compares carefully, and the same person also judges a strong machine translation of sentences whose reference they rated — so we learn whether the references are at least as good as the systems they will measure. Raters join through WhatsApp; we store a scrambled ID, never the phone number.
+
+The protocol — samples, qualification rule and analysis — was fixed before the first rating: [docs/rating-protocol.md](https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md). The same platform will carry the human evaluation of the systems.
+
+[Check translations →](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations)
 Take part
 
 ### Three ways to join in.
@@ -475,9 +486,9 @@ Take part
 Translate the 600 public English sentences into both dialects and send us the files. We score them privately against the references and send the results back. Submissions made before the release are, by construction, free of test-set contamination. [How to submit →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md)
 
 2
-#### Speak Oshiwambo? Help with translations
+#### Speak Oshiwambo? Check translations
 
-Native speakers can add sentence pairs through WhatsApp, one sentence at a time. [Contribute →](/contribute/)
+Most needed right now: tell us whether translations say the same as the English — five sentences, about two minutes, started from WhatsApp. You can also add sentence pairs, one at a time. [Contribute →](/contribute/)
 
 3
 #### Work with us
@@ -502,6 +513,13 @@ Autumn 2026 Now
 
 All 600 English sources are final and public; the new sentences are with our translator.
 
+→
+October 2026 Now
+
+#### Reference check by native speakers
+
+Volunteers rate the references against strong machine translations on [ongiini.ai/rate](/rate/); confirmed errors go back to the translator.
+
 3
 End of 2026
 
@@ -514,7 +532,7 @@ References and scores published on Hugging Face under CC BY 4.0.
 
 #### Human evaluation
 
-Native-speaker volunteers rate adequacy and fluency, so the automatic scores can be checked against people.
+Native-speaker volunteers rate the systems on the same platform, so the automatic scores can be checked against people.
 
 People
 
