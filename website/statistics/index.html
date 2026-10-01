@@ -602,7 +602,7 @@
   <main>
     <p class="stat-eyebrow">Transparency</p>
     <h1>What Ongiini.ai is doing.</h1>
-    <p class="stat-lede">Live aggregate statistics about how the service is used. Updated continuously. Never includes individual conversations.</p>
+    <p class="stat-lede">Live aggregate statistics about how the service is used. Usage numbers refresh every few minutes; the use-case and audience sections are a periodic analysis and show the date they were last computed. Never includes individual conversations.</p>
     <p class="stat-refreshed" id="refreshed">Loading…</p>
 
     <div id="state" class="stat-state" hidden></div>
@@ -727,14 +727,14 @@
       <div class="stat-who" id="who-grid"></div>
 
       <h2>How it performs</h2>
-      <p class="stat-section-note">Operational signals from the model layer. Useful for tuning, less so for understanding people.</p>
+      <p class="stat-section-note">Operational signals. Latency is the time from a message arriving to the reply being sent, including web search and tools (measured this way since 1 Oct 2026; earlier turns count model time only). Failed replies are turns that ended in a fallback message instead of an answer. Useful for tuning, less so for understanding people.</p>
       <div class="stat-perf" id="perf"></div>
 
       <h2>How these numbers are made</h2>
       <div class="stat-meta-prose">
-        <p><strong>What the data is.</strong> Everything on this page is computed live from data Ongiini already keeps for the service itself — the per-message usage log, the structural trace log, and the long-term memory store. No raw conversation content leaves the foundation's infrastructure. The classification and clustering passes that produce the qualitative sections run on the same computer the chat service runs on; no third-party APIs are involved.</p>
+        <p><strong>What the data is.</strong> The usage, growth, engagement and performance numbers are computed live from data Ongiini already keeps for the service itself — the per-message usage log and the structural trace log. The use-case and audience sections come from a separate, periodic analysis of messages and of the long-term memory store. None of this statistics processing sends conversation content anywhere: the classification and clustering run on the same computer the chat service runs on, with no third-party APIs. (Answering a question can involve a web search; what that shares is described in the <a href="/privacy/">Privacy Policy</a>.)</p>
 
-        <p><strong>Two qualitative passes.</strong> The categories you see under <em>How people use Ongiini.ai</em> are <strong>not chosen from a fixed list</strong>. The local AI model first reads each user message and produces a short description — <em>"yellowing maize leaves"</em>, <em>"grade 11 chemistry homework"</em>, <em>"VAT registration deadline"</em>. Then, periodically, the same model reads the entire collection of those descriptions with their counts and groups them into broad <strong>use cases</strong> of its own choosing. <strong>Top topics</strong> below is one level down — the most-mentioned raw descriptions, before clustering. <em>Who uses Ongiini.ai</em> works the same way per dimension: short descriptors per user → clustered into emergent groups for roles, regions, languages, family context, and current life situations.</p>
+        <p><strong>Two qualitative passes.</strong> The categories you see under <em>How people use Ongiini.ai</em> are <strong>not chosen from a fixed list</strong>. The local AI model first reads each user message and produces a short description — <em>"yellowing maize leaves"</em>, <em>"grade 11 chemistry homework"</em>, <em>"VAT registration deadline"</em>. Then the same model reads the entire collection of those descriptions with their counts and groups them into broad <strong>use cases</strong> of its own choosing. This analysis runs in batches, not live: each section shows the date of the last run and which messages it covered. <strong>Top topics</strong> below is one level down — the most-mentioned raw descriptions, before clustering. <em>Who uses Ongiini.ai</em> works the same way per dimension: short descriptors per user → clustered into emergent groups for roles, regions, languages, family context, and current life situations.</p>
 
         <p><strong>This is a heavily skewed sample, not a survey.</strong> The percentages on this page describe <em>only what users have mentioned in conversation</em>. They are not a representative cross-section of who uses Ongiini.ai. A teacher who has never mentioned teaching does not appear under <em>Roles → Teacher</em>. A user in Oshakati who has never named their town does not show up under <em>Regions → Oshakati</em>. We do not ask, we only observe. Every WHO percentage is therefore relative to <em>"users who mentioned this dimension at all"</em> — usually a minority of the total user base — and the sample sizes shown next to each chart make that explicit. Read accordingly.</p>
 
@@ -744,7 +744,7 @@
 
         <p><strong>Anti-leak guardrails on every label.</strong> The model is explicitly instructed to never echo names, towns, ages, dates, employers, or any identifying detail — and to output <em>"REDACTED"</em> if it cannot generalise a message without leaking specifics. Every label the model returns then passes a second, regex-level filter: anything containing a 4-digit number (years, IDs), a capitalised possessive ("Joseph's"), a known Namibian town name, or any pattern our PII scrubber recognises (email, ID number, card number, IBAN) is dropped without being stored. The label only enters the analytics cache once both layers have signed off.</p>
 
-        <p><strong>Right to object.</strong> If you'd rather your data not be counted in any of these statistics — current or future — write to the address in our <a href="/privacy/">Privacy Policy</a> with the subject <em>"object to research processing"</em> and your phone number. Your messages stop contributing immediately and retroactively.</p>
+        <p><strong>Right to object.</strong> If you'd rather your data not be counted in any of these statistics — current or future — write to the address in our <a href="/privacy/">Privacy Policy</a> with the subject <em>"object to research processing"</em> and your phone number. Your messages stop contributing to the live numbers immediately, and to the use-case and audience sections from their next run onwards, which also removes your past messages from them.</p>
       </div>
     </div>
 
@@ -827,7 +827,7 @@
       renderConversationDepth(d.engagement && d.engagement.conversation_depth);
       renderHeatmap(d.distributions.heatmap_dow_hour);
       renderUseCases(d.topics, d.totals.messages_user);
-      renderTopTopics(d.top_topics);
+      renderTopTopics(d.top_topics, d.topics && d.topics.generated_at);
       renderWho(d.who, d.totals.unique_users);
       renderPerf(d.performance);
       renderWebChat(d.web_chat);
@@ -960,7 +960,9 @@
       const innerW = W - padL - padR;
       const innerH = H - padT - padB;
       const xMax = xs[xs.length - 1] || 1;
-      const xFor = w => padL + (w / xMax) * innerW;
+      // Square-root x-scale: the early days (0, 1, 3) would otherwise sit
+      // on top of each other and their labels collide.
+      const xFor = w => padL + Math.sqrt(w / xMax) * innerW;
       const yFor = p => padT + innerH - (p / 100) * innerH;
 
       const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' });
@@ -978,7 +980,8 @@
       const tickLabel = (v) => v === 0 ? 'start' : (isDayBased ? 'Day ' + v : 'wk ' + v);
       xs.forEach((w, i) => {
         const x = xFor(w);
-        const t = svgEl('text', { x: x, y: H - 8, 'text-anchor': 'middle', class: 'axis-tick' });
+        const anchor = i === 0 ? 'start' : i === xs.length - 1 ? 'end' : 'middle';
+        const t = svgEl('text', { x: x, y: H - 8, 'text-anchor': anchor, class: 'axis-tick' });
         t.textContent = tickLabel(w);
         svg.appendChild(t);
       });
@@ -1780,9 +1783,12 @@
       const n = block.n_observations || 0;
       const cov = block.coverage || 0;
       if (subEl) {
-        const covText = totalMessages
-          ? Math.round(cov * 100) + '% of ' + fmtInt.format(totalMessages) + ' user messages all-time'
-          : '—';
+        const stale = snapshotNote(block.generated_at);
+        const covText = stale
+          ? stale
+          : (totalMessages
+            ? Math.round(cov * 100) + '% of ' + fmtInt.format(totalMessages) + ' user messages all-time'
+            : '—');
         subEl.textContent = 'Donut shows ' + fmtInt.format(n) + ' messages we could categorise · ' + covText;
       }
       if (cats.length === 0) {
@@ -1845,7 +1851,17 @@
       parent.appendChild(legend);
     }
 
-    function renderTopTopics(block) {
+    // Qualitative sections are batch analyses. When the last run is older
+    // than 3 days, say so instead of implying they describe all-time use.
+    function snapshotNote(generatedAt) {
+      if (!generatedAt) return '';
+      const t = new Date(generatedAt);
+      if (isNaN(t) || (Date.now() - t.getTime()) < 3 * 86400e3) return '';
+      const d = t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + ' ' + t.getUTCFullYear();
+      return 'as of ' + d + ' · not updated since';
+    }
+
+    function renderTopTopics(block, generatedAt) {
       const parent = document.getElementById('dist-toptopics');
       const subEl = document.getElementById('toptopics-sub');
       clear(parent);
@@ -1857,7 +1873,8 @@
             ? 'Below the privacy floor · ' + fmtInt.format(nDistinct) + ' distinct phrases extracted, none mentioned by 5+ users yet'
             : 'Computing…';
         } else {
-          subEl.textContent = 'Showing top ' + labels.length + ' of ' + fmtInt.format(nDistinct) + ' distinct phrases';
+          const stale = snapshotNote(generatedAt);
+          subEl.textContent = 'Showing top ' + labels.length + ' of ' + fmtInt.format(nDistinct) + ' distinct phrases' + (stale ? ' · ' + stale : '');
         }
       }
       if (labels.length === 0) {
@@ -1896,8 +1913,11 @@
         const block = who[key];
         const panel = el('div', { className: 'stat-who-panel' });
         panel.appendChild(el('p', { className: 'stat-who-head', text: title }));
+        const stale = block ? snapshotNote(block.generated_at) : '';
         const subText = block && block.n_observations
-          ? sub + ' · ' + fmtInt.format(block.n_observations) + ' of ' + fmtInt.format(totalUsers || 0) + ' users · % below are within that group'
+          ? (stale
+            ? sub + ' · ' + fmtInt.format(block.n_observations) + ' users who mentioned it · ' + stale
+            : sub + ' · ' + fmtInt.format(block.n_observations) + ' of ' + fmtInt.format(totalUsers || 0) + ' users · % below are within that group')
           : sub;
         panel.appendChild(el('p', { className: 'stat-who-sub', text: subText }));
         const inner = el('div');
