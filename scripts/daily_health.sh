@@ -31,15 +31,15 @@ if [ "$status" -eq 0 ]; then
   exit 0
 fi
 
-logger -t ongiini-health "BREACH: $(printf '%s' "$report" | python3 -c 'import json,sys; print("; ".join(json.load(sys.stdin).get("breaches", [])))')"
+logger -t ongiini-health "BREACH: $(printf '%s' "$report" | python3 -c 'import json,sys; print(" | ".join(json.load(sys.stdin).get("explanations", [])))')"
 
 if [ -n "${ONGIINI_OPERATOR_MSISDN:-}" ]; then
-  breaches="$(printf '%s' "$report" | python3 -c 'import json,sys; print("\n".join("- " + b for b in json.load(sys.stdin).get("breaches", [])))')"
+  breaches="$(printf '%s' "$report" | python3 -c 'import json,sys; print("\n".join("- " + b for b in json.load(sys.stdin).get("explanations", [])))')"
   docker exec -i -e TO="$ONGIINI_OPERATOR_MSISDN" "$CONTAINER" python3 - <<PY || logger -t ongiini-health "alert delivery failed"
 import asyncio, os, sys
 sys.path.insert(0, "/app")
 from ongiini.ops_alert import send_ops_alert
-text = "daily health check found problems (last 24 h):\n" + """$breaches"""
+text = "Täglicher Check (letzte 24 h) hat Auffälligkeiten gefunden:\n" + """$breaches"""
 print(asyncio.run(send_ops_alert(os.environ["TO"], text)))
 PY
 fi

@@ -388,3 +388,19 @@ def test_health_cli_exit_code(tmp_path):
     assert trace_query.main(["health", "--path", str(p), "--window", "24h"]) == 1
     p2 = _write_traces(tmp_path, [_v2_entry() for _ in range(25)])
     assert trace_query.main(["health", "--path", str(p2), "--window", "24h"]) == 0
+
+
+def test_health_explains_breaches_in_plain_language():
+    slow = [_v2_entry(policy="search_deep", wall_ms=40000) for _ in range(10)]
+    fast = [_v2_entry(policy="none", wall_ms=3000) for _ in range(15)]
+    out = trace_query.cmd_health(_args(), slow + fast)
+    assert len(out["explanations"]) == len(out["breaches"]) == 1
+    text = out["explanations"][0]
+    assert "länger als 25 Sekunden" in text
+    assert "Recherche über mehrere Quellen 10/10" in text
+    assert "kurzer Chat" not in text            # only slow policies are listed
+
+
+def test_health_explains_a_dead_tool():
+    out = trace_query.cmd_health(_args(), [_v2_entry(tool_error="HTTP 402") for _ in range(25)])
+    assert any("Web-Suche' fällt aus" in e and "HTTP 402" in e for e in out["explanations"])

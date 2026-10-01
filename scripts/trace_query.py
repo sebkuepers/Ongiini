@@ -511,12 +511,82 @@ def cmd_health(args, traces: list[dict[str, Any]]) -> dict[str, Any]:
          len(traces)),
         ("over_25s_pct", report["wall_latency"]["over_25s_pct"], len(traces)),
     ]
+    explanations: list[str] = []
+    for tool, row in report["tool_errors"].items():
+        if row["calls"] >= _HEALTH_MIN_SAMPLES and row["error_rate_pct"] > th["tool_error_rate_pct"]:
+            top = next(iter(row["top_errors"]), "")
+            explanations.append(
+                f"Werkzeug '{_TOOL_LABELS.get(tool, tool)}' fällt aus: {row['errors']} von "
+                f"{row['calls']} Aufrufen schlugen fehl ({row['error_rate_pct']} %). "
+                f"Häufigster Fehler: {top}"
+            )
     for key, value, n in checks:
         if n >= _HEALTH_MIN_SAMPLES and value > th[key]:
             breaches.append(f"{key}: {value}% > {th[key]}% (n={n})")
+            explanations.append(_explain(key, value, n, th[key], report))
     report["breaches"] = breaches
+    report["explanations"] = explanations
     report["_exit"] = 1 if breaches else 0
     return report
+
+
+# Human labels for the daily alert (operator reads German).
+_TOOL_LABELS = {"web_search": "Web-Suche", "fetch_url": "Seite abrufen",
+                "fetch_urls": "Seiten abrufen", "lookup_ongiini_docs": "Produkt-Doku"}
+_POLICY_LABELS = {
+    "none": "kurzer Chat",
+    "none_deep": "lange Antworten (Übersetzung, CV, Hausaufgaben)",
+    "search_shallow": "einfache Suche",
+    "search_deep": "Recherche über mehrere Quellen",
+    "search_degraded": "Suche im Notbetrieb",
+    "docs": "Fragen zu Ongiini AI",
+    "admin": "eigene Daten / Verbrauch",
+}
+
+
+def _policy_label(name: str) -> str:
+    if name.startswith("contribute_"):
+        return "Übersetzungs-Beiträge"
+    return _POLICY_LABELS.get(name, name)
+
+
+def _explain(key: str, value: float, n: int, limit: float, report: dict[str, Any]) -> str:
+    """One plain-language sentence (German) for a breached health signal."""
+    if key == "over_25s_pct":
+        slow = []
+        for policy, row in report["wall_latency"]["by_policy"].items():
+            count = round(row["over_25s_pct"] * row["n"] / 100)
+            if count:
+                slow.append((count, f"{_policy_label(policy)} {count}/{row['n']}"))
+        worst = ", ".join(s for _, s in sorted(slow, reverse=True)[:4])
+        return (
+            f"Langsame Antworten: {value} % der {n} Antworten brauchten länger als 25 Sekunden "
+            f"(Grenze {limit} %). Nach 25 s verschwindet bei WhatsApp der 'schreibt…'-Hinweis. "
+            f"Am häufigsten langsam: {worst}."
+        )
+    if key == "degraded_rate_pct":
+        return (
+            f"Notbetrieb: {value} % der {n} Antworten liefen ohne ein benötigtes Werkzeug "
+            f"(meist die Web-Suche) und kamen aus Allgemeinwissen (Grenze {limit} %)."
+        )
+    if key == "router_fallback_rate_pct":
+        reasons = ", ".join(f"{k} {v}x" for k, v in report["router_fallback"]["by_reason"].items())
+        return (
+            f"Classifier unsicher: bei {value} % von {n} Nachrichten konnte er nicht entscheiden "
+            f"({reasons}); diese bekamen die allgemeine Chat-Behandlung ohne Suche (Grenze {limit} %)."
+        )
+    if key == "forced_tool_miss_rate_pct":
+        return (
+            f"vLLM ignoriert erzwungene Werkzeuge: {value} % von {n} erzwungenen Aufrufen "
+            f"(Grenze {limit} %). Das System springt automatisch ein; ein vLLM-Update ist die "
+            f"wahrscheinliche Ursache."
+        )
+    if key == "deadline_exceeded_rate_pct":
+        return (
+            f"Zeitbudget überschritten: {value} % der {n} Antworten liefen über ihr Zeitlimit und "
+            f"wurden ohne weitere Werkzeuge beantwortet (Grenze {limit} %)."
+        )
+    return f"{key}: {value} % > {limit} % (n={n})"
 
 
 COMMANDS = {
