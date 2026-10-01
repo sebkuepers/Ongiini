@@ -41,6 +41,17 @@
   <style>
     /* The research headline is longer than contribute's: wider, balanced lines. */
     .ct-headline { max-width: 24ch; text-wrap: balance; }
+    /* text + photo side by side (photos shared with the home page) */
+    .rs-split { display: grid; gap: 28px; }
+    .rs-split-text > p { max-width: var(--maxw-prose); }
+    .rs-photo { margin: 0; }
+    .rs-photo img { width: 100%; height: auto; aspect-ratio: 800 / 641; object-fit: cover; border-radius: 16px;
+      border: 1px solid var(--rule-faint); display: block; }
+    .rs-photo figcaption { margin-top: 10px; font-size: 13.5px; line-height: 1.45; color: var(--ink-faint); }
+    @media (min-width: 980px) {
+      .rs-split { grid-template-columns: minmax(0, 1fr) 380px; gap: 56px; align-items: start; }
+      .rs-photo { margin-top: 44px; }
+    }
     .ct-cta-icon { width: 18px; height: 18px; flex: none; margin-right: -4px; }
     /* research-page additions — chart hues are the site's teal and
        terracotta, stepped to pass colour-vision checks on the bone surface */
@@ -130,12 +141,20 @@
     </div>
   </section>
 
-  <section class="ct-section">
+  <section class="ct-section ct-section--wide rs-split">
+    <div class="rs-split-text">
     <p class="ct-section-eyebrow">Why this exists</p>
     <h2 class="ct-h2">Half of Namibia's homes speak it. No benchmark did.</h2>
     <p>Oshiwambo is the home language of roughly half of Namibian households. Yet its two written standards, <strong>Oshindonga</strong> and <strong>Oshikwanyama</strong>, are missing from FLORES-200, NLLB-200, MADLAD-400 and the major commercial translation services. Large language models will happily produce text that looks like Oshiwambo — and there was no public way to check whether it is.</p>
     <p>We run <a href="/">Ongiini AI</a>, a free AI assistant for people in Namibia. Our users keep asking for Oshiwambo. Before we can offer it responsibly, we have to be able to measure it. So we built the yardstick, and we are making it open for everyone who works on these languages.</p>
     <p>{{N_MINED}} of the benchmark sentences are paraphrased from real questions people ask Ongiini AI. How people use it, and what for, is public on our <a href="/statistics/">statistics page</a>.</p>
+    </div>
+    <figure class="rs-photo">
+      <img src="/assets/mother.webp" srcset="/assets/mother-480.webp 480w, /assets/mother.webp 800w"
+           sizes="(min-width: 980px) 380px, 100vw" width="800" height="641" loading="lazy" decoding="async"
+           alt="A mother in her living room, looking at her phone, with two children doing homework behind her." />
+      <figcaption>People in Namibia ask everyday questions on their phones, and many would ask in Oshiwambo.</figcaption>
+    </figure>
   </section>
 
   <section class="ct-section ct-section--sand ct-section--wide">
@@ -184,7 +203,8 @@
     </div>
   </section>
 
-  <section class="ct-section ct-section--wide" id="reference-check">
+  <section class="ct-section ct-section--wide rs-split" id="reference-check">
+    <div class="rs-split-text">
     <p class="ct-section-eyebrow">Quality control</p>
     <h2 class="ct-h2">Native speakers check the references.</h2>
     <p>A benchmark is only as good as its references. Before v1.0, native-speaker volunteers check them on <a href="/rate/">ongiini.ai/rate</a>: one English sentence, one translation, one question — <em>does it say the same?</em> Yes, almost, or no, with an optional better translation.</p>
@@ -193,6 +213,13 @@
     <div class="ct-hero-cta">
       <a class="ct-cta" href="https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations" target="_blank" rel="noopener noreferrer">Check translations <span class="ct-cta-arrow">→</span></a>
     </div>
+    </div>
+    <figure class="rs-photo">
+      <img src="/assets/student.webp" srcset="/assets/student-480.webp 480w, /assets/student.webp 800w"
+           sizes="(min-width: 980px) 380px, 100vw" width="800" height="641" loading="lazy" decoding="async"
+           alt="A student at a campus table with a notebook and laptop, reading his phone." />
+      <figcaption>Checking a translation takes a tap; five take about two minutes, on the phone.</figcaption>
+    </figure>
   </section>
 
   <section class="ct-section ct-section--sand">

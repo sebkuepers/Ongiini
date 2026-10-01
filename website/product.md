@@ -381,6 +381,7 @@ We run [Ongiini AI](/), a free AI assistant for people in Namibia. Our users kee
 
 180 of the benchmark sentences are paraphrased from real questions people ask Ongiini AI. How people use it, and what for, is public on our [statistics page](/statistics/).
 
+People in Namibia ask everyday questions on their phones, and many would ask in Oshiwambo.
 The benchmark
 
 ### 600 sentences, built to find where translation breaks.
@@ -477,7 +478,7 @@ Raters see our references and machine translations mixed, never which is which. 
 
 The protocol — samples, qualification rule and analysis — was fixed before the first rating: [docs/rating-protocol.md](https://github.com/sebkuepers/Ongiini/blob/main/docs/rating-protocol.md). The same raters then judge the systems on the leaderboard, so the automatic scores can be checked against people.
 
-[Check translations →](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations)
+[Check translations →](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations) Checking a translation takes a tap; five take about two minutes, on the phone.
 Take part
 
 ### Three ways to join in.
