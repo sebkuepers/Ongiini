@@ -182,7 +182,7 @@ def main(argv=None) -> int:
 
         for i, (text, how, why) in practice:
             add(i, "practice", "practice", text, f"{args.translator}+err:{how}", expected="wrong",
-                explanation=f"This one is ✗ Wrong: {why}")
+                explanation=f"This one is ✗ No: {why}")
         for i in randoms:
             add(i, "random_ref", "ref", ref[i], args.translator)
         for i in flagged:

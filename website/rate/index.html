@@ -99,13 +99,8 @@
     <section id="v-welcome" class="hidden">
       <p class="eyebrow">Check translations · <span class="w-d"></span></p>
       <h1>Tangi unene, <em id="w-name"></em>.</h1>
-      <p>We are building a test set of English sentences with <strong class="w-d"></strong> translations. You can help by checking the translations as a native speaker.</p>
-      <ul class="steps">
-        <li><span class="n">1</span><span>You see an English sentence and <strong>one translation</strong>. Translations come from different sources, some from computers.</span></li>
-        <li><span class="n">2</span><span>You answer one question: <strong>is this a good translation?</strong> ✓ Good, ~ Almost, or ✗ Wrong.</span></li>
-        <li><span class="n">3</span><span>If something is off, you can say what — and how you would say it. That is optional, but very valuable.</span></li>
-      </ul>
-      <p>We go in rounds of ten. Stop whenever you like; your progress is saved. First, two quick practice examples.</p>
+      <p>Help us check <strong class="w-d"></strong> translations. You see an English sentence and a translation, and answer one question: <strong>does it say the same?</strong></p>
+      <p><strong>5 sentences, about 2 minutes.</strong> First, two quick practice examples.</p>
       <div class="row"><button class="btn" id="start">Practice <span>→</span></button></div>
       <p class="fine" style="margin-top:22px">We store your answers and suggestions under the name on your invite, nothing else — no phone number. <a href="/privacy/">Privacy policy</a></p>
     </section>
@@ -113,9 +108,8 @@
     <!-- tip after practice -->
     <section id="v-tip" class="hidden">
       <p class="eyebrow">Ready</p>
-      <h1>One question <em>helps most.</em></h1>
-      <p><strong>Is the meaning right?</strong> If someone would misunderstand it, or something important is missing, it is <strong>✗ Wrong</strong> — even if it sounds fine.</p>
-      <p>If the meaning is right but a word, the spelling or the phrasing is off, it is <strong>~ Almost</strong>. If you would send it exactly like this, it is <strong>✓ Good</strong>.</p>
+      <h1>Compare it <em>with the English.</em></h1>
+      <p>A translation can sound perfect and still say something different. Check numbers, names, and whether every part of the English is there.</p>
       <p>Some translations are wrong on purpose, to check that the system works.</p>
       <div class="row"><button class="btn" id="go">Start <span>→</span></button></div>
     </section>
@@ -132,11 +126,12 @@
         <div class="label" id="t-lang"></div>
         <p class="tgt" id="t-text"></p>
       </div>
-      <p class="q">Is this a good translation?</p>
+      <p class="q">Does it say the same as the English?</p>
+      <p class="feedback no hidden" id="slow" style="margin:8px 0 0">Take your time — check it against the English.</p>
       <div class="answers" id="answers">
-        <button class="answer" type="button" data-v="good" aria-pressed="false"><span class="icon i-good">✓</span><span><strong>Good</strong><small>Correct and natural — I'd send it like this</small></span></button>
-        <button class="answer" type="button" data-v="almost" aria-pressed="false"><span class="icon i-warn">~</span><span><strong>Almost</strong><small>The meaning is right, but a word, spelling or phrasing is off</small></span></button>
-        <button class="answer" type="button" data-v="wrong" aria-pressed="false"><span class="icon i-bad">✗</span><span><strong>Wrong</strong><small>Someone would misunderstand it, or something important is missing</small></span></button>
+        <button class="answer" type="button" data-v="good" aria-pressed="false"><span class="icon i-good">✓</span><span><strong>Yes</strong><small>Same meaning</small></span></button>
+        <button class="answer" type="button" data-v="almost" aria-pressed="false"><span class="icon i-warn">~</span><span><strong>Almost</strong><small>A small detail is off</small></span></button>
+        <button class="answer" type="button" data-v="wrong" aria-pressed="false"><span class="icon i-bad">✗</span><span><strong>No</strong><small>Different meaning, or something is missing</small></span></button>
       </div>
 
       <div class="feedback hidden" id="p-feedback"><strong id="p-head"></strong><span id="p-text"></span>
@@ -172,7 +167,7 @@
       <p class="eyebrow" id="b-eyebrow">Tangi unene!</p>
       <h1 id="b-title"></h1>
       <p id="b-text"></p>
-      <div class="row" id="b-actions"><button class="btn" id="b-more">Ten more <span>→</span></button></div>
+      <div class="row" id="b-actions"><button class="btn" id="b-more">Five more <span>→</span></button></div>
     </section>
   </main>
 
@@ -180,9 +175,9 @@
 (function () {
   var API = location.hostname === "localhost" ? "http://localhost:8766/v1/rate" : "https://api.ongiini.ai/v1/rate";
   var NAMES = { oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama" };
-  var ROUND = 10;
+  var ROUND = 5, FAST_MS = 2000;
   var token = null, item = null, next = null, verdict = null, shownAt = 0, session = 0, busy = false;
-  var practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
+  var fastRun = 0, slowShown = false, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ["v-msg", "v-welcome", "v-tip", "v-task", "v-break"];
   function show(id) { VIEWS.forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); window.scrollTo(0, 0); }
@@ -206,7 +201,7 @@
   function reset() {
     verdict = null; busy = false; $("t-err").textContent = ""; $("s-text").value = "";
     press($("answers"), ".answer", null); press($("issues"), ".chip", null);
-    ["follow", "cant", "p-feedback"].forEach(function (id) { $(id).classList.add("hidden"); });
+    ["follow", "cant", "p-feedback", "slow"].forEach(function (id) { $(id).classList.add("hidden"); });
     $("answers").querySelectorAll(".answer").forEach(function (b) { b.disabled = false; });
   }
   function fill(it, isPractice) {
@@ -216,6 +211,7 @@
     $("t-en").textContent = it.english; $("t-text").textContent = it.text;
     $("t-lang").textContent = NAMES[it.dialect] || it.dialect;
     $("bar").style.width = isPractice ? ((pIdx + 1) / practice.length * 100) + "%" : ((session % ROUND) / ROUND * 100) + "%";
+    if (!isPractice && fastRun >= 3 && !slowShown) { $("slow").classList.remove("hidden"); slowShown = true; fastRun = 0; }
     shownAt = Date.now(); show("v-task");
   }
   function render(it) {
@@ -234,7 +230,9 @@
 
   function send(payload) {
     if (busy) return; busy = true; $("next").disabled = true;
-    post("/answer", Object.assign({ token: token, item_key: item.item_key, duration_ms: Date.now() - shownAt }, payload))
+    var ms = Date.now() - shownAt;
+    fastRun = ms < FAST_MS ? fastRun + 1 : 0;
+    post("/answer", Object.assign({ token: token, item_key: item.item_key, duration_ms: ms }, payload))
       .then(function (r) {
         session += 1; prog = r.progress; count(); $("next").disabled = false;
         if (session % ROUND === 0 && r.item) {
@@ -251,11 +249,12 @@
     b.addEventListener("click", function () {
       verdict = b.getAttribute("data-v"); press($("answers"), ".answer", b); $("cant").classList.add("hidden");
       if (pIdx >= 0) {                                   // practice: feedback, nothing is stored
-        var p = practice[pIdx], ok = verdict === p.expected;
-        $("answers").querySelectorAll(".answer").forEach(function (x) { x.disabled = true; });
+        var p = practice[pIdx], ok = verdict === p.expected;   // must find the error to go on
+        if (ok) $("answers").querySelectorAll(".answer").forEach(function (x) { x.disabled = true; });
         var fb = $("p-feedback"); fb.className = "feedback " + (ok ? "ok" : "no");
         $("p-head").textContent = ok ? "Yes — well spotted." : "Look again.";
-        $("p-text").textContent = p.explanation || "";
+        $("p-text").textContent = ok ? (p.explanation || "") : "Compare it with the English: numbers, names, and whether every part is there. Then choose again.";
+        $("p-next").classList.toggle("hidden", !ok);
         return;
       }
       if (verdict === "good") { send({ verdict: "good" }); return; }
