@@ -5,6 +5,7 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2609.31727-b31b1b.svg)](https://arxiv.org/abs/2609.31727)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 [![Data: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey.svg)](data/oshiwambo_eval/LICENSE)
+[![Research: ongiini.ai/research](https://img.shields.io/badge/research-ongiini.ai%2Fresearch-c46c3f.svg)](https://ongiini.ai/research/)
 
 **Ongiini AI** is a free AI assistant for people in Namibia, used mainly
 through WhatsApp. It answers everyday questions about school, jobs, health,
@@ -16,6 +17,10 @@ This repository contains the whole project: the production service, the
 chat-agent framework it is built on, the website, and **Ongiini-Eval-OW**, a
 machine-translation benchmark for Oshindonga and Oshikwanyama described in our
 [concept paper on arXiv](https://arxiv.org/abs/2609.31727).
+
+> **→ [ongiini.ai/research](https://ongiini.ai/research/)** — the benchmark at a
+> glance: what is in it, example sentences, the roadmap, how to get your MT
+> model scored, and how native speakers can help check the references.
 
 Ongiini AI is the first project of the Common Intelligence Foundation, a
 non-profit being established in Estonia. Until the registration is complete,
@@ -35,6 +40,7 @@ native-speaker references, built from the register Ongiini AI actually sees.
 
 | | |
 |---|---|
+| **Website** | [ongiini.ai/research](https://ongiini.ai/research/) — overview, examples, roadmap, how to take part |
 | **Paper** | Küpers (2026), *The Ongiini-Eval-OW Benchmark* — [arXiv:2609.31727](https://arxiv.org/abs/2609.31727) · [markdown version](docs/oshiwambo-eval-concept.md) · [LaTeX source](docs/concept-paper-latex/) |
 | **Size** | 600 English source items for v1.0, each to be translated into both dialects |
 | **Composition** | 150 retained phrasebook items · 180 paraphrased from production conversations · 210 crafted for 11 linguistic phenomena · 60 formal / institutional |
@@ -42,6 +48,7 @@ native-speaker references, built from the register Ongiini AI actually sees.
 | **Splits** | 420 development / 180 blind (30 %), stratified by phenomenon, length and domain (seed 42) |
 | **Metrics** | chrF++ (primary) and BLEU via sacrebleu, a derailment rate for runaway outputs, and a planned human evaluation of adequacy and fluency |
 | **References** | Kaarina Shoozi and Elizabeth Hamukwaya, native speakers from northern Namibia |
+| **Reference check** | Native-speaker volunteers rate the references on [ongiini.ai/rate](https://ongiini.ai/rate/), blind and mixed with machine translations and planted errors; protocol fixed in advance in [`docs/rating-protocol.md`](docs/rating-protocol.md) |
 
 ### Status
 
@@ -49,12 +56,13 @@ native-speaker references, built from the register Ongiini AI actually sees.
 |---|---|
 | **v0.1** — 423 items | References complete in both dialects, held back until the v1.0 release |
 | **v1.0** — 600 items | English sources final and public ([`data/oshiwambo_eval_v3.tsv`](data/oshiwambo_eval_v3.tsv)); the 177 new items are with the translator |
+| **Reference check** | Under way since October 2026 — native speakers check the references on [ongiini.ai/rate](https://ongiini.ai/rate/) |
 | **Release** | Dataset, references and a public leaderboard on Hugging Face (CC BY 4.0), planned for the end of 2026 |
 
 The English sources are public now so that anyone can prepare a submission.
 Reference translations are not in this repository; they are released together
 with v1.0. Until then we score submissions privately against the references
-and return the scores — see **[how to submit a system](data/oshiwambo_eval/submissions/README.md)**.
+and return the scores — see **[how to submit your MT system](data/oshiwambo_eval/submissions/README.md)**.
 Submissions made before the release are, by construction, free of reference
 contamination.
 
@@ -67,6 +75,7 @@ contamination.
 | `data/oshiwambo_eval_v*_seeds.md` | The crafted, formal and paraphrased-mined source items, with their tags |
 | [`scripts/build_eval_v3.py`](scripts/build_eval_v3.py) | Builds the 600-item set from the frozen v0.1 set plus the v3 seeds, and checks duplicates and tag coverage |
 | [`scripts/generate_oshiwambo_eval_doc.py`](scripts/generate_oshiwambo_eval_doc.py) · [`import_eval_translations.py`](scripts/import_eval_translations.py) | Translator hand-off: a phone-editable Word document out, references back in |
+| [`docs/rating-protocol.md`](docs/rating-protocol.md) · [`ongiini/ratings.py`](ongiini/ratings.py) · [`website/rate/`](website/rate/) | Reference check by native speakers: protocol, assignment and storage, the rating page; [`scripts/build_rating_tasks.py`](scripts/build_rating_tasks.py) builds a round, [`scripts/analyze_ratings.py`](scripts/analyze_ratings.py) analyses it |
 | [`scripts/fill_baseline_translations.py`](scripts/fill_baseline_translations.py) · [`retry_derailed_baselines.py`](scripts/retry_derailed_baselines.py) | Zero-shot baseline translations (Claude via API, Gemma via vLLM); regenerates derailed outputs with unchanged decoding and logs every attempt |
 | [`scripts/score_eval_baselines.py`](scripts/score_eval_baselines.py) | chrF++ / BLEU / derailment scoring, by split, dialect, length, domain and phenomenon |
 
@@ -110,7 +119,7 @@ that show one plain-text reply and no UI.
 |---|---|
 | [`owela/`](owela/) | The framework — router → policy → step executor, protocols for model, transport, memory and hooks. No product code. [README](owela/README.md) |
 | [`ongiini/`](ongiini/) | The application — Gemma adapter, WhatsApp transport, memory, tools, system prompt, statistics, the Learn app backend. [README](ongiini/README.md) |
-| [`website/`](website/) · [`functions/`](functions/) | ongiini.ai — landing page, web chat, Learn, contribution page, statistics (Cloudflare Pages) |
+| [`website/`](website/) · [`functions/`](functions/) | ongiini.ai — landing page, web chat, Learn, contribution page, research page, translation check (rate), statistics (Cloudflare Pages) |
 | [`deploy/`](deploy/) | DGX Spark host scripts (vLLM restart, network watchdog) |
 | [`docs/`](docs/) | [Operator manual](docs/operations.md), [statistics framework](docs/statistics.md), [webhook resilience](docs/webhook-resilience.md), usage analyses |
 | [`scripts/`](scripts/) | Benchmark pipeline, product-knowledge builder, analysis tools |
