@@ -183,7 +183,51 @@ Nearly half of all Namibians speak Oshiwambo at home. No big AI company will eve
 
 Byna die helfte van alle Namibiërs praat Oshiwambo tuis. Geen groot KI-maatskappy gaan ooit behoorlike Oshiwambo-ondersteuning bou nie, want daar is geen kommersiële rede daarvoor nie. So ons gaan dit self doen, beginnend met sy twee skryfstandaarde — Oshindonga en Oshikwanyama. Gratis. Oop. Een sin op 'n slag.
 
-[ Help on WhatsAppHelp op WhatsApp → ](https://wa.me/4915888635886?text=I%20want%20to%20help%20translate) [ How it worksHoe dit werk ↓ ](#how) 10,000 Pairs per dialect — our target Pare per dialek — ons teiken 2 Dialects collected from day one Dialekte vanaf dag een versamel ~30s One sentence, one translation Een sin, een vertaling
+**Right now we need one thing most: native speakers who check translations.** Five sentences, about two minutes.
+
+**Op die oomblik het ons een ding die nodigste: moedertaalsprekers wat vertalings nagaan.** Vyf sinne, omtrent twee minute.
+
+[ Check translations on WhatsAppGaan vertalings na op WhatsApp → ](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations) [ Or translate sentencesOf vertaal sinne ↓ ](#how) 10,000 Pairs per dialect — our target Pare per dialek — ons teiken 2 Dialects collected from day one Dialekte vanaf dag een versamel 2 min Five translations checked Vyf vertalings nagegaan
+Most needed right now
+
+Die nodigste nou
+
+### Check translations. Two minutes.
+
+### Gaan vertalings na. Twee minute.
+
+We've built a test set of 600 English sentences with Oshindonga and Oshikwanyama translations — the yardstick for how well any AI handles Oshiwambo. Before anyone relies on it, native speakers have to confirm that each translation really says the same as the English. You don't translate anything: you just look and tap.
+
+Ons het 'n toetsstel van 600 Engelse sinne met Oshindonga- en Oshikwanyama-vertalings gebou — die maatstaf vir hoe goed enige KI Oshiwambo hanteer. Voordat iemand daarop staatmaak, moet moedertaalsprekers bevestig dat elke vertaling regtig dieselfde sê as die Engels. Jy vertaal niks nie: jy kyk net en tik.
+
+1
+#### Tap the button
+
+#### Tik die knoppie
+
+WhatsApp opens with a ready message to Ongiini AI. Just send it.
+
+WhatsApp maak oop met 'n gereedgemaakte boodskap aan Ongiini AI. Stuur dit net.
+
+2
+#### Get your personal link
+
+#### Kry jou persoonlike skakel
+
+Ongiini AI replies with a link that's just for you. It opens a small page — nothing to install.
+
+Ongiini AI antwoord met 'n skakel net vir jou. Dit maak 'n klein bladsy oop — niks om te installeer nie.
+
+3
+#### Does it say the same?
+
+#### Sê dit dieselfde?
+
+You see an English sentence and a translation, and tap **Yes**, **Almost** or **No**. Five sentences per round, about two minutes. Do another round, or stop any time.
+
+Jy sien 'n Engelse sin en 'n vertaling, en tik **Yes**, **Almost** of **No**. Vyf sinne per rondte, omtrent twee minute. Doen nog 'n rondte, of stop enige tyd.
+
+I'd like to help check translations Great! Tap the link to get started: *ongiini.ai/rate/#t=…* [ Check translations on WhatsAppGaan vertalings na op WhatsApp → ](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations)
 Why this matters
 
 Hoekom dit saak maak
@@ -216,9 +260,9 @@ Every translation in the dataset is labelled with the dialect you speak. The res
 
 Elke vertaling in die datastel word met die dialek wat jy praat, gemerk. Die resultaat sal een oop Oshiwambo-datastel wees met twee skoon subgroepe — bruikbaar deur enigeen wat modelle in een of albei dialekte wil oplei.
 
-How it works
+The other way to help: translating
 
-Hoe dit werk
+Die ander manier om te help: vertaal
 
 ### Send one message. Get one sentence. Translate.
 
@@ -308,18 +352,18 @@ Skole, NRO's, taaldepartemente — as jy 'n groter bydrae-veldtog wil koördinee
 
 ### Kom ons doen dit self.
 
-One Oshiwambo sentence is enough to start. The dataset is open, the model is open, the bot is open — only your language is still missing. Help us add it.
+Two minutes of checking is enough to start. The dataset is open, the model is open, the bot is open — only your language is still missing. Help us add it.
 
-Een Oshiwambo-sin is genoeg om te begin. Die datastel is oop, die model is oop, die bot is oop — net jou taal ontbreek nog. Help ons om dit by te voeg.
+Twee minute se nagaan is genoeg om te begin. Die datastel is oop, die model is oop, die bot is oop — net jou taal ontbreek nog. Help ons om dit by te voeg.
 
-[ Help on WhatsAppHelp op WhatsApp → ](https://wa.me/4915888635886?text=I%20want%20to%20help%20translate) [ Open on GitHubMaak op GitHub oop → ](https://github.com/sebkuepers/Ongiini)
+[ Check translationsGaan vertalings na → ](https://wa.me/4915888635886?text=I%27d%20like%20to%20help%20check%20translations) [ Translate sentencesVertaal sinne → ](https://wa.me/4915888635886?text=I%20want%20to%20help%20translate)
 The fine print
 
 Die fynskrif
 
-We store your translation, the English source sentence, the dialect, and a one-way scrambled ID from your WhatsApp number. We don't store the number itself next to translations, and we automatically scrub personal-data patterns (emails, IDs, account numbers) before saving. Legal basis: Art. 6 (1) (a) GDPR (your consent, given by submitting after reading the permanence note) and Art. 89 GDPR / § 27 BDSG. Full details in our [privacy policy](/privacy/).
+We store your translation, the English source sentence, the dialect, and a one-way scrambled ID from your WhatsApp number. We don't store the number itself next to translations, and we automatically scrub personal-data patterns (emails, IDs, account numbers) before saving. Legal basis: Art. 6 (1) (a) GDPR (your consent, given by submitting after reading the permanence note) and Art. 89 GDPR / § 27 BDSG. If you check translations, we store your answers, the dialect, whether it is your first language and a scrambled ID of your number — never the number itself. Full details in our [privacy policy](/privacy/).
 
-Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting geskommelde ID van jou WhatsApp-nommer. Ons stoor nie die nommer self langs vertalings nie, en ons vee outomaties persoonlike data (e-posse, ID's, rekeningnommers) skoon voordat ons stoor. Regsgrondslag: Art. 6 (1) (a) AVO (jou toestemming, gegee deur in te dien nadat jy die permanensie-nota gelees het) en Art. 89 AVO / § 27 BDSG. Volle besonderhede in ons [privaatheidsbeleid](/privacy/).
+Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting geskommelde ID van jou WhatsApp-nommer. Ons stoor nie die nommer self langs vertalings nie, en ons vee outomaties persoonlike data (e-posse, ID's, rekeningnommers) skoon voordat ons stoor. Regsgrondslag: Art. 6 (1) (a) AVO (jou toestemming, gegee deur in te dien nadat jy die permanensie-nota gelees het) en Art. 89 AVO / § 27 BDSG. As jy vertalings nagaan, stoor ons jou antwoorde, die dialek, of dit jou eerste taal is en 'n geskommelde ID van jou nommer — nooit die nommer self nie. Volle besonderhede in ons [privaatheidsbeleid](/privacy/).
 
 ## Research (Ongiini-Eval-OW translation benchmark)
 
