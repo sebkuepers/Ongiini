@@ -291,7 +291,7 @@
     document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
     prog = s.progress; count(); item = s.item;
     practice = (s.practice || []).filter(function (p) { return p.dialect === s.dialects[0]; }).slice(0, 2);
-    if (go || prog.done > 0 || store("ongiini.rate.practiced") === "1") render(item); else show("v-welcome");
+    if (go || prog.done > 0) render(item); else show("v-welcome");
   }).catch(function (e) {
     if (e.message === "invite") { try { localStorage.removeItem("ongiini.rate.token"); } catch (x) {}
       msg("This invite link doesn't work.", "It may have been replaced. Please ask us for a new link on WhatsApp."); }
