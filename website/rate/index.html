@@ -114,6 +114,11 @@
     .answers.chosen .answer[aria-pressed="false"] { display: none; }
     .change { background: none; border: 0; padding: 0 0 12px; color: var(--ink-soft); text-decoration: underline;
       font: 14px 'Geist', sans-serif; cursor: pointer; }
+    .slow { background: #8f1d1d; color: #fff; border-radius: 14px; padding: 14px 16px; margin: 10px 0 0; font-size: 16px;
+      box-shadow: 0 4px 14px color-mix(in oklab, #8f1d1d 35%, transparent); animation: shake .45s ease-in-out both; }
+    .slow strong { display: block; font-size: 17px; margin-bottom: 2px; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    @media (prefers-reduced-motion: reduce) { .slow { animation: none; } }
     .hidden { display: none !important; }
     .err { color: var(--bad); }
   </style>
@@ -191,7 +196,7 @@
         <p class="tgt" id="t-text"></p>
       </div>
       <p class="q">Does it say the same as the English?</p>
-      <p class="feedback no hidden" id="slow" style="margin:8px 0 0">Take your time — check it against the English.</p>
+      <p class="slow hidden" id="slow" role="alert"><strong>Slow down a little.</strong> Take your time — check it against the English.</p>
       <div class="answers" id="answers">
         <button class="answer" type="button" data-v="good" aria-pressed="false"><span class="icon i-good">✓</span><span><strong>Yes</strong><small>Same meaning</small></span></button>
         <button class="answer" type="button" data-v="almost" aria-pressed="false"><span class="icon i-warn">~</span><span><strong>Almost</strong><small>A small detail is off</small></span></button>
