@@ -370,7 +370,7 @@ Ons stoor jou vertaling, die Engelse bronsin, die dialek en 'n een-rigting gesko
 Research · Ongiini-Eval-OW
 Nobody could say — there was no way to measure it. Ongiini-Eval-OW is an open benchmark for English → Oshindonga and English → Oshikwanyama translation, with references written by native speakers and sentences in the English Namibians actually write.
 
-[Read the paper →](https://arxiv.org/abs/2609.31727) [Submit a system →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md) [Code & data on GitHub →](https://github.com/sebkuepers/Ongiini) 600English source sentences 2Dialects — Oshindonga and Oshikwanyama 11Linguistic phenomena, ≥ 30 items each 180Blind sentences, held back for the leaderboard
+[Read the paper →](https://arxiv.org/abs/2609.31727) [Evaluate your MT model →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md) [Code & data on GitHub →](https://github.com/sebkuepers/Ongiini) 600English source sentences 2Dialects — Oshindonga and Oshikwanyama 11Linguistic phenomena, ≥ 30 items each 180Blind sentences, held back for the leaderboard
 Why this exists
 
 ### Half of Namibia's homes speak it. No benchmark did.
@@ -481,9 +481,9 @@ Take part
 ### Three ways to join in.
 
 1
-#### Submit a system
+#### Built a translation model? Get it scored
 
-Translate the 600 public English sentences into both dialects and send us the files. We score them privately against the references and send the results back. Submissions made before the release are, by construction, free of test-set contamination. [How to submit →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md)
+For teams with a machine-translation system or a language model: let it translate the 600 public English sentences into both dialects and send us the output files. We score them privately against the references and send the results back. Submissions made before the release are, by construction, free of test-set contamination. [How to submit →](https://github.com/sebkuepers/Ongiini/blob/main/data/oshiwambo_eval/submissions/README.md)
 
 2
 #### Speak Oshiwambo? Check translations
