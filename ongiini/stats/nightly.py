@@ -34,6 +34,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
@@ -472,6 +473,10 @@ def seconds_until_next_run(now: datetime) -> float:
     return (target - now).total_seconds()
 
 
+def _catch_up_forced() -> bool:
+    return os.environ.get("ONGIINI_STATS_CATCH_UP_NOW", "").lower() in ("1", "true", "yes")
+
+
 def in_night_window(now: datetime) -> bool:
     """23:00–04:00 UTC (01:00–06:00 in Namibia): low chat traffic."""
     return now.hour >= 23 or now.hour < 4
@@ -481,12 +486,13 @@ async def run_nightly_forever(complete: Complete, list_facts: Callable[[str], li
                               load_excluded: Callable[[], frozenset[str]]) -> None:
     """Run nightly at RUN_HOUR_UTC. If the process starts inside the night
     window and the last run is over a day old (e.g. a restart missed it),
-    catch up straight away; never during the day — the first full run
-    takes hours of batch calls on the same vLLM that serves chat."""
+    catch up straight away. During the day only when the operator sets
+    ONGIINI_STATS_CATCH_UP_NOW=1 — the first full run takes hours of
+    batch calls on the same vLLM that serves chat."""
     last = _last_run()
     now = datetime.now(timezone.utc)
     stale = last is None or now - last > timedelta(hours=26)
-    if stale and in_night_window(now):
+    if stale and (in_night_window(now) or _catch_up_forced()):
         await asyncio.sleep(300)                        # let start-up traffic settle
         await _safe_run(complete, list_facts, load_excluded)
     while True:
