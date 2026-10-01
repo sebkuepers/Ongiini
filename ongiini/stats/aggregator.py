@@ -31,6 +31,21 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+# reply_reason values (trace, since 2026-09-30) that mean the user got a
+# fallback instead of an answer.
+_FAILED_REPLY_REASONS = ("error", "max_steps")
+
+
+def _turn_latency_ms(row: dict[str, Any]) -> int:
+    """End-to-end turn time. ``wall_ms`` (since 2026-09-30) includes tool
+    time; older rows only have model time in ``total_latency_ms``."""
+    for key in ("wall_ms", "total_latency_ms"):
+        v = row.get(key)
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v)
+    return 0
+
+
 from ..config import settings
 from .taxonomy import TAXONOMY_VERSION
 
@@ -941,6 +956,8 @@ def _compute_web_chat() -> dict[str, Any] | None:
     tokens_out_total = 0
     images = 0
     tool_call_turns = 0
+    replies_with_reason = 0
+    failed_replies = 0
     truncations = 0
     latencies: list[int] = []
     timestamps: list[datetime] = []
@@ -979,8 +996,12 @@ def _compute_web_chat() -> dict[str, Any] | None:
 
         if r.get("truncated"):
             truncations += 1
+        if "reply_reason" in r:
+            replies_with_reason += 1
+            if r["reply_reason"] in _FAILED_REPLY_REASONS:
+                failed_replies += 1
 
-        lat = int(r.get("total_latency_ms") or 0)
+        lat = _turn_latency_ms(r)
         if lat > 0:
             latencies.append(lat)
 
@@ -1046,6 +1067,8 @@ def _compute_web_chat() -> dict[str, Any] | None:
         "p95_latency_ms": p95_lat,
         "tool_call_rate": round(tool_call_turns / messages, 4),
         "truncation_rate": round(truncations / messages, 4),
+        "failed_reply_rate": round(failed_replies / replies_with_reason, 4)
+        if replies_with_reason else None,
     }
 
     return {
@@ -1195,6 +1218,8 @@ def _compute_sync() -> dict[str, Any]:
     web_searches_trace = 0
     tool_call_turns = 0
     total_trace_turns = 0
+    replies_with_reason = 0
+    failed_replies = 0
     latencies: list[int] = []
 
     # Materialise trace rows so we can also use them for deltas.
@@ -1216,24 +1241,32 @@ def _compute_sync() -> dict[str, Any]:
         calls = tr.get("calls", []) or []
         any_tool_called = False
         for call in calls:
-            for tc in call.get("tool_calls", []) or []:
-                name = tc.get("name", "")
+            if call.get("tool_calls"):
                 any_tool_called = True
+            # Count executed tools (tool_results), not requested ones:
+            # policy-synthesised calls (planner fan-out, auto fetch_urls)
+            # never appear as model tool_calls but do run.
+            for res in call.get("tool_results", []) or []:
+                name = res.get("name", "")
                 if name == "web_search":
                     web_searches_trace += 1
-                elif name == "fetch_url":
+                elif name in ("fetch_url", "fetch_urls"):
                     url_fetches += 1
+                elif name == "delete_my_data" and not res.get("error"):
+                    deletions += 1
         if any_tool_called:
             tool_call_turns += 1
             if day:
                 tool_call_turns_per_day[day] += 1
-        if tr.get("deleted_data"):
-            deletions += 1
         if tr.get("truncated"):
             truncations += 1
-        lat = tr.get("total_latency_ms")
-        if isinstance(lat, (int, float)) and lat > 0:
-            latencies.append(int(lat))
+        if "reply_reason" in tr:
+            replies_with_reason += 1
+            if tr["reply_reason"] in _FAILED_REPLY_REASONS:
+                failed_replies += 1
+        lat = _turn_latency_ms(tr)
+        if lat > 0:
+            latencies.append(lat)
 
     # ---- Pass 3: per-user memory files (kinds count) ----
     # The memory files preserve the actual message stream including
@@ -1375,6 +1408,8 @@ def _compute_sync() -> dict[str, Any]:
         "truncation_rate": round(truncations / total_trace_turns, 4)
         if total_trace_turns
         else 0.0,
+        "failed_reply_rate": round(failed_replies / replies_with_reason, 4)
+        if replies_with_reason else None,
     }
 
     # ---- Conversations: total count + per-conversation length list (for depth) ----

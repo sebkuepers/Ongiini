@@ -1910,7 +1910,7 @@
         ['Median latency', formatMs(p.median_latency_ms)],
         ['p95 latency', formatMs(p.p95_latency_ms)],
         ['Tool-call rate', formatPct(p.tool_call_rate)],
-        ['Truncation rate', formatPct(p.truncation_rate)],
+        ['Failed replies', p.failed_reply_rate == null ? '—' : formatPct(p.failed_reply_rate)],
       ];
       for (const t of tiles) {
         const div = el('div', { className: 'stat-perf-tile' });
@@ -1979,7 +1979,7 @@
         ['Median latency', formatMs(p.median_latency_ms)],
         ['p95 latency', formatMs(p.p95_latency_ms)],
         ['Tool-call rate', formatPct(p.tool_call_rate)],
-        ['Truncation rate', formatPct(p.truncation_rate)],
+        ['Failed replies', p.failed_reply_rate == null ? '—' : formatPct(p.failed_reply_rate)],
       ];
       for (const pt of perfTiles) {
         const div = el('div', { className: 'stat-perf-tile' });

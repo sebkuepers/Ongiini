@@ -31,8 +31,8 @@ extend it.
    + top-topics list (raw extracted phrases, threshold ≥5).
 6. **Who uses Ongiini.ai** — five separate emergent-clustering panels:
    roles, regions, languages, family situation, current life context.
-7. **How it performs** — median + p95 latency, tool-call rate,
-   truncation rate. Rendered against an `--ink` dark background so it
+7. **How it performs** — median + p95 end-to-end latency (tool time included since 2026-10-01), tool-call rate,
+   failed-reply rate (turns that ended in a fallback reply). Rendered against an `--ink` dark background so it
    visually separates ops signals from user-facing data.
 8. **Methodology** — every page disclosure: what the data is, the two
    qualitative passes, the heavy skew, the privacy floor, the
