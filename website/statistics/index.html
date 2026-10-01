@@ -1246,6 +1246,28 @@
       return { slope, intercept };
     }
 
+    // Bar layout that degrades gracefully with many days: the gap is a
+    // fraction of the slot (not a fixed pixel count), so 130+ days still
+    // get positive-width bars. Fixed 4–6 px gaps used to push the width
+    // negative and the bars disappeared.
+    function _barLayout(innerW, n, maxBarW, maxGap) {
+      const slot = innerW / Math.max(1, n);
+      const gap = Math.min(maxGap, slot * 0.25);
+      const barW = Math.min(maxBarW, slot - gap);
+      const groupW = barW + gap;
+      const offset = (innerW - (n * groupW - gap)) / 2;
+      return { barW, gap, groupW, offset };
+    }
+
+    // ~6 evenly spaced tick indices (always first and last) for long series.
+    function _tickIndices(n, want) {
+      if (n <= want) return [...Array(n).keys()];
+      const step = (n - 1) / (want - 1);
+      const out = new Set();
+      for (let k = 0; k < want; k++) out.add(Math.round(k * step));
+      return [...out];
+    }
+
     function _renderCombinedVolumeChart(parentId, series, opts) {
       const parent = document.getElementById(parentId);
       clear(parent);
@@ -1268,19 +1290,23 @@
       zeroLabel.textContent = '0';
       svg.appendChild(zeroLabel);
 
-      // Per-day group layout — same math as renderBarTimeseries.
-      const barGap = 6;
-      const naturalW = (innerW - barGap * (series.length - 1)) / series.length;
-      const groupW = Math.min(56, naturalW);
-      const groupOffset = (innerW - (series.length * (groupW + barGap) - barGap)) / 2;
+      // Per-day group layout (shared with renderBarTimeseries).
+      const lay = _barLayout(innerW, series.length, 56, 6);
+      const groupW = lay.barW;
       const msgsBarW = groupW * 0.62;       // wide primary bar
       const convsBarW = groupW * 0.32;      // narrow secondary, nestled to the right
+      const dense = series.length > 14;
+      // Long series: label only the peak and the latest day, and a handful
+      // of dates; every-day labels overlap into an unreadable band.
+      const peakIdx = series.reduce((m, s, i) => (s.msgs > series[m].msgs ? i : m), 0);
+      const labelIdx = new Set(dense ? [peakIdx, series.length - 1] : series.map((_, i) => i));
+      const dateIdx = new Set(dense ? _tickIndices(series.length, 6) : series.map((_, i) => i));
 
-      const xCenter = i => padL + groupOffset + i * (groupW + barGap) + groupW / 2;
+      const xCenter = i => padL + lay.offset + i * lay.groupW + groupW / 2;
 
       series.forEach((p, i) => {
         const isPartial = opts.dimLast && i === series.length - 1;
-        const groupLeft = padL + groupOffset + i * (groupW + barGap);
+        const groupLeft = padL + lay.offset + i * lay.groupW;
 
         // Primary bar: messages
         const mh = (p.msgs / maxV) * innerH;
@@ -1304,30 +1330,37 @@
         if (isPartial) cAttrs['fill-opacity'] = '0.55';
         svg.appendChild(svgEl('rect', cAttrs));
 
-        // Message value label above primary bar
-        const tx = svgEl('text', {
-          x: (groupLeft + msgsBarW / 2).toFixed(1),
-          y: Math.max(padT + 4, my - 4).toFixed(1),
-          'text-anchor': 'middle', class: 'value-label',
-        });
-        tx.textContent = fmtCompact.format(p.msgs);
-        svg.appendChild(tx);
+        if (labelIdx.has(i)) {
+          // Message value label above primary bar
+          const tx = svgEl('text', {
+            x: (groupLeft + msgsBarW / 2).toFixed(1),
+            y: Math.max(padT + 4, my - 4).toFixed(1),
+            'text-anchor': dense && i === series.length - 1 ? 'end' : 'middle',
+            class: 'value-label',
+          });
+          tx.textContent = fmtCompact.format(p.msgs);
+          svg.appendChild(tx);
 
-        // Conversation value label — smaller, above secondary bar
-        const ctx = svgEl('text', {
-          x: (groupLeft + msgsBarW + 2 + convsBarW / 2).toFixed(1),
-          y: Math.max(padT + 4, cy - 4).toFixed(1),
-          'text-anchor': 'middle', class: 'axis-tick',
-        });
-        ctx.textContent = fmtCompact.format(p.convs);
-        svg.appendChild(ctx);
+          if (!dense) {
+            // Conversation value label — smaller, above secondary bar
+            const ctx = svgEl('text', {
+              x: (groupLeft + msgsBarW + 2 + convsBarW / 2).toFixed(1),
+              y: Math.max(padT + 4, cy - 4).toFixed(1),
+              'text-anchor': 'middle', class: 'axis-tick',
+            });
+            ctx.textContent = fmtCompact.format(p.convs);
+            svg.appendChild(ctx);
+          }
+        }
 
+        if (!dateIdx.has(i)) return;
         // Date label below, with "partial" on its own line for the
         // current-day bar (same convention as renderBarTimeseries).
+        const anchor = dense ? (i === 0 ? 'start' : i === series.length - 1 ? 'end' : 'middle') : 'middle';
         const dt = svgEl('text', {
           x: xCenter(i).toFixed(1),
           y: (isPartial ? H - 12 : H - 4),
-          'text-anchor': 'middle', class: 'axis-tick',
+          'text-anchor': anchor, class: 'axis-tick',
         });
         dt.textContent = shortDate(p.day);
         svg.appendChild(dt);
@@ -1338,6 +1371,7 @@
             'font-size': '9', 'fill-opacity': '0.7',
           });
           pt.textContent = 'partial';
+          pt.setAttribute('text-anchor', anchor);
           svg.appendChild(pt);
         }
       });
@@ -1590,11 +1624,10 @@
       // Bar width: small gap, max width capped so a 3-day chart doesn't
       // produce three giant blocks. 40px feels right with the 480px
       // canvas and the surrounding tile padding.
-      const barGap = 4;
-      const naturalW = (innerW - barGap * (series.length - 1)) / series.length;
-      const barW = Math.min(40, naturalW);
-      const groupW = barW + barGap;
-      const groupOffset = (innerW - (series.length * groupW - barGap)) / 2;
+      const lay = _barLayout(innerW, series.length, 40, 4);
+      const barW = lay.barW;
+      const groupW = lay.groupW;
+      const groupOffset = lay.offset;
       const showAllLabels = series.length <= 14;
 
       series.forEach((p, i) => {
@@ -1648,15 +1681,15 @@
       });
 
       if (!showAllLabels) {
-        // Long series: just the endpoints.
-        const firstX = padL + groupOffset + barW / 2;
-        const lastX = padL + groupOffset + (series.length - 1) * groupW + barW / 2;
-        const firstLabel = svgEl('text', { x: firstX, y: H - 4, 'text-anchor': 'start', class: 'axis-tick' });
-        firstLabel.textContent = shortDate(series[0][0]);
-        svg.appendChild(firstLabel);
-        const lastLabel = svgEl('text', { x: lastX, y: H - 4, 'text-anchor': 'end', class: 'axis-tick' });
-        lastLabel.textContent = shortDate(series[series.length - 1][0]);
-        svg.appendChild(lastLabel);
+        // Long series: ~6 evenly spaced dates, first/last anchored inside.
+        const n = series.length;
+        _tickIndices(n, 6).forEach(i => {
+          const x = padL + groupOffset + i * groupW + barW / 2;
+          const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+          const t = svgEl('text', { x: x.toFixed(1), y: H - 4, 'text-anchor': anchor, class: 'axis-tick' });
+          t.textContent = shortDate(series[i][0]);
+          svg.appendChild(t);
+        });
       }
       parent.appendChild(svg);
     }
