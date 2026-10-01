@@ -253,6 +253,41 @@ async def test_synth_first_call_from_message_dispatches_without_model_call():
 
 
 @pytest.mark.asyncio
+async def test_reply_from_tool_sends_the_tool_text_without_a_model_call():
+    @tool(name="link_test")
+    async def link() -> str:
+        """link."""
+        return json.dumps({"status": "ok", "reply": "Tap: https://x.test/#t=abc_DEF-123"})
+
+    model = ScriptedModel([_ScriptedResponse(content="should not be used")])
+    table = PolicyTable().set(
+        VERDICT_NONE, DEPTH_SHALLOW,
+        Policy(name="link", synth_tool="link_test", synth_arg="",
+               synth_first_call_from_message=True, reply_from_tool="reply"),
+    )
+    result = await Agent(_runtime(model=model, policies=table, tools=[link])).handle(_msg("link pls"))
+    assert model.calls == []
+    assert result.reply_text == "Tap: https://x.test/#t=abc_DEF-123"
+
+
+@pytest.mark.asyncio
+async def test_reply_from_tool_falls_back_to_compose_when_field_missing():
+    @tool(name="nolink_test")
+    async def nolink() -> str:
+        """nolink."""
+        return "not json"
+
+    model = ScriptedModel([_ScriptedResponse(content="composed")])
+    table = PolicyTable().set(
+        VERDICT_NONE, DEPTH_SHALLOW,
+        Policy(name="nolink", synth_tool="nolink_test", synth_arg="",
+               synth_first_call_from_message=True, reply_from_tool="reply"),
+    )
+    result = await Agent(_runtime(model=model, policies=table, tools=[nolink])).handle(_msg("x"))
+    assert len(model.calls) == 1 and result.reply_text == "composed"
+
+
+@pytest.mark.asyncio
 async def test_forced_tool_not_honoured_is_traced_and_recovered_by_synthesis():
     seen: list[str] = []
 

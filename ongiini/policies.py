@@ -7,6 +7,8 @@ and model stacks) so the table can be imported and tested on its own.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from owela import (
     DEPTH_DEEP, DEPTH_SHALLOW, Policy, PolicyTable,
     VERDICT_ADMIN, VERDICT_DOCS, VERDICT_NONE, VERDICT_SEARCH, force_tool,
@@ -233,10 +235,12 @@ def build_policy_table() -> PolicyTable:
     ):
         table.set(verdict, DEPTH_SHALLOW, _state_tool(name, tool_name, contribute_sections))
     # Checking translations (ongiini.ai/rate) is a separate flow from
-    # translating: its own verdict, tool and phrasing skill.
+    # translating. The tool returns the finished one-line reply with the
+    # link; it is sent verbatim (no model call — the link can't be
+    # mangled, and the message stays small: data is expensive).
     table.set(
         VERDICT_RATE_INVITE, DEPTH_SHALLOW,
-        _state_tool("rate_invite", "rate_link", (*SECTIONS_CHAT, "skill:rate")),
+        replace(_state_tool("rate_invite", "rate_link", SECTIONS_CHAT), reply_from_tool="reply"),
     )
     table.set(
         VERDICT_OPT_OUT_BROADCAST, DEPTH_SHALLOW,

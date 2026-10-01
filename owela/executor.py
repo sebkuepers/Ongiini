@@ -117,10 +117,13 @@ async def execute_turn(runtime: "Runtime", msg: InboundMessage) -> list[Step]:
         if synthesised_initial:
             policy = await synth.dispatch_and_follow_up(policy, variants, source)
         first_tool = AUTO if synthesised_initial else policy.first_tool
+        fixed = _reply_from_tool(steps, policy) if synthesised_initial else ""
 
         # 5. Act loop. Only model-driven turns count toward max_steps.
         model_turns_taken = 0
-        while model_turns_taken < policy.max_steps:
+        if fixed:
+            draft = fixed
+        while not fixed and model_turns_taken < policy.max_steps:
             model_turns_taken += 1
             compose_only = clock.over()
             tc = AUTO if (compose_only or model_turns_taken > 1) else first_tool
@@ -157,8 +160,9 @@ async def execute_turn(runtime: "Runtime", msg: InboundMessage) -> list[Step]:
             policy = await _degrade_on_tool_error(runtime, ctx, steps, tool_steps)
             await synth.auto_followup(policy, tool_steps)
         else:
-            draft = policy.fallback_reply
-            reason = REPLY_MAX_STEPS
+            if not fixed:
+                draft = policy.fallback_reply
+                reason = REPLY_MAX_STEPS
 
         # 6. Critique + revise — only for a real draft, with time left, on a
         # turn that still has the evidence it was meant to have.
@@ -419,6 +423,24 @@ def _initial_variants(
     if policy.synth_first_call_from_message:
         return [QueryVariant(query=msg.text)], "message"
     return [], ""
+
+
+def _reply_from_tool(steps: list[Step], policy: Policy) -> str:
+    """``policy.reply_from_tool``: the synthesised tool returned the finished
+    reply as a field of its JSON result. Empty string = compose normally."""
+    if not policy.reply_from_tool:
+        return ""
+    for s in reversed(steps):
+        if isinstance(s, ToolStep) and s.tool_name == policy.synth_tool:
+            if s.error is not None:
+                return ""
+            try:
+                data = json.loads(s.attrs.get("result", ""))
+            except ValueError:
+                return ""
+            reply = data.get(policy.reply_from_tool) if isinstance(data, dict) else None
+            return reply.strip() if isinstance(reply, str) else ""
+    return ""
 
 
 class _Synth:

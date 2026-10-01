@@ -17,11 +17,11 @@ def _isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(contributions.settings, "contributions_hash_salt", "test-salt")
 
 
-def _ctx(user_id="264811234567"):
+def _ctx(user_id="264811234567", history=None):
     from owela import ToolContext
     from owela.transport import InboundMessage
     msg = InboundMessage(user_id=user_id, msg_id="m", text="I'd like to help check translations",
-                         content_parts=[])
+                         content_parts=[], history=history or [])
     return ToolContext(user_id=user_id, runtime=MagicMock(), msg=msg)
 
 
@@ -53,3 +53,18 @@ async def test_blocked_number():
 async def test_soft_fails_without_salt(monkeypatch):
     monkeypatch.setattr(contributions.settings, "contributions_hash_salt", "")
     assert json.loads(await rate_link(_ctx()))["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_reply_is_short_and_carries_the_exact_link():
+    old = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "Ongiini! ..."}]
+    r = json.loads(await rate_link(_ctx(history=old)))
+    assert r["reply"] == f"Great! Tap the link to get started:\n{r['url']}"
+    again = json.loads(await rate_link(_ctx(history=old)))
+    assert again["url"] in again["reply"] and "new link" in again["reply"]
+
+
+@pytest.mark.asyncio
+async def test_first_ever_message_leads_with_ai_disclosure():
+    r = json.loads(await rate_link(_ctx()))
+    assert r["reply"].startswith("Ongiini! I'm an AI assistant.\n\nGreat!")

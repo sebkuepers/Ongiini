@@ -132,6 +132,11 @@ class Policy:
     synth_arg: str = "query"
     synth_default_args: dict[str, Any] = field(default_factory=dict)
     synth_first_call_from_message: bool = False
+    # Deterministic reply: when set, the synthesised tool returns JSON and
+    # this field of it IS the reply — no model call, so nothing the tool
+    # produced (a link, a code) can be paraphrased or mangled. Falls back
+    # to a normal compose if the field is missing or empty.
+    reply_from_tool: str = ""
 
     # Deterministic follow-up tool synthesis. When ``auto_followup_after``
     # is set, the executor watches each ToolStep: if its ``tool_name``
