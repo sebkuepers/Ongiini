@@ -119,6 +119,7 @@ def prompt(dialect: str, english: str, gloss: list[tuple[str, str, str]]) -> str
 async def translate(args, jobs: list[dict]) -> None:
     client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key("OPENROUTER_API_KEY"))
     sem, lock = asyncio.Semaphore(args.concurrency), asyncio.Lock()
+    body = {} if args.reasoning == "default" else {"reasoning": {"enabled": args.reasoning == "on"}}
 
     async def one(job: dict) -> None:
         async with sem:
@@ -129,8 +130,9 @@ async def translate(args, jobs: list[dict]) -> None:
                     await asyncio.sleep(wait)
                     try:
                         r = await client.chat.completions.create(
-                            model=args.model, max_tokens=1024, temperature=0, seed=42,
-                            messages=[{"role": "user", "content": job["prompt"]}])
+                            model=args.model, max_tokens=args.max_tokens, temperature=0, seed=42,
+                            messages=[{"role": "user", "content": job["prompt"]}],
+                            extra_body=body)
                         if r.choices:
                             break
                     except Exception as exc:              # noqa: BLE001
@@ -139,16 +141,25 @@ async def translate(args, jobs: list[dict]) -> None:
                 if r is None:
                     print(f"  error {job['id']} {job['dialect']}", file=sys.stderr)
                     return
-                raw = r.choices[0].message.content or ""
+                msg = r.choices[0].message
+                raw = msg.content or ""
+                thinking = (msg.model_extra or {}).get("reasoning") or ""
+                finish = r.choices[0].finish_reason
                 text = clean(raw, job["dialect"])
                 if text and not is_derailed(job["english"], text):
                     break
         rec = {"id": job["id"], "dialect": job["dialect"], "model_id": args.model,
-               "prompt_template_id": TEMPLATE_ID, "translation": text, "raw_response": raw,
-               "attempts": attempts, "glossary": job["gloss"]}
+               "prompt_template_id": TEMPLATE_ID if job["gloss"] else PAPER_ZEROSHOT_ID, "translation": text, "raw_response": raw,
+               "attempts": attempts, "finish_reason": finish, "glossary": job["gloss"],
+               "reasoning_setting": args.reasoning, "max_tokens": args.max_tokens}
         async with lock:
-            with (OUT / f"gemma-glossary_{job['dialect']}.jsonl").open("a") as f:
+            with (OUT / f"{args.label}_{job['dialect']}.jsonl").open("a") as f:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            if thinking:
+                with (OUT / f"{args.label}_{job['dialect']}.reasoning.jsonl").open("a") as f:
+                    f.write(json.dumps({"id": job["id"], "dialect": job["dialect"], "english": job["english"],
+                                        "glossary": job["gloss"], "reasoning": thinking},
+                                       ensure_ascii=False) + "\n")
 
     await asyncio.gather(*(one(j) for j in jobs))
 
@@ -172,7 +183,12 @@ def compare(items: dict, dialect: str, ids: list[int], base: dict[int, str], exp
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="google/gemma-4-26b-a4b-it")
-    ap.add_argument("--baseline", default="gemma-4-26b-api")
+    ap.add_argument("--label", default="gemma-glossary", help="output stem in data/private/experiments/dictionary")
+    ap.add_argument("--baseline", default="gemma-4-26b-api",
+                    help="what to compare with: a stem in the experiment dir, else in baselines/")
+    ap.add_argument("--reasoning", choices=("default", "on", "off"), default="default")
+    ap.add_argument("--max-tokens", type=int, default=1024)
+    ap.add_argument("--no-glossary", action="store_true", help="same run without the glossary (a fresh baseline)")
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--score-only", action="store_true")
     args = ap.parse_args(argv)
@@ -185,25 +201,33 @@ def main(argv=None) -> int:
         lex = lexicon(d)
         ids = sorted(i for i, r in items.items() if not r["in_blind_split"]
                      and (r.get(f"{d}_reference") or "").strip())
-        gl = {i: glossary(items[i]["english"], lex) for i in ids}
-        plan[d] = (ids, gl)
+        gl = {i: glossary(items[i]["english"], lex) for i in ids}          # for the split, always
+        run_gl = {i: [] for i in ids} if args.no_glossary else gl
+        plan[d] = (ids, gl, run_gl)
         report["dialects"][d] = {"lexicon_entries": sum(map(len, lex.values())),
                                  "items_with_glossary": sum(bool(g) for g in gl.values()),
                                  "mean_entries": round(float(np.mean([len(g) for g in gl.values()])), 2)}
     if not args.score_only:
         jobs = []
-        for d, (ids, gl) in plan.items():
-            p = OUT / f"gemma-glossary_{d}.jsonl"
+        for d, (ids, gl, run_gl) in plan.items():
+            p = OUT / f"{args.label}_{d}.jsonl"
             done = {json.loads(l)["id"] for l in p.read_text().splitlines() if l.strip()} if p.exists() else set()
-            jobs += [{"id": i, "dialect": d, "english": items[i]["english"].strip(), "gloss": gl[i],
-                      "prompt": prompt(d, items[i]["english"].strip(), gl[i])}
+            jobs += [{"id": i, "dialect": d, "english": items[i]["english"].strip(), "gloss": run_gl[i],
+                      "prompt": prompt(d, items[i]["english"].strip(), run_gl[i])}
                      for i in ids if i not in done]
         print(f"{len(jobs)} translations to run", file=sys.stderr)
         asyncio.run(translate(args, jobs))
 
-    for d, (ids, gl) in plan.items():
-        base, _ = E.load_system_file(BASE / f"{args.baseline}_{d}.jsonl", d, ids)
-        exp = {int(r["id"]): r["translation"] for r in E.load_jsonl(OUT / f"gemma-glossary_{d}.jsonl")}
+    def outputs(stem: str, d: str) -> dict[int, str]:
+        p = OUT / f"{stem}_{d}.jsonl"
+        p = p if p.exists() else BASE / f"{stem}_{d}.jsonl"
+        return {int(r["id"]): r.get("translation") or "" for r in E.load_jsonl(p)}
+
+    report |= {"label": args.label, "reasoning": args.reasoning, "max_tokens": args.max_tokens,
+               "glossary": not args.no_glossary}
+    for d, (ids, gl, _) in plan.items():
+        base, exp = outputs(args.baseline, d), outputs(args.label, d)
+        ids = [i for i in ids if i in base]
         ids = [i for i in ids if i in exp]
         with_g = [i for i in ids if gl[i]]
         without = [i for i in ids if not gl[i]]
@@ -213,7 +237,7 @@ def main(argv=None) -> int:
             rd["with_glossary"] = compare(items, d, with_g, base, exp)
         if len(without) >= 20:
             rd["without_glossary"] = compare(items, d, without, base, exp)
-    (OUT / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    (OUT / f"report_{args.label}_vs_{args.baseline}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False))
     print(json.dumps(report, indent=2, ensure_ascii=False))
     return 0
 
