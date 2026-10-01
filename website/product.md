@@ -379,6 +379,8 @@ Oshiwambo is the home language of roughly half of Namibian households. Yet its t
 
 We run [Ongiini AI](/), a free AI assistant for people in Namibia. Our users keep asking for Oshiwambo. Before we can offer it responsibly, we have to be able to measure it. So we built the yardstick, and we are making it open for everyone who works on these languages.
 
+180 of the benchmark sentences are paraphrased from real questions people ask Ongiini AI. How people use it, and what for, is public on our [statistics page](/statistics/).
+
 The benchmark
 
 ### 600 sentences, built to find where translation breaks.

@@ -139,6 +139,7 @@ def main() -> int:
 
     values = {
         "N_ITEMS": str(n), "N_BLIND": str(blind), "N_DEV": str(n - blind),
+        "N_MINED": str(prov["mined_paraphrased"]),
         "BLIND_PCT": f"{round(100 * blind / n)}", "N_PHEN": str(len(PHENOMENA)),
         "MIN_PHEN": str(min(tag_all[k] for k, *_ in PHENOMENA)),
         "LEN_S": f"{round(100 * length['S'] / n)}", "LEN_M": f"{round(100 * length['M'] / n)}",
