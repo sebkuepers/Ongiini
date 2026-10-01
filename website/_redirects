@@ -1,0 +1,4 @@
+# The web chat and Learn are their own Pages projects; the copies under
+# ongiini.ai/chat-app/ and /learn-app/ would be duplicate content.
+/chat-app/*   https://chat.ongiini.ai/:splat    301
+/learn-app/*  https://learn.ongiini.ai/:splat   301

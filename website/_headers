@@ -1,0 +1,17 @@
+# Preview / *.pages.dev hosts duplicate ongiini.ai — keep them out of search.
+https://ongiini.pages.dev/*
+  X-Robots-Tag: noindex
+https://:hash.ongiini.pages.dev/*
+  X-Robots-Tag: noindex
+
+/assets/*
+  Cache-Control: public, max-age=86400
+
+/assets/og/*
+  Cache-Control: public, max-age=604800
+
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8

@@ -114,7 +114,7 @@ Other ways to help: open the code on GitHub, file an issue, or tell one person w
 
 ### What is Ongiini?
 
-A free AI helper on WhatsApp. Send a question — about learning, work, health, daily life — and you get a useful answer back. Built on a simple idea: a tool this useful belongs to all of us, not just to whoever can afford a subscription.
+A free AI assistant on WhatsApp. Send a question — about learning, work, health, daily life — and you get a useful answer back. Built on a simple idea: a tool this useful belongs to all of us, not just to whoever can afford a subscription.
 
 ### Why 'Ongiini'?
 
@@ -566,7 +566,7 @@ An open yardstick is the first step towards AI that really speaks Oshiwambo — 
 
 How Ongiini handles your data — last updated 1 October 2026
 
-**The short version.** Ongiini is a free AI helper on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).
+**The short version.** Ongiini is a free AI assistant on WhatsApp. To work, we receive your messages (via Meta) and your phone number, and we keep a small amount of information so the assistant can follow conversations. We do not sell your data, do not show you ads, and do not train anyone's AI on your conversations. We do publish aggregate, anonymous statistics about how the service is used — themes, professions, growth — to be transparent about our impact; individual conversations are never published (see Section 7).
 
 You can see what we remember about you by sending *"what do you remember about me?"* on WhatsApp. You can delete it by sending *"delete my data"*. Both work in English and Afrikaans, any time.
 
@@ -799,7 +799,7 @@ Last updated: 1 October 2026. Effective immediately.
 
 Plain-language rules for using Ongiini — last updated 2 June 2026
 
-**The short version.** Ongiini is a free AI helper on WhatsApp. By messaging the Ongiini number, you accept these terms.
+**The short version.** Ongiini is a free AI assistant on WhatsApp. By messaging the Ongiini number, you accept these terms.
 
 Treat Ongiini's answers as a useful starting point — **not as professional advice**. For decisions about your health, your money, your legal situation, your safety, or anything else that really matters, always check with a qualified person.
 

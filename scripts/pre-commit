@@ -29,3 +29,9 @@ python3 scripts/build_product_knowledge.py
 git add ongiini/knowledge/product.md website/product.md
 
 echo "pre-commit: regenerated and staged product.md"
+
+# Search / sharing metadata: the SEO block in every page head and the
+# sitemap come from scripts/build_site_seo.py (PAGES table).
+python3 scripts/build_site_seo.py
+git add website/sitemap.xml website/*.html website/*/index.html website/*/*/index.html scripts/research_page_template.html 2>/dev/null || true
+python3 scripts/build_site_seo.py --check

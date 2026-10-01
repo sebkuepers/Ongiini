@@ -16,11 +16,13 @@ on:
     paths:
       - "website/**"
       - "scripts/build_product_knowledge.py"
+      - "scripts/build_site_seo.py"
       - "ongiini/knowledge/**"
   pull_request:
     paths:
       - "website/**"
       - "scripts/build_product_knowledge.py"
+      - "scripts/build_site_seo.py"
       - "ongiini/knowledge/**"
 
 jobs:
@@ -42,3 +44,6 @@ jobs:
         # --check writes nothing and exits non-zero if the generated
         # content would differ from what's committed.
         run: python3 scripts/build_product_knowledge.py --check
+
+      - name: Verify SEO heads and sitemap (scripts/build_site_seo.py)
+        run: python3 scripts/build_site_seo.py --check

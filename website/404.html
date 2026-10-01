@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Page not found — Ongiini AI</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#f5efe4" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-frame.css" />
+  <style>
+    :root {
+      --bone: oklch(0.965 0.012 75); --bone-deep: oklch(0.945 0.018 75);
+      --ink: oklch(0.20 0.018 50); --ink-soft: oklch(0.50 0.020 50); --ink-faint: oklch(0.68 0.020 50);
+      --terracotta: oklch(0.60 0.14 45); --terracotta-deep: oklch(0.48 0.13 40);
+      --rule: oklch(0.85 0.018 70); --rule-faint: oklch(0.90 0.014 70);
+    }
+    @supports not (color: oklch(0 0 0)) {
+      :root { --bone: #f5efe4; --bone-deep: #ede5d6; --ink: #2a2522; --ink-soft: #6a625d; --ink-faint: #968d87;
+        --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --rule: #d1c8b9; --rule-faint: #ddd5c6; }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bone); color: var(--ink); }
+    body { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-size: 17px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+    a { color: inherit; text-decoration: none; }
+    main { padding-top: 72px; padding-bottom: 96px; }
+    .eyebrow { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--terracotta-deep); margin: 0 0 18px; }
+    h1 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(40px, 7vw, 68px); line-height: 1.04; letter-spacing: -.02em; margin: 0 0 18px; max-width: 18ch; }
+    h1 em { color: var(--terracotta-deep); }
+    p { color: var(--ink-soft); max-width: 52ch; margin: 0 0 28px; }
+    .links { display: grid; gap: 10px; max-width: 520px; }
+    .links a { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--bone-deep); }
+    .links a:hover { border-color: var(--terracotta); }
+    .links span { color: var(--ink-faint); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header class="og-bar">
+    <div class="og-bar-inner">
+      <div class="og-brand-group">
+        <a class="og-brand" href="/" aria-label="Ongiini AI — home">
+          <span class="og-brand-icon"><img src="/assets/ongiini-icon-72.png" alt="Ongiini" width="36" height="36" /></span>
+        </a>
+      </div>
+      <nav class="og-bar-nav" aria-label="Explore">
+        <a href="/research/">Research</a>
+        <a href="/statistics/">Statistics</a>
+        <a href="/contribute/">Contribute</a>
+        <a href="/slides/">Slides</a>
+      </nav>
+      <span class="og-lang-spacer" aria-hidden="true"></span>
+    </div>
+  </header>
+  <main class="frame">
+    <p class="eyebrow">404 · Page not found</p>
+    <h1>This page <em>doesn’t exist.</em></h1>
+    <p>The link may be old or mistyped. Here is where most people want to go:</p>
+    <nav class="links" aria-label="Main pages">
+      <a href="/">Ongiini AI <span>Free AI assistant on WhatsApp →</span></a>
+      <a href="/research/">Research <span>Oshiwambo benchmark →</span></a>
+      <a href="/statistics/">Statistics <span>Live usage →</span></a>
+      <a href="/contribute/">Contribute <span>Help with Oshiwambo →</span></a>
+    </nav>
+  </main>
+</body>
+</html>

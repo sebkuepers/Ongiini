@@ -1,0 +1,20 @@
+# Ongiini AI
+
+> Ongiini AI is a free AI assistant on WhatsApp for people in Namibia — school, jobs, health, farming and daily life, in English and Afrikaans. It runs an open-weight model (Gemma 4) on a single computer the project controls, not a commercial AI API. It is the first project of the Common Intelligence Foundation (non-profit, being established in Estonia). The code is open source.
+
+## Main pages
+
+- [Home](https://ongiini.ai/): what Ongiini AI does, privacy, FAQs, how to start on WhatsApp
+- [Web chat](https://chat.ongiini.ai/): try Ongiini AI in the browser, no signup
+- [Research — Ongiini-Eval-OW](https://ongiini.ai/research/): an open English → Oshindonga / Oshikwanyama machine-translation benchmark (600 sentences, native-speaker references); how to get an MT model scored
+- [Statistics](https://ongiini.ai/statistics/): live, aggregate usage statistics; never individual conversations
+- [Contribute](https://ongiini.ai/contribute/): help check or translate Oshiwambo sentences on WhatsApp
+- [Check translations](https://ongiini.ai/rate/): the rating page for native speakers
+
+## Details
+
+- [Full product information](https://ongiini.ai/product.md): everything the assistant itself knows about the service, generated from this website
+- [Concept paper (arXiv:2609.31727)](https://arxiv.org/abs/2609.31727)
+- [Source code on GitHub](https://github.com/sebkuepers/Ongiini)
+- [Privacy policy](https://ongiini.ai/privacy/) · [Terms](https://ongiini.ai/terms/) · [Imprint](https://ongiini.ai/imprint/)
+- Contact: hello@ongiini.ai
