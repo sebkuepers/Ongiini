@@ -83,7 +83,7 @@ def load(db: Path):
     con.row_factory = sqlite3.Row
     rows = [dict(r) for r in con.execute(
         "SELECT r.*, i.round, i.sentence_id, i.dialect, i.english, i.text, i.grp, i.kind, i.source, "
-        "i.expected, i.pair_of, i.severity, ra.label, ra.first_language FROM ratings r JOIN items i USING (item_key) "
+        "i.expected, i.pair_of, i.severity, ra.label, ra.first_language, ra.home_dialect FROM ratings r JOIN items i USING (item_key) "
         "JOIN raters ra USING (rater_id) ORDER BY r.rater_id, r.seq")]
     items = [dict(r) for r in con.execute("SELECT * FROM items")]
     return rows, items
@@ -100,7 +100,8 @@ def rater_qc(rows: list[dict]) -> dict[int, dict]:
         reps = [(firsts[r["item_key"]], r) for r in rs if r["is_repeat"] and r["item_key"] in firsts]
         durs = sorted(r["duration_ms"] for r in rs if r["duration_ms"] is not None)
         out[rid] = {
-            "label": rs[0]["label"], "first_language": rs[0].get("first_language"), "n": len(rs),
+            "label": rs[0]["label"], "first_language": rs[0].get("first_language"),
+            "home_dialect": rs[0].get("home_dialect"), "n": len(rs),
             "controls": len(ctrl), "caught": sum(r["verdict"] == "wrong" for r in ctrl),
             "passed_as_good": sum(r["verdict"] == "good" for r in ctrl if r["grp"] == "control_error"),
             "repeats": len(reps), "same_verdict": sum(a["verdict"] == b["verdict"] for a, b in reps),
@@ -245,10 +246,11 @@ def report(rows: list[dict], items: list[dict]) -> list[str]:
         L.append("")
 
     # 5. raters
-    L += ["## 5. Raters", "", "| rater | first language | answers | planted caught | controls caught | planted ✓ "
-          "| repeats same (wrong/not) | median s | < 3 s | can't judge |", "|---|---|---|---|---|---|---|---|---|---|"]
+    L += ["## 5. Raters", "", "| rater | first language | home | answers | planted caught | controls caught | planted ✓ "
+          "| repeats same (wrong/not) | median s | < 3 s | can't judge |", "|---|---|---|---|---|---|---|---|---|---|---|"]
     for rid, q in sorted(qc.items()):
-        L.append(f"| {q['label']}{' ✓' if q['qualified'] else ''} | {q['first_language'] or '–'} | {q['n']} | "
+        L.append(f"| {q['label']}{' ✓' if q['qualified'] else ''} | {q['first_language'] or '–'} | "
+                 f"{(q['home_dialect'] or '–').removeprefix('oshi')} | {q['n']} | "
                  f"{q['planted_caught']}/{q['planted_seen']} | {q['caught']}/{q['controls']} | "
                  f"{q['passed_as_good']} | {q['same_verdict']}/{q['repeats']} ({q['same_wrong']}) | "
                  f"{q['median_s']:.0f} | {q['fast']} | {q['cant']} |")

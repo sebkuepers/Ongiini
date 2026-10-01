@@ -227,8 +227,13 @@ def test_whatsapp_link_new_returning_and_profile(con):
         ratings.set_profile(con, r, ["oshindonga", "afrikaans"], "yes")
     with pytest.raises(ValueError):
         ratings.set_profile(con, r, ["oshindonga"], "maybe")
-    r = ratings.set_profile(con, r, ["oshikwanyama", "oshindonga"], "second")
+    with pytest.raises(ValueError):                                # both dialects: home one required
+        ratings.set_profile(con, r, ["oshikwanyama", "oshindonga"], "second")
+    r = ratings.set_profile(con, r, ["oshikwanyama", "oshindonga"], "second", "oshikwanyama")
     assert r["dialects"] == "oshindonga,oshikwanyama" and not ratings.needs_profile(r)
+    assert r["home_dialect"] == "oshikwanyama"
+    r = ratings.set_profile(con, r, ["oshindonga"], "yes", "oshikwanyama")
+    assert r["home_dialect"] == "oshindonga"                       # one dialect: it is the home one
 
 
 def test_blocked_number_gets_no_link(con):
@@ -253,7 +258,7 @@ def test_migration_adds_columns_to_old_schema(tmp_path):
     old.close()
     c = ratings.connect(path)
     cols = {r["name"] for r in c.execute("PRAGMA table_info(raters)")}
-    assert {"contributor_hash", "first_language", "blocked"} <= cols
+    assert {"contributor_hash", "first_language", "blocked", "home_dialect"} <= cols
     row = c.execute("SELECT * FROM raters").fetchone()
     assert row["blocked"] == 0 and ratings.needs_profile(row)      # admin raters answer once
     c.close()

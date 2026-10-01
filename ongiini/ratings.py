@@ -50,6 +50,7 @@ from .config import settings
 VERDICTS = ("good", "almost", "wrong", "cant_judge")
 DIALECTS = ("oshindonga", "oshikwanyama")
 FIRST_LANGUAGE = ("yes", "second")
+HOME_DIALECT = ("oshindonga", "oshikwanyama", "both")  # asked only of raters who check both
 RATE_URL = "https://ongiini.ai/rate/"
 ISSUES = ("word_choice", "spelling_grammar", "unnatural", "other_dialect")
 CANT_REASONS = ("english", "unfamiliar_word", "other")
@@ -109,7 +110,7 @@ def db_path() -> Path:
 
 # Columns added after the first schema; connect() adds whichever are missing.
 _RATER_COLUMNS = {"contributor_hash": "TEXT", "first_language": "TEXT",
-                  "blocked": "INTEGER NOT NULL DEFAULT 0"}
+                  "blocked": "INTEGER NOT NULL DEFAULT 0", "home_dialect": "TEXT"}
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -207,19 +208,25 @@ def rater_for(con: sqlite3.Connection, token: str) -> sqlite3.Row | None:
 
 
 def needs_profile(rater: sqlite3.Row) -> bool:
-    return not rater["dialects"] or rater["first_language"] not in FIRST_LANGUAGE
+    return (not rater["dialects"] or rater["first_language"] not in FIRST_LANGUAGE
+            or rater["home_dialect"] not in HOME_DIALECT)
 
 
 def set_profile(con: sqlite3.Connection, rater: sqlite3.Row, dialects: list[str],
-                first_language: str) -> sqlite3.Row:
+                first_language: str, home_dialect: str | None = None) -> sqlite3.Row:
+    """Store the self-report. ``home_dialect`` (the one mainly spoken at
+    home) is asked only of raters who check both; otherwise it is the one."""
     ds = [d for d in DIALECTS if d in set(dialects)]
     if not ds or len(ds) != len(set(dialects)):
         raise ValueError("unknown dialect")
     if first_language not in FIRST_LANGUAGE:
         raise ValueError("unknown first_language")
+    home = home_dialect if len(ds) > 1 else ds[0]
+    if home not in HOME_DIALECT:
+        raise ValueError("unknown home_dialect")
     with con:
-        con.execute("UPDATE raters SET dialects = ?, first_language = ? WHERE rater_id = ?",
-                    (",".join(ds), first_language, rater["rater_id"]))
+        con.execute("UPDATE raters SET dialects = ?, first_language = ?, home_dialect = ? WHERE rater_id = ?",
+                    (",".join(ds), first_language, home, rater["rater_id"]))
     return con.execute("SELECT * FROM raters WHERE rater_id = ?", (rater["rater_id"],)).fetchone()
 
 

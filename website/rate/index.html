@@ -171,13 +171,21 @@
 
     <!-- first visit: dialect + first language -->
     <section id="v-profile" class="hidden">
-      <p class="eyebrow">Two quick questions</p>
+      <p class="eyebrow">Quick questions</p>
       <h2 class="h1">Tangi unene!</h2>
       <p class="q">Which language do you check?</p>
       <div class="chips" id="pf-dialect">
         <button class="chip" type="button" data-v="oshindonga" aria-pressed="false">Oshindonga</button>
         <button class="chip" type="button" data-v="oshikwanyama" aria-pressed="false">Oshikwanyama</button>
         <button class="chip" type="button" data-v="both" aria-pressed="false">Both</button>
+      </div>
+      <div id="pf-home-wrap" class="hidden">
+        <p class="q">Which one do you mainly speak at home?</p>
+        <div class="chips" id="pf-home">
+          <button class="chip" type="button" data-v="oshindonga" aria-pressed="false">Oshindonga</button>
+          <button class="chip" type="button" data-v="oshikwanyama" aria-pressed="false">Oshikwanyama</button>
+          <button class="chip" type="button" data-v="both" aria-pressed="false">Both equally</button>
+        </div>
       </div>
       <p class="q">Is it your first language?</p>
       <div class="chips" id="pf-first">
@@ -504,19 +512,22 @@
       startPage("This link doesn't work any more — maybe you asked for a new one. Get a fresh link here:"); }
     else msg("We can't reach the server right now.", "Please try again in a few minutes.");
   }
-  var pf = { dialect: null, first: null };
-  ["pf-dialect", "pf-first"].forEach(function (id) {
+  var pf = { dialect: null, home: null, first: null };
+  var PF = { "pf-dialect": "dialect", "pf-home": "home", "pf-first": "first" };
+  Object.keys(PF).forEach(function (id) {
     $(id).querySelectorAll(".chip").forEach(function (b) {
       b.addEventListener("click", function () {
-        press($(id), ".chip", b); pf[id === "pf-dialect" ? "dialect" : "first"] = b.getAttribute("data-v");
-        $("pf-go").disabled = !(pf.dialect && pf.first);
+        press($(id), ".chip", b); pf[PF[id]] = b.getAttribute("data-v");
+        $("pf-home-wrap").classList.toggle("hidden", pf.dialect !== "both");
+        $("pf-go").disabled = !(pf.dialect && pf.first && (pf.dialect !== "both" || pf.home));
       });
     });
   });
   $("pf-go").addEventListener("click", function () {
     $("pf-go").disabled = true; $("pf-err").textContent = "";
     var ds = pf.dialect === "both" ? ["oshindonga", "oshikwanyama"] : [pf.dialect];
-    post("/profile", { token: token, dialects: ds, first_language: pf.first }).then(begin)
+    post("/profile", { token: token, dialects: ds, first_language: pf.first,
+                       home_dialect: pf.dialect === "both" ? pf.home : null }).then(begin)
       .catch(function (e) { $("pf-go").disabled = false;
         if (e.message === "invite") failed(e); else $("pf-err").textContent = "That didn't save — please try again."; });
   });

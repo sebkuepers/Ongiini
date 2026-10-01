@@ -5,7 +5,7 @@ body (never in a URL the server logs):
   * ``/session`` — validate the token; return label, dialects, progress,
     the onboarding practice examples (with their expected answer and
     feedback) and the first item — or ``needs_profile`` on a first visit
-  * ``/profile`` — store dialect(s) + first language, then as /session
+  * ``/profile`` — store dialect(s), first language and home dialect, then as /session
   * ``/answer``  — store one verdict (+ optional issues, better
     translation, or a can't-judge reason) and return the next item
 
@@ -31,6 +31,7 @@ class SessionIn(BaseModel):
 class ProfileIn(SessionIn):
     dialects: list[str] = Field(min_length=1, max_length=2)
     first_language: str
+    home_dialect: str | None = None
 
 
 class AnswerIn(SessionIn):
@@ -73,7 +74,8 @@ def build_router() -> APIRouter:
         try:
             rater = rater_or_401(con, body.token)
             try:
-                rater = ratings.set_profile(con, rater, body.dialects, body.first_language)
+                rater = ratings.set_profile(con, rater, body.dialects, body.first_language,
+                                             body.home_dialect)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from None
             return state(con, rater)

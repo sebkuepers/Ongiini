@@ -60,8 +60,11 @@ with seed 42.
   with a personal link. A few early testers got links from the admin.
 - **Identity.** One rater per WhatsApp number. We store only a salted
   one-way hash of the number, so ratings are pseudonymous.
-- **Self-report** at the first visit: dialect(s) rated, and whether it is
-  their first language (yes, or "no, but I speak it well").
+- **Self-report** at the first visit: dialect(s) rated, whether it is
+  their first language (yes, or "no, but I speak it well"), and, for
+  raters who check both, which one they mainly speak at home
+  (Oshindonga, Oshikwanyama, both equally). Used to recruit the dialect
+  annotators below.
 - **Exclusion.** The reference translator is blocked and cannot rate.
 - **Consent and pay.** Raters are unpaid volunteers. Consent and data
   handling are covered by ongiini.ai/privacy, "Translation ratings".
@@ -99,9 +102,75 @@ consistency only. "Can't judge" answers are excluded and counted.
 5. **Rater quality.** Planted and control hit rates, repeat consistency,
    time per task, can't-judge reasons.
 
+## Dialect annotation (separate paid task, fixed before it starts)
+
+The meaning question cannot show dialect drift: a correct Oshindonga
+translation of a sentence requested in Oshikwanyama says the same as the
+English. Which dialect a text is in is therefore annotated separately,
+by two paid annotators, not on the volunteer platform.
+
+**Annotators.** Two, recruited from the volunteer raters: one who mainly
+speaks Oshindonga at home, one who mainly speaks Oshikwanyama; first
+language "yes"; at least 20 platform answers with at least 2/3 of the
+planted errors caught. Before the task each passes a qualification set
+of 20 short texts (10 clearly Oshindonga, 10 clearly Oshikwanyama,
+written by the reference translator) with at least 17 correct. The
+reference translator does not annotate (her references are in the set).
+Paid per hour at a rate stated in the paper; written consent that the
+labels are used pseudonymously in research data.
+
+**Items** (seed 42, built once the system runs are complete):
+
+| group | n | purpose |
+|---|---|---|
+| system outputs | 8 systems × 30 sentences × 2 requested dialects = 480 | fidelity and drift; the same sentences requested in both dialects |
+| references | ≤ 120 | the development Kwanyama references GlotLID labels Ndonga, plus a random sample of the rest of both dialects |
+| known controls | 20 | 10 + 10 clear texts by the reference translator (not the qualification set) |
+| wrong language | 10 | NLLB → Tswana outputs; expected "not Oshiwambo" |
+
+The 8 systems are the main systems at evenly spaced ranks of development
+chrF++ (mean over both dialects), so the set spans the quality range; the
+list is added here with a date before the annotation starts. The 30
+sentences are drawn from development items that have both references.
+The blind split is never shown.
+
+**Task.** One text per row, shuffled separately for each annotator. Only
+the Oshiwambo text is shown — no English, no system, no requested
+dialect, no hint whether it is a reference. One label:
+
+- Oshindonga
+- Oshikwanyama
+- mixed (features of both)
+- not Oshiwambo
+- can't tell
+
+**Analysis.**
+
+1. Agreement: Cohen's κ overall and per label, and a confusion matrix
+   between the two annotators. Disagreements are kept, not resolved; a
+   third person (team member, not the reference translator) may give a
+   tie-break label, reported separately.
+2. Fidelity per system and requested dialect: share labelled as the
+   requested dialect, by each annotator and where both agree, with
+   Wilson 95 % CI. Drift: share labelled the other dialect or mixed.
+   Paired: for each sentence, whether the two requests got different
+   labels.
+3. Reference check: labels for the references; Kwanyama references both
+   annotators label Oshindonga go to the correction list.
+4. GlotLID vs annotators: confusion matrix and agreement, so LID-based
+   numbers in the evaluation can be calibrated.
+5. Asymmetry: whether each annotator labels their home dialect
+   differently from the other annotator.
+6. Joined with the meaning ratings where the same output was rated on
+   the platform (fluent-looking but wrong meaning vs dialect).
+
 ## Changes
 
 - 2026-10-01: question changed from "Is this a good translation?" to
   "Does it say the same as the English?", rounds of 5, and practice must
   be answered correctly. Reason: the pilot rater rated all 70 items ✓ in
   about 1 s each, including all planted errors. Pilot data were discarded.
+- 2026-10-01: the profile asks raters who check both dialects which one
+  they mainly speak at home; dialect annotation added as a separate paid
+  task. Reason: the meaning question cannot detect dialect drift. No
+  real ratings had been collected yet.

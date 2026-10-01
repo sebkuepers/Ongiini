@@ -29,6 +29,8 @@ def test_session_and_answer_flow(tmp_path, monkeypatch):
     assert first["needs_profile"] and "item" not in first
     assert c.post("/v1/rate/profile", json={"token": token, "dialects": ["klingon"],
                                             "first_language": "yes"}).status_code == 400
+    assert c.post("/v1/rate/profile", json={"token": token, "dialects": ["oshindonga", "oshikwanyama"],
+                                            "first_language": "yes"}).status_code == 400
     s = c.post("/v1/rate/profile", json={"token": token, "dialects": ["oshindonga"],
                                          "first_language": "yes"}).json()
     assert not s["needs_profile"]

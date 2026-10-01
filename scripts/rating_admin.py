@@ -58,7 +58,7 @@ def main(argv: list[str]) -> int:
     elif cmd == "report":
         print(json.dumps(ratings.summary(con), indent=2))
     elif cmd == "raters":
-        for r in con.execute("SELECT rater_id, label, dialects, first_language, active, blocked, "
+        for r in con.execute("SELECT rater_id, label, dialects, first_language, home_dialect, active, blocked, "
                              "CASE WHEN contributor_hash IS NULL THEN 'admin' ELSE 'whatsapp' END via, "
                              "(SELECT COUNT(*) FROM ratings x WHERE x.rater_id = raters.rater_id) n FROM raters"):
             print(dict(r))
