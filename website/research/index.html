@@ -116,6 +116,26 @@
     .ct-lang-seg + .ct-lang-seg { border-left: 1px solid var(--rule); }
     .ct-lang-seg.is-active { background: var(--ink); color: var(--bone); }
 
+    /* ── EXPLORE NAV (contribute, research, statistics, slides) ──
+       Shared by the project pages; the home page keeps its own nav.
+       Darker bar + "Explore" label + pill group mark the area apart. */
+    .ct-bar.ex-bar { background: color-mix(in oklab, var(--bone-deep) 92%, transparent); }
+    .ex-bar .ct-bar-inner { flex-wrap: wrap; height: auto; min-height: 60px; row-gap: 0; padding-top: 10px; padding-bottom: 10px; }
+    .ex-left { display: inline-flex; align-items: center; gap: 14px; }
+    .ex-label { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .16em;
+      text-transform: uppercase; color: var(--terracotta-deep); padding-left: 14px; border-left: 1px solid var(--rule); line-height: 22px; }
+    .ex-nav { order: 3; flex-basis: 100%; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-top: 10px; padding: 3px;
+      border: 1px solid var(--rule); border-radius: 999px; background: var(--bone); width: max-content; max-width: 100%; }
+    .ex-nav::-webkit-scrollbar { display: none; }
+    .ex-nav a { flex: none; font-family: 'Geist', ui-sans-serif, system-ui; font-size: 13px; font-weight: 500; color: var(--ink-soft);
+      text-decoration: none; padding: 6px 13px; border-radius: 999px; transition: background 160ms, color 160ms; }
+    .ex-nav a:hover { color: var(--ink); background: var(--bone-deep); }
+    .ex-nav a[aria-current="page"] { background: var(--ink); color: var(--bone); }
+    @media (min-width: 880px) {
+      .ex-bar .ct-bar-inner { flex-wrap: nowrap; height: 64px; padding-top: 0; padding-bottom: 0; }
+      .ex-nav { order: 0; flex-basis: auto; margin: 0 auto; }
+    }
+
     /* ── HERO ──────────────────────────────────────────────────── */
     .ct-hero {
       max-width: var(--maxw-wide);
@@ -423,15 +443,22 @@
   </style>
 </head>
 <body>
-  <header class="ct-bar">
+  <header class="ct-bar ex-bar">
     <div class="ct-bar-inner">
-      <a class="ct-wordmark" href="/" aria-label="Ongiini">
-        <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
-        <span class="ct-wordmark-text">Ongiini<span class="dot">.</span></span>
-      </a>
-      <div class="ct-bar-right">
-        <a class="ct-back" href="/">← Back</a>
+      <div class="ex-left">
+        <a class="ct-wordmark" href="/" aria-label="Ongiini AI — home">
+          <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
+          <span class="ct-wordmark-text">Ongiini<span class="dot">.</span></span>
+        </a>
+        <span class="ex-label">Explore</span>
       </div>
+      <nav class="ex-nav" aria-label="Explore">
+        <a href="/research/" aria-current="page">Research</a>
+        <a href="/statistics/">Statistics</a>
+        <a href="/contribute/">Contribute</a>
+        <a href="/slides/">Slides</a>
+      </nav>
+      <div class="ct-bar-right"></div>
     </div>
   </header>
 
