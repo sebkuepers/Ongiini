@@ -254,7 +254,7 @@ async def web_search(
     too is redundant ~10× tokens.
 
     Provider failures (not configured, HTTP 4xx/5xx such as the 402 of
-    Aug–Sep 2026, network errors) raise ``ToolError``: the ToolStep then
+    Sep 2026, network errors) raise ``ToolError``: the ToolStep then
     carries ``error``, the circuit breaker counts it, and the executor
     degrades the turn instead of composing over an error string.
     """

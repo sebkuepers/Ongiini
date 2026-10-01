@@ -1,7 +1,7 @@
 """Owela ``Hook`` that raises the alarm when a capability goes down.
 
-The Tavily outage of Aug–Sep 2026 (every web search returned 402 for
-five weeks) went unnoticed because nothing looked at ``ToolStep.error``.
+The Tavily outage of Sep 2026 (every web search returned 402 from
+09-04 to 09-30) went unnoticed because nothing looked at ``ToolStep.error``.
 The executor now degrades turns when a required tool is down; this hook
 makes sure a human hears about it:
 

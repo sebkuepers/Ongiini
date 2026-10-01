@@ -11,8 +11,8 @@
 # The operator number is read from ONGIINI_OPERATOR_MSISDN in the
 # environment or, if unset, from the repo's .env.
 #
-# Why: the Tavily 402 outage of Aug–Sep 2026 failed every web search for
-# five weeks before anyone noticed. This check fails on day one.
+# Why: the Tavily 402 outage of Sep 2026 failed every web search for
+# 3.5 weeks before anyone noticed. This check fails on day one.
 
 set -uo pipefail
 

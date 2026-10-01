@@ -106,8 +106,8 @@ def build_shared_components(*, trace_path: Path | None = None) -> SharedComponen
     reviewer = OngiiniReviewer(model=model, system_prompt=build_system_prompt(SECTIONS_SEARCH))
 
     # The breaker stops calling a tool after 3 failures in 10 minutes and
-    # re-probes after 15 — the Tavily 402 outage (Aug–Sep 2026) ran for
-    # five weeks because nothing acted on ToolStep.error.
+    # re-probes after 15 — the Tavily 402 outage (Sep 2026) ran for
+    # 3.5 weeks because nothing acted on ToolStep.error.
     tools = ToolRegistry(
         list(ALL_TOOLS),
         breaker=CircuitBreaker(BreakerConfig(failure_threshold=3, window_s=600, cooldown_s=900)),

@@ -220,7 +220,7 @@ async def test_web_search_no_api_key_raises_tool_error(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_web_search_http_402_raises_tool_error(monkeypatch):
-    """The Aug–Sep 2026 outage: Tavily answered 402 Payment Required on
+    """The Sep 2026 outage: Tavily answered 402 Payment Required on
     every call. That must surface as a ToolError the model can read."""
     _search._SEARCH_CACHE.clear()
     monkeypatch.setattr(_search.settings, "tavily_api_key", "fake-key")

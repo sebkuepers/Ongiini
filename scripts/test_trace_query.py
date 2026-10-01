@@ -342,7 +342,7 @@ def test_tool_errors_reports_rate_and_prefixes():
 
 
 def test_health_flags_a_dead_search_provider():
-    """The Aug–Sep 2026 shape: every search errors → breach, exit 1."""
+    """The Sep 2026 shape: every search errors → breach, exit 1."""
     traces = [_v2_entry(tool_error="HTTP 402", degraded=True) for _ in range(25)]
     out = trace_query.cmd_health(_args(), traces)
     assert out["_exit"] == 1

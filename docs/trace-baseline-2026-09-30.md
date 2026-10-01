@@ -5,8 +5,8 @@ Aggregate numbers from `data/trace.jsonl` (33,347 turns, 2026-05-20 to
 timings only — no message content, no user identifiers. Use these as the
 "before" column when judging the changes.
 
-Caveat: `web_search` failed on every call from late August to 2026-09-30
-(Tavily `402 Payment Required`). Search-turn quality numbers for weeks 35–39
+Caveat: `web_search` failed on every call from 2026-09-04 to 2026-09-30
+(Tavily `402 Payment Required`). Search-turn quality numbers for that period
 measure that outage, not the pipeline.
 
 ## Traffic
@@ -51,7 +51,7 @@ measure that outage, not the pipeline.
 | Planner plans with 0 queries (`search_deep`) | 288 / 1,763 (16 %) |
 | `finish_reason=length` on `search_deep` calls | 145 |
 | `reasoning_leak_stripped > 0` on `search_deep` calls | 177 |
-| `web_search` tool errors | 213 / 6,188 all time; 100 % weeks 36–39 |
+| `web_search` tool errors | 213 / 6,188 all time; 100 % from 2026-09-04 |
 
 ## Fields that could not be measured
 

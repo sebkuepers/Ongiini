@@ -28,7 +28,7 @@ Usage examples::
 rates, degraded turns, classifier fallbacks, forced tools the engine
 ignored, deadline overruns, reply length and wall latency, each with a
 threshold. It exits non-zero when a threshold is breached, so a cron
-job can alert. (The Tavily 402 outage of Aug–Sep 2026 would have
+job can alert. (The Tavily 402 outage of Sep 2026 would have
 tripped ``tool-errors`` on its first day.)
 
 Output is JSON to stdout (single object) — pipe to ``jq`` for
