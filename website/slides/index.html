@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-frame.css" />
 
   <style>
     :root {
@@ -59,9 +60,14 @@
     html[data-locale="af"] [data-af="i"] { display: inline; }
 
     /* ─── deck container ─── */
+    /* Site header above the deck; hidden while presenting (fullscreen, F). */
+    :root { --bar-h: 61px; }
+    @media (min-width: 880px) { :root { --bar-h: 73px; } }
+    html.is-presenting { --bar-h: 0px; }
+    html.is-presenting .og-bar { display: none; }
     .deck {
       position: fixed;
-      inset: 0;
+      inset: var(--bar-h) 0 0 0;
       display: grid;
       place-items: center;
       padding: clamp(24px, 4vw, 56px);
@@ -71,7 +77,7 @@
     .deck-stage {
       width: min(100%, 1280px);
       aspect-ratio: 16 / 9;
-      max-height: calc(100vh - 144px);
+      max-height: calc(100vh - 144px - var(--bar-h));
       position: relative;
       background: var(--bone);
     }
@@ -559,7 +565,7 @@
     @media print {
       @page { size: 1280px 720px; margin: 0; }
       html, body { background: white; overflow: visible; }
-      .deck-footer, .zone { display: none !important; }
+      .deck-footer, .zone, .og-bar { display: none !important; }
       .deck { position: static; padding: 0; display: block; height: auto; }
       .deck-stage { position: static; width: 100%; max-width: none; aspect-ratio: auto; max-height: none; height: auto; }
       .slide {
@@ -578,6 +584,27 @@
   </style>
 </head>
 <body>
+
+  <header class="og-bar">
+    <div class="og-bar-inner">
+      <div class="og-brand-group">
+        <a class="og-brand" href="/" aria-label="Ongiini AI — home">
+          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192-v2.png" alt="Ongiini" width="36" height="36" /></span>
+        </a>
+        <span class="og-bar-label"><span data-en="i">Explore</span><span data-af="i">Verken</span></span>
+      </div>
+      <nav class="og-bar-nav" aria-label="Explore">
+        <a href="/research/"><span data-en="i">Research</span><span data-af="i">Navorsing</span></a>
+        <a href="/statistics/"><span data-en="i">Statistics</span><span data-af="i">Statistieke</span></a>
+        <a href="/contribute/"><span data-en="i">Contribute</span><span data-af="i">Bydra</span></a>
+        <a href="/slides/" aria-current="page">Slides</a>
+      </nav>
+      <div class="og-lang" role="group" aria-label="Language">
+        <button type="button" class="og-lang-seg is-active" data-set-locale="en">EN</button>
+        <button type="button" class="og-lang-seg" data-set-locale="af">AF</button>
+      </div>
+    </div>
+  </header>
 
   <main class="deck" id="deck">
     <div class="deck-stage" id="stage">
@@ -1196,10 +1223,6 @@
     </a>
     <span class="counter"><span id="ix">1</span> / <span id="total">13</span></span>
     <div class="actions">
-      <div class="lang-segment" role="group" aria-label="Language">
-        <button data-set-locale="en" class="is-active">EN</button>
-        <button data-set-locale="af">AF</button>
-      </div>
       <a class="icon-btn" href="/slides/guide/" title="Volunteer guide" aria-label="Volunteer guide">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h10l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h6"/></svg>
       </a>
@@ -1247,7 +1270,15 @@
             break;
           case 'p': case 'P':
             window.print(); break;
+          case 'f': case 'F':
+            if (document.fullscreenElement) document.exitFullscreen();
+            else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+            break;
         }
+      });
+
+      document.addEventListener('fullscreenchange', function () {
+        document.documentElement.classList.toggle('is-presenting', !!document.fullscreenElement);
       });
 
       // click zones (touch on phones, mouse on desktop)

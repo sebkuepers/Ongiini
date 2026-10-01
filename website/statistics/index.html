@@ -15,6 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-frame.css" />
 
   <style>
     :root {
@@ -42,7 +43,7 @@
       --rule:           oklch(0.85  0.018 70);
       --rule-faint:     oklch(0.90  0.014 70);
       --gutter: 22px;
-      --maxw-stat: 960px;
+      --maxw-stat: 1180px;   /* = site frame (assets/site-frame.css) */
     }
     @supports not (color: oklch(0 0 0)) {
       :root {
@@ -79,39 +80,13 @@
     a { color: var(--terracotta-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
     a:hover { color: var(--terracotta); }
 
-    .stat-bar {
-      background: color-mix(in oklab, var(--bone) 86%, transparent);
-      backdrop-filter: saturate(140%) blur(10px);
-      -webkit-backdrop-filter: saturate(140%) blur(10px);
-      border-bottom: 1px solid var(--rule-faint);
-      position: sticky; top: 0; z-index: 50;
-    }
-    .stat-bar-inner {
-      max-width: var(--maxw-stat); margin: 0 auto;
-      padding: 0 var(--gutter);
-      height: 60px;
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    }
-    .stat-wordmark {
-      display: inline-flex; align-items: center; gap: 10px;
-      text-decoration: none;
-      color: var(--ink);
-    }
-    .stat-wordmark img { width: 28px; height: 28px; display: block; }
-    .stat-wordmark-text {
-      font-family: 'Instrument Serif', serif;
-      font-style: italic;
-      font-size: 18px;
-      letter-spacing: -0.01em;
-    }
-    .stat-wordmark-text .dot { color: var(--terracotta); font-style: normal; }
-    .stat-back {
-      font-family: 'Geist', ui-sans-serif, system-ui;
-      font-size: 13px; font-weight: 500;
-      color: var(--terracotta-deep);
-      text-decoration: none;
-    }
-    .stat-back:hover { color: var(--terracotta); }
+    /* Header: /assets/site-frame.css (same bar as the home page) */
+    .stat-footer { max-width: var(--maxw-stat); margin: 0 auto; padding: 40px var(--gutter); text-align: center;
+      font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.06em;
+      color: var(--ink-faint); border-top: 1px solid var(--rule-faint); }
+    .stat-footer a { color: var(--ink-soft); text-decoration: none; }
+    .stat-footer a:hover { color: var(--terracotta); }
+    @media (max-width: 380px) { :root { --gutter: 18px; } }
 
     main { max-width: var(--maxw-stat); margin: 0 auto; padding: 56px var(--gutter) 96px; }
 
@@ -582,20 +557,27 @@
     }
     @media (min-width: 880px) {
       :root { --gutter: 48px; }
-      .stat-bar-inner { height: 72px; }
       main { padding: 96px var(--gutter) 128px; }
       .stat-kpis { gap: 18px; }
     }
   </style>
 </head>
 <body>
-  <header class="stat-bar">
-    <div class="stat-bar-inner">
-      <a class="stat-wordmark" href="/" aria-label="Ongiini">
-        <img src="/assets/ongiini-icon-192-v2.png" alt="" width="28" height="28" />
-        <span class="stat-wordmark-text">Ongiini<span class="dot">.</span></span>
-      </a>
-      <a class="stat-back" href="/">← Back</a>
+  <header class="og-bar">
+    <div class="og-bar-inner">
+      <div class="og-brand-group">
+        <a class="og-brand" href="/" aria-label="Ongiini AI — home">
+          <span class="og-brand-icon"><img src="/assets/ongiini-icon-192-v2.png" alt="Ongiini" width="36" height="36" /></span>
+        </a>
+        <span class="og-bar-label">Explore</span>
+      </div>
+      <nav class="og-bar-nav" aria-label="Explore">
+        <a href="/research/">Research</a>
+        <a href="/statistics/" aria-current="page">Statistics</a>
+        <a href="/contribute/">Contribute</a>
+        <a href="/slides/">Slides</a>
+      </nav>
+      <span class="og-lang-spacer" aria-hidden="true"></span>
     </div>
   </header>
 
@@ -750,6 +732,13 @@
 
     <div class="stat-foot" id="foot">—</div>
   </main>
+
+  <footer class="stat-footer">
+    <a href="/">Ongiini</a> &nbsp;·&nbsp; <a href="/research/">Research</a> &nbsp;·&nbsp;
+    <a href="/statistics/">Statistics</a> &nbsp;·&nbsp; <a href="/contribute/">Contribute</a> &nbsp;·&nbsp;
+    <a href="/slides/">Slides</a> &nbsp;·&nbsp; <a href="/privacy/">Privacy</a> &nbsp;·&nbsp;
+    <a href="/terms/">Terms</a> &nbsp;·&nbsp; <a href="/imprint/">Imprint</a>
+  </footer>
 
   <script>
     'use strict';
