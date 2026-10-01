@@ -256,9 +256,9 @@
 (function () {
   var API = location.hostname === "localhost" ? "http://localhost:8766/v1/rate" : "https://api.ongiini.ai/v1/rate";
   var NAMES = { oshindonga: "Oshindonga", oshikwanyama: "Oshikwanyama" };
-  var ROUND = 5, FAST_MS = 2000;
+  var ROUND = 5, FAST_MS = 3000;   // 3 answers in a row under 3 s → slow-down hint, every time
   var token = null, item = null, next = null, verdict = null, shownAt = 0, session = 0, busy = false;
-  var practiced = false, fastRun = 0, slowShown = false, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
+  var practiced = false, fastRun = 0, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ["v-msg", "v-start", "v-profile", "v-welcome", "v-tip", "v-task", "v-break"];
   function show(id) { VIEWS.forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); window.scrollTo(0, 0); }
@@ -321,7 +321,7 @@
     var P = isPractice || (practiced && session < ROUND) ? practice.length : 0;
     if (isPractice) stepbar("bar", "bar-label", P, pIdx, "Practice " + (pIdx + 1) + " of " + P, true);
     else stepbar("bar", "bar-label", P, P + session % ROUND, "Sentence " + (session % ROUND + 1) + " of " + ROUND, false);
-    if (!isPractice && fastRun >= 3 && !slowShown) { $("slow").classList.remove("hidden"); slowShown = true; fastRun = 0; }
+    if (!isPractice && fastRun >= 3) { $("slow").classList.remove("hidden"); fastRun = 0; }
     shownAt = Date.now(); show("v-task");
   }
   // Round-done reward: badge + confetti, a star per round, the shared goal.
