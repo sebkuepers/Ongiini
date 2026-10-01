@@ -10,7 +10,7 @@ The system has no fixed taxonomy — categories are emergent from the
 data via LLM analysis. See analyses.py for the framework.)
 """
 
-ANALYSIS_VERSION = 3  # bumped: anti-PII guardrails on extraction prompts
+ANALYSIS_VERSION = 4  # 2026-10-01: fixed categories (stats/nightly.py) replace emergent clusters
 
 # Backwards-compat alias used by aggregator.py. Same number.
 TAXONOMY_VERSION = ANALYSIS_VERSION

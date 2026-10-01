@@ -769,13 +769,33 @@ async def _one_full_pass() -> None:
 
 
 async def run_forever() -> None:
+    """Background task started by the webhook.
+
+    Since 2026-10-01 this runs ``stats.nightly`` (fixed categories, one
+    run per night at 01:00 UTC, plus a catch-up shortly after start-up
+    when the last run is over a day old). The emergent-clustering loop
+    below is kept for reference but no longer started: its clusters were
+    unreadable and its multi-minute synthesis calls stalled chat.
+    Set ONGIINI_STATS_LOOP_DISABLED=1 to switch the analysis off.
+    """
     import os
     if os.environ.get("ONGIINI_STATS_LOOP_DISABLED", "").lower() in ("1", "true", "yes"):
         log.warning(
-            "qualitative analysis loop DISABLED via ONGIINI_STATS_LOOP_DISABLED — "
+            "qualitative analysis DISABLED via ONGIINI_STATS_LOOP_DISABLED — "
             "stats will be served from existing /data/synthesis-*.json snapshots"
         )
         return
+    from ..models.vllm_gemma import VLLMGemmaModel
+    from . import nightly
+
+    model = VLLMGemmaModel(settings.vllm_base_url, settings.vllm_model)
+    await nightly.run_nightly_forever(
+        model.complete, mem.list_all, _load_objections_at_call_time,
+    )
+
+
+async def _run_emergent_loop_forever() -> None:
+    """The pre-2026-10-01 emergent-clustering loop (not started)."""
     log.info(
         "qualitative analysis loop starting (interval %ds, analyses: %s)",
         settings.topic_classify_interval_seconds,

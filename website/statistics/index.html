@@ -705,7 +705,7 @@
       </div>
 
       <h2>Who uses Ongiini.ai</h2>
-      <p class="stat-section-note">Built from the small set of facts the memory system extracts when users share them in chat — <strong>not a registration form</strong>. Most users don't volunteer most of these things; <strong>the percentages on each panel are within the group that did mention it, not the whole user base</strong>.</p>
+      <p class="stat-section-note">Built from the small set of facts the memory system extracts when users share them in chat — <strong>not a registration form</strong> — and, for languages, from the language people write in. Most users don't volunteer most of these things; <strong>the percentages on each panel are within the group that did mention it, not the whole user base</strong>.</p>
       <div class="stat-who" id="who-grid"></div>
 
       <h2>How it performs</h2>
@@ -716,7 +716,7 @@
       <div class="stat-meta-prose">
         <p><strong>What the data is.</strong> The usage, growth, engagement and performance numbers are computed live from data Ongiini already keeps for the service itself — the per-message usage log and the structural trace log. The use-case and audience sections come from a separate, periodic analysis of messages and of the long-term memory store. None of this statistics processing sends conversation content anywhere: the classification and clustering run on the same computer the chat service runs on, with no third-party APIs. (Answering a question can involve a web search; what that shares is described in the <a href="/privacy/">Privacy Policy</a>.)</p>
 
-        <p><strong>Two qualitative passes.</strong> The categories you see under <em>How people use Ongiini.ai</em> are <strong>not chosen from a fixed list</strong>. The local AI model first reads each user message and produces a short description — <em>"yellowing maize leaves"</em>, <em>"grade 11 chemistry homework"</em>, <em>"VAT registration deadline"</em>. Then the same model reads the entire collection of those descriptions with their counts and groups them into broad <strong>use cases</strong> of its own choosing. This analysis runs in batches, not live: each section shows the date of the last run and which messages it covered. <strong>Top topics</strong> below is one level down — the most-mentioned raw descriptions, before clustering. <em>Who uses Ongiini.ai</em> works the same way per dimension: short descriptors per user → clustered into emergent groups for roles, regions, languages, family context, and current life situations.</p>
+        <p><strong>How the qualitative sections are made.</strong> Once a night, the local AI model reads each user message that is still stored and puts it into one of a <strong>fixed list of use cases</strong> — school &amp; homework, writing help, translation, language learning, jobs &amp; career, health, money &amp; business, government services, local info &amp; news, personal &amp; relationships, tech help, small talk, other. It also notes the language of the message and a short generic description (<em>"grade 11 chemistry homework"</em>, <em>"cv improvement"</em>); the most frequent descriptions are the <strong>Top topics</strong>. <em>Who uses Ongiini.ai</em> works the same way from the few facts the memory system keeps per user: role, Namibian region, household and current situation, each from a fixed list, and only for users whose facts mention it. <em>Languages</em> is the language a user mostly writes in. Only messages and facts that are still stored count, so deleted data and users who object drop out at the next run. Each section shows the date of its last run.</p>
 
         <p><strong>This is a heavily skewed sample, not a survey.</strong> The percentages on this page describe <em>only what users have mentioned in conversation</em>. They are not a representative cross-section of who uses Ongiini.ai. A teacher who has never mentioned teaching does not appear under <em>Roles → Teacher</em>. A user in Oshakati who has never named their town does not show up under <em>Regions → Oshakati</em>. We do not ask, we only observe. Every WHO percentage is therefore relative to <em>"users who mentioned this dimension at all"</em> — usually a minority of the total user base — and the sample sizes shown next to each chart make that explicit. Read accordingly.</p>
 
@@ -1894,7 +1894,7 @@
       const dims = [
         ['roles',      'Roles',                'What people do'],
         ['regions',    'Regions',              'Where they live'],
-        ['languages',  'Languages',            'Preferred reply language'],
+        ['languages',  'Languages',            'Language they mostly write in'],
         ['family',     'Family situation',     'Household context'],
         ['situations', 'Current life context', 'What they are working through'],
       ];

@@ -896,6 +896,19 @@ def _top_topics_block(top_n: int = 20) -> dict[str, Any]:
         # mem0); only used when analyses_io isn't yet present.
         from .analyses import load_label_counts_sync as load_label_counts_via_io  # type: ignore
 
+    # Nightly fixed-category run (stats/nightly.py) writes the phrase counts
+    # over currently stored messages, so deleted / objecting users drop out.
+    from .synthesis_io import load_synthesis
+    nightly = load_synthesis("top_topics")
+    if nightly is not None:
+        labels = list(nightly.get("labels") or [])[:top_n]
+        return {
+            "n_distinct": int(nightly.get("n_distinct", 0)),
+            "n_shown": len(labels),
+            "labels": labels,
+            "generated_at": nightly.get("generated_at"),
+        }
+
     counts = load_label_counts_via_io("topics")
     if not counts:
         return {
