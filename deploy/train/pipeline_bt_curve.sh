@@ -4,6 +4,9 @@
 #   setsid nohup bash deploy/train/pipeline_bt_curve.sh > data/private/experiments/pipeline.log 2>&1 &
 # Steps: finish back-translation (200k) → wait for the running B10k training →
 # benchmark B10k → build 50k / 200k sets → train + benchmark B50k → B200k.
+# After each benchmark the retention suite (scripts/retention_suite.py) checks
+# general abilities against the base model, with a blind LLM judge on English
+# answers (scripts/retention_judge.py).
 # Every training run is logged by monitor.sh (GPU, temperature, throttling,
 # production latency). Results: data/private/experiments/lora/scores.json.
 set -u
@@ -13,7 +16,7 @@ MODEL_DIR="$HOME/models/gemma-4-12b-it-bf16"
 MODEL=/models/gemma-4-12b-it-bf16
 D=data/private/corpus/osheng_v1
 EXP=data/private/experiments
-mkdir -p "$EXP/lora" "$EXP/gpu" data/private/lora
+mkdir -p "$EXP/lora" "$EXP/gpu" "$EXP/retention" data/private/lora
 log() { echo "$(date '+%F %T') $*"; }
 run() {  # run <name> <gpu:yes|no> <cmd...>
   local name=$1 gpu=$2; shift 2
@@ -23,6 +26,19 @@ run() {  # run <name> <gpu:yes|no> <cmd...>
     -e OPENROUTER_API_KEY="$(grep '^OPENROUTER_API_KEY=' .env | cut -d= -f2-)" \
     -v "$MODEL_DIR:$MODEL:ro" -v "$PWD:/work" -w /work "$IMG" "$@"
 }
+retention() {  # retention <label> [adapter dir]
+  local label=$1 adapter=${2:-}
+  [ -f "$EXP/retention/$label.json" ] && return 0
+  log "retention $label"
+  if [ -n "$adapter" ]; then
+    run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" --adapter "$adapter" --label "$label" \
+      | grep -v "^Loading" | tail -2
+    run ongiini-judge no python3 scripts/retention_judge.py gemma-4-12b-base "$label" | tail -1
+  else
+    run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" --label "$label" | grep -v "^Loading" | tail -2
+  fi
+}
+
 train_and_eval() {  # train_and_eval <tag> <train file> <epochs>
   local tag=$1 train=$2 epochs=$3
   log "train $tag ($(wc -l < "$train") examples, $epochs epoch(s))"
@@ -36,6 +52,7 @@ train_and_eval() {  # train_and_eval <tag> <train file> <epochs>
     || { log "benchmark $tag FAILED"; return 1; }
   run "ongiini-score" no python3 scripts/score_lora_runs.py --base gemma-4-12b-base \
     gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B200k
+  retention "gemma-4-12b-$tag" "data/private/lora/${tag}_12b_r16"
 }
 
 log "pipeline start"
@@ -53,6 +70,9 @@ if [ ! -f "$EXP/lora/gemma-4-12b-B10k_oshikwanyama.jsonl" ]; then
     --adapter data/private/lora/B10k_12b_r16 --label gemma-4-12b-B10k --out "$EXP/lora" --batch 16
 fi
 run ongiini-score no python3 scripts/score_lora_runs.py --base gemma-4-12b-base gemma-4-12b-A gemma-4-12b-B10k
+retention gemma-4-12b-base
+retention gemma-4-12b-A data/private/lora/A_parallel_ndo_12b_r16
+retention gemma-4-12b-B10k data/private/lora/B10k_12b_r16
 
 log "build 50k / 200k sets"
 run ongiini-build no python3 scripts/build_sft_bt.py --n 50000 200000
