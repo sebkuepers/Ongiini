@@ -147,6 +147,22 @@ The WhatsApp link is hard-coded in `website/index.html` (currently
 `wa.me/...` `href` values directly in the HTML — the number is no
 longer displayed on the page, only the CTA buttons that open WhatsApp.
 
+### Meyabase translation service
+
+Since 2026-10-02 the Spark hosts Meyabase Platforms' English↔Oshindonga
+translator (their HF Inference Endpoint was too expensive; Ongiini AI
+sponsors it). Container `meyabase-translate` (`deploy/meyabase/`),
+CPU-only, capped at 2 CPUs / 3 GB, public at `https://meyabase.ongiini.ai/`
+in the HF-endpoint format their site (translate.meyabase.com) sends. Weights
+are Meyabase's private models, pulled at start with the `HF_TOKEN` read
+token into `data/meyabase_cache`.
+
+```sh
+docker compose up -d --build meyabase-translate   # never touches the webhook
+docker logs -f meyabase-translate                 # direction, length, ms — no text
+curl -s localhost:8450/health
+```
+
 ### Cloudflare Tunnel
 
 Public DNS for `ongiini.ai` lives on Cloudflare. A tunnel named
@@ -158,6 +174,7 @@ systemd service on the Spark and routes:
 | `ongiini.ai` | `http://localhost:18789` (website) |
 | `www.ongiini.ai` | `http://localhost:18789` (via CNAME chain) |
 | `api.ongiini.ai` | `http://localhost:8445` (webhook) |
+| `meyabase.ongiini.ai` | `http://localhost:8450` (Meyabase translation service, see below) |
 
 Config: `/etc/cloudflared/config.yml` + credentials at
 `/etc/cloudflared/<UUID>.json`. Both are root-owned. To inspect:

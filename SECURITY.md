@@ -136,6 +136,17 @@ A compromised webhook process can write to its own memory, talk to
 vLLM/Tavily, and read/write `/data`. It cannot escalate, mount, modify
 the rootfs, or open raw sockets.
 
+### Hosted third-party service
+
+`meyabase-translate` (Meyabase's translator, public at
+`meyabase.ongiini.ai`) runs in its own container with the same hardening,
+plus `mem_limit 3g`, `cpus 2`, `pids_limit 256`. It shares no volume with
+the webhook and sees only the Hugging Face read token, not `.env`. The
+service accepts at most 1,000 characters, ignores caller-supplied
+generation parameters, translates one request at a time behind a bounded
+queue, rate-limits per client IP and allows CORS only for
+`translate.meyabase.com`. Request text is never logged or stored.
+
 ## Edge hardening (Cloudflare)
 
 See [`docs/cloudflare-waf.md`](docs/cloudflare-waf.md) for click-through
