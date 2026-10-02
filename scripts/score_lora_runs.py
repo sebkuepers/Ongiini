@@ -70,6 +70,21 @@ def main(argv=None) -> int:
         hk = [E.clean_hypothesis(o["oshikwanyama"][i], "oshikwanyama") for i in both]
         hn = [E.clean_hypothesis(o["oshindonga"][i], "oshindonga") for i in both]
         ndo_ref = [E.normalise(items[i]["oshindonga_reference"]) for i in both]
+        # dev slices by phenomenon tag and domain (small n: read as tendencies)
+        sl: dict = {}
+        for d in E.DIALECTS:
+            ids = sorted(i for i, r in items.items() if not r["in_blind_split"] and (r.get(f"{d}_reference") or "").strip())
+            raw_x, _ = E.load_system_file(EXP / f"{label}_{d}.jsonl", d, ids)
+            groups: dict = {}
+            for i in ids:
+                for t in (items[i].get("phenomenon_tags") or []):
+                    groups.setdefault(f"tag:{t}", []).append(i)
+                groups.setdefault(f"domain:{items[i]['domain']}", []).append(i)
+            for g, gi in groups.items():
+                h = [E.clean_hypothesis(raw_x[i], d) for i in gi]
+                r = [E.normalise(items[i][f"{d}_reference"]) for i in gi]
+                sl.setdefault(g, {})[d] = {"n": len(gi), "chrf++": round(E.METRICS["chrf++"].corpus_score(h, [r]).score, 1)}
+        res["slices"] = sl
         res["drift"] = {"kua_request_vs_ndo_ref": round(E.METRICS["chrf++"].corpus_score(hk, [ndo_ref]).score, 1),
                         "self_similarity": SIM.dialect_self_similarity(hn, hk),
                         "identical": sum(a == c for a, c in zip(hn, hk))}
