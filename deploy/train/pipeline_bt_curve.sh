@@ -3,7 +3,8 @@
 # Spark (independent of the laptop). Start detached:
 #   setsid nohup bash deploy/train/pipeline_bt_curve.sh > data/private/experiments/pipeline.log 2>&1 &
 # Steps: finish back-translation (200k) → wait for the running B10k training →
-# benchmark B10k → build 50k / 200k sets → train + benchmark B50k → B200k.
+# benchmark B10k → build 50k / 200k sets → train + benchmark B50k → selection
+# experiment B50kG (grammar) / B50kV (vocabulary) → B200k.
 # After each benchmark the retention suite (scripts/retention_suite.py) checks
 # general abilities against the base model, with a blind LLM judge on English
 # answers (scripts/retention_judge.py).
@@ -51,7 +52,7 @@ train_and_eval() {  # train_and_eval <tag> <train file> <epochs>
     --adapter "data/private/lora/${tag}_12b_r16" --label "gemma-4-12b-$tag" --out "$EXP/lora" --batch 16 \
     || { log "benchmark $tag FAILED"; return 1; }
   run "ongiini-score" no python3 scripts/score_lora_runs.py --base gemma-4-12b-base \
-    gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B200k
+    gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B50kV gemma-4-12b-B200k
   retention "gemma-4-12b-$tag" "data/private/lora/${tag}_12b_r16"
 }
 
@@ -77,5 +78,16 @@ retention gemma-4-12b-B10k data/private/lora/B10k_12b_r16
 log "build 50k / 200k sets"
 run ongiini-build no python3 scripts/build_sft_bt.py --n 50000 200000
 train_and_eval B50k "$D/sft_B50k_train.jsonl" 1
+
+# Selection experiment: same size as B50k, chosen by grammar (constructions the
+# newspaper corpus lacks) or by vocabulary coverage — runs before B200k.
+log "waiting for grammar labels"
+while docker ps -q -f name=^ongiini-label$ | grep -q .; do sleep 60; done
+log "labels: $(wc -l < "$D/bt_labels.jsonl")"
+run ongiini-build no python3 scripts/build_sft_selected.py --strategy grammar --n 50000 | tail -20
+run ongiini-build no python3 scripts/build_sft_selected.py --strategy vocab --n 50000 | tail -6
+train_and_eval B50kG "$D/sft_B50kG_train.jsonl" 1
+train_and_eval B50kV "$D/sft_B50kV_train.jsonl" 1
+
 train_and_eval B200k "$D/sft_B200k_train.jsonl" 1
 log "pipeline done"
