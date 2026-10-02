@@ -41,6 +41,10 @@ MODELS = {  # label → (OpenRouter id, extra body)
     "deepseek-v4.1": ("deepseek/deepseek-v4.1-flash", {"reasoning": {"enabled": False}}),
     "claude-opus-5": ("anthropic/claude-opus-5", {}),
     "gemini-3.1-pro": ("google/gemini-3.1-pro-preview", {}),
+    "gemma-4-31b": ("google/gemma-4-31b-it", {}),
+    "gpt-oss-120b": ("openai/gpt-oss-120b", {}),
+    "qwen3.5-122b": ("qwen/qwen3.5-122b-a10b", {}),
+    "nemotron-3-super-120b": ("nvidia/nemotron-3-super-120b-a12b", {}),
 }
 BATCH = 25
 

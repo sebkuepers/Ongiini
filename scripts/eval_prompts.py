@@ -54,6 +54,35 @@ DIALECT_NAMES = {"oshindonga": "Oshindonga", "oshikwanyama": "Oshikwanyama"}
 
 TEMPLATES = {PAPER_ZEROSHOT_ID: PAPER_ZEROSHOT, LEGACY_ID: LEGACY, R23_ID: R23, MIN_ID: MIN}
 
+# Prompt screening (docs/eval-protocol.md §9, exploratory, 2026-10-02): each
+# variant changes exactly one property of the paper prompt. Used to choose
+# which properties the robustness check tests — never to pick the
+# leaderboard prompt, which stays PAPER_ZEROSHOT.
+_PAPER_NO_ROLE = PAPER_ZEROSHOT.replace(
+    "You are a professional translator translating English to {dialect} (an "
+    "Oshiwambo language spoken in northern Namibia). Translate", "Translate").replace(
+    "sentence into natural, fluent {dialect}.",
+    "sentence into natural, fluent {dialect} (an Oshiwambo language spoken in northern Namibia).")
+SCREEN = {
+    "screen-no-role": _PAPER_NO_ROLE,
+    "screen-no-description": PAPER_ZEROSHOT.replace(
+        " (an Oshiwambo language spoken in northern Namibia)", ""),
+    "screen-iso-name": PAPER_ZEROSHOT,          # rendered with NAME_VARIANTS below
+    # the umbrella name already says "Oshiwambo", so the description would repeat it
+    "screen-umbrella-name": PAPER_ZEROSHOT.replace(
+        " (an Oshiwambo language spoken in northern Namibia)", " (spoken in northern Namibia)"),
+    "screen-no-format-rule": PAPER_ZEROSHOT.replace(
+        "Only output the translation. Do not include explanations, glosses, or "
+        "commentary.\n\n", ""),
+}
+NAME_VARIANTS = {
+    "screen-iso-name": {"oshindonga": "Ndonga", "oshikwanyama": "Kwanyama"},
+    "screen-umbrella-name": {"oshindonga": "Oshiwambo (Oshindonga dialect)",
+                             "oshikwanyama": "Oshiwambo (Oshikwanyama dialect)"},
+}
+TEMPLATES |= SCREEN
+
 
 def render(template_id: str, dialect: str, source: str) -> str:
-    return TEMPLATES[template_id].format(dialect=DIALECT_NAMES[dialect], source=source)
+    name = NAME_VARIANTS.get(template_id, DIALECT_NAMES)[dialect]
+    return TEMPLATES[template_id].format(dialect=name, source=source)
