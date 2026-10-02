@@ -174,3 +174,11 @@ dialect, no hint whether it is a reference. One label:
   they mainly speak at home; dialect annotation added as a separate paid
   task. Reason: the meaning question cannot detect dialect drift. No
   real ratings had been collected yet.
+- 2026-10-02: dialect-annotation systems fixed before any annotation, by
+  the rule above applied to the interim scores of 2026-10-01 and refined
+  to systems that take the dialect as an instruction (single-direction MT
+  models return the same text for both requests) with ≤ 10 % empty
+  outputs: Gemini 3.1 Pro, GPT-6 Astra, Muse Spark 1.3, Kimi K3, Gemma 4
+  31B, Mistral Small 4, gpt-oss-120b, Gemma 4 26B. 30 sentences, seed 42;
+  59 development Kwanyama references labelled Ndonga by GlotLID plus 61
+  random references; built by scripts/build_dialect_annotation.py.
