@@ -40,10 +40,18 @@ SYSTEMS = {
     "gemma-4-26b-api":        ("Gemma 4 26B", "open-weight", "USA", "OpenRouter", "main"),
     "llama-4-scout":          ("Llama 4 Scout", "open-weight", "USA", "OpenRouter", "main"),
     "mistral-small-4":        ("Mistral Small 4", "open-weight", "Europe", "OpenRouter", "main"),
+    # Mid-size open-weight class (~120B; fits the DGX Spark at 4 bit), added 2026-10-01
+    "gpt-oss-120b":           ("gpt-oss-120b", "open-weight", "USA", "OpenRouter", "main"),
+    "qwen3.5-122b":           ("Qwen 3.5 122B-A10B", "open-weight", "China", "OpenRouter", "main"),
+    "nemotron-3-super-120b":  ("Nemotron 3 Super 120B-A12B", "open-weight", "USA", "OpenRouter", "main"),
+    "gemma-4-31b":            ("Gemma 4 31B", "open-weight", "USA", "OpenRouter", "main"),
     "qwen3.8-27b":            ("Qwen 3.8 27B", "open-weight", "China", "OpenRouter", "main"),
     "okalm-1b_zeroshot":      ("OkaLM 1B", "specialist", "Namibia", "local (MLX)", "diagnostic"),  # base model, ignores the instruction (2026-10-01)
     "okalm-3b_zeroshot":      ("OkaLM 3B", "specialist", "Namibia", "local (MLX)", "diagnostic"),  # base model, ignores the instruction (2026-10-01)
     "okalm-8b_zeroshot":      ("OkaLM 8B", "specialist", "Namibia", "local (MLX)", "diagnostic"),  # base model, ignores the instruction (2026-10-01)
+    # English→Ndonga Marian models (single direction; Kwanyama scored as transfer), added 2026-10-02
+    "opus-mt-en-ng":          ("Helsinki-NLP opus-mt-en-ng", "mt", "Europe", "local", "main"),
+    "meyabase-en-ng":         ("Meyabase en-ng (opus-mt fine-tune)", "mt", "Namibia", "local", "main"),
     "nllb-200-3.3b":          ("NLLB-200 3.3B → Tswana", "mt", "USA", "local", "reference-point"),
     "madlad400-3b-mt":        ("MADLAD-400 3B → Tswana", "mt", "USA", "local", "reference-point"),
     "nllb-200-3.3b-umb":      ("NLLB-200 3.3B → Umbundu", "mt", "USA", "local", "reference-point"),

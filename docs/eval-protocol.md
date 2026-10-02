@@ -159,3 +159,24 @@ about shared sources or strategies, not as evidence about training data.
   several times the cost, applying it to some systems and not others would
   mix configurations, and the literature finds little gain from thinking
   for direct translation (Li, Ji & Tiedemann 2025, arXiv:2510.06471).
+- 2026-10-01, before any scores of these systems were read: added a
+  mid-size open-weight class — gpt-oss-120b, Qwen 3.5 122B-A10B, Nemotron 3
+  Super 120B-A12B — and Gemma 4 31B, all at their default configuration.
+  Reason: the tested open models were either ~25–30B or ≥ 700B; ~120B
+  models fit the DGX Spark at 4 bit and are the realistic self-hosted
+  alternative.
+- 2026-10-02: exploratory prompt screening before the robustness check
+  (scripts/prompt_screening.py): five one-property variants of the paper
+  prompt (no role, no language description, ISO names Ndonga/Kwanyama,
+  umbrella name "Oshiwambo (… dialect)", no format rule) plus MIN, R23 and
+  the May legacy prompt, on Gemma 4 26B, Qwen 3.5 122B and DeepSeek V4.1
+  (both reasoning off), 100 development items. It selects which properties
+  the robustness check tests; the leaderboard prompt stays the paper prompt.
+  Reason: Gemma 4 26B scored ~5 chrF++ higher with the May prompt on the
+  Spark than with the paper prompt via the API.
+- 2026-10-02: added two dedicated English→Ndonga MT systems, run locally
+  with beam 4 like NLLB: Helsinki-NLP opus-mt-en-ng (public) and Meyabase's
+  fine-tune of it (private weights, shared with us; results unpublished
+  until Meyabase agrees). Both translate into Ndonga only; Oshikwanyama is
+  scored as transfer. Reason: the concept paper's claim that no dedicated
+  MT system covers Oshiwambo missed opus-mt-en-ng.

@@ -77,6 +77,46 @@ services:
     labels:
       autoheal: "true"
 
+  # Meyabase Platforms' English↔Oshindonga translator, hosted here as a
+  # sponsorship (their HF Inference Endpoint was too expensive). Public at
+  # meyabase.ongiini.ai via the tunnel. CPU-only and capped so it can never
+  # starve the webhook or vLLM; sees only the HF read token, not .env.
+  # See deploy/meyabase/serve.py.
+  meyabase-translate:
+    build:
+      context: deploy/meyabase
+    container_name: meyabase-translate
+    restart: unless-stopped
+    environment:
+      TF_TOKEN: ${HF_TOKEN:?HF_TOKEN missing in .env}
+      ALLOWED_ORIGINS: https://translate.meyabase.com
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M,mode=1777
+    volumes:
+      - ./data/meyabase_cache:/cache
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 256
+    ports:
+      - "127.0.0.1:8450:8080"
+    healthcheck:
+      test:
+        - "CMD"
+        - "python3"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health',timeout=3).status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    labels:
+      autoheal: "true"
+
   website:
     image: nginx:1.27-alpine
     container_name: ongiini-website

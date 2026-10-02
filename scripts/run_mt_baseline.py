@@ -41,7 +41,10 @@ DIALECTS = ("oshindonga", "oshikwanyama")
 # has a Kwanyama tag <2kj> (a real vocabulary token; verified 2026-10-01) —
 # run it with --tgt kj; it is scored as native for Oshikwanyama and as
 # transfer for Oshindonga, which MADLAD lacks.
-DEFAULT_TGT = {"nllb": "tsn_Latn", "madlad": "tn"}
+DEFAULT_TGT = {"nllb": "tsn_Latn", "madlad": "tn", "marian": "ng"}
+# marian: single-direction English→Ndonga models (Helsinki-NLP opus-mt-en-ng
+# and Meyabase's fine-tunes of it) — no target tag; scored as native for
+# Oshindonga and as transfer for Oshikwanyama.
 
 
 def restore_untied_madlad(model, repo: str) -> None:
@@ -62,7 +65,7 @@ def restore_untied_madlad(model, repo: str) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--system", choices=("nllb", "madlad"), required=True)
+    ap.add_argument("--system", choices=("nllb", "madlad", "marian"), required=True)
     ap.add_argument("--model", required=True)
     ap.add_argument("--label", required=True)
     ap.add_argument("--batch", type=int, default=6)
@@ -90,6 +93,9 @@ def main(argv=None) -> int:
     if args.system == "nllb":
         tok = AutoTokenizer.from_pretrained(args.model, src_lang="eng_Latn")
         prefix, gen_extra = "", {"forced_bos_token_id": tok.convert_tokens_to_ids(tgt)}
+    elif args.system == "marian":
+        tok = AutoTokenizer.from_pretrained(args.model)
+        prefix, gen_extra = "", {}
     else:
         tok = AutoTokenizer.from_pretrained(args.model)
         prefix, gen_extra = f"<2{tgt}> ", {}
