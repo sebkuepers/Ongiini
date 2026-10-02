@@ -35,6 +35,12 @@
 #       in full and the user gets over-billed for every turn's
 #       static overhead.
 #
+#   GPU_MEM_UTIL (default 0.40, was 0.70 until 2026-10-02)
+#       Leaves ~36 GB of the Spark's unified memory for LoRA training next
+#       to production. At 0.70 vLLM had 65 GiB KV cache (2.85M tokens, 43x
+#       concurrency at 65k context) for a cap of 16 sequences; 0.40 keeps
+#       ~29 GiB (~19x), still above the cap. GPU_MEM_UTIL=0.70 restores it.
+#
 # Service interruption: ~3-4 minutes during cold model load.
 
 set -euo pipefail
@@ -44,6 +50,7 @@ IMAGE=vllm/vllm-openai:gemma4-0505-arm64-cu130
 MODEL_DIR=/home/nexus/models/gemma-4-26b-a4b-nvfp4
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_SRC="${TEMPLATE_SRC:-repo}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.40}"
 TEMPLATE_MOUNT=()
 if [ "$TEMPLATE_SRC" = "bundled" ]; then
   TEMPLATE_PATH=/vllm-workspace/examples/tool_chat_template_gemma4.jinja
@@ -74,7 +81,7 @@ docker run -d \
   --max-model-len 65536 \
   --max-num-batched-tokens 8192 \
   --max-num-seqs 16 \
-  --gpu-memory-utilization 0.70 \
+  --gpu-memory-utilization "$GPU_MEM_UTIL" \
   --moe-backend marlin \
   --reasoning-parser gemma4 \
   --enable-auto-tool-choice --tool-call-parser gemma4 \
