@@ -12,6 +12,12 @@ Runs the same automatic checks on the base model and on base + adapter:
    valid JSON and the right tool.
 6. English answers to 40 Ongiini-style questions, saved for a blind pairwise
    comparison by an LLM judge (scripts/retention_judge.py).
+7. Oshindonga vocabulary (not retention but the target): 500 content words
+   from the corpus dictionary (high confidence, all frequency bands), both
+   directions — word→English meaning (hit = a content word of a dictionary
+   sense) and English→word (hit = the form or lemma). The dictionary is
+   Gemini-built, so absolute numbers are approximate; the comparison across
+   base and adapters is what counts. Synonyms count as misses.
 
 Test data: data/private/retention/ (downloaded once; see the paper-3 notes).
 Results: data/private/experiments/retention/<label>.json (+ _answers.json).
@@ -219,6 +225,20 @@ def main(argv=None) -> int:
     res["tools_valid_json"] = round(100 * valid / len(TOOL_CASES), 1)
     res["tools_right_tool"] = round(100 * right / len(TOOL_CASES), 1)
     print("tools", res["tools_valid_json"], res["tools_right_tool"], flush=True)
+
+    words = json.loads((DATA / "wordtest_500.json").read_text())
+    stop = {"a", "an", "the", "of", "to", "in", "on", "or", "and", "be", "is", "for", "with", "s"}
+    ans = generate(model, tok, [f"What does the Oshindonga word '{w['form']}' mean in English? "
+                                "Answer with the English meaning only, in 1 to 4 words." for w in words], 16)
+    def content(t):
+        return {x.rstrip("s") for x in re.findall(r"[a-z]+", t.lower())} - stop
+    res["vocab_ndo_to_en"] = round(100 * sum(bool(content(a) & content(" ".join(w["senses"])))
+                                             for a, w in zip(ans, words)) / len(words), 1)
+    ans = generate(model, tok, [f"What is the Oshindonga word for '{w['senses'][0]}'? "
+                                "Answer with the Oshindonga word only." for w in words], 16)
+    res["vocab_en_to_ndo"] = round(100 * sum(w["form"].lower() in a.lower() or w["lemma"].lower() in a.lower()
+                                             for a, w in zip(ans, words)) / len(words), 1)
+    print("vocab", res["vocab_ndo_to_en"], res["vocab_en_to_ndo"], flush=True)
 
     chat = generate(model, tok, CHAT, 400)
     OUT.mkdir(parents=True, exist_ok=True)
