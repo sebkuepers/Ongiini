@@ -4,7 +4,7 @@
 Runs inside the training image on the DGX Spark (deploy/train/Dockerfile),
 next to production vLLM. Data: chat-format JSONL ({"messages": [user,
 assistant]}) built from data/private/corpus/. Loss is computed on the
-assistant turn only. The adapter targets the attention projections, which
+Oshiwambo answer only (prompt/completion format). The adapter targets the attention projections, which
 vLLM can load as a LoRA on the production model.
 
     python3 scripts/train_lora.py --model /models/gemma-4-26b-a4b-it-bf16 \\
@@ -63,17 +63,20 @@ def main(argv=None) -> int:
     print(f"loaded in {time.time() - t0:.0f}s; GPU mem {torch.cuda.memory_allocated() / 2**30:.1f} GiB", flush=True)
 
     ds = load_dataset("json", data_files={"train": args.train, "val": args.val})
-    ds = ds.remove_columns([c for c in ds["train"].column_names if c != "messages"])
+    # Conversational prompt/completion format: trl computes the loss on the
+    # completion (the Oshiwambo answer) only, with any chat template.
+    ds = ds.map(lambda r: {"prompt": r["messages"][:-1], "completion": r["messages"][-1:]},
+                remove_columns=ds["train"].column_names)
     if args.limit:
         ds["train"] = ds["train"].select(range(min(args.limit, len(ds["train"]))))
 
     cfg = SFTConfig(
         output_dir=args.out, num_train_epochs=args.epochs, learning_rate=args.lr,
         per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
-        gradient_accumulation_steps=args.accum, lr_scheduler_type="cosine", warmup_ratio=0.03,
+        gradient_accumulation_steps=args.accum, lr_scheduler_type="cosine", warmup_steps=20,
         logging_steps=10, eval_strategy="steps", eval_steps=100, save_strategy="steps",
         save_steps=200, save_total_limit=2, bf16=True, gradient_checkpointing=True,
-        max_length=args.max_len, assistant_only_loss=True, report_to=[], seed=42)
+        max_length=args.max_len, completion_only_loss=True, report_to=[], seed=42)
     peft_cfg = LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
                           target_modules=TARGETS, task_type="CAUSAL_LM")
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],
