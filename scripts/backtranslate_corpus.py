@@ -31,6 +31,35 @@ MONO = ROOT / "data/private/corpus/osheng_v1/mono.jsonl"
 PROMPT = ("Translate the following {name} sentence (an Oshiwambo language of northern Namibia) "
           "into natural English. Only output the English translation.\n\n{name}: {text}\nEnglish:")
 NAMES = {"Oshindonga": "Oshindonga", "Oshikwanyama": "Oshikwanyama"}
+PROMPT_GLOSSARY = (
+    "Translate the following {name} sentence (an Oshiwambo language of northern Namibia) into natural English.\n\n"
+    "Glossary of words in the sentence, from a corpus dictionary (may be incomplete or list several senses; "
+    "pick the sense that fits the sentence, ignore entries that do not fit):\n{glossary}\n\n"
+    "Only output the English translation.\n\n{name}: {text}\nEnglish:")
+SKIP_TOP = 300            # the most frequent forms are function words the teacher already knows
+MAX_ENTRIES = 12
+
+
+def load_dictionary(path: Path) -> dict[str, dict]:
+    return {e["form"]: e for e in map(json.loads, path.open()) if e.get("senses")}
+
+
+def glossary_for(text: str, dictionary: dict[str, dict]) -> str:
+    import re
+    seen, lines = set(), []
+    words = re.findall(r"[A-Za-zÀ-ÿ]+(?:['’-][A-Za-zÀ-ÿ]+)*", text)
+    hits = [dictionary[w.lower()] for w in words if w.lower() in dictionary]
+    hits = [e for e in hits if (e.get("rank") or 0) > SKIP_TOP]
+    for e in sorted(hits, key=lambda e: -(e.get("rank") or 0)):            # rarest first
+        if e["form"] in seen:
+            continue
+        seen.add(e["form"])
+        pos = e.get("pos") or ""
+        lines.append(f"- {e['form']} ({pos}{', lemma ' + e['lemma'] if e.get('lemma') and e['lemma'] != e['form'] else ''}): "
+                     + "; ".join(e["senses"][:3]))
+        if len(lines) >= MAX_ENTRIES:
+            break
+    return "\n".join(lines)
 
 
 def sample(n: int, dialect: str, seed: int) -> list[dict]:
@@ -39,9 +68,16 @@ def sample(n: int, dialect: str, seed: int) -> list[dict]:
     return rows[:n]
 
 
-async def teacher(rows: list[dict], out: Path, model: str, conc: int, reasoning: str = "off") -> float:
+async def teacher(rows: list[dict], out: Path, model: str, conc: int, reasoning: str = "off",
+                  dictionary: dict | None = None) -> float:
     client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key("OPENROUTER_API_KEY"))
     sem, lock, cost = asyncio.Semaphore(conc), asyncio.Lock(), [0.0]
+
+    def prompt_for(r: dict) -> str:
+        g = glossary_for(r["text"], dictionary) if dictionary else ""
+        if g:
+            return PROMPT_GLOSSARY.format(name=NAMES[r["lid"]], text=r["text"], glossary=g)
+        return PROMPT.format(name=NAMES[r["lid"]], text=r["text"])
 
     async def one(r: dict) -> None:
         async with sem:
@@ -51,7 +87,7 @@ async def teacher(rows: list[dict], out: Path, model: str, conc: int, reasoning:
                     resp = await client.chat.completions.create(
                         model=model, temperature=0, seed=42,
                         max_tokens=512 if reasoning == "off" else 8192,
-                        messages=[{"role": "user", "content": PROMPT.format(name=NAMES[r["lid"]], text=r["text"])}],
+                        messages=[{"role": "user", "content": prompt_for(r)}],
                         extra_body={"usage": {"include": True}, **(
                             {} if reasoning == "default" else {"reasoning": {"enabled": reasoning == "on"}})})
                     if resp.choices:
@@ -104,12 +140,14 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--second-teacher", action="store_true")
     ap.add_argument("--reasoning", choices=("off", "on", "default"), default="off")
+    ap.add_argument("--dictionary", type=Path, help="corpus dictionary JSONL for per-sentence glossaries")
     args = ap.parse_args(argv)
     rows = sample(args.n, args.dialect, args.seed)
     done = {(json.loads(l)["doc"], json.loads(l)["i"]) for l in args.out.open()} if args.out.exists() else set()
     todo = [r for r in rows if (r["doc"], r["i"]) not in done]
     print(f"{len(todo)} of {len(rows)} to translate", file=sys.stderr)
-    cost = asyncio.run(teacher(todo, args.out, args.model, args.concurrency, args.reasoning))
+    dictionary = load_dictionary(args.dictionary) if args.dictionary else None
+    cost = asyncio.run(teacher(todo, args.out, args.model, args.concurrency, args.reasoning, dictionary))
     print(f"teacher cost {cost:.3f} $", file=sys.stderr)
     if args.second_teacher:
         second_teacher(args.out)
