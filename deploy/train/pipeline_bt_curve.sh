@@ -63,17 +63,28 @@ retention() {  # retention <label> [adapter dir]
     check retention "$label"
   fi
 }
-summary() {  # one line per label for the WhatsApp message
+summary() {  # result message for WhatsApp, with the earlier runs for comparison
   python3 - "$1" <<'PY'
 import json, sys
 label = sys.argv[1]
-s = json.load(open("data/private/experiments/lora/scores.json"))[label]
-r = json.load(open(f"data/private/experiments/retention/{label}.json"))
-j = r.get("english_pairwise_vs_base", {})
-print(f"Ndonga {s['oshindonga_dev']['chrf++']} (blind {s['oshindonga_blind']['chrf++']}), "
-      f"Kwanyama {s['oshikwanyama_dev']['chrf++']}; Englisch ppl {r['en_perplexity']}, GSM8K {r['gsm8k']}, "
-      f"Vokabeln {r['vocab_en_to_ndo']} %, Claude-Vergleich {j.get('adapter_wins')}:{j.get('base_wins')} "
-      f"({j.get('ties')} unentschieden)")
+S = json.load(open("data/private/experiments/lora/scores.json"))
+s = S[label]
+def nd(l):
+    return S[l]["oshindonga_dev"]["chrf++"] if l in S else None
+others = ", ".join(f"{l.replace('gemma-4-12b-', '')} {nd(l)}" for l in S if l != label and nd(l) is not None)
+lines = [f"Ndonga {s['oshindonga_dev']['chrf++']} (blind {s['oshindonga_blind']['chrf++']}, "
+         f"+{s['oshindonga_dev']['delta_vs_base']} vs Basis). Zum Vergleich: {others}.",
+         f"Kwanyama {s['oshikwanyama_dev']['chrf++']}; Drift Kwanyama-Ausgaben vs Ndonga-Referenz "
+         f"{s.get('drift', {}).get('kua_request_vs_ndo_ref', '?')}."]
+try:
+    r = json.load(open(f"data/private/experiments/retention/{label}.json"))
+    j = r.get("english_pairwise_vs_base", {})
+    lines.append(f"Allgemein: Englisch-Perplexität {r['en_perplexity']}, GSM8K {r['gsm8k']} %, "
+                 f"Vokabeltest {r['vocab_en_to_ndo']} %, Claude-Vergleich Englisch {j.get('adapter_wins')}:"
+                 f"{j.get('base_wins')} ({j.get('ties')} unentschieden).")
+except (OSError, KeyError) as exc:
+    lines.append(f"Retention fehlt ({exc!r}).")
+print(" ".join(lines))
 PY
 }
 
