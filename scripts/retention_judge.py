@@ -16,7 +16,7 @@ import random
 import sys
 from pathlib import Path
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_openrouter_baseline import api_key  # noqa: E402
@@ -38,20 +38,27 @@ Which answer is more helpful, correct and clear? Reply with exactly one word: 1,
 
 async def judge(base: dict, cand: dict, model: str) -> dict:
     client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key("OPENROUTER_API_KEY"))
-    rng, sem = random.Random(42), asyncio.Semaphore(8)
+    rng, sem = random.Random(42), asyncio.Semaphore(3)
     tally = {"adapter_wins": 0, "ties": 0, "base_wins": 0, "unparsed": 0}
 
     async def one(q: str) -> None:
         flip = rng.random() < 0.5
         a1, a2 = (cand[q], base[q]) if flip else (base[q], cand[q])
         async with sem:
-            r = await client.chat.completions.create(
-                model=model, temperature=0, max_tokens=10, extra_body={"reasoning": {"enabled": False}},
-                messages=[{"role": "user", "content": PROMPT.format(q=q, a1=a1, a2=a2)}])
+            for attempt in range(8):  # OpenRouter limits new accounts to 20 requests/min per model
+                try:
+                    r = await client.chat.completions.create(
+                        model=model, temperature=0, max_tokens=10, extra_body={"reasoning": {"enabled": False}},
+                        messages=[{"role": "user", "content": PROMPT.format(q=q, a1=a1, a2=a2)}])
+                    break
+                except RateLimitError:
+                    if attempt == 7:
+                        raise
+                    await asyncio.sleep(15 * (attempt + 1))
         v = (r.choices[0].message.content or "").strip().lower()
         if v.startswith("tie"):
             tally["ties"] += 1
-        elif v[:1] in "12":
+        elif v[:1] and v[:1] in "12":
             adapter_won = (v[:1] == "1") == flip
             tally["adapter_wins" if adapter_won else "base_wins"] += 1
         else:

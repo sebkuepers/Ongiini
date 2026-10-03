@@ -155,7 +155,10 @@ def generate(model, tok, prompts: list[str], max_new: int, batch: int = 16) -> l
 def perplexity(model, tok, paras: list[str]) -> float:
     nll, n = 0.0, 0
     for p in paras:
-        ids = tok(p, return_tensors="pt", truncation=True, max_length=512).input_ids.to(model.device)
+        # Gemma needs <bos>; the tokenizer does not add it here, and without it
+        # the loss is meaningless (perplexity in the millions).
+        ids = tok(tok.bos_token + p, return_tensors="pt", truncation=True, max_length=512,
+                  add_special_tokens=False).input_ids.to(model.device)
         with torch.no_grad():
             loss = model(ids, labels=ids).loss.item()
         nll += loss * (ids.shape[1] - 1)
@@ -183,7 +186,7 @@ def main(argv=None) -> int:
     print("perplexity", res["en_perplexity"], flush=True)
 
     cases = [(q, name, rule) for q in QUESTIONS for name, rule in RULES.items()]
-    ans = generate(model, tok, [f"{q}\n\n{r[0]}" for q, _, r in cases], 200)
+    ans = generate(model, tok, [f"{q}\n\n{r[0]}" for q, _, r in cases], 600)  # 200 cut answers before the end phrase
     by_rule = {name: [] for name in RULES}
     for (_, name, rule), a in zip(cases, ans):
         by_rule[name].append(bool(rule[1](a)))
