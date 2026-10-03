@@ -79,7 +79,7 @@ def main(argv=None) -> int:
         logging_steps=10, eval_strategy="steps", eval_steps=100, save_strategy="steps",
         save_steps=200, save_total_limit=2, bf16=True, gradient_checkpointing=True,
         max_length=args.max_len, completion_only_loss=True, report_to=[], seed=42,
-        group_by_length=args.group_by_length)
+        train_sampling_strategy="group_by_length" if args.group_by_length else "random")
     peft_cfg = LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
                           target_modules=TARGETS, task_type="CAUSAL_LM")
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],
