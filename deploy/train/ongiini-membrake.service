@@ -1,0 +1,18 @@
+# Install: sudo cp deploy/train/ongiini-membrake.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now ongiini-membrake
+[Unit]
+Description=Ongiini memory emergency brake (kills training containers when memory runs low)
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/bin/bash /home/nexus/dev/Ongiini/deploy/train/membrake.sh
+Environment=THRESHOLD_GB=12
+Restart=always
+RestartSec=5
+# Must survive the memory pressure it is there to stop.
+OOMScoreAdjust=-1000
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
