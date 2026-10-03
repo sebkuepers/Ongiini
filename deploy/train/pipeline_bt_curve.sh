@@ -24,6 +24,7 @@ run() {  # run <name> <gpu:yes|no> <cmd...>
   local g=(); [ "$gpu" = yes ] && g=(--gpus all)
   docker run --rm --name "$name" "${g[@]}" --ipc host --shm-size 16g --user 1000:1000 \
     -e HOME=/tmp -e HF_HOME=/tmp/hf -e PYTHONUNBUFFERED=1 \
+    -e USER=nexus -e LOGNAME=nexus -e TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor -e TRITON_CACHE_DIR=/tmp/triton \
     -e OPENROUTER_API_KEY="$(grep '^OPENROUTER_API_KEY=' .env | cut -d= -f2-)" \
     -v "$MODEL_DIR:$MODEL:ro" -v "$PWD:/work" -w /work "$IMG" "$@"
 }
@@ -31,6 +32,7 @@ retention() {  # retention <label> [adapter dir]
   local label=$1 adapter=${2:-}
   [ -f "$EXP/retention/$label.json" ] && return 0
   log "retention $label"
+  set -o pipefail
   if [ -n "$adapter" ]; then
     run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" --adapter "$adapter" --label "$label" \
       | grep -v "^Loading" | tail -2
@@ -38,6 +40,8 @@ retention() {  # retention <label> [adapter dir]
   else
     run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" --label "$label" | grep -v "^Loading" | tail -2
   fi
+  [ -f "$EXP/retention/$label.json" ] || { log "retention $label FAILED — stopping"; exit 1; }
+  set +o pipefail
 }
 
 train_and_eval() {  # train_and_eval <tag> <train file> <epochs>
@@ -46,11 +50,11 @@ train_and_eval() {  # train_and_eval <tag> <train file> <epochs>
   ( sleep 30; bash deploy/train/monitor.sh "ongiini-train-$tag" "$EXP/gpu/$tag.csv" ) &
   run "ongiini-train-$tag" yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
     --train "$train" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "data/private/lora/${tag}_12b_r16" \
-    --epochs "$epochs" --batch 16 --accum 1 --group-by-length || { log "training $tag FAILED"; return 1; }
+    --epochs "$epochs" --batch 16 --accum 1 --group-by-length || { log "training $tag FAILED — stopping"; exit 1; }
   log "benchmark $tag"
   run "ongiini-eval-$tag" yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
     --adapter "data/private/lora/${tag}_12b_r16" --label "gemma-4-12b-$tag" --out "$EXP/lora" --batch 16 \
-    || { log "benchmark $tag FAILED"; return 1; }
+    || { log "benchmark $tag FAILED — stopping"; exit 1; }
   run "ongiini-score" no python3 scripts/score_lora_runs.py --base gemma-4-12b-base \
     gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B50kV gemma-4-12b-B200k
   retention "gemma-4-12b-$tag" "data/private/lora/${tag}_12b_r16"
@@ -68,7 +72,8 @@ while docker ps -q -f name=^ongiini-train-B10k$ | grep -q .; do sleep 60; done
 if [ ! -f "$EXP/lora/gemma-4-12b-B10k_oshikwanyama.jsonl" ]; then
   log "benchmark B10k"
   run ongiini-eval-B10k yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
-    --adapter data/private/lora/B10k_12b_r16 --label gemma-4-12b-B10k --out "$EXP/lora" --batch 16
+    --adapter data/private/lora/B10k_12b_r16 --label gemma-4-12b-B10k --out "$EXP/lora" --batch 16 \
+    || { log "benchmark B10k FAILED — stopping"; exit 1; }
 fi
 run ongiini-score no python3 scripts/score_lora_runs.py --base gemma-4-12b-base gemma-4-12b-A gemma-4-12b-B10k
 retention gemma-4-12b-base
