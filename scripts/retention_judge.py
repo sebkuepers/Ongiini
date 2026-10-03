@@ -73,9 +73,12 @@ def main(argv=None) -> int:
     ap.add_argument("base")
     ap.add_argument("candidate")
     ap.add_argument("--model", default="anthropic/claude-opus-5")
+    ap.add_argument("--limit", type=int, default=0, help="judge only the first N questions (preflight)")
     args = ap.parse_args(argv)
     base = json.loads((OUT / f"{args.base}_answers.json").read_text())
     cand = json.loads((OUT / f"{args.candidate}_answers.json").read_text())
+    if args.limit:
+        base = dict(list(base.items())[:args.limit])
     tally = asyncio.run(judge(base, cand, args.model))
     res_path = OUT / f"{args.candidate}.json"
     res = json.loads(res_path.read_text())

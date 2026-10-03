@@ -172,7 +172,9 @@ def main(argv=None) -> int:
     ap.add_argument("--model", required=True)
     ap.add_argument("--adapter", default="")
     ap.add_argument("--label", required=True)
+    ap.add_argument("--quick", action="store_true", help="3 items per test (pipeline preflight)")
     args = ap.parse_args(argv)
+    n = 3 if args.quick else None
     tok = AutoTokenizer.from_pretrained(args.model)
     tok.padding_side = "left"
     model = load_model(args.model, four_bit=False)
@@ -182,10 +184,10 @@ def main(argv=None) -> int:
     model.eval()
     res: dict = {"label": args.label, "adapter": args.adapter or None}
 
-    res["en_perplexity"] = perplexity(model, tok, json.loads((DATA / "wikitext_100.json").read_text()))
+    res["en_perplexity"] = perplexity(model, tok, json.loads((DATA / "wikitext_100.json").read_text())[:n])
     print("perplexity", res["en_perplexity"], flush=True)
 
-    cases = [(q, name, rule) for q in QUESTIONS for name, rule in RULES.items()]
+    cases = [(q, name, rule) for q in QUESTIONS[:n] for name, rule in RULES.items()]
     ans = generate(model, tok, [f"{q}\n\n{r[0]}" for q, _, r in cases], 600)  # 200 cut answers before the end phrase
     by_rule = {name: [] for name in RULES}
     for (_, name, rule), a in zip(cases, ans):
@@ -194,7 +196,7 @@ def main(argv=None) -> int:
     res["instructions_all"] = round(100 * sum(sum(v) for v in by_rule.values()) / len(cases), 1)
     print("instructions", res["instructions_all"], flush=True)
 
-    gsm = json.loads((DATA / "gsm8k_100.json").read_text())
+    gsm = json.loads((DATA / "gsm8k_100.json").read_text())[:n]
     ans = generate(model, tok, [g["q"] + "\n\nSolve step by step, then end with a line 'Answer: <number>'." for g in gsm], 400)
     def final(t):
         m = re.findall(r"Answer:\s*\$?(-?[\d,]*\.?\d+)", t) or re.findall(r"(-?\d[\d,]*\.?\d*)", t)
@@ -203,7 +205,7 @@ def main(argv=None) -> int:
                                    for a, g in zip(ans, gsm)) / len(gsm), 1)
     print("gsm8k", res["gsm8k"], flush=True)
 
-    fl = json.loads((DATA / "flores_en_af_de_100.json").read_text())
+    fl = json.loads((DATA / "flores_en_af_de_100.json").read_text())[:n]
     chrf = sacrebleu.metrics.CHRF()
     for code, lang in (("af", "Afrikaans"), ("de", "German")):
         hyp = generate(model, tok, [f"Translate into {lang}. Only output the translation.\n\nEnglish: {r['en']}" for r in fl], 200)
@@ -213,10 +215,10 @@ def main(argv=None) -> int:
 
     tool_desc = "\n".join(f"- {k}: {v}" for k, v in TOOLS.items())
     prompts = [f"You can call one of these tools:\n{tool_desc}\n\nUser request: {q}\n\n"
-               'Reply only with JSON: {"tool": "<tool name>", "arguments": {...}}' for q, _ in TOOL_CASES]
+               'Reply only with JSON: {"tool": "<tool name>", "arguments": {...}}' for q, _ in TOOL_CASES[:n]]
     ans = generate(model, tok, prompts, 120)
     valid = right = 0
-    for a, (_, want) in zip(ans, TOOL_CASES):
+    for a, (_, want) in zip(ans, TOOL_CASES[:n]):
         m = re.search(r"\{.*\}", a, re.S)
         try:
             o = json.loads(m.group(0)) if m else None
@@ -225,11 +227,11 @@ def main(argv=None) -> int:
         if isinstance(o, dict) and isinstance(o.get("arguments", {}), dict):
             valid += 1
             right += o.get("tool") == want
-    res["tools_valid_json"] = round(100 * valid / len(TOOL_CASES), 1)
-    res["tools_right_tool"] = round(100 * right / len(TOOL_CASES), 1)
+    res["tools_valid_json"] = round(100 * valid / len(ans), 1)
+    res["tools_right_tool"] = round(100 * right / len(ans), 1)
     print("tools", res["tools_valid_json"], res["tools_right_tool"], flush=True)
 
-    words = json.loads((DATA / "wordtest_500.json").read_text())
+    words = json.loads((DATA / "wordtest_500.json").read_text())[:n]
     stop = {"a", "an", "the", "of", "to", "in", "on", "or", "and", "be", "is", "for", "with", "s"}
     ans = generate(model, tok, [f"What does the Oshindonga word '{w['form']}' mean in English? "
                                 "Answer with the English meaning only, in 1 to 4 words." for w in words], 16)
@@ -243,9 +245,9 @@ def main(argv=None) -> int:
                                              for a, w in zip(ans, words)) / len(words), 1)
     print("vocab", res["vocab_ndo_to_en"], res["vocab_en_to_ndo"], flush=True)
 
-    chat = generate(model, tok, CHAT, 400)
+    chat = generate(model, tok, CHAT[:n], 400)
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"{args.label}_answers.json").write_text(json.dumps(dict(zip(CHAT, chat)), ensure_ascii=False, indent=1))
+    (OUT / f"{args.label}_answers.json").write_text(json.dumps(dict(zip(CHAT[:n], chat)), ensure_ascii=False, indent=1))
     (OUT / f"{args.label}.json").write_text(json.dumps(res, indent=2))
     print(json.dumps(res), flush=True)
     return 0

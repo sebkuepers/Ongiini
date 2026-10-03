@@ -57,6 +57,8 @@ def main(argv=None) -> int:
     ap.add_argument("--bf16-base", action="store_true", help="no 4-bit quantisation of the base")
     ap.add_argument("--group-by-length", action="store_true",
                     help="batch examples of similar length (less padding on short sentences)")
+    ap.add_argument("--chat-format", choices=["trl", "rendered"], default="trl",
+                    help="trl = learning-curve recipe; rendered = prompt exactly as at inference")
     args = ap.parse_args(argv)
 
     t0 = time.time()
@@ -65,9 +67,22 @@ def main(argv=None) -> int:
     print(f"loaded in {time.time() - t0:.0f}s; GPU mem {torch.cuda.memory_allocated() / 2**30:.1f} GiB", flush=True)
 
     ds = load_dataset("json", data_files={"train": args.train, "val": args.val})
-    # Conversational prompt/completion format: trl computes the loss on the
-    # completion (the Oshiwambo answer) only, with any chat template.
-    ds = ds.map(lambda r: {"prompt": r["messages"][:-1], "completion": r["messages"][-1:]},
+    # Loss on the Oshiwambo answer only. "trl" = trl's conversational
+    # prompt/completion format (A, B10k and the rest of the learning curve).
+    # Gemma 4's generation prompt ends with an empty thought block that the
+    # rendered prompt+answer lacks, so trl's prefix mask drops the first answer
+    # tokens (~4) from the loss and trains on a prompt the model never sees at
+    # inference. "rendered" fixes both: prompt = the inference prompt as text.
+    def conversational(r):
+        return {"prompt": r["messages"][:-1], "completion": r["messages"][-1:]}
+
+    def rendered(r):
+        prompt = tok.apply_chat_template(r["messages"][:-1], tokenize=False, add_generation_prompt=True)
+        full = tok.apply_chat_template(r["messages"], tokenize=False)
+        answer = r["messages"][-1]["content"].strip()
+        end = full[full.rindex(answer) + len(answer):]  # end-of-turn marker after the answer
+        return {"prompt": prompt, "completion": answer + end}
+    ds = ds.map(rendered if args.chat_format == "rendered" else conversational,
                 remove_columns=ds["train"].column_names)
     if args.limit:
         ds["train"] = ds["train"].select(range(min(args.limit, len(ds["train"]))))
@@ -85,6 +100,10 @@ def main(argv=None) -> int:
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],
                          processing_class=tok, peft_config=peft_cfg)
     trainer.model.print_trainable_parameters()
+    ex = trainer.train_dataset[0]
+    if "completion_mask" in ex:  # show what the loss sees for one example
+        ids = [i for i, m in zip(ex["input_ids"], ex["completion_mask"]) if m]
+        print("loss on:", repr(tok.decode(ids)), flush=True)
     trainer.train()
     trainer.save_model(args.out)
     metrics = trainer.evaluate()
