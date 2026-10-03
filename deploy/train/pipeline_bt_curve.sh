@@ -116,6 +116,13 @@ preflight() {
 }
 
 log "pipeline start"
+# One GPU job at a time next to production: a leftover training container
+# plus a new one exhausted memory on 2026-10-03 and froze the Spark (and the
+# WhatsApp webhook) for half an hour.
+others=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
+[ -z "$others" ] || fail "other GPU jobs still running: $others"
+avail=$(free -g | awk '/^Speicher:|^Mem:/{print $7}')
+[ "$avail" -ge 50 ] || fail "only ${avail} GB memory available (training needs ~50)"
 ( bash deploy/train/watchdog.sh $$ "$LOG" ) &
 notify "Pipeline startet: Vorabtest aller Stufen (~20 min), danach B50k."
 preflight
