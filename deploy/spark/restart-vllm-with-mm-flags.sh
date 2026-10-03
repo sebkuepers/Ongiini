@@ -35,11 +35,13 @@
 #       in full and the user gets over-billed for every turn's
 #       static overhead.
 #
-#   GPU_MEM_UTIL (default 0.40, was 0.70 until 2026-10-02)
-#       Leaves ~36 GB of the Spark's unified memory for LoRA training next
-#       to production. At 0.70 vLLM had 65 GiB KV cache (2.85M tokens, 43x
-#       concurrency at 65k context) for a cap of 16 sequences; 0.40 keeps
-#       ~29 GiB (~19x), still above the cap. GPU_MEM_UTIL=0.70 restores it.
+#   GPU_MEM_UTIL (default 0.22; 0.70 until 2026-10-02, 0.40 until 2026-10-04)
+#       Leaves the rest of the Spark's unified memory for LoRA training next
+#       to production. Measured at 0.40: weights 15.9 GiB, overhead ~3.3 GiB,
+#       KV cache 29.5 GiB = 1.28M tokens (~24 KiB/token). 0.22 keeps ~7.6 GiB
+#       KV = ~330k tokens, 5x a full 65k context; real peak load is 1-4
+#       concurrent conversations. Below ~0.18 a full 65k context no longer fits.
+#       GPU_MEM_UTIL=0.40 restores the previous setting.
 #
 # Service interruption: ~3-4 minutes during cold model load.
 
@@ -50,7 +52,7 @@ IMAGE=vllm/vllm-openai:gemma4-0505-arm64-cu130
 MODEL_DIR=/home/nexus/models/gemma-4-26b-a4b-nvfp4
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_SRC="${TEMPLATE_SRC:-repo}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.40}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.22}"
 TEMPLATE_MOUNT=()
 if [ "$TEMPLATE_SRC" = "bundled" ]; then
   TEMPLATE_PATH=/vllm-workspace/examples/tool_chat_template_gemma4.jinja
