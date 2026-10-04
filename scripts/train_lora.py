@@ -26,6 +26,9 @@ from transformers import AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
 
 TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj"]
+# All linear layers of the language model (not the vision/audio towers), as in
+# the CPT adapter (scripts/train_cpt.py): attention + MLP.
+TARGETS_ALL = r".*language_model.*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)"
 
 
 def load_model(path: str, four_bit: bool):
@@ -59,6 +62,10 @@ def main(argv=None) -> int:
                     help="batch examples of similar length (less padding on short sentences)")
     ap.add_argument("--chat-format", choices=["trl", "rendered"], default="trl",
                     help="trl = learning-curve recipe; rendered = prompt exactly as at inference")
+    ap.add_argument("--targets", choices=["attn", "all"], default="attn",
+                    help="attn = attention projections (curve); all = attention + MLP, as the CPT adapter")
+    ap.add_argument("--init-adapter", default="",
+                    help="continue training this LoRA adapter (SFT after CPT); rank/targets come from it")
     args = ap.parse_args(argv)
 
     t0 = time.time()
@@ -94,12 +101,22 @@ def main(argv=None) -> int:
         logging_steps=10, eval_strategy="steps", eval_steps=100, save_strategy="steps",
         save_steps=200, save_total_limit=2, bf16=True, gradient_checkpointing=True,
         max_length=args.max_len, completion_only_loss=True, report_to=[], seed=42,
+        # non-reentrant checkpointing works with an already-wrapped PeftModel
+        # (--init-adapter) without input grads; same maths as before.
+        gradient_checkpointing_kwargs={"use_reentrant": False} if args.init_adapter else None,
         train_sampling_strategy="group_by_length" if args.group_by_length else "random")
-    peft_cfg = LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
-                          target_modules=TARGETS, task_type="CAUSAL_LM")
+    if args.init_adapter:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, args.init_adapter, is_trainable=True)
+        peft_cfg = None
+    else:
+        peft_cfg = LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
+                              target_modules=TARGETS_ALL if args.targets == "all" else TARGETS,
+                              task_type="CAUSAL_LM")
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],
                          processing_class=tok, peft_config=peft_cfg)
-    trainer.model.print_trainable_parameters()
+    if hasattr(trainer.model, "print_trainable_parameters"):
+        trainer.model.print_trainable_parameters()
     try:  # show what the loss sees for one example (diagnostic only, never fatal)
         ex = trainer.train_dataset[0]
         if "labels" in ex:

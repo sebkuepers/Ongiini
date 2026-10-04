@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import math
 import re
 import sys
@@ -42,7 +43,7 @@ from train_lora import load_model  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data/private/retention"
-OUT = ROOT / "data/private/experiments/retention"
+OUT = ROOT / os.environ.get("ONGIINI_EXP_DIR", "data/private/experiments") / "retention"  # override: pipeline tests
 
 QUESTIONS = [
     "How can I renew my national ID card?",

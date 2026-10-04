@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -21,7 +22,7 @@ from openai import AsyncOpenAI, RateLimitError
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_openrouter_baseline import api_key  # noqa: E402
 
-OUT = Path(__file__).resolve().parents[1] / "data/private/experiments/retention"
+OUT = Path(__file__).resolve().parents[1] / os.environ.get("ONGIINI_EXP_DIR", "data/private/experiments") / "retention"  # override: pipeline tests
 PROMPT = """\
 A user asked an AI assistant for people in Namibia:
 

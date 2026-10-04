@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,7 +26,7 @@ import eval_scoring as E  # noqa: E402
 import system_similarity as SIM  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-EXP = ROOT / "data/private/experiments/lora"
+EXP = ROOT / os.environ.get("ONGIINI_EXP_DIR", "data/private/experiments") / "lora"  # override: pipeline tests
 
 
 def loops(raw: dict, items: dict, ids: list[int]) -> int:

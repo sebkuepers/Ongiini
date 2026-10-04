@@ -7,6 +7,7 @@ stops and alerts instead of building on it. Every threshold must be validated
 against measured runs (A, B10k) before use — run the checks on them first.
 
     python3 scripts/check_stage.py train data/private/lora/B50k_12b_r16
+    python3 scripts/check_stage.py cpt data/private/lora/C1_cpt_12b_r64
     python3 scripts/check_stage.py bench gemma-4-12b-B50k
     python3 scripts/check_stage.py retention gemma-4-12b-B50k [--judged]
 """
@@ -14,11 +15,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import math
 import sys
 from pathlib import Path
 
-EXP = Path("data/private/experiments")
+EXP = Path(os.environ.get("ONGIINI_EXP_DIR", "data/private/experiments"))  # override: pipeline tests
 
 
 def check_train(out: str) -> list[str]:
@@ -29,6 +31,17 @@ def check_train(out: str) -> list[str]:
     # Defect = did not learn. Measured on this val set: untrained base ~4.2,
     # trained A 1.57, B10k 1.32 — 3.0 sits clearly between.
     return [f"eval_loss {loss:.2f} > 3.0 (base ~4.2, A 1.57, B10k 1.32)"] if loss > 3.0 else []
+
+
+def check_cpt(out: str) -> list[str]:
+    """CPT defect = did not learn: the held-out Oshiwambo loss must drop."""
+    run = json.loads(Path(out, "run.json").read_text())
+    before, after = run.get("held_out_loss_before"), run.get("held_out_loss_after")
+    if after is None or not math.isfinite(after):
+        return [f"held-out loss missing or not finite: {after}"]
+    if before is not None and after > before - 0.05:
+        return [f"held-out loss did not drop: {before:.3f} -> {after:.3f}"]
+    return []
 
 
 def check_bench(label: str, base: str = "gemma-4-12b-base") -> list[str]:
@@ -66,13 +79,13 @@ def check_retention(label: str, judged: bool, preflight: bool = False) -> list[s
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["train", "bench", "retention"])
+    ap.add_argument("stage", choices=["train", "cpt", "bench", "retention"])
     ap.add_argument("target")
     ap.add_argument("--judged", action="store_true")
     ap.add_argument("--preflight", action="store_true")
     args = ap.parse_args(argv)
     try:
-        bad = {"train": lambda: check_train(args.target), "bench": lambda: check_bench(args.target),
+        bad = {"train": lambda: check_train(args.target), "cpt": lambda: check_cpt(args.target), "bench": lambda: check_bench(args.target),
                "retention": lambda: check_retention(args.target, args.judged, args.preflight)}[args.stage]()
     except (OSError, KeyError, ValueError) as exc:
         bad = [f"cannot read results: {exc!r}"]
