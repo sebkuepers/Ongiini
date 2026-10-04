@@ -13,9 +13,9 @@
 #    failure; watchdog.sh alerts when the pipeline dies or the log stalls.
 # Every stage skips work that is already done, so a restart resumes.
 #
-# Order: base retention → B50k → selection B50kG / B50kV → B200k → B10kR (B10k
-# with the corrected chat format, measures what the trl format cost) →
-# retention reruns for A and B10k. Results: data/private/experiments/lora/scores.json,
+# Order: retention base, A, B10k (rerun with the fixed suite) → B50k →
+# selection B50kG / B50kV → B200k → B10kR (B10k with the corrected chat format,
+# measures what the trl format cost). Results: data/private/experiments/lora/scores.json,
 # retention/, GPU logs gpu/<tag>.csv.
 set -u -o pipefail
 cd "$HOME/dev/Ongiini"
@@ -112,7 +112,9 @@ preflight() {
   local P=$EXP/preflight
   rm -rf "$P" data/private/lora/preflight_* "$EXP/retention/preflight"*
   for fmt in trl rendered; do
-    train "preflight_$fmt" "$D/sft_B50k_train.jsonl" 1 "$fmt" 320 2>&1 | grep -E "loss on|eval_loss|Error|error" | tail -3
+    log "preflight training ($fmt)"
+    train "preflight_$fmt" "$D/sft_B50k_train.jsonl" 1 "$fmt" 320 2>&1 | tr '\r' '\n' \
+      | grep -E '^loss on|^input:|^\{"eval_loss|Error' | cut -c1-400
     [ -f "data/private/lora/preflight_${fmt}_12b_r16/run.json" ] || fail "preflight training ($fmt)"
   done
   run ongiini-eval-preflight yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
@@ -145,6 +147,8 @@ if [ -f "$EXP/retention/gemma-4-12b-base.json" ] && [ ! -d "$EXP/retention/v1_no
   mkdir -p "$EXP/retention/v1_nobos" && mv "$EXP/retention/"gemma-4-12b-*.json "$EXP/retention/v1_nobos/"
 fi
 retention gemma-4-12b-base
+retention gemma-4-12b-A data/private/lora/A_parallel_ndo_12b_r16
+retention gemma-4-12b-B10k data/private/lora/B10k_12b_r16
 
 stage B50k "$D/sft_B50k_train.jsonl" 1 trl
 
@@ -162,7 +166,5 @@ stage B200k "$D/sft_B200k_train.jsonl" 1 trl
 BATCH="--batch 8 --accum 2"
 stage B10kR "$D/sft_B10k_train.jsonl" 2 rendered
 
-retention gemma-4-12b-A data/private/lora/A_parallel_ndo_12b_r16
-retention gemma-4-12b-B10k data/private/lora/B10k_12b_r16
 log "pipeline done"
 notify "Pipeline komplett fertig (B50k, B50kG, B50kV, B200k, B10kR)."

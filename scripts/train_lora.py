@@ -100,10 +100,17 @@ def main(argv=None) -> int:
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],
                          processing_class=tok, peft_config=peft_cfg)
     trainer.model.print_trainable_parameters()
-    ex = trainer.train_dataset[0]
-    if "completion_mask" in ex:  # show what the loss sees for one example
-        ids = [i for i, m in zip(ex["input_ids"], ex["completion_mask"]) if m]
-        print("loss on:", repr(tok.decode(ids)), flush=True)
+    try:  # show what the loss sees for one example (diagnostic only, never fatal)
+        ex = trainer.train_dataset[0]
+        if "labels" in ex:
+            print("loss on:", repr(tok.decode([t for t in ex["labels"] if t != -100])), flush=True)
+        elif "completion_mask" in ex:
+            print("loss on:", repr(tok.decode([i for i, m in zip(ex["input_ids"], ex["completion_mask"]) if m])), flush=True)
+        else:
+            print("loss on: columns", list(ex), flush=True)
+        print("input:", repr(tok.decode(ex["input_ids"])[-160:]), flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print("loss-on diagnostic failed:", repr(exc), flush=True)
     trainer.train()
     trainer.save_model(args.out)
     metrics = trainer.evaluate()
