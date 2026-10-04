@@ -31,7 +31,6 @@ import torch
 from datasets import Dataset, load_from_disk
 from peft import LoraConfig, get_peft_model
 from transformers import AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
-from transformers.trainer_utils import get_last_checkpoint
 
 from train_lora import TARGETS_ALL, load_model
 
@@ -67,6 +66,20 @@ def blocks(texts: list[str], tok, size: int) -> Dataset:
         n = len(flat) // size * size
         return {"input_ids": [flat[i: i + size] for i in range(0, n, size)]}
     return ds.map(group, batched=True, batch_size=2000, remove_columns=["ids"], num_proc=8)
+
+
+def last_complete_checkpoint(out: str) -> str | None:
+    """Newest checkpoint that was fully written. A run killed while saving
+    leaves a checkpoint folder without trainer_state.json; resuming from it
+    crashes, so fall back to the one before."""
+    if not Path(out).is_dir():
+        return None
+    cps = sorted(Path(out).glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[-1]), reverse=True)
+    for cp in cps:
+        if (cp / "trainer_state.json").exists() and any(cp.glob("adapter_model.*")):
+            return str(cp)
+        print(f"skipping incomplete {cp}", flush=True)
+    return None
 
 
 def main(argv=None) -> int:
@@ -117,7 +130,7 @@ def main(argv=None) -> int:
         remove_unused_columns=False)
     trainer = Trainer(model=model, args=cfg, train_dataset=train_ds, eval_dataset=held_ds,
                       data_collator=DataCollatorForLanguageModeling(tok, mlm=False))
-    last = get_last_checkpoint(args.out) if Path(args.out).is_dir() else None
+    last = last_complete_checkpoint(args.out)
     if last:
         print(f"resuming from {last}", flush=True)
     before = trainer.evaluate()["eval_loss"] if not last else None
