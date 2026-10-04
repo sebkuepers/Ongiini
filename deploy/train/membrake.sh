@@ -19,7 +19,7 @@ while true; do
       msg="Notbremse: nur $((avail_kb / 1024 / 1024)) GB Speicher frei, GPU-Jobs gestoppt: $victims"
       echo "$(date '+%F %T') $msg"
       # notify in the background with a timeout: never block the brake.
-      ( cd "$REPO" && timeout 60 sudo -u nexus bash deploy/train/notify.sh "$msg" ) &
+      ( cd "$REPO" && timeout 180 sudo -u nexus bash deploy/train/notify.sh "$msg" ) &
       sleep 20
     fi
   fi
