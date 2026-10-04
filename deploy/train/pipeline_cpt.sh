@@ -5,11 +5,11 @@
 # to slip). Started by deploy/train/switch_after.sh when B50kV is done, or:
 #   setsid nohup bash deploy/train/pipeline_cpt.sh > data/private/experiments/pipeline_cpt.log 2>&1 < /dev/null &
 #
-# Stages (same SFT data and chat format in all three, only CPT / adapter differ):
-#   B10kR       SFT 10k, corrected chat format, LoRA r16 attention   (format fix)
+# Stages, in run order (same SFT data and chat format in all three SFT runs):
 #   C1          CPT on all Oshiwambo text, LoRA r64 attention + MLP  (21M tokens)
 #   C1-B10kR    the C1 adapter continues with the B10kR SFT          (CPT effect)
 #   B10kR-r64   SFT only, r64 attention + MLP adapter                (control: size)
+#   B10kR       SFT 10k, corrected chat format, LoRA r16 attention   (format fix)
 # CPT effect = C1-B10kR vs B10kR-r64; format effect = B10kR vs B10k.
 #
 # Safeguards as in pipeline_bt_curve.sh: start lock, preflight of every step
@@ -217,13 +217,15 @@ else
     --label gemma-4-12b-base --out "$EXP/lora" $EVAL_LIMIT 2>&1 | tail -1
   retention gemma-4-12b-base
 fi
-notify "CPT-Pipeline startet: Vorabtest SFT, dann B10kR (ca. 6 h), dann Vorabtest CPT (Speicher, Tempo), CPT, C1-B10kR, B10kR-r64."
-preflight_sft
-sft_stage B10kR "$D/sft_B10k_train.jsonl" 2
+notify "CPT-Pipeline startet: Vorabtest CPT (Speicher, Tempo, SFT auf CPT-Adapter), CPT, dann C1-B10kR, B10kR-r64, B10kR."
+# CPT first: its memory and speed are the open questions, so they are measured
+# while someone is still watching (2026-10-04 evening).
 [ -f "$LORA/C1_cpt_12b/run.json" ] || preflight_cpt
 cpt_stage
+preflight_sft
 sft_stage C1-B10kR "$D/sft_B10k_train.jsonl" 2 --init-adapter "$LORA/C1_cpt_12b"
 sft_stage B10kR-r64 "$D/sft_B10k_train.jsonl" 2 --targets all --rank 64
+sft_stage B10kR "$D/sft_B10k_train.jsonl" 2
 
 log "pipeline done"
 notify "CPT-Pipeline komplett fertig (B10kR, C1, C1-B10kR, B10kR-r64)."
