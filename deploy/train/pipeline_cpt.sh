@@ -38,7 +38,7 @@ else
   EXP=data/private/experiments
   LORA=data/private/lora
   SFT_LIMIT=0; EVAL_LIMIT=""; RET_QUICK=""; JUDGE_LIMIT=""
-  CPT_ARGS=""
+  CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
 LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B50kV gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64"
@@ -220,7 +220,7 @@ fi
 notify "CPT-Pipeline startet: Vorabtest CPT (Speicher, Tempo, SFT auf CPT-Adapter), CPT, dann C1-B10kR, B10kR-r64, B10kR."
 # CPT first: its memory and speed are the open questions, so they are measured
 # while someone is still watching (2026-10-04 evening).
-[ -f "$LORA/C1_cpt_12b/run.json" ] || preflight_cpt
+[ -f "$LORA/C1_cpt_12b/run.json" ] || [ "${SKIP_PREFLIGHT_CPT:-0}" = 1 ] || preflight_cpt
 cpt_stage
 preflight_sft
 sft_stage C1-B10kR "$D/sft_B10k_train.jsonl" 2 --init-adapter "$LORA/C1_cpt_12b"
