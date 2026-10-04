@@ -8,6 +8,7 @@
 set -u
 cd "$HOME/dev/Ongiini"
 PID=$1 LOG=$2 TRIGGER=$3 NEXT_LOG=$4; shift 4
+PATTERN=${SWITCH_CONTAINERS:-'^ongiini-(train|eval|ret)-'}  # override only for tests
 log() { echo "$(date '+%F %T') $*"; }
 log "waiting for /$TRIGGER/ in $LOG (pipeline pid $PID)"
 until grep -aqE "$TRIGGER" "$LOG"; do
@@ -24,11 +25,11 @@ echo "$(date '+%F %T') planned hand-over to the next pipeline ($TRIGGER skipped)
 # and monitor loops; a container it already started is killed separately.
 kill -- -"$PID" 2>/dev/null || kill "$PID" 2>/dev/null
 for _ in $(seq 1 12); do
-  c=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
+  c=$(docker ps --format '{{.Names}}' | grep -E "$PATTERN" | tr '\n' ' ')
   [ -n "$c" ] && docker kill $c >/dev/null 2>&1
   sleep 5
 done
-c=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
+c=$(docker ps --format '{{.Names}}' | grep -E "$PATTERN" | tr '\n' ' ')
 if [ -n "$c" ] || kill -0 "$PID" 2>/dev/null; then
   log "could not stop cleanly (containers: '$c') — not starting the next one"
   bash deploy/train/notify.sh "Übergabe abgebrochen: alte Pipeline ließ sich nicht sauber stoppen ($c)." | tail -1

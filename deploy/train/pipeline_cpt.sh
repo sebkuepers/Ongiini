@@ -30,7 +30,7 @@ if [ "$TINY" = 1 ]; then
   MODEL_DIR="$PWD/data/private/models-tiny/gemma4-tiny"
   EXP=data/private/experiments/tinytest
   LORA=data/private/lora/tinytest
-  SFT_LIMIT=32; EVAL_LIMIT="--limit 3"; RET_QUICK="--quick"; JUDGE_LIMIT="--limit 1"
+  SFT_LIMIT=32; EVAL_LIMIT=""; RET_QUICK="--quick"; JUDGE_LIMIT="--limit 1"
   CPT_ARGS="--limit-docs 300 --block 256 --max-steps 4 --save-steps 2 --batch 2 --accum 1"
   PRE_CPT_ARGS="--limit-docs 300 --block 256 --max-steps 2 --save-steps 2 --batch 2 --accum 1"
 else
@@ -72,7 +72,7 @@ memwatch() {  # memwatch <container> <out file>: lowest MemAvailable (GB) while 
 
 sft() {  # sft <tag> <train file> <epochs> <extra train_lora args...>
   local tag=$1 file=$2 epochs=$3; shift 3
-  run "ongiini-train-$tag" yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
+  run "ongiini-train-${tag//\//-}" yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
     --train "$file" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "$LORA/${tag}_12b" \
     --epochs "$epochs" --batch 8 --accum 2 --chat-format rendered --limit "$SFT_LIMIT" "$@"
 }
@@ -156,24 +156,40 @@ cpt_stage() {
   notify "CPT fertig: Oshiwambo-Perplexität (zurückgehaltene Artikel) $(python3 -c "import json;r=json.load(open('$out/run.json'));print(round(r['held_out_ppl_before'] or 0,1),'->',round(r['held_out_ppl_after'],1))"), Dauer $(python3 -c "import json;print(json.load(open('$out/run.json'))['minutes'])") min."
 }
 
-preflight() {
-  log "preflight"
+preflight_sft() {  # before B10kR: SFT in the rendered format, benchmark, retention, judge
+  log "preflight SFT"
   local P=$EXP/preflight PL=$LORA/preflight
   rm -rf "$P" "$PL" "$EXP/retention/preflight"*
   mkdir -p "$P" "$PL"
-  # 1. CPT, 20 steps at full size: memory and speed, measured before the long run.
+  sft preflight/sft-r16 "$D/sft_B10k_train.jsonl" 1 --limit 320 2>&1 | tr '\r' '\n' \
+    | grep -E '^loss on|^input:|^\{"eval_loss|Error|Traceback' | cut -c1-300 || true
+  [ -f "$PL/sft-r16_12b/run.json" ] || fail "preflight SFT"
+  run ongiini-eval-preflight yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
+    --adapter "$PL/sft-r16_12b" --label preflight --out "$P" --limit 5 2>&1 | tail -1
+  [ "$(cat "$P"/preflight_*.jsonl 2>/dev/null | wc -l)" = 10 ] || fail "preflight benchmark"
+  run ongiini-ret-preflight yes python3 scripts/retention_suite.py --model "$MODEL" \
+    --adapter "$PL/sft-r16_12b" --label preflight --quick 2>&1 | tail -1
+  run ongiini-judge no python3 scripts/retention_judge.py gemma-4-12b-base preflight --limit 2 2>&1 | tail -1
+  check retention preflight --judged --preflight
+  rm -rf "$P" "$PL" "$EXP/retention/preflight"*
+  log "preflight SFT ok"
+}
+
+preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continuing the CPT adapter
   log "preflight CPT"
+  local P=$EXP/preflight PL=$LORA/preflight
+  rm -rf "$P" "$PL"
+  mkdir -p "$P" "$PL"
   memwatch ongiini-train-pre-cpt "$P/mem_cpt" &
   local t0; t0=$(date +%s)
   run ongiini-train-pre-cpt yes python3 scripts/train_cpt.py --model "$MODEL" --out "$PL/cpt" $PRE_CPT_ARGS 2>&1 \
     | tr '\r' '\n' | grep -E '^blocks|^articles|^trainable|^\{"model|Error|Traceback' | cut -c1-300 || true
   [ -f "$PL/cpt/run.json" ] || fail "preflight CPT"
-  local mem; mem=$(cat "$P/mem_cpt" 2>/dev/null || echo 0)
-  local eta; eta=$(python3 -c "import json;r=json.load(open('$PL/cpt/run.json'));print(round(r['sec_per_step']*r['steps_per_epoch']/3600,1))")
+  local mem eta; mem=$(cat "$P/mem_cpt" 2>/dev/null || echo 0)
+  eta=$(python3 -c "import json;r=json.load(open('$PL/cpt/run.json'));print(round(r['sec_per_step']*r['steps_per_epoch']/3600,1))")
   log "preflight CPT: min available memory ${mem} GB, $(( $(date +%s) - t0 )) s incl. data prep and load, projected CPT epoch ${eta} h"
-  notify "CPT-Vorabtest: min. ${mem} GB Speicher frei, CPT-Dauer hochgerechnet ${eta} h."
   if [ "$TINY" != 1 ] && [ "$mem" -lt 25 ]; then fail "CPT needs too much memory: min ${mem} GB available (need >= 25)"; fi
-  # 2. SFT continuing the CPT adapter (rendered format), 20 steps.
+  notify "CPT-Vorabtest: min. ${mem} GB Speicher frei, CPT-Dauer hochgerechnet ${eta} h."
   log "preflight SFT on top of CPT"
   memwatch ongiini-train-pre-sft "$P/mem_sft" &
   run ongiini-train-pre-sft yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
@@ -181,18 +197,11 @@ preflight() {
     --epochs 1 --batch 8 --accum 2 --chat-format rendered --limit 320 --init-adapter "$PL/cpt" 2>&1 \
     | tr '\r' '\n' | grep -E '^loss on|^input:|^\{"eval_loss|Error|Traceback' | cut -c1-300 || true
   [ -f "$PL/sft/run.json" ] || fail "preflight SFT on CPT adapter"
-  log "preflight SFT: min available memory $(cat "$P/mem_sft" 2>/dev/null) GB"
+  log "preflight SFT on CPT: min available memory $(cat "$P/mem_sft" 2>/dev/null) GB"
   grep -q '"r": 64' "$PL/sft/adapter_config.json" || fail "preflight SFT adapter is not the r64 CPT adapter"
-  # 3. benchmark, retention, judge on that adapter.
-  run ongiini-eval-preflight yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
-    --adapter "$PL/sft" --label preflight --out "$P" --limit 5 2>&1 | tail -1
-  [ "$(cat "$P"/preflight_*.jsonl 2>/dev/null | wc -l)" = 10 ] || fail "preflight benchmark"
-  run ongiini-ret-preflight yes python3 scripts/retention_suite.py --model "$MODEL" \
-    --adapter "$PL/sft" --label preflight --quick 2>&1 | tail -1
-  run ongiini-judge no python3 scripts/retention_judge.py gemma-4-12b-base preflight --limit 2 2>&1 | tail -1
-  check retention preflight --judged --preflight
-  rm -rf "$P" "$PL" "$EXP/retention/preflight"*
-  log "preflight ok"
+  grep -q 'gate_proj' "$PL/sft/adapter_config.json" || fail "preflight SFT adapter lacks the MLP targets"
+  rm -rf "$P" "$PL"
+  log "preflight CPT ok"
 }
 
 log "CPT pipeline start (TINY=$TINY)"
@@ -208,11 +217,10 @@ else
     --label gemma-4-12b-base --out "$EXP/lora" $EVAL_LIMIT 2>&1 | tail -1
   retention gemma-4-12b-base
 fi
-notify "CPT-Pipeline startet: Vorabtest (CPT-Speicher und -Tempo, SFT auf CPT-Adapter, Auswertung), dann B10kR, CPT, C1-B10kR, B10kR-r64."
-preflight
-notify "CPT-Vorabtest bestanden. Lange Läufe starten."
-
+notify "CPT-Pipeline startet: Vorabtest SFT, dann B10kR (ca. 6 h), dann Vorabtest CPT (Speicher, Tempo), CPT, C1-B10kR, B10kR-r64."
+preflight_sft
 sft_stage B10kR "$D/sft_B10k_train.jsonl" 2
+[ -f "$LORA/C1_cpt_12b/run.json" ] || preflight_cpt
 cpt_stage
 sft_stage C1-B10kR "$D/sft_B10k_train.jsonl" 2 --init-adapter "$LORA/C1_cpt_12b"
 sft_stage B10kR-r64 "$D/sft_B10k_train.jsonl" 2 --targets all --rank 64
