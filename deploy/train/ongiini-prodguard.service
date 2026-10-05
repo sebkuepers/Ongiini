@@ -1,0 +1,15 @@
+# Install: sudo cp deploy/train/ongiini-prodguard.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now ongiini-prodguard
+[Unit]
+Description=Ongiini production guard (kills GPU jobs / restarts vLLM when production stops answering)
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/bin/bash /home/nexus/dev/Ongiini/deploy/train/prodguard.sh
+Restart=always
+RestartSec=10
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=multi-user.target
