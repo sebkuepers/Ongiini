@@ -3,9 +3,13 @@
 
 The CPT adapter C1 translates very well but lost general abilities (English
 answers degenerate into looping Oshiwambo-like text). C2 continues it with the
-translation pairs mixed with general tasks answered by Gemma 4 itself (the
-production 26B model via vLLM, chat template without thinking), so the adapter
-relearns to behave like the base model outside translation.
+translation pairs mixed with general tasks answered by Gemma 4 itself, so the
+adapter relearns to behave like the base model outside translation.
+
+Backends: --backend hf (default) = the 12B base model in this container, a
+normal GPU job (self-distillation). --backend vllm = the production server —
+NEVER while a training runs: on 2026-10-05 four long generations next to a
+training stalled vLLM for 47 minutes (Ongiini down).
 
 Prompts: databricks-dolly-15k (CC BY-SA 3.0; all categories, context included)
 and GSM8K *train* (MIT; the retention suite uses the test split). Prompts that
@@ -93,28 +97,57 @@ async def answer_all(items: list[dict], concurrency: int, max_new: int) -> None:
     await asyncio.gather(*(one(it) for it in items))
 
 
+def answer_local(items: list[dict], model_path: str, batch: int, max_new: int) -> None:
+    """Self-distillation: the base 12B answers, greedy, sorted by length for batching."""
+    import torch
+    from train_lora import load_model
+    tok = AutoTokenizer.from_pretrained(model_path)
+    tok.padding_side = "left"
+    model = load_model(model_path, four_bit=False).eval()
+    order = sorted(range(len(items)), key=lambda i: len(items[i]["prompt"]))
+    for b in range(0, len(order), batch):
+        idx = order[b: b + batch]
+        texts = [tok.apply_chat_template([{"role": "user", "content": items[i]["prompt"]}], tokenize=False,
+                                         add_generation_prompt=True) for i in idx]
+        enc = tok(texts, return_tensors="pt", padding=True, add_special_tokens=False).to(model.device)
+        with torch.no_grad():
+            g = model.generate(**enc, max_new_tokens=max_new, do_sample=False)
+        new = g[:, enc["input_ids"].shape[1]:]
+        for i, ids, text in zip(idx, new, tok.batch_decode(new, skip_special_tokens=True)):
+            items[i]["answer"] = text.strip()
+            n_real = int((ids != tok.pad_token_id).sum())
+            items[i]["finish"] = "length" if n_real >= max_new else "stop"
+        print(f"answered {min(b + batch, len(order))}/{len(order)}", flush=True)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--tokenizer", default="/models/gemma-4-12b-it-bf16")
+    ap.add_argument("--tokenizer", default="/models/gemma-4-12b-it-bf16", help="also the model for --backend hf")
     ap.add_argument("--dolly", type=int, default=4000)
     ap.add_argument("--gsm", type=int, default=1300)
     ap.add_argument("--concurrency", type=int, default=3, help="keep low: this is the production server")
     ap.add_argument("--max-new", type=int, default=320)
     ap.add_argument("--max-tokens", type=int, default=380, help="prompt + answer, chat template included")
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--backend", choices=["hf", "vllm"], default="hf")
+    ap.add_argument("--keep-length", action="store_true", help="keep answers that hit --max-new (tiny tests only)")
+    ap.add_argument("--batch", type=int, default=32, help="hf backend")
     args = ap.parse_args(argv)
 
     items = prompts(args.dolly, args.gsm, args.seed)
     print(f"prompts: {len(items)}", flush=True)
-    asyncio.run(answer_all(items, args.concurrency, args.max_new))
+    if args.backend == "vllm":
+        asyncio.run(answer_all(items, args.concurrency, args.max_new))
+    else:
+        answer_local(items, args.tokenizer, args.batch, args.max_new)
     tok = AutoTokenizer.from_pretrained(args.tokenizer)
     kept, why = [], {"empty/error": 0, "hit max_new": 0, "too long": 0}
     for it in items:
         if not it.get("answer") or str(it.get("finish", "")).startswith("error"):
             why["empty/error"] += 1
             continue
-        if it["finish"] == "length":
+        if it["finish"] == "length" and not args.keep_length:
             why["hit max_new"] += 1
             continue
         msgs = [{"role": "user", "content": it["prompt"]}, {"role": "assistant", "content": it["answer"]}]

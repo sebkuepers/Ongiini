@@ -21,6 +21,7 @@ if [ "$TINY" = 1 ]; then
   EXP=data/private/experiments/tinytest
   LORA=data/private/lora/tinytest
   SFT_LIMIT=32; EVAL_LIMIT=""; RET_QUICK="--quick"; JUDGE_LIMIT="--limit 1"
+  REPLAY_ARGS="--dolly 8 --gsm 4 --max-new 16 --batch 4 --keep-length"
   CPT_ARGS="--limit-docs 300 --block 256 --max-steps 4 --save-steps 2 --batch 2 --accum 1"
   PRE_CPT_ARGS="--limit-docs 300 --block 256 --max-steps 2 --save-steps 2 --batch 2 --accum 1"
 else
@@ -28,6 +29,7 @@ else
   EXP=data/private/experiments
   LORA=data/private/lora
   SFT_LIMIT=0; EVAL_LIMIT=""; RET_QUICK=""; JUDGE_LIMIT=""
+  REPLAY_ARGS="--dolly 1500 --gsm 500 --max-new 384 --max-tokens 640 --batch 32"
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
@@ -209,17 +211,23 @@ else
 fi
 REPLAY=data/private/corpus/replay_v1/replay.jsonl
 MIX="$D/sft_C2_replay_train.jsonl"
-while docker ps -q -f name='^ongiini-replay$' | grep -q .; do sleep 60; done  # replay still being generated
-[ -s "$REPLAY" ] || fail "replay set missing: $REPLAY"
-if [ ! -s "$MIX" ]; then  # B10k translation pairs + replay, shuffled with a fixed seed
+if [ ! -s "$REPLAY" ]; then
+  # Self-distillation from the base 12B as a normal GPU stage — never bulk
+  # generation on the production vLLM next to a training (stalled it 47 min, 10/05).
+  log "replay set: base 12B answers Dolly-15k + GSM8K-train prompts"
+  run ongiini-eval-replay yes python3 scripts/build_replay_set.py --out "$REPLAY" --backend hf --tokenizer "$MODEL" \
+    $REPLAY_ARGS 2>&1 | grep --line-buffered -E '^prompts|^answered|^\{"kept|Error|Traceback' | cut -c1-300 || true
+  [ -s "$REPLAY" ] || fail "replay set missing: $REPLAY"
+fi
+if [ ! -s "$MIX" ]; then  # B10k translation pairs + replay (x2), shuffled with a fixed seed
   python3 - "$D/sft_B10k_train.jsonl" "$REPLAY" "$MIX" <<'PY'
 import json, random, sys
 a = [l for l in open(sys.argv[1]) if l.strip()]
 b = [json.dumps({"messages": json.loads(l)["messages"]}, ensure_ascii=False) + "\n" for l in open(sys.argv[2]) if l.strip()]
-rows = a + b
+rows = a + 2 * b
 random.Random(42).shuffle(rows)
 open(sys.argv[3], "w").writelines(rows)
-print(f"mix: {len(a)} translation + {len(b)} replay = {len(rows)}")
+print(f"mix: {len(a)} translation + 2 x {len(b)} replay = {len(rows)}")
 PY
 fi
 notify "C2-Pipeline startet: CPT-Adapter + Übersetzungspaare + Replay ($(wc -l < "$REPLAY") allgemeine Aufgaben) gegen das Vergessen."
