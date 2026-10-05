@@ -148,7 +148,7 @@ cpt_stage() {
     notify "CPT startet (ganzer Oshiwambo-Korpus, ca. 21 Mio. Tokens)."
     ( sleep 30; bash deploy/train/monitor.sh ongiini-train-C1 "$EXP/gpu/C1.csv" ) &
     run ongiini-train-C1 yes python3 scripts/train_cpt.py --model "$MODEL" --out "$out" $CPT_ARGS 2>&1 \
-      | tr '\r' '\n' | grep -E '^blocks|^articles|^trainable|^\{.loss|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
+      | stdbuf -oL tr '\r' '\n' | grep --line-buffered -E '^blocks|^articles|^trainable|^\{.loss|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
       | cut -c1-300 || true
     [ -f "$out/run.json" ] || fail "CPT C1"
   fi
