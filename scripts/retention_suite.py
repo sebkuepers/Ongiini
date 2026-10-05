@@ -202,8 +202,11 @@ def main(argv=None) -> int:
     def final(t):
         m = re.findall(r"Answer:\s*\$?(-?[\d,]*\.?\d+)", t) or re.findall(r"(-?\d[\d,]*\.?\d*)", t)
         return m[-1].replace(",", "").rstrip(".") if m else ""
-    res["gsm8k"] = round(100 * sum(final(a) == g["a"] or (final(a) and g["a"] and float(final(a) or 0) == float(g["a"]))
+    # bool(): an answer without any number gives final(a) == "", and the bare
+    # `or` chain would then add "" to an int (crashed on the CPT adapter, 2026-10-05).
+    res["gsm8k"] = round(100 * sum(bool(final(a) == g["a"] or (final(a) and g["a"] and float(final(a) or 0) == float(g["a"])))
                                    for a, g in zip(ans, gsm)) / len(gsm), 1)
+    res["gsm8k_no_number"] = sum(final(a) == "" for a in ans)
     print("gsm8k", res["gsm8k"], flush=True)
 
     fl = json.loads((DATA / "flores_en_af_de_100.json").read_text())[:n]
