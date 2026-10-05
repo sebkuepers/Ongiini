@@ -194,7 +194,7 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
   log "preflight CPT ok"
 }
 
-log "CPT pipeline start (TINY=$TINY)"
+log "C2 pipeline start (TINY=$TINY)"
 if [ "$TINY" != 1 ]; then
   others=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
   [ -z "$others" ] || fail "other GPU jobs still running: $others"
@@ -209,6 +209,7 @@ else
 fi
 REPLAY=data/private/corpus/replay_v1/replay.jsonl
 MIX="$D/sft_C2_replay_train.jsonl"
+while docker ps -q -f name='^ongiini-replay$' | grep -q .; do sleep 60; done  # replay still being generated
 [ -s "$REPLAY" ] || fail "replay set missing: $REPLAY"
 if [ ! -s "$MIX" ]; then  # B10k translation pairs + replay, shuffled with a fixed seed
   python3 - "$D/sft_B10k_train.jsonl" "$REPLAY" "$MIX" <<'PY'
