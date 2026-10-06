@@ -33,7 +33,7 @@ else
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
-LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r"
+LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep"
 mkdir -p "$EXP/lora" "$EXP/gpu" "$EXP/retention" "$LORA"
 log() { echo "$(date '+%F %T') $*"; }
 notify() { if [ "$TINY" = 1 ]; then echo "notify (tiny, not sent): $*"; else bash deploy/train/notify.sh "$*" | tail -1; fi; }
@@ -231,6 +231,16 @@ print(f"mix: {len(a)} translation + 2 x {len(b)} replay = {len(rows)}")
 PY
 fi
 notify "C2-Pipeline startet: CPT-Adapter + Übersetzungspaare + Replay ($(wc -l < "$REPLAY") allgemeine Aufgaben) gegen das Vergessen."
+# Variant (2026-10-06): the control B10kR-r64 (no CPT) reached Ndonga 45.8 / blind 48.8
+# — as good as CPT — and forgot just as badly, and C2r on the CPT adapter diverged.
+# C2_VARIANT=r64rep trains the stable B10kR-r64 recipe on translation + replay.
+if [ "${C2_VARIANT:-cpt}" = r64rep ]; then
+  preflight_sft
+  sft_stage B10kR-r64rep "$MIX" 2 --targets all --rank 64 --max-len 640
+  log "pipeline done"
+  notify "C2-Pipeline (B10kR-r64rep) fertig."
+  exit 0
+fi
 if [ ! -f "$LORA/C1_cpt_12b/run.json" ]; then  # tiny runs build their own CPT adapter first
   preflight_cpt
   cpt_stage

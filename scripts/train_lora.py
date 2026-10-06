@@ -44,6 +44,20 @@ def load_model(path: str, four_bit: bool):
         return AutoModelForImageTextToText.from_pretrained(path, **kw)
 
 
+class DivergenceGuard:
+    """Stop when the training loss blows up instead of burning hours: C2r (2026-10-06)
+    jumped from 1.2 to 11.7 at step ~90 and stayed at ~7. Normal SFT runs log
+    0.6-1.5, so a loss above 4 after step 50 means the run is broken."""
+
+    def __init__(self, limit: float = 4.0, after: int = 50):
+        self.limit, self.after, self.tripped = limit, after, False
+
+    def check(self, step: int, loss) -> bool:
+        if loss is not None and step >= self.after and float(loss) > self.limit:
+            self.tripped = True
+        return self.tripped
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
@@ -128,7 +142,18 @@ def main(argv=None) -> int:
         print("input:", repr(tok.decode(ex["input_ids"])[-160:]), flush=True)
     except Exception as exc:  # noqa: BLE001
         print("loss-on diagnostic failed:", repr(exc), flush=True)
+    from transformers import TrainerCallback
+    guard = DivergenceGuard()
+
+    class _Stop(TrainerCallback):
+        def on_log(self, a, state, control, logs=None, **kw):
+            if guard.check(state.global_step, (logs or {}).get("loss")):
+                print(f"DIVERGED: loss {logs.get('loss')} at step {state.global_step} — stopping", flush=True)
+                control.should_training_stop = True
+    trainer.add_callback(_Stop())
     trainer.train()
+    if guard.tripped:  # no run.json: the pipeline treats the stage as failed
+        return 1
     trainer.save_model(args.out)
     metrics = trainer.evaluate()
     Path(args.out, "run.json").write_text(json.dumps({**vars(args), **metrics,
