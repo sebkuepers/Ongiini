@@ -143,12 +143,14 @@ def main(argv=None) -> int:
     except Exception as exc:  # noqa: BLE001
         print("loss-on diagnostic failed:", repr(exc), flush=True)
     from transformers import TrainerCallback
-    guard = DivergenceGuard()
+    import os
+    guard = DivergenceGuard(limit=float(os.environ.get("DIVERGENCE_LIMIT", "4")))  # override only for tiny tests
 
     class _Stop(TrainerCallback):
         def on_log(self, a, state, control, logs=None, **kw):
-            if guard.check(state.global_step, (logs or {}).get("loss")):
+            if not guard.tripped and guard.check(state.global_step, (logs or {}).get("loss")):
                 print(f"DIVERGED: loss {logs.get('loss')} at step {state.global_step} — stopping", flush=True)
+            if guard.tripped:
                 control.should_training_stop = True
     trainer.add_callback(_Stop())
     from train_cpt import last_complete_checkpoint  # same rule: skip a checkpoint cut off mid-save
