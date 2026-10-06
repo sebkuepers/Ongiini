@@ -151,7 +151,11 @@ def main(argv=None) -> int:
                 print(f"DIVERGED: loss {logs.get('loss')} at step {state.global_step} — stopping", flush=True)
                 control.should_training_stop = True
     trainer.add_callback(_Stop())
-    trainer.train()
+    from train_cpt import last_complete_checkpoint  # same rule: skip a checkpoint cut off mid-save
+    last = last_complete_checkpoint(args.out)
+    if last:
+        print(f"resuming from {last}", flush=True)
+    trainer.train(resume_from_checkpoint=last)
     if guard.tripped:  # no run.json: the pipeline treats the stage as failed
         return 1
     trainer.save_model(args.out)

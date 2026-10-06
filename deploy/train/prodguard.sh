@@ -46,8 +46,10 @@ while true; do
       restarts+=("$now")
       log "still not answering — restarting vLLM"
       timeout 180 $NOTIFY "vLLM hängt weiter — automatischer Neustart (ca. 4 min)." &
-      $RESTART > /tmp/prodguard-vllm-restart.log 2>&1
-      log "restart finished: $(tail -1 /tmp/prodguard-vllm-restart.log)"
+      # /run, not /tmp: with protected_regular root may not write a /tmp file owned by
+      # another user (the first automatic restart on 2026-10-06 failed that way).
+      $RESTART > /run/ongiini-prodguard-vllm-restart.log 2>&1
+      log "restart finished: $(tail -1 /run/ongiini-prodguard-vllm-restart.log)"
       tripped_at=$(date +%s)  # give it another full window before the next restart
     fi
   fi

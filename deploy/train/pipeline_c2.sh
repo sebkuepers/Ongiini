@@ -126,8 +126,25 @@ sft_stage() {  # sft_stage <tag> <train file> <epochs> <extra train_lora args...
     log "train $tag ($(wc -l < "$file") examples, $epochs epochs, $*)"
     notify "Training $tag startet."
     ( sleep 30; bash deploy/train/monitor.sh "ongiini-train-$tag" "$EXP/gpu/$tag.csv" ) &
-    sft "$tag" "$file" "$epochs" "$@" 2>&1 | tr '\r' '\n' | grep -E '^loss on|^input:|^\{"eval_loss|^\{.loss|Error|Traceback' \
-      | cut -c1-300 || true
+    local attempt
+    for attempt in 1 2 3; do
+      sft "$tag" "$file" "$epochs" "$@" 2>&1 | tr '\r' '\n' \
+        | grep --line-buffered -E '^loss on|^input:|^\{"eval_loss|^resuming|DIVERGED|Error|Traceback' | cut -c1-300 \
+        | tee "$EXP/train_$tag.last" || true
+      [ -f "$out/run.json" ] && break
+      grep -q DIVERGED "$EXP/train_$tag.last" && fail "training $tag diverged"
+      [ "$attempt" = 3 ] && fail "training $tag (interrupted 3 times)"
+      # killed from outside (production guard, brake): resume once production answers
+      log "training $tag interrupted — waiting for production, then resuming (attempt $((attempt + 1)))"
+      notify "Training $tag unterbrochen (z. B. Production-Schutz). Setze nach Erholung von vLLM am letzten Checkpoint fort."
+      local w
+      for w in $(seq 1 60); do
+        [ "$TINY" = 1 ] && break
+        curl -sf -m 20 -o /dev/null localhost:8124/v1/chat/completions -H 'content-type: application/json' \
+          -d '{"model":"gemma-4-26b","messages":[{"role":"user","content":"Say ok."}],"max_tokens":4}' && break
+        sleep 30
+      done
+    done
     [ -f "$out/run.json" ] || fail "training $tag"
   fi
   check train "$out"
@@ -235,7 +252,7 @@ notify "C2-Pipeline startet: CPT-Adapter + Übersetzungspaare + Replay ($(wc -l 
 # — as good as CPT — and forgot just as badly, and C2r on the CPT adapter diverged.
 # C2_VARIANT=r64rep trains the stable B10kR-r64 recipe on translation + replay.
 if [ "${C2_VARIANT:-cpt}" = r64rep ]; then
-  preflight_sft
+  [ "${SKIP_PREFLIGHT_SFT:-0}" = 1 ] || preflight_sft
   sft_stage B10kR-r64rep "$MIX" 2 --targets all --rank 64 --max-len 640
   log "pipeline done"
   notify "C2-Pipeline (B10kR-r64rep) fertig."
