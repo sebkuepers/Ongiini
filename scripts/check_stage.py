@@ -77,16 +77,40 @@ def check_retention(label: str, judged: bool, preflight: bool = False) -> list[s
     return bad
 
 
+# The goal set on 2026-10-05: Oshiwambo clearly above 40 chrF AND no catastrophic
+# forgetting. Thresholds fixed before the candidates were run; checked against
+# B50kG (fails chrF), B10kR-r64 and B10kR-r64rep (fail retention).
+GOAL = {"ndo_dev": 42.0, "ndo_blind": 42.0, "gsm8k": 85.0, "instructions_all": 90.0,
+        "tools_right_tool": 90.0, "flores_en_af_chrf": 55.0, "flores_en_de_chrf": 60.0, "base_wins_max": 24}
+
+
+def check_goal(label: str) -> list[str]:
+    s = json.loads((EXP / "lora" / "scores.json").read_text())[label]
+    r = json.loads((EXP / "retention" / f"{label}.json").read_text())
+    bad = []
+    for key, val in (("ndo_dev", s["oshindonga_dev"]["chrf++"]), ("ndo_blind", s["oshindonga_blind"]["chrf++"])):
+        if val < GOAL[key]:
+            bad.append(f"{key} {val} < {GOAL[key]}")
+    for key in ("gsm8k", "instructions_all", "tools_right_tool", "flores_en_af_chrf", "flores_en_de_chrf"):
+        if r[key] < GOAL[key]:
+            bad.append(f"{key} {r[key]} < {GOAL[key]}")
+    j = r.get("english_pairwise_vs_base") or {}
+    if j.get("base_wins", 99) > GOAL["base_wins_max"]:
+        bad.append(f"English judge: base wins {j.get('base_wins')} > {GOAL['base_wins_max']}/40")
+    return bad
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["train", "cpt", "bench", "retention"])
+    ap.add_argument("stage", choices=["train", "cpt", "bench", "retention", "goal"])
     ap.add_argument("target")
     ap.add_argument("--judged", action="store_true")
     ap.add_argument("--preflight", action="store_true")
     args = ap.parse_args(argv)
     try:
         bad = {"train": lambda: check_train(args.target), "cpt": lambda: check_cpt(args.target), "bench": lambda: check_bench(args.target),
-               "retention": lambda: check_retention(args.target, args.judged, args.preflight)}[args.stage]()
+               "retention": lambda: check_retention(args.target, args.judged, args.preflight),
+               "goal": lambda: check_goal(args.target)}[args.stage]()
     except (OSError, KeyError, ValueError) as exc:
         bad = [f"cannot read results: {exc!r}"]
     if bad:
