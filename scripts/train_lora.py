@@ -88,7 +88,11 @@ def main(argv=None) -> int:
     model = load_model(args.model, four_bit=not args.bf16_base)
     print(f"loaded in {time.time() - t0:.0f}s; GPU mem {torch.cuda.memory_allocated() / 2**30:.1f} GiB", flush=True)
 
-    ds = load_dataset("json", data_files={"train": args.train, "val": args.val})
+    # Load the files separately and keep only "messages": mixes built by
+    # build_sft_templates.py have no doc/source columns, the val file does.
+    from datasets import DatasetDict
+    ds = DatasetDict({k: load_dataset("json", data_files=f)["train"].select_columns(["messages"])
+                      for k, f in (("train", args.train), ("val", args.val))})
     # Loss on the Oshiwambo answer only. "trl" = trl's conversational
     # prompt/completion format (A, B10k and the rest of the learning curve).
     # Gemma 4's generation prompt ends with an empty thought block that the
