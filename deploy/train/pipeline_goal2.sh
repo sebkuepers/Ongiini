@@ -53,6 +53,7 @@ run() {  # run <name> <gpu:yes|no> <cmd...>
   local g=(); [ "$gpu" = yes ] && g=(--gpus all)
   docker run --rm --name "$name" "${g[@]}" --ipc host --shm-size 16g --user 1000:1000 \
     -e HOME=/tmp -e HF_HOME=/tmp/hf -e PYTHONUNBUFFERED=1 -e ONGIINI_EXP_DIR="$EXP" \
+    -e DIVERGENCE_LIMIT="${DIVERGENCE_LIMIT:-4}" -e DIVERGENCE_AFTER="${DIVERGENCE_AFTER:-50}" \
     -e USER=nexus -e LOGNAME=nexus -e TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor -e TRITON_CACHE_DIR=/tmp/triton \
     -e OPENROUTER_API_KEY="$(grep '^OPENROUTER_API_KEY=' .env | cut -d= -f2-)" \
     -v "$MODEL_DIR:$MODEL:ro" -v "$PWD:/work" -w /work "$IMG" "$@"
@@ -142,7 +143,11 @@ sft_stage() {  # sft_stage <tag> <train file> <epochs> <extra train_lora args...
         | grep --line-buffered -E '^loss on|^input:|^\{"eval_loss|^resuming|DIVERGED|Error|Traceback' | cut -c1-300 \
         | tee "$EXP/train_$tag.last" || true
       [ -f "$out/run.json" ] && break
-      grep -q DIVERGED "$EXP/train_$tag.last" && fail "training $tag diverged"
+      if grep -q DIVERGED "$EXP/train_$tag.last"; then  # goal pipeline: try the next candidate
+        log "training $tag diverged — next candidate"
+        notify "$tag ist divergiert (Loss explodiert) — weiter mit dem nächsten Kandidaten."
+        return 1
+      fi
       [ "$attempt" = 3 ] && fail "training $tag (interrupted 3 times)"
       # killed from outside (production guard, brake): resume once production answers
       log "training $tag interrupted — waiting for production, then resuming (attempt $((attempt + 1)))"
@@ -288,7 +293,7 @@ for cand in T1 G16t2; do
   esac
   [ "$TINY" = 1 ] && SFT_BATCH="--batch 8 --accum 2"
   preflight_mem "$cand" "$file" "${extra[@]}"
-  sft_stage "$cand" "$file" "$epochs" "${extra[@]}"
+  sft_stage "$cand" "$file" "$epochs" "${extra[@]}" || continue
   goal_check "$cand"
 done
 log "pipeline done"

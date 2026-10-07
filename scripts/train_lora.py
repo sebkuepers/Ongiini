@@ -149,7 +149,8 @@ def main(argv=None) -> int:
         print("loss-on diagnostic failed:", repr(exc), flush=True)
     from transformers import TrainerCallback
     import os
-    guard = DivergenceGuard(limit=float(os.environ.get("DIVERGENCE_LIMIT", "4")))  # override only for tiny tests
+    guard = DivergenceGuard(limit=float(os.environ.get("DIVERGENCE_LIMIT", "4")),  # overrides only for tests
+                            after=int(os.environ.get("DIVERGENCE_AFTER", "50")))
 
     class _Stop(TrainerCallback):
         def on_log(self, a, state, control, logs=None, **kw):
