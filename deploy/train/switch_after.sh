@@ -14,7 +14,7 @@ log "waiting for /$TRIGGER/ in $LOG (pipeline pid $PID)"
 until grep -aqE "$TRIGGER" "$LOG"; do
   if ! kill -0 "$PID" 2>/dev/null; then
     log "pipeline $PID ended before the trigger — not starting the next one"
-    bash deploy/train/notify.sh "Übergabe abgebrochen: die laufende Pipeline endete vor '$TRIGGER'. Nichts Neues gestartet." | tail -1
+    [ "${NOTIFY_ON_ABORT:-1}" = 1 ] && bash deploy/train/notify.sh "Übergabe abgebrochen: die laufende Pipeline endete vor '$TRIGGER'. Nichts Neues gestartet." | tail -1
     exit 1
   fi
   sleep 5

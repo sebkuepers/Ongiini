@@ -65,6 +65,7 @@ def main(argv=None) -> int:
     ap.add_argument("--val", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--rank", type=int, default=16)
+    ap.add_argument("--alpha", type=float, default=0, help="LoRA alpha; 0 = 2 x rank (all runs before T1)")
     ap.add_argument("--epochs", type=float, default=2)
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--batch", type=int, default=8)
@@ -124,7 +125,7 @@ def main(argv=None) -> int:
         model = PeftModel.from_pretrained(model, args.init_adapter, is_trainable=True)
         peft_cfg = None
     else:
-        peft_cfg = LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
+        peft_cfg = LoraConfig(r=args.rank, lora_alpha=args.alpha or 2 * args.rank, lora_dropout=0.05,
                               target_modules=TARGETS_ALL if args.targets == "all" else TARGETS,
                               task_type="CAUSAL_LM")
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],

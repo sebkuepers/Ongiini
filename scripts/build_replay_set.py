@@ -49,9 +49,41 @@ def retention_prompts() -> set[str]:
     return {norm(t) for t in items}
 
 
-def prompts(n_dolly: int, n_gsm: int, seed: int) -> list[dict]:
+# Tool-call prompts for replay — deliberately different tools and requests from
+# the retention suite's tool test (retention_suite.TOOLS / TOOL_CASES).
+REPLAY_TOOLS = {"book_taxi": "book a taxi (args: pickup, destination, time)",
+                "check_balance": "check a mobile money balance (args: account)",
+                "find_school": "find schools near a town (args: town, level)",
+                "get_bus_times": "bus departures between towns (args: origin, destination, date)",
+                "report_outage": "report a power or water outage (args: town, kind)",
+                "lookup_word": "look up a word in a dictionary (args: word, language)"}
+TOOL_REQUESTS = [("When is the next bus from Ondangwa to Windhoek on Friday?", "get_bus_times"),
+                 ("There is no electricity in Katutura since this morning.", "report_outage"),
+                 ("How much money is left on my account 0811234567?", "check_balance"),
+                 ("I need a taxi from the hospital to Hage Geingob stadium at 5 pm.", "book_taxi"),
+                 ("Which secondary schools are there in Oshakati?", "find_school"),
+                 ("What does the word 'omugongo' mean?", "lookup_word"),
+                 ("The water is off in Ongwediva, please report it.", "report_outage"),
+                 ("Find me a primary school in Rundu for my son.", "find_school"),
+                 ("Book a car to take me from Eros airport to the city centre now.", "book_taxi"),
+                 ("Is there a bus to Swakopmund tomorrow morning?", "get_bus_times")]
+
+
+def tool_prompts(n: int, rng: random.Random) -> list[dict]:
+    desc = "\n".join(f"- {k}: {v}" for k, v in REPLAY_TOOLS.items())
+    out = []
+    for i in range(n):
+        q, _ = TOOL_REQUESTS[i % len(TOOL_REQUESTS)]
+        fmt = rng.choice(['Reply only with JSON: {"tool": "<tool name>", "arguments": {...}}',
+                          'Answer with a JSON object {"tool": ..., "arguments": {...}} and nothing else.'])
+        out.append({"prompt": f"Available tools:\n{desc}\n\nRequest: {q}\n\n{fmt}", "source": "tools:synthetic",
+                    "license": "own"})
+    return out
+
+
+def prompts(n_dolly: int, n_gsm: int, seed: int, exclude: set[str] | None = None, n_tools: int = 0) -> list[dict]:
     rng = random.Random(seed)
-    banned = retention_prompts()
+    banned = retention_prompts() | (exclude or set())
     out = []
     dolly = list(load_dataset("databricks/databricks-dolly-15k", split="train"))
     rng.shuffle(dolly)
@@ -66,9 +98,14 @@ def prompts(n_dolly: int, n_gsm: int, seed: int) -> list[dict]:
             break
     gsm = list(load_dataset("openai/gsm8k", "main", split="train"))
     rng.shuffle(gsm)
-    for r in gsm[:n_gsm]:
+    taken = 0
+    for r in gsm:
+        if taken >= n_gsm:
+            break
         if norm(r["question"]) not in banned:
             out.append({"prompt": r["question"].strip(), "source": "gsm8k:train", "license": "MIT"})
+            taken += 1
+    out += tool_prompts(n_tools, rng)
     rng.shuffle(out)
     return out
 
@@ -132,10 +169,13 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--backend", choices=["hf", "vllm"], default="hf")
     ap.add_argument("--keep-length", action="store_true", help="keep answers that hit --max-new (tiny tests only)")
+    ap.add_argument("--exclude", nargs="*", default=[], help="replay files whose prompts must not be reused")
+    ap.add_argument("--tools", type=int, default=0, help="synthetic tool-call prompts")
     ap.add_argument("--batch", type=int, default=32, help="hf backend")
     args = ap.parse_args(argv)
 
-    items = prompts(args.dolly, args.gsm, args.seed)
+    exclude = {norm(json.loads(l)["messages"][0]["content"]) for f in args.exclude for l in open(f) if l.strip()}
+    items = prompts(args.dolly, args.gsm, args.seed, exclude, args.tools)
     print(f"prompts: {len(items)}", flush=True)
     if args.backend == "vllm":
         asyncio.run(answer_all(items, args.concurrency, args.max_new))
