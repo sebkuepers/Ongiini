@@ -293,7 +293,10 @@ for cand in T1 G16t2; do
   esac
   [ "$TINY" = 1 ] && SFT_BATCH="--batch 8 --accum 2"
   preflight_mem "$cand" "$file" "${extra[@]}"
+  # test hook: TEST_DIVERGE=<candidate> forces that candidate's training to diverge
+  if [ "${TEST_DIVERGE:-}" = "$cand" ]; then DIVERGENCE_LIMIT=1 DIVERGENCE_AFTER=0; else unset DIVERGENCE_LIMIT DIVERGENCE_AFTER; fi
   sft_stage "$cand" "$file" "$epochs" "${extra[@]}" || continue
+  unset DIVERGENCE_LIMIT DIVERGENCE_AFTER
   goal_check "$cand"
 done
 log "pipeline done"
