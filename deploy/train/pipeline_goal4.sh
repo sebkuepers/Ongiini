@@ -33,7 +33,7 @@ if [ "$TINY" = 1 ]; then
   REPLAY_ARGS="--dolly 8 --gsm 4 --max-new 16 --batch 4 --keep-length"
   REPLAY3_ARGS="--dolly 8 --gsm 4 --tools 4 --max-new 16 --batch 4 --keep-length"
   SCORE_ARGS="--limit 400"; T4_ARGS="--bt-n 100 --vocab-n 50"; COMPAT=0; SCORE_ADAPTER=""
-  OUTD=data/private/corpus/tinytest; rm -rf "$OUTD"
+  OUTD=data/private/corpus/tinytest; rm -rf "$OUTD"; mkdir -p "$OUTD"
   TOOL_ARGS="-n 12 --batch 4 --max-new 12 --keep-length"; SFT_BATCH_T4="--batch 8 --accum 2"
   CPT_ARGS="--limit-docs 300 --block 256 --max-steps 4 --save-steps 2 --batch 2 --accum 1"
   PRE_CPT_ARGS="--limit-docs 300 --block 256 --max-steps 2 --save-steps 2 --batch 2 --accum 1"
