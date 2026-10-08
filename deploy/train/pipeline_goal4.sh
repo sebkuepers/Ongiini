@@ -317,7 +317,7 @@ replay_gen "$REPLAY3" 37 "$REPLAY" "$REPLAY2"
 replay_gen "$REPLAY4" 41 "$REPLAY" "$REPLAY2" "$REPLAY3"
 # 3. T4
 T4F="$D/sft_T4_train.jsonl"
-[ -s "$T4F" ] || python3 scripts/build_sft_t4.py --out "$T4F" $T4_ARGS --replay "$REPLAY" "$REPLAY2" "$REPLAY3" "$REPLAY4" \
+[ -s "$T4F" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4F" $T4_ARGS --replay "$REPLAY" "$REPLAY2" "$REPLAY3" "$REPLAY4" \
   || fail "build T4"
 preflight_sft
 SFT_FORMAT=rendered; SFT_BATCH="--batch 8 --accum 2 --group-by-length"
@@ -329,7 +329,7 @@ if sft_stage T4 "$T4F" 1 "${extra[@]}"; then
   goal_check T4 || true
   # 4. T4h: short final stage on human translations only (+ a little replay), lower LR
   T4H="$D/sft_T4h_train.jsonl"
-  [ -s "$T4H" ] || python3 scripts/build_sft_t4.py --out "$T4H" --bt-n 0 --vocab-n 0 --human-repeat 1 \
+  [ -s "$T4H" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4H" --bt-n 0 --vocab-n 0 --human-repeat 1 \
     --replay "$REPLAY" || fail "build T4h"
   sft_stage T4h "$T4H" 1 --init-adapter "$LORA/T4_12b" --lr 5e-5 --max-len 640 && { compat_stage T4h; goal_check T4h || true; }
 fi
