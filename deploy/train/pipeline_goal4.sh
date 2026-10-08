@@ -291,9 +291,11 @@ compat_stage() {  # compat_stage <tag>: compatibility suite base vs candidate th
     || fail "eval vLLM for $tag"
   local C=(docker run --rm --name "ongiini-eval-compat-$tag" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus
            -e TORCHINDUCTOR_CACHE_DIR=/tmp/ti -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest)
+  local gen_ok=1
   "${C[@]}" python3 scripts/compat_suite.py generate --model "$(echo "$tag" | tr 'A-Z' 'a-z')" --label "$tag" --concurrency 32 2>&1 \
-    | grep --line-buffered -vE "HTTP Request|Warning" | tail -3
+    | grep --line-buffered -vE "HTTP Request|Warning" | tail -3 || gen_ok=0
   docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
+  [ "$gen_ok" = 1 ] || fail "compat generation for $tag had errors"
   "${C[@]}" python3 scripts/compat_suite.py score --labels base "$tag" 2>&1 | grep -vE "HTTP Request|Warning" | tail -40
   [ -f "data/private/compat/report_${tag}_vs_base.json" ] || fail "compat report $tag missing"
   notify "Kompatibilität $tag vs Basis: $(python3 -c "
