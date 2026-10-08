@@ -11,7 +11,9 @@ Builds on the T1/T2 recipe (many templates + unique self-distilled replay) and a
   sentences (eval-set overlap removed), --human-repeat times;
 - dictionary hints (Viljoen index) in --glossary-share of the translation prompts;
 - vocabulary tasks from the dictionary in both directions, excluding the words of the
-  retention vocabulary test so that test stays meaningful.
+  retention vocabulary test so that test stays meaningful;
+- optionally native tool-call replay (--tool-replay), pre-rendered rows that keep
+  the adapter calling tools like the base model (T2 lost that, tool_suite.py).
 
     python3 scripts/build_sft_t4.py --out data/private/corpus/osheng_v1/sft_T4_train.jsonl
 """
@@ -90,6 +92,9 @@ def main(argv=None) -> int:
     ap.add_argument("--replay", nargs="*", default=["data/private/corpus/replay_v1/replay.jsonl",
                                                     "data/private/corpus/replay_v2/replay.jsonl",
                                                     "data/private/corpus/replay_v3/replay.jsonl"])
+    ap.add_argument("--tool-replay", nargs="*", default=[],
+                    help="pre-rendered native tool-call replay (build_tool_replay.py); rendered format only")
+    ap.add_argument("--tool-n", type=int, default=0, help="use only the first N tool-replay rows (0 = all)")
     ap.add_argument("--seed", type=int, default=17)
     args = ap.parse_args(argv)
     rng = random.Random(args.seed)
@@ -145,12 +150,15 @@ def main(argv=None) -> int:
                 if m[0]["content"][:200] not in seen:
                     seen.add(m[0]["content"][:200]); replay.append({"messages": m})
     rows += replay
+    tools = [json.loads(l) for p in args.tool_replay for l in open(p) if l.strip()]
+    tools = tools[: args.tool_n] if args.tool_n else tools
+    rows += [{"prompt": r["prompt"], "completion": r["completion"]} for r in tools]
     rng.shuffle(rows)
     Path(args.out).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     print(json.dumps({"human_pairs": len(human), "dict_examples": len(dict_ex), "human_rows": len(human) * args.human_repeat,
                       "bt_selected": len(chosen), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3),
-                      "vocab": min(args.vocab_n, len(entries)), "replay": len(replay),
-                      "replay_share": round(len(replay) / len(rows), 3), "rows": len(rows)}))
+                      "vocab": min(args.vocab_n, len(entries)), "replay": len(replay), "tool_replay": len(tools),
+                      "replay_share": round((len(replay) + len(tools)) / len(rows), 3), "rows": len(rows)}))
     return 0
 
 

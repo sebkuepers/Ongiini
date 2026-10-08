@@ -12,6 +12,11 @@
 # 20 % of prompts, dictionary vocabulary tasks, replay v1-v4 (~15 %); then T4h, a short
 # final stage on human translations only (+ replay). Each candidate: benchmark,
 # retention, goal check and the compatibility suite (base vs candidate, via vLLM 0.31).
+# Restart after 10:25 (2026-10-08): BT scoring tripped the memory brake (fixed: token
+# budget); T2 called tools far less than the base (tool_suite.py), because no training
+# row had Gemma 4's native tool format — T4/T4h now include self-distilled native
+# tool-call replay (build_tool_replay.py), and every compat stage runs the tool suite.
+# TINY outputs go to data/private/corpus/tinytest, never next to the real files.
 #   setsid nohup bash deploy/train/pipeline_goal4.sh >> data/private/experiments/pipeline_goal4.log 2>&1 < /dev/null &
 # TINY=1 runs it end-to-end with the tiny model.
 set -u -o pipefail
@@ -28,6 +33,8 @@ if [ "$TINY" = 1 ]; then
   REPLAY_ARGS="--dolly 8 --gsm 4 --max-new 16 --batch 4 --keep-length"
   REPLAY3_ARGS="--dolly 8 --gsm 4 --tools 4 --max-new 16 --batch 4 --keep-length"
   SCORE_ARGS="--limit 400"; T4_ARGS="--bt-n 100 --vocab-n 50"; COMPAT=0; SCORE_ADAPTER=""
+  OUTD=data/private/corpus/tinytest; rm -rf "$OUTD"
+  TOOL_ARGS="-n 12 --batch 4 --max-new 12 --keep-length"; SFT_BATCH_T4="--batch 8 --accum 2"
   CPT_ARGS="--limit-docs 300 --block 256 --max-steps 4 --save-steps 2 --batch 2 --accum 1"
   PRE_CPT_ARGS="--limit-docs 300 --block 256 --max-steps 2 --save-steps 2 --batch 2 --accum 1"
 else
@@ -38,6 +45,11 @@ else
   REPLAY_ARGS="--dolly 1500 --gsm 500 --max-new 384 --max-tokens 640 --batch 32"
   REPLAY3_ARGS="--dolly 3500 --gsm 800 --tools 400 --max-new 384 --max-tokens 640 --batch 32"
   SCORE_ARGS=""; T4_ARGS="--bt-n 30000 --vocab-n 3000"; COMPAT=1; SCORE_ADAPTER=data/private/lora/A_parallel_ndo_12b_r16
+  OUTD=$D
+  TOOL_ARGS="-n 2400 --batch 16 --max-new 384 --max-tokens 1200"
+  # tool rows are up to 1200 tokens: half the batch keeps the padded tokens per step
+  # (and the 262k-vocabulary logits) where T2's 8 x 640 were
+  SFT_BATCH_T4="--batch 4 --accum 4 --group-by-length"
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
@@ -243,6 +255,10 @@ REPLAY=data/private/corpus/replay_v1/replay.jsonl
 REPLAY2=data/private/corpus/replay_v2/replay.jsonl
 REPLAY3=data/private/corpus/replay_v3/replay.jsonl
 REPLAY4=data/private/corpus/replay_v4/replay.jsonl
+TOOLR=data/private/corpus/replay_tools_v1/replay.jsonl
+if [ "$TINY" = 1 ]; then
+  REPLAY3=$OUTD/replay_v3.jsonl REPLAY4=$OUTD/replay_v4.jsonl TOOLR=$OUTD/replay_tools.jsonl
+fi
 [ -s "$REPLAY2" ] || fail "replay v2 missing: $REPLAY2"
 preflight_mem() {  # preflight_mem <tag> <file> <train_lora args...>: 20 steps on the 320 longest examples
   local tag=$1 file=$2; shift 2
@@ -253,7 +269,9 @@ preflight_mem() {  # preflight_mem <tag> <file> <train_lora args...>: 20 steps o
   python3 -c "
 import json
 rows = [l for l in open('$file') if l.strip()]
-rows.sort(key=lambda l: -sum(len(m['content']) for m in json.loads(l)['messages']))
+def size(r):
+    return len(r['prompt']) + len(r['completion']) if 'prompt' in r else sum(len(m['content']) for m in r['messages'])
+rows.sort(key=lambda l: -size(json.loads(l)))
 open('$P/longest.jsonl', 'w').writelines(rows[:320])"
   memwatch "ongiini-train-preflight-mem" "$P/mem" &
   sft preflight/mem "$P/longest.jsonl" 1 --limit 320 "$@" 2>&1 | tr '\r' '\n' | grep -E 'DIVERGED|Error|Traceback' | cut -c1-200 || true
@@ -294,44 +312,62 @@ compat_stage() {  # compat_stage <tag>: compatibility suite base vs candidate th
   local gen_ok=1
   "${C[@]}" python3 scripts/compat_suite.py generate --model "$(echo "$tag" | tr 'A-Z' 'a-z')" --label "$tag" --concurrency 32 2>&1 \
     | grep --line-buffered -vE "HTTP Request|Warning" | tail -3 || gen_ok=0
+  # tool suite: 86 scenarios x 3 samples with the production prompt and tools (base once)
+  [ -s data/private/compat/tools_base.jsonl ] || "${C[@]}" python3 scripts/tool_suite.py generate --model gemma-4-12b --label base \
+    --concurrency 16 2>&1 | grep -vE "HTTP Request|Warning" | tail -2 || gen_ok=0
+  "${C[@]}" python3 scripts/tool_suite.py generate --model "$(echo "$tag" | tr 'A-Z' 'a-z')" --label "$tag" --concurrency 16 2>&1 \
+    | grep -vE "HTTP Request|Warning" | tail -2 || gen_ok=0
   docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
   [ "$gen_ok" = 1 ] || fail "compat generation for $tag had errors"
   "${C[@]}" python3 scripts/compat_suite.py score --labels base "$tag" 2>&1 | grep -vE "HTTP Request|Warning" | tail -40
   [ -f "data/private/compat/report_${tag}_vs_base.json" ] || fail "compat report $tag missing"
+  "${C[@]}" python3 scripts/tool_suite.py score --labels base "$tag" > /dev/null 2>&1 || fail "tool suite score $tag"
   notify "Kompatibilität $tag vs Basis: $(python3 -c "
 import json; r=json.load(open('data/private/compat/report_${tag}_vs_base.json')); b, t = r['base'], r['$tag']; p = r['pairwise_${tag}_vs_base']
-print(f\"GSM8K {b['gsm_acc']}/{t['gsm_acc']}, IFEval {b['ifeval_prompt_strict']}/{t['ifeval_prompt_strict']}, Tools {b['ongiini_tool_decision']}/{t['ongiini_tool_decision']}, Bilder {b['images_correct']}/{t['images_correct']}, unsicher {b['safety_unsafe']}/{t['safety_unsafe']}, OW-Antworten {b['owchat_answers_in_oshiwambo']}/{t['owchat_answers_in_oshiwambo']}; Vergleich offen {p['open']}, OW-Chat {p['owchat']}\")")"
+T = json.load(open('data/private/compat/tools_report_${tag}_vs_base.json')); tb, tt, tp = T['base'], T['$tag'], T['paired']
+print(f\"Tool-Test {tb['all']}/{tt['all']} % (Websuche {tb.get('web_search')}/{tt.get('web_search')}, Seite lesen {tb.get('fetch_url')}/{tt.get('fetch_url')}; schlechter {tp['cand_worse']}, besser {tp['cand_better']}, p {tp['sign_test_p']}), GSM8K {b['gsm_acc']}/{t['gsm_acc']}, IFEval {b['ifeval_prompt_strict']}/{t['ifeval_prompt_strict']}, Tools {b['ongiini_tool_decision']}/{t['ongiini_tool_decision']}, Bilder {b['images_correct']}/{t['images_correct']}, unsicher {b['safety_unsafe']}/{t['safety_unsafe']}, OW-Antworten {b['owchat_answers_in_oshiwambo']}/{t['owchat_answers_in_oshiwambo']}; Vergleich offen {p['open']}, OW-Chat {p['owchat']}\")")"
 }
 
-notify "Ziel-Pipeline 4 startet: Datenqualität (gefilterte Rückübersetzungen, menschliche Daten x3, Wörterbuch) -> T4, danach T4h (Feinschliff auf menschlichen Übersetzungen). Je mit Kompatibilitätstest."
+notify "Ziel-Pipeline 4 startet (neu): Datenqualität (gefilterte Rückübersetzungen, menschliche Daten x3, Wörterbuch) + Tool-Aufrufe im Trainingsmix -> T4, danach T4h. Je mit Kompatibilitäts- und Tool-Test."
 # 1. quality scores for the 200k back-translations (adapter A: human pairs only)
-SC="$D/bt_scores_A.jsonl"
-if [ ! -s "$SC" ] || [ "$TINY" = 1 ]; then
+SC="$OUTD/bt_scores_A.jsonl"
+if [ ! -s "$SC" ]; then
   log "score back-translations with adapter A"
   run ongiini-eval-btscore yes python3 scripts/score_bt_pairs.py --model "$MODEL" --adapter "$SCORE_ADAPTER" \
     --pairs "$D/bt_ndo_dict.jsonl" --out "$SC" $SCORE_ARGS 2>&1 | grep --line-buffered -E '^scored [0-9]*00/|Error|Traceback' || true
-  [ -s "$SC" ] || fail "BT scores missing"
+  [ "$(wc -l < "$SC")" -ge "$( [ "$TINY" = 1 ] && echo 400 || wc -l < "$D/bt_ndo_dict.jsonl")" ] || fail "BT scores incomplete"
 fi
 # 2. more replay so general tasks stay ~15 % of the bigger mix
 replay_gen "$REPLAY3" 37 "$REPLAY" "$REPLAY2"
 replay_gen "$REPLAY4" 41 "$REPLAY" "$REPLAY2" "$REPLAY3"
+# 2b. native tool-call replay: the base 12B's own first move (call or answer) under tool declarations
+if [ ! -s "$TOOLR" ]; then
+  log "tool replay: base 12B, native tool format"
+  run ongiini-eval-toolreplay yes python3 scripts/build_tool_replay.py --out "$TOOLR" --model "$MODEL" $TOOL_ARGS 2>&1 \
+    | grep --line-buffered -E '^prompts|^\{"kept|Error|Traceback' | tee "$EXP/toolreplay.last" || true
+  [ -s "$TOOLR" ] || fail "tool replay missing"
+  if [ "$TINY" != 1 ]; then  # a broken template would yield no calls at all
+    calls=$(grep -c '"tool_call": true' "$TOOLR"); rows=$(wc -l < "$TOOLR")
+    [ "$calls" -ge $((rows / 10)) ] && [ "$rows" -ge 1500 ] || fail "tool replay implausible: $calls calls in $rows rows"
+    notify "Tool-Replay fertig: $rows Beispiele, davon $calls mit Tool-Aufruf (Gemma 4 entscheidet selbst)."
+  fi
+fi
 # 3. T4
-T4F="$D/sft_T4_train.jsonl"
+T4F="$OUTD/sft_T4_train.jsonl"
 [ -s "$T4F" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4F" $T4_ARGS --replay "$REPLAY" "$REPLAY2" "$REPLAY3" "$REPLAY4" \
-  || fail "build T4"
+  --tool-replay "$TOOLR" || fail "build T4"
 preflight_sft
-SFT_FORMAT=rendered; SFT_BATCH="--batch 8 --accum 2 --group-by-length"
-extra=(--targets all --rank 32 --alpha 32 --lr 2e-4 --max-len 640)
-[ "$TINY" = 1 ] && SFT_BATCH="--batch 8 --accum 2"
+SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
+extra=(--targets all --rank 32 --alpha 32 --lr 2e-4 --max-len 1280)
 preflight_mem T4 "$T4F" "${extra[@]}"
 if sft_stage T4 "$T4F" 1 "${extra[@]}"; then
   compat_stage T4
   goal_check T4 || true
   # 4. T4h: short final stage on human translations only (+ a little replay), lower LR
-  T4H="$D/sft_T4h_train.jsonl"
+  T4H="$OUTD/sft_T4h_train.jsonl"
   [ -s "$T4H" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4H" --bt-n 0 --vocab-n 0 --human-repeat 1 \
-    --replay "$REPLAY" || fail "build T4h"
-  sft_stage T4h "$T4H" 1 --init-adapter "$LORA/T4_12b" --lr 5e-5 --max-len 640 && { compat_stage T4h; goal_check T4h || true; }
+    --replay "$REPLAY" --tool-replay "$TOOLR" --tool-n 800 || fail "build T4h"
+  sft_stage T4h "$T4H" 1 --init-adapter "$LORA/T4_12b" --lr 5e-5 --max-len 1280 && { compat_stage T4h; goal_check T4h || true; }
 fi
 log "pipeline done"
 notify "Ziel-Pipeline 4 fertig. Ergebnisse im Register."

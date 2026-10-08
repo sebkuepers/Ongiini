@@ -90,9 +90,18 @@ def main(argv=None) -> int:
 
     # Load the files separately and keep only "messages": mixes built by
     # build_sft_templates.py have no doc/source columns, the val file does.
-    from datasets import DatasetDict
-    ds = DatasetDict({k: load_dataset("json", data_files=f)["train"].select_columns(["messages"])
-                      for k, f in (("train", args.train), ("val", args.val))})
+    from datasets import Dataset, DatasetDict
+    if args.chat_format == "rendered":
+        # Rows are rendered here; pre-rendered {"prompt", "completion"} rows (native
+        # tool-call replay, scripts/build_tool_replay.py) pass through unchanged.
+        # Each row travels as one JSON string, so mixed row shapes and extra
+        # columns (doc/source) never meet the datasets schema inference.
+        def load_rows(f):
+            return Dataset.from_list([{"pre": l.strip()} for l in open(f) if l.strip()])
+        ds = DatasetDict({k: load_rows(f) for k, f in (("train", args.train), ("val", args.val))})
+    else:
+        ds = DatasetDict({k: load_dataset("json", data_files=f)["train"].select_columns(["messages"])
+                          for k, f in (("train", args.train), ("val", args.val))})
     # Loss on the Oshiwambo answer only. "trl" = trl's conversational
     # prompt/completion format (A, B10k and the rest of the learning curve).
     # Gemma 4's generation prompt ends with an empty thought block that the
@@ -103,6 +112,9 @@ def main(argv=None) -> int:
         return {"prompt": r["messages"][:-1], "completion": r["messages"][-1:]}
 
     def rendered(r):
+        r = json.loads(r["pre"])
+        if "messages" not in r:
+            return {"prompt": r["prompt"], "completion": r["completion"]}
         prompt = tok.apply_chat_template(r["messages"][:-1], tokenize=False, add_generation_prompt=True)
         full = tok.apply_chat_template(r["messages"], tokenize=False)
         answer = r["messages"][-1]["content"].strip()
