@@ -8,7 +8,9 @@
 #   docker rm -f ongiini-eval-vllm12b
 set -euo pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
-IMAGE=vllm/vllm-openai:gemma4-0505-arm64-cu130
+# The production image's transformers does not know gemma4_unified (the dense 12B);
+# the training image is the same vLLM with transformers 5.18 → vLLM's transformers backend.
+IMAGE=${EVAL_VLLM_IMAGE:-ongiini-train:latest}
 MODEL_DIR="$HOME/models/gemma-4-12b-it-bf16"
 TEMPLATE=deploy/spark/tool_chat_template_gemma4.jinja
 mods=() mounts=()
@@ -21,7 +23,8 @@ docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1 || true
 docker run -d --name ongiini-eval-vllm12b --gpus all --ipc host --shm-size 16g \
   -p 127.0.0.1:8200:8000 \
   -v "$MODEL_DIR:/models/gemma-4-12b:ro" -v "$PWD/$TEMPLATE:/templates/chat.jinja:ro" "${mounts[@]}" \
-  "$IMAGE" \
+  --entrypoint vllm "$IMAGE" serve /models/gemma-4-12b \
+  --model-impl "${EVAL_MODEL_IMPL:-transformers}" \
   --model /models/gemma-4-12b --served-model-name gemma-4-12b \
   --host 0.0.0.0 --port 8000 \
   --max-model-len 32768 --max-num-seqs 16 --max-num-batched-tokens 8192 \
