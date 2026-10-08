@@ -168,7 +168,11 @@ async def generate(args) -> None:
     if args.sections:
         items = [i for i in items if i["section"] in args.sections]
     path = OUT / f"out_{args.label}.jsonl"
-    done = {json.loads(l)["id"] for l in open(path)} if path.exists() else set()
+    done = set()
+    if path.exists():  # resume; failed requests (e.g. server killed) are redone, not counted as done
+        kept = [r for r in map(json.loads, open(path)) if not str(r.get("finish", "")).startswith("error")]
+        path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept))
+        done = {r["id"] for r in kept}
     todo = [i for i in items if i["id"] not in done]
     sem, lock, n = asyncio.Semaphore(args.concurrency), asyncio.Lock(), 0
 
@@ -194,7 +198,10 @@ async def generate(args) -> None:
                 print(f"{args.label}: {n}/{len(todo)}", flush=True)
 
     await asyncio.gather(*(one(i) for i in todo))
-    print(f"{args.label}: done {len(todo)}", flush=True)
+    errors = sum(1 for r in map(json.loads, open(path)) if str(r.get("finish", "")).startswith("error"))
+    print(f"{args.label}: done {len(todo)}, errors {errors}", flush=True)
+    if errors:
+        sys.exit(1)
 
 
 # ── score ────────────────────────────────────────────────────────────
