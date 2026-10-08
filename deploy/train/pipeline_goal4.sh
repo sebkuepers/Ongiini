@@ -354,7 +354,7 @@ if [ ! -s "$TOOLR" ]; then
 fi
 # 3. T4
 T4F="$OUTD/sft_T4_train.jsonl"
-[ -s "$T4F" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4F" $T4_ARGS --replay "$REPLAY" "$REPLAY2" "$REPLAY3" "$REPLAY4" \
+[ -s "$T4F" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4F" $T4_ARGS --bt-scores "$SC" --replay "$REPLAY" "$REPLAY2" "$REPLAY3" "$REPLAY4" \
   --tool-replay "$TOOLR" || fail "build T4"
 preflight_sft
 SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
