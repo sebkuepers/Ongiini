@@ -37,6 +37,13 @@ VOCAB_BACK = ["What does the Oshindonga word '{ow}' mean in English?", "Translat
               "Meaning of '{ow}' (Oshindonga)?"]
 
 
+# Function words make noisy, space-wasting hints ("and: e / na", "that: kutya"):
+# only content words get dictionary hints.
+HINT_STOP = set("""and that this the with from have has had was were are been for not but you your they them their
+there here what which when where who how why will would could should into onto than then also just only some any
+very much many more most such other each every all both our out about over under after before because while""".split())
+
+
 def grams(t: str, n: int = 6) -> set[str]:
     w = re.findall(r"\w+", t.lower())
     return {" ".join(w[i:i + n]) for i in range(len(w) - n + 1)}
@@ -47,7 +54,7 @@ def render_pair(rng, src: str, tgt: str, pool, lex, args, tag: str = "") -> dict
     L = rng.choice(NAMES["oshindonga"])
     hints = ""
     if rng.random() < args.glossary_share:
-        g = glossary(src, lex)
+        g = [e for e in glossary(src, lex) if e[0] not in HINT_STOP]
         if g:
             hints = ("Dictionary entries that may help (use one only if its meaning fits; inflect as needed):\n"
                      + "\n".join(f"- {en}: {ow}" + (f" ({note})" if note else "") for en, ow, note in g) + "\n\n")
