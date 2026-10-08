@@ -116,7 +116,7 @@ def main(argv=None) -> int:
 
     # back-translations: length filter, then best by adapter-A loss
     bt = [json.loads(l) for l in open(args.bt)]
-    scores = {json.loads(l)["row"]: json.loads(l)["nll"] for l in open(args.bt_scores)}
+    scores = {json.loads(l)["row"]: json.loads(l)["nll"] for l in open(args.bt_scores)} if args.bt_n else {}
     def ok(r):
         a, b = len(r["text"].split()), len((r.get("en") or "").split())
         return a >= 3 and b >= 3 and 0.5 <= a / b <= 3 and not (grams(r["text"]) & evg)
@@ -156,7 +156,7 @@ def main(argv=None) -> int:
     rng.shuffle(rows)
     Path(args.out).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     print(json.dumps({"human_pairs": len(human), "dict_examples": len(dict_ex), "human_rows": len(human) * args.human_repeat,
-                      "bt_selected": len(chosen), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3),
+                      "bt_selected": len(chosen), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3) if chosen else None,
                       "vocab": min(args.vocab_n, len(entries)), "replay": len(replay), "tool_replay": len(tools),
                       "replay_share": round((len(replay) + len(tools)) / len(rows), 3), "rows": len(rows)}))
     return 0

@@ -365,7 +365,7 @@ if sft_stage T4 "$T4F" 1 "${extra[@]}"; then
   goal_check T4 || true
   # 4. T4h: short final stage on human translations only (+ a little replay), lower LR
   T4H="$OUTD/sft_T4h_train.jsonl"
-  [ -s "$T4H" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4H" --bt-n 0 --vocab-n 0 --human-repeat 1 \
+  [ -s "$T4H" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4H" --bt-scores "$SC" --bt-n 0 --vocab-n 0 --human-repeat 1 \
     --replay "$REPLAY" --tool-replay "$TOOLR" --tool-n 800 || fail "build T4h"
   sft_stage T4h "$T4H" 1 --init-adapter "$LORA/T4_12b" --lr 5e-5 --max-len 1280 && { compat_stage T4h; goal_check T4h || true; }
 fi
