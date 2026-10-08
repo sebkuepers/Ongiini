@@ -27,7 +27,7 @@ if [ "$TINY" = 1 ]; then
   SFT_LIMIT=32; EVAL_LIMIT=""; RET_QUICK="--quick"; JUDGE_LIMIT="--limit 1"
   REPLAY_ARGS="--dolly 8 --gsm 4 --max-new 16 --batch 4 --keep-length"
   REPLAY3_ARGS="--dolly 8 --gsm 4 --tools 4 --max-new 16 --batch 4 --keep-length"
-  SCORE_ARGS="--limit 400"; T4_ARGS="--bt-n 100 --vocab-n 50"; COMPAT=0
+  SCORE_ARGS="--limit 400"; T4_ARGS="--bt-n 100 --vocab-n 50"; COMPAT=0; SCORE_ADAPTER=""
   CPT_ARGS="--limit-docs 300 --block 256 --max-steps 4 --save-steps 2 --batch 2 --accum 1"
   PRE_CPT_ARGS="--limit-docs 300 --block 256 --max-steps 2 --save-steps 2 --batch 2 --accum 1"
 else
@@ -37,7 +37,7 @@ else
   SFT_LIMIT=0; EVAL_LIMIT=""; RET_QUICK=""; JUDGE_LIMIT=""
   REPLAY_ARGS="--dolly 1500 --gsm 500 --max-new 384 --max-tokens 640 --batch 32"
   REPLAY3_ARGS="--dolly 3500 --gsm 800 --tools 400 --max-new 384 --max-tokens 640 --batch 32"
-  SCORE_ARGS=""; T4_ARGS="--bt-n 30000 --vocab-n 3000"; COMPAT=1
+  SCORE_ARGS=""; T4_ARGS="--bt-n 30000 --vocab-n 3000"; COMPAT=1; SCORE_ADAPTER=data/private/lora/A_parallel_ndo_12b_r16
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
@@ -306,7 +306,7 @@ notify "Ziel-Pipeline 4 startet: Datenqualität (gefilterte Rückübersetzungen,
 SC="$D/bt_scores_A.jsonl"
 if [ ! -s "$SC" ] || [ "$TINY" = 1 ]; then
   log "score back-translations with adapter A"
-  run ongiini-eval-btscore yes python3 scripts/score_bt_pairs.py --model "$MODEL" --adapter data/private/lora/A_parallel_ndo_12b_r16 \
+  run ongiini-eval-btscore yes python3 scripts/score_bt_pairs.py --model "$MODEL" --adapter "$SCORE_ADAPTER" \
     --pairs "$D/bt_ndo_dict.jsonl" --out "$SC" $SCORE_ARGS 2>&1 | grep --line-buffered -E '^scored [0-9]*00/|Error|Traceback' || true
   [ -s "$SC" ] || fail "BT scores missing"
 fi

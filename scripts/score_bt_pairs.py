@@ -30,7 +30,7 @@ from train_lora import load_model  # noqa: E402
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--adapter", required=True)
+    ap.add_argument("--adapter", default="", help="empty = base model (tiny tests)")
     ap.add_argument("--pairs", required=True, help="jsonl with English 'en' and Oshiwambo 'text' (bt output)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--batch", type=int, default=32)
@@ -43,8 +43,11 @@ def main(argv=None) -> int:
     out = Path(args.out)
     done = sum(1 for _ in open(out)) if out.exists() else 0
     tok = AutoTokenizer.from_pretrained(args.model)
-    from peft import PeftModel
-    model = PeftModel.from_pretrained(load_model(args.model, four_bit=False), args.adapter).eval()
+    model = load_model(args.model, four_bit=False)
+    if args.adapter:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, args.adapter)
+    model.eval()
     pad = tok.pad_token_id
     with out.open("a") as f:
         for b in range(done, len(rows), args.batch):
