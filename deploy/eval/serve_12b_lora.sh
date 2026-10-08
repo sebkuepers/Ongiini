@@ -27,7 +27,7 @@ docker run -d --name ongiini-eval-vllm12b --gpus all --ipc host --shm-size 16g \
   --model-impl "${EVAL_MODEL_IMPL:-auto}" \
   --served-model-name gemma-4-12b \
   --host 0.0.0.0 --port 8000 \
-  --max-model-len 32768 --max-num-seqs 16 --max-num-batched-tokens 8192 \
+  --max-model-len 32768 --max-num-seqs "${EVAL_MAX_SEQS:-16}" --max-num-batched-tokens 8192 \
   --gpu-memory-utilization "${EVAL_GPU_MEM_UTIL:-0.30}" \
   --reasoning-parser gemma4 --enable-auto-tool-choice --tool-call-parser gemma4 \
   --chat-template /templates/chat.jinja \
