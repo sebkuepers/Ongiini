@@ -25,7 +25,7 @@ docker run -d --name ongiini-eval-vllm12b --gpus all --ipc host --shm-size 16g \
   -v "$MODEL_DIR:/models/gemma-4-12b:ro" -v "$PWD/$TEMPLATE:/templates/chat.jinja:ro" "${mounts[@]}" \
   --entrypoint vllm "$IMAGE" serve /models/gemma-4-12b \
   --model-impl "${EVAL_MODEL_IMPL:-transformers}" \
-  --model /models/gemma-4-12b --served-model-name gemma-4-12b \
+  --served-model-name gemma-4-12b \
   --host 0.0.0.0 --port 8000 \
   --max-model-len 32768 --max-num-seqs 16 --max-num-batched-tokens 8192 \
   --gpu-memory-utilization "${EVAL_GPU_MEM_UTIL:-0.30}" \
