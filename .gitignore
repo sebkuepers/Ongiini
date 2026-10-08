@@ -29,3 +29,7 @@ data/*
 !data/oshiwambo_eval_v2.tsv
 !data/oshiwambo_eval_v3.tsv
 !data/oshiwambo_eval_v*_seeds.md
+
+# experimental.ongiini.ai: runtime data and the generated page (scripts/build_experimental_chat.py)
+/data-experimental/
+/deploy/experimental/site/

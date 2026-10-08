@@ -6,6 +6,8 @@
 # Container name ongiini-eval-* so the memory brake and production guard cover it.
 #   bash deploy/eval/serve_12b_lora.sh t2=data/private/lora/T2_12b [name=dir ...]
 #   docker rm -f ongiini-eval-vllm12b
+# EVAL_NAME / EVAL_PORT / EVAL_RESTART reuse it for experimental.ongiini.ai
+# (deploy/experimental/serve_model.sh).
 set -euo pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 # The production image (vLLM 0.20.2) cannot serve the dense 12B (gemma4_unified);
@@ -19,9 +21,10 @@ for spec in "$@"; do
   mounts+=(-v "$PWD/$dir:/adapters/$name:ro")
   mods+=("$name=/adapters/$name")
 done
-docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1 || true
-docker run -d --name ongiini-eval-vllm12b --gpus all --ipc host --shm-size 16g \
-  -p 127.0.0.1:8200:8000 \
+NAME=${EVAL_NAME:-ongiini-eval-vllm12b} PORT=${EVAL_PORT:-8200}
+docker rm -f "$NAME" >/dev/null 2>&1 || true
+docker run -d --name "$NAME" --restart "${EVAL_RESTART:-no}" --gpus all --ipc host --shm-size 16g \
+  -p 127.0.0.1:$PORT:8000 \
   -v "$MODEL_DIR:/models/gemma-4-12b:ro" -v "$PWD/$TEMPLATE:/templates/chat.jinja:ro" "${mounts[@]}" \
   --entrypoint vllm "$IMAGE" serve /models/gemma-4-12b \
   --model-impl "${EVAL_MODEL_IMPL:-auto}" \
@@ -33,10 +36,10 @@ docker run -d --name ongiini-eval-vllm12b --gpus all --ipc host --shm-size 16g \
   --chat-template /templates/chat.jinja \
   --limit-mm-per-prompt '{"image": 4, "audio": 0}' --mm-processor-kwargs '{"max_soft_tokens": 280}' \
   --enable-lora --max-lora-rank 64 --max-loras 2 --lora-modules "${mods[@]}"
-echo "waiting for :8200"
+echo "waiting for :$PORT"
 for _ in $(seq 1 90); do
-  curl -sf -m 5 localhost:8200/v1/models >/dev/null && { echo "ready"; curl -s localhost:8200/v1/models | python3 -c "import json,sys; print([m['id'] for m in json.load(sys.stdin)['data']])"; exit 0; }
-  docker ps -q -f name=^ongiini-eval-vllm12b$ | grep -q . || { echo "container exited"; docker logs --tail 30 ongiini-eval-vllm12b 2>&1; exit 1; }
+  curl -sf -m 5 localhost:$PORT/v1/models >/dev/null && { echo "ready"; curl -s localhost:$PORT/v1/models | python3 -c "import json,sys; print([m['id'] for m in json.load(sys.stdin)['data']])"; exit 0; }
+  docker ps -q -f name=^$NAME$ | grep -q . || { echo "container exited"; docker logs --tail 30 "$NAME" 2>&1; exit 1; }
   sleep 10
 done
 echo "not ready after 15 min"; exit 1

@@ -117,6 +117,69 @@ services:
     labels:
       autoheal: "true"
 
+  # experimental.ongiini.ai — a test environment that always runs our latest
+  # Oshiwambo model (Gemma 4 12B + LoRA, deploy/experimental/serve_model.sh on
+  # :8201). Same backend image as the webhook, but its own data dir, no WhatsApp
+  # traffic (nginx exposes only /v1/chat*), no stats loop, no operator alerts.
+  # Off by default:  docker compose --profile experimental up -d --build
+  # Page: python3 scripts/build_experimental_chat.py --model-note "..."
+  experimental:
+    profiles: [experimental]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ongiini-experimental
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      VLLM_BASE_URL: http://host.docker.internal:8201/v1
+      VLLM_MODEL: ongiini-experimental
+      ONGIINI_STATS_LOOP_DISABLED: "1"
+      ONGIINI_OPERATOR_MSISDN: ""
+      ONGIINI_LEARN_ENABLED: "0"
+      ONGIINI_CHAT_ENABLED: "1"
+      ONGIINI_CHAT_ALLOWED_ORIGINS: https://experimental.ongiini.ai
+      MEM0_DIR: /data/mem0
+      MEM0_TELEMETRY: "False"
+      HF_HOME: /data/hf_cache
+      SENTENCE_TRANSFORMERS_HOME: /data/hf_cache/sentence_transformers
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M,mode=1777
+    volumes:
+      - ./data-experimental:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 4g
+    healthcheck:
+      test:
+        - "CMD"
+        - "python3"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health',timeout=3).status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    labels:
+      autoheal: "true"
+
+  experimental-web:
+    profiles: [experimental]
+    image: nginx:1.27-alpine
+    container_name: ongiini-experimental-web
+    restart: unless-stopped
+    volumes:
+      - ./deploy/experimental/site:/usr/share/nginx/html:ro
+      - ./deploy/experimental/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:8447:8080"
+    depends_on: [experimental]
+
   website:
     image: nginx:1.27-alpine
     container_name: ongiini-website
