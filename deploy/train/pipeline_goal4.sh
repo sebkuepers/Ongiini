@@ -46,7 +46,7 @@ else
   REPLAY3_ARGS="--dolly 3500 --gsm 800 --tools 400 --max-new 384 --max-tokens 640 --batch 32"
   SCORE_ARGS=""; T4_ARGS="--bt-n 30000 --vocab-n 3000"; COMPAT=1; SCORE_ADAPTER=data/private/lora/A_parallel_ndo_12b_r16
   OUTD=$D
-  TOOL_ARGS="-n 2400 --batch 16 --max-new 384 --max-tokens 1200"
+  TOOL_ARGS="-n 2000 --batch 16 --max-new 320 --max-tokens 1200"  # real-scale test: ~7 s per row at 384
   # tool rows are up to 1200 tokens: half the batch keeps the padded tokens per step
   # (and the 262k-vocabulary logits) where T2's 8 x 640 were
   SFT_BATCH_T4="--batch 4 --accum 4 --group-by-length"
