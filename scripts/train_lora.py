@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 import time
 from pathlib import Path
 
@@ -24,6 +26,9 @@ from datasets import load_dataset
 from peft import LoraConfig
 from transformers import AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from train_guard import DivergenceGuard, retry_argv  # noqa: E402
 
 TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj"]
 # All linear layers of the language model (not the vision/audio towers), as in
@@ -42,20 +47,6 @@ def load_model(path: str, four_bit: bool):
         return AutoModelForCausalLM.from_pretrained(path, **kw)
     except (ValueError, KeyError):
         return AutoModelForImageTextToText.from_pretrained(path, **kw)
-
-
-class DivergenceGuard:
-    """Stop when the training loss blows up instead of burning hours: C2r (2026-10-06)
-    jumped from 1.2 to 11.7 at step ~90 and stayed at ~7. Normal SFT runs log
-    0.6-1.5, so a loss above 4 after step 50 means the run is broken."""
-
-    def __init__(self, limit: float = 4.0, after: int = 50):
-        self.limit, self.after, self.tripped = limit, after, False
-
-    def check(self, step: int, loss) -> bool:
-        if loss is not None and step >= self.after and float(loss) > self.limit:
-            self.tripped = True
-        return self.tripped
 
 
 def main(argv=None) -> int:
@@ -81,7 +72,10 @@ def main(argv=None) -> int:
                     help="attn = attention projections (curve); all = attention + MLP, as the CPT adapter")
     ap.add_argument("--init-adapter", default="",
                     help="continue training this LoRA adapter (SFT after CPT); rank/targets come from it")
+    ap.add_argument("--divergence-retries", type=int, default=1,
+                    help="after a divergence, restart from scratch at half the lr this many times")
     args = ap.parse_args(argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
 
     t0 = time.time()
     tok = AutoTokenizer.from_pretrained(args.model)
@@ -160,14 +154,17 @@ def main(argv=None) -> int:
     except Exception as exc:  # noqa: BLE001
         print("loss-on diagnostic failed:", repr(exc), flush=True)
     from transformers import TrainerCallback
-    import os
     guard = DivergenceGuard(limit=float(os.environ.get("DIVERGENCE_LIMIT", "4")),  # overrides only for tests
                             after=int(os.environ.get("DIVERGENCE_AFTER", "50")))
 
     class _Stop(TrainerCallback):
         def on_log(self, a, state, control, logs=None, **kw):
-            if not guard.tripped and guard.check(state.global_step, (logs or {}).get("loss")):
-                print(f"DIVERGED: loss {logs.get('loss')} at step {state.global_step} — stopping", flush=True)
+            logs = logs or {}
+            had_warning = bool(guard.warning)
+            if not guard.tripped and guard.check(state.global_step, logs.get("loss"), logs.get("grad_norm")):
+                print(f"DIVERGED: {guard.reason} — stopping", flush=True)
+            if guard.warning and not had_warning:
+                print(f"UNSTABLE (warning only): {guard.warning}", flush=True)
             if guard.tripped:
                 control.should_training_stop = True
     trainer.add_callback(_Stop())
@@ -176,12 +173,27 @@ def main(argv=None) -> int:
     if last:
         print(f"resuming from {last}", flush=True)
     trainer.train(resume_from_checkpoint=last)
-    if guard.tripped:  # no run.json: the pipeline treats the stage as failed
-        return 1
+    history = json.loads(os.environ.get("DIVERGENCE_HISTORY", "[]"))
+    if guard.tripped:
+        if args.divergence_retries <= 0:  # no run.json: the pipeline treats the stage as failed
+            return 1
+        # keep the diverged run, then start over in a fresh process (clean GPU memory)
+        # at half the learning rate; the pipeline sees one stage that took longer
+        kept = Path(f"{args.out}.diverged-lr{args.lr:g}")
+        if kept.exists():
+            kept = Path(f"{kept}-{int(time.time())}")
+        Path(args.out).rename(kept)
+        history.append({"lr": args.lr, "reason": guard.reason, "kept": str(kept)})
+        os.environ["DIVERGENCE_HISTORY"] = json.dumps(history)
+        print(f"RETRY: from scratch at lr {args.lr / 2:g} (diverged run kept in {kept})", flush=True)
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()),
+                                  *retry_argv(argv, args.lr, args.divergence_retries)])
     trainer.save_model(args.out)
     metrics = trainer.evaluate()
     Path(args.out, "run.json").write_text(json.dumps({**vars(args), **metrics,
-                                                       "minutes": round((time.time() - t0) / 60, 1)}, indent=2))
+                                                       "minutes": round((time.time() - t0) / 60, 1),
+                                                       "unstable_warning": guard.warning,
+                                                       "diverged_attempts": history}, indent=2))
     print(json.dumps(metrics), flush=True)
     return 0
 
