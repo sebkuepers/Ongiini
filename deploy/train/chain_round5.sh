@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Round 5 after round 4, laptop-independent and strictly sequential:
-#   wait until pipeline_goal4.sh has ended → only if its run ended with "pipeline done":
+#   wait until pipeline_goal4.sh has ended → only if its run ended with "pipeline done"
+#   (2026-10-09: it did, with T4 diverged; round 5 now starts with T4b at lr 1e-4):
 #   pipeline_goal5.sh as TINY (tiny model, plumbing) → only if that passes: the real run.
 #   setsid nohup bash deploy/train/chain_round5.sh > data/private/experiments/chain_round5.log 2>&1 < /dev/null &
 set -u

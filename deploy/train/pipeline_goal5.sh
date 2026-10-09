@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Round 5 (prepared 2026-10-08, runs after pipeline_goal4.sh): goal chrF > 50 with
 # Gemma 4's abilities intact (compat suite + tool suite + retention).
-#  1. decoding test (MBR over 8 samples, retrieved few-shot) on T4 and T4h;
+#  1. T4b = T4 at lr 1e-4: T4 at 2e-4 diverged at step 1240 of 4085 (2026-10-09 04:54;
+#     eval loss still falling, 1.233 at 1200, but grad-norm spikes 308/113 from step 1100 —
+#     instability, not bad data); then T4bh (human pairs, lr 5e-5); each with benchmark,
+#     retention, compat + tool suite and the decoding test (MBR, retrieved few-shot);
 #  2. C1-T4: the CPT adapter C1 (r64 attention+MLP, half an epoch on 21M Oshiwambo
 #     tokens) continued with the T4 mix (quality-selected BT, human pairs x3, dictionary,
 #     replay incl. native tool calls) — CPT inside the recipe that keeps Gemma intact
@@ -46,7 +49,7 @@ else
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
-LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-C1-T4"
+LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4"
 mkdir -p "$EXP/lora" "$EXP/gpu" "$EXP/retention" "$LORA"
 log() { echo "$(date '+%F %T') $*"; }
 notify() { if [ "$TINY" = 1 ]; then echo "notify (tiny, not sent): $*"; else bash deploy/train/notify.sh "$*" | tail -1; fi; }
@@ -343,7 +346,7 @@ decode_test() {  # decode_test <tag>: MBR / retrieved few-shot through the eval 
 import json; r=json.load(open('$R')); print(', '.join(f\"{k} {v['chrf']}\" + (f\" ({v['delta_vs_greedy']:+}, CI {v['ci95']})\" if 'delta_vs_greedy' in v else '') for k, v in r.items() if isinstance(v, dict)))")"
 }
 
-notify "Runde 5 startet: Decoding-Test (MBR) auf T4/T4h, dann C1-T4 (CPT-Adapter + T4-Rezept), je mit Kompatibilitäts- und Tool-Test."
+notify "Runde 5 startet: T4b (T4 mit halber Lernrate, T4 war divergiert), dann T4bh, dann C1-T4 (CPT-Adapter + T4-Rezept); je mit Kompatibilitäts-, Tool- und Decoding-Test."
 T4F="$OUTD/sft_T4_train.jsonl"
 if [ "$TINY" = 1 ]; then  # tiny stand-ins for what round 4 produced
   run ongiini-eval-toolreplay yes python3 scripts/build_tool_replay.py --out "$TOOLR" --model "$MODEL" $TOOL_ARGS 2>&1 | tail -1
@@ -351,13 +354,27 @@ if [ "$TINY" = 1 ]; then  # tiny stand-ins for what round 4 produced
     --tool-replay "$TOOLR" 2>&1 | tail -1
 fi
 [ -s "$T4F" ] || fail "T4 mix missing: $T4F (round 4)"
-# 1. decoding test on the round-4 candidates
-decode_test T4
-decode_test T4h
+SC="$OUTD/bt_scores_A.jsonl"
+SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
+# 1. T4b: the T4 mix at lr 1e-4, then T4bh on human pairs (+ replay, 800 tool rows)
+extra=(--targets all --rank 32 --alpha 32 --lr 1e-4 --max-len 1280)
+preflight_mem T4b "$T4F" "${extra[@]}"
+if sft_stage T4b "$T4F" 1 "${extra[@]}"; then
+  compat_stage T4b
+  goal_check T4b || true
+  decode_test T4b
+  T4H="$OUTD/sft_T4h_train.jsonl"
+  [ -s "$T4H" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4H" --bt-scores "$SC" --bt-n 0 --vocab-n 0 \
+    --human-repeat 1 --replay "$REPLAY" --tool-replay "$TOOLR" --tool-n 800 || fail "build T4h"
+  if sft_stage T4bh "$T4H" 1 --init-adapter "$LORA/T4b_12b" --lr 5e-5 --max-len 1280; then
+    compat_stage T4bh
+    goal_check T4bh || true
+    decode_test T4bh
+  fi
+fi
 # 2. C1-T4: CPT adapter continued with the T4 recipe
 if [ ! -f "$LORA/C1_cpt_12b/run.json" ] && [ "$TINY" = 1 ]; then cpt_stage; fi
 [ -f "$LORA/C1_cpt_12b/run.json" ] || fail "CPT adapter C1 missing"
-SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
 extra=(--init-adapter "$LORA/C1_cpt_12b" --lr 1e-4 --max-len 1280)
 preflight_mem C1-T4 "$T4F" "${extra[@]}"
 if sft_stage C1-T4 "$T4F" 1 "${extra[@]}"; then
