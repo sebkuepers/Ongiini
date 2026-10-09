@@ -44,7 +44,13 @@ def check_cpt(out: str) -> list[str]:
     return []
 
 
-def check_bench(label: str, base: str = "gemma-4-12b-base") -> list[str]:
+def base_label(label: str) -> str:
+    """gemma-4-12b-T4b -> gemma-4-12b-base, gemma-4-31b-H31 -> gemma-4-31b-base."""
+    return "-".join(label.split("-")[:3]) + "-base"
+
+
+def check_bench(label: str, base: str = "") -> list[str]:
+    base = base or base_label(label)
     bad = []
     for d in ("oshindonga", "oshikwanyama"):
         rows = [json.loads(l) for l in (EXP / "lora" / f"{label}_{d}.jsonl").read_text().splitlines()]

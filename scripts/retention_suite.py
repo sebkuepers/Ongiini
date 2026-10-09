@@ -174,11 +174,12 @@ def main(argv=None) -> int:
     ap.add_argument("--adapter", default="")
     ap.add_argument("--label", required=True)
     ap.add_argument("--quick", action="store_true", help="3 items per test (pipeline preflight)")
+    ap.add_argument("--four-bit", action="store_true", help="4-bit base (31B: bf16 does not fit next to production)")
     args = ap.parse_args(argv)
     n = 3 if args.quick else None
     tok = AutoTokenizer.from_pretrained(args.model)
     tok.padding_side = "left"
-    model = load_model(args.model, four_bit=False)
+    model = load_model(args.model, four_bit=args.four_bit)
     if args.adapter:
         from peft import PeftModel
         model = PeftModel.from_pretrained(model, args.adapter)

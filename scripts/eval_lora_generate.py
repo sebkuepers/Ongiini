@@ -43,6 +43,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--four-bit", action="store_true", help="4-bit base (31B: bf16 does not fit next to production)")
     args = ap.parse_args(argv)
 
     ids = set(json.loads(IDS.read_text()))
@@ -55,7 +56,7 @@ def main(argv=None) -> int:
 
     tok = AutoTokenizer.from_pretrained(args.model)
     tok.padding_side = "left"
-    model = load_model(args.model, four_bit=False)
+    model = load_model(args.model, four_bit=args.four_bit)
     if args.adapter:
         from peft import PeftModel
         model = PeftModel.from_pretrained(model, args.adapter)
