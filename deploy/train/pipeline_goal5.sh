@@ -307,14 +307,26 @@ compat_stage() {  # compat_stage <tag>: compatibility suite base vs candidate th
     || fail "eval vLLM for $tag"
   local C=(docker run --rm --name "ongiini-eval-compat-$tag" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus
            -e TORCHINDUCTOR_CACHE_DIR=/tmp/ti -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest)
-  local gen_ok=1
-  "${C[@]}" python3 scripts/compat_suite.py generate --model "$(echo "$tag" | tr 'A-Z' 'a-z')" --label "$tag" --concurrency 32 2>&1 \
-    | grep --line-buffered -vE "HTTP Request|Warning" | tail -3 || gen_ok=0
-  # tool suite: 86 scenarios x 3 samples with the production prompt and tools (base once)
-  [ -s data/private/compat/tools_base.jsonl ] || "${C[@]}" python3 scripts/tool_suite.py generate --model gemma-4-12b --label base \
-    --concurrency 16 2>&1 | grep -vE "HTTP Request|Warning" | tail -2 || gen_ok=0
-  "${C[@]}" python3 scripts/tool_suite.py generate --model "$(echo "$tag" | tr 'A-Z' 'a-z')" --label "$tag" --concurrency 16 2>&1 \
-    | grep -vE "HTTP Request|Warning" | tail -2 || gen_ok=0
+  local gen_ok attempt lc; lc=$(echo "$tag" | tr 'A-Z' 'a-z')
+  # 2026-10-09: the eval vLLM died during T4b's tool suite (255 connection errors, log lost
+  # with the container); the rerun on a fresh server was clean. Both generators resume and
+  # redo failed requests, so on errors: keep the dead server's log, restart, retry once.
+  for attempt in 1 2; do
+    gen_ok=1
+    "${C[@]}" python3 scripts/compat_suite.py generate --model "$lc" --label "$tag" --concurrency 32 2>&1 \
+      | grep --line-buffered -vE "HTTP Request|Warning" | tail -3 || gen_ok=0
+    # tool suite: 86 scenarios x 3 samples with the production prompt and tools (base once)
+    [ -s data/private/compat/tools_base.jsonl ] || "${C[@]}" python3 scripts/tool_suite.py generate --model gemma-4-12b --label base \
+      --concurrency 16 2>&1 | grep -vE "HTTP Request|Warning" | tail -2 || gen_ok=0
+    "${C[@]}" python3 scripts/tool_suite.py generate --model "$lc" --label "$tag" --concurrency 16 2>&1 \
+      | grep -vE "HTTP Request|Warning" | tail -2 || gen_ok=0
+    [ "$gen_ok" = 1 ] && break
+    docker logs --tail 200 ongiini-eval-vllm12b > "$EXP/compat_vllm_${tag}_attempt$attempt.log" 2>&1
+    [ "$attempt" = 2 ] && break
+    log "compat/tool generation for $tag had errors — restarting the eval vLLM once (log kept)"
+    EVAL_GPU_MEM_UTIL=0.45 EVAL_MAX_SEQS=32 bash deploy/eval/serve_12b_lora.sh "$lc=$LORA/${tag}_12b" \
+      || fail "eval vLLM restart for $tag"
+  done
   docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
   [ "$gen_ok" = 1 ] || fail "compat generation for $tag had errors"
   "${C[@]}" python3 scripts/compat_suite.py score --labels base "$tag" 2>&1 | grep -vE "HTTP Request|Warning" | tail -40
