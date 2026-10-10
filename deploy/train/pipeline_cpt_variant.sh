@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
-# SFT variant pipeline (2026-10-11): one parametrised pipeline for every "T4-recipe" experiment
-# instead of a copy per round. The variant comes from the environment:
-#   VARIANT_TAG        adapter/label tag, e.g. T4b1 (label gemma-4-12b-T4b1)
-#   VARIANT_EXTRA      train_lora.py args, e.g. "--targets all --rank 32 --alpha 32 --lr 1e-4 --max-len 1280"
-#   VARIANT_INIT       optional: adapter dir to continue from (--init-adapter); TINY uses a stand-in
-#   VARIANT_EPOCHS     default 1
-#   VARIANT_BUILD_ARGS optional: build_sft_t4.py args (e.g. "--bt-n 60000 --vocab-n 3000") to build
-#                      $OUTD/sft_<TAG>_train.jsonl with replay v1-v4 + tool replay; default = the T4 mix
-#   VARIANT_MODEL_DIR  optional: a different base model directory (variant M: Gemma 4 with the CPT
-#                      adapter merged in, scripts/merge_adapter.py); used for training, HF evals
-#                      and the eval vLLM; comparisons stay against gemma-4-12b-base
-# Stages (as in rounds 4-6): memory preflight, SFT (retry on divergence), benchmark, retention,
-# compat + tool suite (eval vLLM, one restart on errors), goal check, decoding test (MBR).
-# A3: VARIANT_TAG=T4b1 VARIANT_INIT=data/private/lora/T4b_12b VARIANT_EXTRA="--lr 5e-5 --max-len 1280"
-# A4: VARIANT_TAG=T4k60 VARIANT_BUILD_ARGS="--bt-n 60000 --vocab-n 3000" VARIANT_EXTRA="--targets all --rank 32 --alpha 32 --lr 1e-4 --max-len 1280"
+# CPT variant pipeline (2026-10-11): one parametrised pipeline for "CPT recipe X, then the
+# identical T4 SFT as C1-T4", so CPT variants are comparable. From the environment:
+#   CPT_VARIANT_TAG   e.g. C1r (adapter data/private/lora/<TAG>_cpt_12b, SFT adapter <TAG>-T4_12b)
+#   CPT_VARIANT_ARGS  train_cpt.py args, e.g. "--ow-fraction 0.5 --replay-corpus data/private/corpora/replay_en/fineweb_edu_4M.jsonl --replay-share 0.25"
+#                     (--max-steps is NOT needed: --ow-fraction 0.5 = C1's half of the blocks, each once)
+#   CPT_VARIANT_SFT   optional train_lora.py args for the SFT, default "--lr 1e-4 --max-len 1280" (= C1-T4)
+# Stages: CPT preflight (memory, speed), CPT with logged block order + English held-out, check,
+# WhatsApp with Oshiwambo/English held-out; memory preflight; SFT (retry on divergence);
+# benchmark, retention, compat + tool suite, goal check, decoding test.
+# Variants: R (replay 25 %), S (--rank 16 --alpha 16 --lr 5e-5), Q (--kua-weight 5), C2 (--ow-fraction 1).
 # Shared helpers copied from pipeline_goal6.sh (round history in the earlier pipelines' headers).
-#   setsid nohup bash deploy/train/pipeline_sft_variant.sh >> data/private/experiments/pipeline_sft_variant.log 2>&1 < /dev/null &
+#   setsid nohup bash deploy/train/pipeline_cpt_variant.sh >> data/private/experiments/pipeline_cpt_variant.log 2>&1 < /dev/null &
 # TINY=1 runs it end-to-end with the tiny model.
 set -u -o pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
@@ -51,7 +46,7 @@ else
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
-LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4 gemma-4-12b-C2-T4 gemma-4-12b-${VARIANT_TAG}"
+LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4 gemma-4-12b-C2-T4 gemma-4-12b-${CPT_VARIANT_TAG}-T4"
 mkdir -p "$EXP/lora" "$EXP/gpu" "$EXP/retention" "$LORA"
 log() { echo "$(date '+%F %T') $*"; }
 notify() { if [ "$TINY" = 1 ]; then echo "notify (tiny, not sent): $*"; else bash deploy/train/notify.sh "$*" | tail -1; fi; }
@@ -238,14 +233,14 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
   log "preflight CPT ok"
 }
 
-: "${VARIANT_TAG:?VARIANT_TAG missing}" "${VARIANT_EXTRA:?VARIANT_EXTRA missing}"
-log "sft variant $VARIANT_TAG start (TINY=$TINY): extra=[$VARIANT_EXTRA] init=[${VARIANT_INIT:-}] build=[${VARIANT_BUILD_ARGS:-}]"
+: "${CPT_VARIANT_TAG:?CPT_VARIANT_TAG missing}" "${CPT_VARIANT_ARGS?CPT_VARIANT_ARGS missing}"
+log "cpt variant $CPT_VARIANT_TAG start (TINY=$TINY): cpt=[$CPT_VARIANT_ARGS] sft=[${CPT_VARIANT_SFT:-}]"
 if [ "$TINY" != 1 ]; then
   others=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
   [ -z "$others" ] || fail "other GPU jobs still running: $others"
   avail=$(free -g | awk '/^Speicher:|^Mem:/{print $7}')
   [ "$avail" -ge 50 ] || fail "only ${avail} GB memory available (training needs ~50)"
-  ( bash deploy/train/watchdog.sh $$ "$EXP/pipeline_sft_variant.log" ) &
+  ( bash deploy/train/watchdog.sh $$ "$EXP/pipeline_cpt_variant.log" ) &
 else
   # tiny run: the base model's outputs and retention, which real runs already have
   run ongiini-eval-tinybase yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
@@ -363,44 +358,44 @@ import json; r=json.load(open('$R')); print(', '.join(f\"{k} {v['chrf']}\" + (f\
 
 
 
-notify "Variante $VARIANT_TAG startet: $VARIANT_EXTRA${VARIANT_INIT:+ (weiter von $(basename "$VARIANT_INIT"))}${VARIANT_BUILD_ARGS:+ (Mix: $VARIANT_BUILD_ARGS)}. Danach alle Tests."
+notify "CPT-Variante $CPT_VARIANT_TAG startet: train_cpt $CPT_VARIANT_ARGS; danach identisches T4-Training wie C1-T4 und alle Tests."
 T4F="$OUTD/sft_T4_train.jsonl"
-SC="$OUTD/bt_scores_A.jsonl"
-INIT=${VARIANT_INIT:-}
-BUILD_ARGS=${VARIANT_BUILD_ARGS:-}
-if [ "$TINY" = 1 ]; then  # tiny stand-ins: tool replay, T4 mix, an init adapter
+CPT_V_ARGS=$CPT_VARIANT_ARGS
+if [ "$TINY" = 1 ]; then  # tiny stand-ins for what round 4 produced; the replay corpus is the real file, limited
   run ongiini-eval-toolreplay yes python3 scripts/build_tool_replay.py --out "$TOOLR" --model "$MODEL" $TOOL_ARGS 2>&1 | tail -1
   run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4F" --bt-n 0 --vocab-n 50 --replay "$REPLAY" \
     --tool-replay "$TOOLR" 2>&1 | tail -1
-  [ -n "$BUILD_ARGS" ] && BUILD_ARGS="--bt-n 0 --vocab-n 50"
-  if [ -n "$INIT" ]; then
-    SFT_FORMAT=rendered SFT_BATCH="--batch 8 --accum 2" sft tinyinit "$T4F" 1 --targets all --rank 32 --alpha 32 2>&1 | grep -E "Error|Traceback" || true
-    [ -f "$LORA/tinyinit_12b/run.json" ] || fail "tiny init adapter"
-    INIT="$LORA/tinyinit_12b"
-  fi
+  CPT_V_ARGS="$CPT_V_ARGS --save-steps 2"
 fi
-if [ "$TINY" != 1 ] && [ -n "${VARIANT_MODEL_DIR:-}" ]; then
-  [ -f "$VARIANT_MODEL_DIR/config.json" ] || fail "VARIANT_MODEL_DIR has no config.json: $VARIANT_MODEL_DIR"
-  MODEL_DIR=$(cd "$VARIANT_MODEL_DIR" && pwd); MODEL="/models/$(basename "$MODEL_DIR")"
-  export EVAL_MODEL_DIR=$MODEL_DIR
-  log "base model for this variant: $MODEL_DIR"
+[ -s "$T4F" ] || fail "T4 mix missing: $T4F (round 4)"
+# 1. CPT variant
+CPT="$LORA/${CPT_VARIANT_TAG}_cpt_12b"
+if [ ! -f "$CPT/run.json" ]; then
+  preflight_cpt
+  log "CPT $CPT_VARIANT_TAG: $CPT_V_ARGS"
+  notify "CPT $CPT_VARIANT_TAG startet."
+  run "ongiini-train-${CPT_VARIANT_TAG}cpt" yes python3 scripts/train_cpt.py --model "$MODEL" --out "$CPT" $CPT_ARGS $CPT_V_ARGS 2>&1 \
+    | stdbuf -oL tr '\r' '\n' | grep --line-buffered -E '^blocks|^articles|^replay blocks|^training sequence|^trainable|^kept step|^english held-out|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
+    | cut -c1-300 || true
+  [ -f "$CPT/run.json" ] || fail "CPT $CPT_VARIANT_TAG"
 fi
-TRAIN=$T4F
-if [ -n "$BUILD_ARGS" ]; then
-  TRAIN="$OUTD/sft_${VARIANT_TAG}_train.jsonl"
-  [ -s "$TRAIN" ] || run ongiini-build no python3 scripts/build_sft_t4.py --out "$TRAIN" $BUILD_ARGS --bt-scores "$SC" \
-    --replay "$REPLAY" "$REPLAY2" "$REPLAY3" "$REPLAY4" --tool-replay "$TOOLR" || fail "build mix for $VARIANT_TAG"
-fi
-[ -s "$TRAIN" ] || fail "training file missing: $TRAIN"
-log "training file $TRAIN ($(wc -l < "$TRAIN") rows)"
+check cpt "$CPT"
+notify "CPT $CPT_VARIANT_TAG fertig: $(python3 -c "
+import json, math
+r = json.load(open('$CPT/run.json'))
+eb, ea = r.get('english_held_out_before'), r.get('english_held_out_after')
+en = f'Englisch-Held-out {round(math.exp(eb), 2)} -> {round(math.exp(ea), 2)}' if eb is not None and ea is not None else 'kein Englisch-Held-out'
+print(f\"Oshiwambo-Perplexität {round(r['held_out_ppl_before'] or 0, 1)} -> {round(r['held_out_ppl_after'], 2)} (C1: 7.76), {en}; \"
+      f\"{r.get('ow_blocks_seen', 0) * r['block'] / 1e6:.2f} Mio. Oshiwambo-Tokens + {r.get('replay_blocks_seen', 0) * r['block'] / 1e6:.2f} Mio. Replay, {r['minutes']} min\")")"
+# 2. the identical T4 SFT on top
 SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
-extra=($VARIANT_EXTRA)
-[ -n "$INIT" ] && extra+=(--init-adapter "$INIT")
-preflight_mem "$VARIANT_TAG" "$TRAIN" "${extra[@]}"
-if sft_stage "$VARIANT_TAG" "$TRAIN" "${VARIANT_EPOCHS:-1}" "${extra[@]}"; then
-  compat_stage "$VARIANT_TAG"
-  goal_check "$VARIANT_TAG" || true
-  decode_test "$VARIANT_TAG"
+extra=(--init-adapter "$CPT" ${CPT_VARIANT_SFT:---lr 1e-4 --max-len 1280})
+TAG="${CPT_VARIANT_TAG}-T4"
+preflight_mem "$TAG" "$T4F" "${extra[@]}"
+if sft_stage "$TAG" "$T4F" 1 "${extra[@]}"; then
+  compat_stage "$TAG"
+  goal_check "$TAG" || true
+  decode_test "$TAG"
 fi
 log "pipeline done"
-notify "Variante $VARIANT_TAG fertig. Ergebnisse im Register."
+notify "CPT-Variante $CPT_VARIANT_TAG fertig ($TAG). Ergebnisse im Register."

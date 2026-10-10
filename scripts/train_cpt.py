@@ -40,21 +40,39 @@ CORPUS = Path("data/private/corpus/osheng_v1/mono.jsonl")
 DIALECTS = {"Oshindonga", "Oshikwanyama"}
 
 
-def articles(path: Path, limit_docs: int = 0) -> tuple[list[str], list[str]]:
-    """Articles as text (sentences in order), split into train / held-out by doc hash."""
+def articles(path: Path, limit_docs: int = 0, kua_weight: int = 1) -> tuple[list[str], list[str]]:
+    """Articles as text (sentences in order), split into train / held-out by doc hash.
+    kua_weight > 1 repeats articles whose sentences are mostly Oshikwanyama (2.9 % of the
+    corpus; CPT on it erased Kwanyama, 2026-10-05) that many times in the training list."""
     docs: dict[str, list[tuple[int, str]]] = defaultdict(list)
+    kua: dict[str, int] = defaultdict(int)
     with path.open() as f:
         for line in f:
             r = json.loads(line)
             if r.get("lid") in DIALECTS and r.get("doc") is not None:
                 docs[r["doc"]].append((int(r.get("i", 0)), r["text"].strip()))
+                kua[r["doc"]] += 1 if r["lid"] == "Oshikwanyama" else -1
     train, held = [], []
     for k in sorted(docs):
         text = " ".join(t for _, t in sorted(docs[k]) if t)
-        (held if int(hashlib.sha1(k.encode()).hexdigest(), 16) % 200 == 0 else train).append(text)
+        if int(hashlib.sha1(k.encode()).hexdigest(), 16) % 200 == 0:
+            held.append(text)
+        else:
+            train += [text] * (kua_weight if kua[k] > 0 else 1)
         if limit_docs and len(train) >= limit_docs:
             break
     return train, held
+
+
+def replay_texts(path: Path, limit_docs: int = 0) -> list[str]:
+    """English replay documents ({"text": ...} lines, scripts/build_cpt_replay_corpus.py)."""
+    out = []
+    with path.open() as f:
+        for line in f:
+            out.append(json.loads(line)["text"].strip())
+            if limit_docs and len(out) >= limit_docs:
+                break
+    return out
 
 
 def blocks(texts: list[str], tok, size: int) -> Dataset:
@@ -108,7 +126,14 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--corpus", default=str(CORPUS))
     ap.add_argument("--rank", type=int, default=64)
+    ap.add_argument("--alpha", type=float, default=0, help="LoRA alpha; 0 = 2 x rank (C1)")
     ap.add_argument("--lr", type=float, default=1e-4)
+    ap.add_argument("--ow-fraction", type=float, default=1.0,
+                    help="train on this random fraction of the Oshiwambo blocks (C1 saw ~0.5 via --max-steps)")
+    ap.add_argument("--kua-weight", type=int, default=1, help="repeat mostly-Oshikwanyama articles this many times")
+    ap.add_argument("--replay-corpus", default="", help="English replay jsonl; also the source of the English held-out")
+    ap.add_argument("--replay-share", type=float, default=0.0,
+                    help="share of replay blocks in the training sequence (0.25 = one in four)")
     ap.add_argument("--epochs", type=float, default=1)
     ap.add_argument("--block", type=int, default=1024)
     ap.add_argument("--batch", type=int, default=4)
@@ -123,14 +148,25 @@ def main(argv=None) -> int:
 
     t0 = time.time()
     tok = AutoTokenizer.from_pretrained(args.model)
-    cache = Path(args.corpus).with_name(f"cpt_blocks_{args.block}" + (f"_lim{args.limit_docs}" if args.limit_docs else ""))
+    cache = Path(args.corpus).with_name(f"cpt_blocks_{args.block}" + (f"_lim{args.limit_docs}" if args.limit_docs else "")
+                                        + (f"_kua{args.kua_weight}" if args.kua_weight > 1 else ""))
     if (cache / "train").exists():
         train_ds, held_ds = load_from_disk(str(cache / "train")), load_from_disk(str(cache / "held"))
     else:
-        train_txt, held_txt = articles(Path(args.corpus), args.limit_docs)
+        train_txt, held_txt = articles(Path(args.corpus), args.limit_docs, args.kua_weight)
         train_ds, held_ds = blocks(train_txt, tok, args.block), blocks(held_txt, tok, args.block)
         train_ds.save_to_disk(str(cache / "train")); held_ds.save_to_disk(str(cache / "held"))
         print(f"articles: train {len(train_txt)}, held-out {len(held_txt)}", flush=True)
+    rep_ds = en_held = None
+    if args.replay_corpus:
+        rcache = Path(args.corpus).with_name(f"cpt_blocks_{args.block}_replay_{Path(args.replay_corpus).stem}"
+                                             + (f"_lim{args.limit_docs}" if args.limit_docs else ""))
+        if (rcache / "train").exists():
+            rep_ds = load_from_disk(str(rcache / "train"))
+        else:
+            rep_ds = blocks(replay_texts(Path(args.replay_corpus), args.limit_docs), tok, args.block)
+            rep_ds.save_to_disk(str(rcache / "train"))
+        print(f"replay blocks: {len(rep_ds)} ({len(rep_ds) * args.block / 1e6:.1f}M tokens) from {args.replay_corpus}", flush=True)
     if len(held_ds) == 0:  # tiny test corpora: hold out the last 2 % of training blocks instead
         k = max(1, len(train_ds) // 50)
         held_ds, train_ds = train_ds.select(range(len(train_ds) - k, len(train_ds))), train_ds.select(range(len(train_ds) - k))
@@ -141,12 +177,32 @@ def main(argv=None) -> int:
     # Our own, logged block order (2026-10-10): with the Trainer's internal shuffle it was not
     # recorded which half of the blocks C1 saw. Now the permutation is ours, the Trainer reads
     # sequentially, and run.json/blocks_order.json say exactly which blocks were trained.
-    order = list(range(len(train_ds)))
-    random.Random(args.seed).shuffle(order)
-    train_ds = train_ds.select(order)
+    # --ow-fraction takes the first part of the permutation; --replay-share mixes English replay
+    # blocks (their own permutation) into the sequence; the English held-out is the tail of the
+    # replay permutation, never trained on.
+    from datasets import concatenate_datasets
+    rng = random.Random(args.seed)
+    ow_perm = list(range(len(train_ds))); rng.shuffle(ow_perm)
+    n_ow = max(1, int(round(len(ow_perm) * args.ow_fraction)))
+    ow_sel = ow_perm[:n_ow]
+    rep_sel: list[int] = []
+    if rep_ds is not None:
+        rep_perm = list(range(len(rep_ds))); rng.shuffle(rep_perm)
+        n_held = min(50, max(1, len(rep_perm) // 20))
+        en_held = rep_ds.select(rep_perm[-n_held:])
+        if args.replay_share > 0:
+            n_rep = min(len(rep_perm) - n_held, int(round(n_ow * args.replay_share / (1 - args.replay_share))))
+            rep_sel = rep_perm[:n_rep]
+    combined = concatenate_datasets([train_ds.select(ow_sel)] + ([rep_ds.select(rep_sel)] if rep_sel else []))
+    seq = list(range(len(combined))); rng.shuffle(seq)
+    train_ds = combined.select(seq)
+    order = seq  # combined index < n_ow -> Oshiwambo block ow_sel[i], else replay block rep_sel[i - n_ow]
+    print(f"training sequence: {n_ow} Oshiwambo blocks ({n_ow * args.block / 1e6:.2f}M tokens, fraction {args.ow_fraction}) "
+          f"+ {len(rep_sel)} replay blocks ({len(rep_sel) / max(1, len(seq)):.1%}); English held-out {len(en_held) if en_held is not None else 0}",
+          flush=True)
 
     model = load_model(args.model, four_bit=False)
-    model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
+    model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=args.alpha or 2 * args.rank, lora_dropout=0.05,
                                              target_modules=TARGETS_ALL, task_type="CAUSAL_LM"))
     model.print_trainable_parameters()
 
@@ -164,24 +220,42 @@ def main(argv=None) -> int:
     trainer = InOrder(model=model, args=cfg, train_dataset=train_ds, eval_dataset=held_ds,
                       data_collator=DataCollatorForLanguageModeling(tok, mlm=False))
 
+    en_curve: list[list[float]] = []
+
+    def en_loss() -> float | None:
+        if en_held is None:
+            return None
+        return trainer.evaluate(eval_dataset=en_held, metric_key_prefix="en")["en_loss"]
+
+    class EnglishHeldOut(TrainerCallback):  # forgetting visible DURING CPT (lesson of 2026-10-05)
+        def on_save(self, a, state, control, **kw):
+            l = en_loss()
+            if l is not None:
+                en_curve.append([state.global_step, round(l, 4)])
+                print(f"english held-out at step {state.global_step}: loss {l:.4f}", flush=True)
+    if en_held is not None:
+        trainer.add_callback(EnglishHeldOut())
+
     class Keep(TrainerCallback):  # e.g. C2 at C1's 650 steps: same steps, more data still ahead
         def on_step_end(self, a, state, control, **kw):
             if state.global_step in args.keep_steps and not Path(args.out, f"step-{state.global_step}").exists():
                 d = Path(args.out, f"step-{state.global_step}")
                 trainer.model.save_pretrained(str(d))
-                loss = trainer.evaluate()["eval_loss"]
+                loss = trainer.evaluate()["eval_loss"]; el = en_loss()
                 (d / "held_out.json").write_text(json.dumps({"step": state.global_step, "held_out_loss": loss,
-                                                             "held_out_ppl": math.exp(loss)}))
-                print(f"kept step {state.global_step}: held-out loss {loss:.4f}", flush=True)
+                                                             "held_out_ppl": math.exp(loss), "english_held_out_loss": el}))
+                print(f"kept step {state.global_step}: held-out loss {loss:.4f}, english {el}", flush=True)
     if args.keep_steps:
         trainer.add_callback(Keep())
     last = last_complete_checkpoint(args.out)
     if last:
         print(f"resuming from {last}", flush=True)
     before = trainer.evaluate()["eval_loss"] if not last else None
+    en_before = en_loss() if not last else None
     tr = trainer.train(resume_from_checkpoint=last)
     trainer.save_model(args.out)
     after = trainer.evaluate()["eval_loss"]
+    en_after = en_loss()
     res = {**vars(args), "held_out_loss_before": before, "held_out_loss_after": after,
            "held_out_ppl_before": math.exp(before) if before is not None else None,
            "held_out_ppl_after": math.exp(after), "train_blocks": len(train_ds),
@@ -190,11 +264,16 @@ def main(argv=None) -> int:
            "steps_per_epoch": math.ceil(len(train_ds) / (args.batch * args.accum)),
            "minutes": round((time.time() - t0) / 60, 1)}
     seen = min(len(order), trainer.state.global_step * args.batch * args.accum)
-    res |= {"blocks_seen": seen, "tokens_seen": seen * args.block,
+    seen_ow = sum(1 for i in order[:seen] if i < n_ow)
+    res |= {"blocks_seen": seen, "tokens_seen": seen * args.block, "ow_blocks_seen": seen_ow,
+            "replay_blocks_seen": seen - seen_ow, "replay_share_seen": round((seen - seen_ow) / max(1, seen), 3),
             "held_out_curve": [[h["step"], round(h["eval_loss"], 4)] for h in trainer.state.log_history if "eval_loss" in h],
+            "english_held_out_before": en_before, "english_held_out_after": en_after, "english_held_out_curve": en_curve,
             "provenance": provenance(args, cache)}
-    Path(args.out, "blocks_order.json").write_text(json.dumps({"seed": args.seed, "blocks_seen": seen,
-                                                               "order": order}))
+    Path(args.out, "blocks_order.json").write_text(json.dumps({
+        "seed": args.seed, "blocks_seen": seen, "n_ow": n_ow, "ow_blocks": ow_sel, "replay_blocks": rep_sel,
+        "sequence": order, "note": "sequence index < n_ow -> ow_blocks[i] (index into the Oshiwambo block cache), "
+                                   "else replay_blocks[i - n_ow] (index into the replay block cache)"}))
     Path(args.out, "run.json").write_text(json.dumps(res, indent=2))
     print(json.dumps(res), flush=True)
     return 0

@@ -13,7 +13,7 @@ cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 # The production image (vLLM 0.20.2) cannot serve the dense 12B (gemma4_unified);
 # vLLM 0.31.0 supports Gemma4UnifiedForConditionalGeneration natively (2026-10-08).
 IMAGE=${EVAL_VLLM_IMAGE:-vllm/vllm-openai:v0.31.0-aarch64}
-MODEL_DIR="$HOME/models/gemma-4-12b-it-bf16"
+MODEL_DIR="${EVAL_MODEL_DIR:-$HOME/models/gemma-4-12b-it-bf16}"  # e.g. a merged model (variant M)
 TEMPLATE=deploy/spark/tool_chat_template_gemma4.jinja
 mods=() mounts=()
 for spec in "$@"; do
