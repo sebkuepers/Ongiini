@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Round 6 (2026-10-10): C2-T4 — does the second, unseen half of the Oshiwambo corpus add
-# to CPT's gain? C1 saw 10.65M of 21.2M tokens (650 of 1,295 steps, a random half of the
-# blocks, each once, cosine schedule over 650 steps) and C1-T4 beat T4b by +1.7 chrF (dev
-# and blind, CIs above 0). C2 = CPT over ALL 21.2M tokens from the base (1,295 steps, schedule
-# over the full epoch, logged block order + corpus/tokenizer hashes), then the IDENTICAL T4 SFT
-# as C1-T4 (T4 mix, lr 1e-4, max-len 1280). Reported next to chrF: the held-out Oshiwambo loss
-# curve (does better language modelling reach translation?). Caveat: data amount and LR
-# schedule change together vs C1 — a causal split would need a control run.
-# Shared helpers copied from pipeline_goal5.sh (round 4/5 history in their headers).
-#   setsid nohup bash deploy/train/pipeline_goal6.sh >> data/private/experiments/pipeline_goal6.log 2>&1 < /dev/null &
+# Round 7 (prepared 2026-10-09 as round 6; moved behind C2-T4 on 2026-10-10): does a bigger
+# base model buy the last points to 50?
+# Probe before any long run: the T4h mix (human pairs LAC + Viljoen examples, replay,
+# 800 native tool rows; ~11k rows) trained from the base on Gemma 4 12B (H12) and on
+# Gemma 4 31B (H31, dense, Apache-2.0; base zero-shot 20.8 vs 12B 14.8 on Ndonga dev),
+# same recipe (r32 attn+MLP, alpha 32, lr 1e-4, 1 epoch, rendered). 31B trains and is
+# evaluated in 4-bit (bf16 = 62.5 GB does not fit next to production); its base is
+# evaluated in 4-bit too, so deltas are fair. 31B results live in experiments/r31.
+# TINY also forces a divergence once to exercise train_lora's automatic retry.
+# Shared helpers copied from pipeline_goal5.sh, parametrised by the model (SUF=12b|31b).
+#   setsid nohup bash deploy/train/pipeline_goal7.sh >> data/private/experiments/pipeline_goal7.log 2>&1 < /dev/null &
 # TINY=1 runs it end-to-end with the tiny model.
 set -u -o pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 IMG=ongiini-train:latest
+SUF=12b
 MODEL=/models/gemma-4-12b-it-bf16
 D=data/private/corpus/osheng_v1
 TINY=${TINY:-0}
@@ -44,7 +46,7 @@ else
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
-LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4 gemma-4-12b-C2-T4"
+LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4"
 mkdir -p "$EXP/lora" "$EXP/gpu" "$EXP/retention" "$LORA"
 log() { echo "$(date '+%F %T') $*"; }
 notify() { if [ "$TINY" = 1 ]; then echo "notify (tiny, not sent): $*"; else bash deploy/train/notify.sh "$*" | tail -1; fi; }
@@ -78,8 +80,8 @@ memwatch() {  # memwatch <container> <out file>: lowest MemAvailable (GB) while 
 
 sft() {  # sft <tag> <train file> <epochs> <extra train_lora args...>
   local tag=$1 file=$2 epochs=$3; shift 3
-  run "ongiini-train-${tag//\//-}" yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
-    --train "$file" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "$LORA/${tag}_12b" \
+  run "ongiini-train-${tag//\//-}" yes python3 scripts/train_lora.py --model "$MODEL" $BF16_BASE \
+    --train "$file" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "$LORA/${tag}_${SUF}" \
     --epochs "$epochs" ${SFT_BATCH:---batch 8 --accum 2} --chat-format "${SFT_FORMAT:-rendered}" --limit "$SFT_LIMIT" "$@"
 }
 retention() {  # retention <label> [adapter dir]
@@ -87,11 +89,11 @@ retention() {  # retention <label> [adapter dir]
   [ -f "$EXP/retention/$label.json" ] && return 0
   log "retention $label"
   local a=(); [ -n "$adapter" ] && a=(--adapter "$adapter")
-  run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" "${a[@]}" --label "$label" $RET_QUICK \
+  run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" "${a[@]}" --label "$label" $RET_QUICK $FOUR_BIT \
     2>&1 | grep -v "^Loading" | tail -2
   [ -f "$EXP/retention/$label.json" ] || fail "retention $label wrote no result"
   if [ -n "$adapter" ]; then
-    run ongiini-judge no python3 scripts/retention_judge.py gemma-4-12b-base "$label" $JUDGE_LIMIT 2>&1 | tail -1
+    run ongiini-judge no python3 scripts/retention_judge.py "gemma-4-${SUF}-base" "$label" $JUDGE_LIMIT 2>&1 | tail -1
     check retention "$label" --judged
   else
     check retention "$label"
@@ -106,7 +108,7 @@ S = json.load(open(f"{exp}/lora/scores.json"))
 s = S[label]
 def nd(l):
     return S[l]["oshindonga_dev"]["chrf++"] if l in S else None
-others = ", ".join(f"{l.replace('gemma-4-12b-', '')} {nd(l)}" for l in S if l != label and nd(l) is not None)
+others = ", ".join(f"{l.split('-', 3)[-1]} {nd(l)}" for l in S if l != label and nd(l) is not None)
 lines = [f"Ndonga {s['oshindonga_dev']['chrf++']} (blind {s['oshindonga_blind']['chrf++']}, "
          f"+{s['oshindonga_dev']['delta_vs_base']} vs Basis). Zum Vergleich: {others}.",
          f"Kwanyama {s['oshikwanyama_dev']['chrf++']}; Drift Kwanyama-Ausgaben vs Ndonga-Referenz "
@@ -126,16 +128,16 @@ evaluate() {  # evaluate <tag> <adapter dir>: benchmark, scores, checks, retenti
   local tag=$1 out=$2
   log "benchmark $tag"
   run "ongiini-eval-$tag" yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
-    --adapter "$out" --label "gemma-4-12b-$tag" --out "$EXP/lora" --batch 16 $EVAL_LIMIT 2>&1 | grep -v "^Loading" | tail -1 \
+    --adapter "$out" --label "gemma-4-${SUF}-$tag" --out "$EXP/lora" --batch 16 $EVAL_LIMIT $FOUR_BIT 2>&1 | grep -v "^Loading" | tail -1 \
     || fail "benchmark $tag"
-  run ongiini-score no python3 scripts/score_lora_runs.py --base gemma-4-12b-base $LABELS 2>&1 | tail -10
-  check bench "gemma-4-12b-$tag"
-  retention "gemma-4-12b-$tag" "$out"
-  notify "$tag fertig: $(summary "gemma-4-12b-$tag" 2>&1)"
+  run ongiini-score no python3 scripts/score_lora_runs.py --base "gemma-4-${SUF}-base" $LABELS 2>&1 | tail -10
+  check bench "gemma-4-${SUF}-$tag"
+  retention "gemma-4-${SUF}-$tag" "$out"
+  notify "$tag fertig: $(summary "gemma-4-${SUF}-$tag" 2>&1)"
 }
 sft_stage() {  # sft_stage <tag> <train file> <epochs> <extra train_lora args...>
   local tag=$1 file=$2 epochs=$3; shift 3
-  local out="$LORA/${tag}_12b"
+  local out="$LORA/${tag}_${SUF}"
   if [ ! -f "$out/run.json" ]; then
     log "train $tag ($(wc -l < "$file") examples, $epochs epochs, $*)"
     notify "Training $tag startet."
@@ -231,13 +233,14 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
   log "preflight CPT ok"
 }
 
-log "goal pipeline 6 start (TINY=$TINY)"
+log "goal pipeline 7 start (TINY=$TINY)"
 if [ "$TINY" != 1 ]; then
   others=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
   [ -z "$others" ] || fail "other GPU jobs still running: $others"
   avail=$(free -g | awk '/^Speicher:|^Mem:/{print $7}')
   [ "$avail" -ge 50 ] || fail "only ${avail} GB memory available (training needs ~50)"
-  ( bash deploy/train/watchdog.sh $$ "$EXP/pipeline_goal6.log" ) &
+  [ -f "$HOME/models/gemma-4-31b-it-bf16/model.safetensors.index.json" ] || fail "Gemma 4 31B missing in ~/models"
+  ( bash deploy/train/watchdog.sh $$ "$EXP/pipeline_goal7.log" ) &
 else
   # tiny run: the base model's outputs and retention, which real runs already have
   run ongiini-eval-tinybase yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
@@ -255,7 +258,7 @@ fi
 [ -s "$REPLAY2" ] || fail "replay v2 missing: $REPLAY2"
 preflight_mem() {  # preflight_mem <tag> <file> <train_lora args...>: 20 steps on the 320 longest examples
   local tag=$1 file=$2; shift 2
-  [ -f "$LORA/${tag}_12b/run.json" ] && return 0
+  [ -f "$LORA/${tag}_${SUF}/run.json" ] && return 0
   log "preflight memory $tag"
   local P=$EXP/preflight PL=$LORA/preflight
   rm -rf "$P" "$PL"; mkdir -p "$P" "$PL"
@@ -268,7 +271,7 @@ rows.sort(key=lambda l: -size(json.loads(l)))
 open('$P/longest.jsonl', 'w').writelines(rows[:320])"
   memwatch "ongiini-train-preflight-mem" "$P/mem" &
   sft preflight/mem "$P/longest.jsonl" 1 --limit 320 "$@" 2>&1 | tr '\r' '\n' | grep -E 'DIVERGED|Error|Traceback' | cut -c1-200 || true
-  [ -f "$PL/mem_12b/run.json" ] || fail "preflight memory $tag"
+  [ -f "$PL/mem_${SUF}/run.json" ] || fail "preflight memory $tag"
   local mem; mem=$(cat "$P/mem" 2>/dev/null || echo 0)
   log "preflight memory $tag: min available ${mem} GB"
   if [ "$TINY" != 1 ] && [ "$mem" -lt 25 ]; then fail "$tag needs too much memory: min ${mem} GB available (need >= 25)"; fi
@@ -276,12 +279,12 @@ open('$P/longest.jsonl', 'w').writelines(rows[:320])"
 }
 goal_check() {  # goal_check <tag>: report against the round-1 criteria (no stop: round 4 aims at > 50)
   local out
-  if out=$(ONGIINI_EXP_DIR="$EXP" python3 scripts/check_stage.py goal "gemma-4-12b-$1"); then
+  if out=$(ONGIINI_EXP_DIR="$EXP" python3 scripts/check_stage.py goal "gemma-4-${SUF}-$1"); then
     log "round-1 goal criteria met by $1"
-    notify "$1: alle Kriterien erfüllt (chrF >= 42, kein Vergessen). $(summary "gemma-4-12b-$1" 2>&1)"
+    notify "$1: alle Kriterien erfüllt (chrF >= 42, kein Vergessen). $(summary "gemma-4-${SUF}-$1" 2>&1)"
   else
     log "round-1 goal criteria not met by $1: $out"
-    notify "$1 verfehlt Kriterien: ${out#*FAILED: }. $(summary "gemma-4-12b-$1" 2>&1)"
+    notify "$1 verfehlt Kriterien: ${out#*FAILED: }. $(summary "gemma-4-${SUF}-$1" 2>&1)"
   fi
 }
 
@@ -334,63 +337,78 @@ print(f\"Tool-Test {tb['all']}/{tt['all']} % (Websuche {tb.get('web_search')}/{t
 }
 
 
-decode_test() {  # decode_test <tag>: MBR / retrieved few-shot through the eval vLLM, Ndonga dev
-  [ "$COMPAT" = 1 ] || { log "decoding test skipped (tiny)"; return 0; }
-  local tag=$1 lc; lc=$(echo "$1" | tr 'A-Z' 'a-z')
-  local R="$EXP/inference_tricks/report_$lc.json"
-  [ -f "$R" ] && return 0
-  [ -f "$LORA/${tag}_12b/run.json" ] || { log "decoding test $tag: no adapter"; return 0; }
-  log "decoding test $tag"
-  EVAL_GPU_MEM_UTIL=0.45 EVAL_MAX_SEQS=32 bash deploy/eval/serve_12b_lora.sh "$lc=$LORA/${tag}_12b" || fail "eval vLLM for $tag"
-  # client container: host network (vLLM on 127.0.0.1:8200), evalsuite image (sacrebleu, openai)
-  docker run --rm --name "ongiini-eval-decode-$lc" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus \
-    -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest \
-    python3 scripts/exp_inference_tricks.py --model "$lc" --out "$EXP/inference_tricks" --concurrency 32 2>&1 \
-    | grep --line-buffered -vE "HTTP Request|Warning" | tail -6
-  docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
-  [ -f "$R" ] || fail "decoding report $tag missing"
-  notify "Decoding-Test $tag (Ndonga dev): $(python3 -c "
-import json; r=json.load(open('$R')); print(', '.join(f\"{k} {v['chrf']}\" + (f\" ({v['delta_vs_greedy']:+}, CI {v['ci95']})\" if 'delta_vs_greedy' in v else '') for k, v in r.items() if isinstance(v, dict)))")"
+
+
+use_model() {  # use_model 12b|31b: model, 4-bit flags, experiment dir, label set
+  SUF=$1
+  if [ "$TINY" = 1 ]; then
+    MODEL_DIR="$PWD/data/private/models-tiny/gemma4-tiny"
+    [ "$SUF" = 31b ] && MODEL_DIR="$PWD/data/private/models-tiny/gemma4-31b-tiny"
+  else
+    MODEL_DIR="$HOME/models/gemma-4-${SUF}-it-bf16"
+  fi
+  MODEL=/models/gemma-4-${SUF}-it-bf16
+  if [ "$SUF" = 31b ]; then
+    BF16_BASE=""; FOUR_BIT="--four-bit"; EXP=$EXP0/r31
+    LABELS="gemma-4-31b-H31"  # own scores.json in r31
+    mkdir -p "$EXP/lora" "$EXP/retention"
+    [ -e "$EXP/gpu" ] || ln -s ../gpu "$EXP/gpu"  # the watchdog watches $EXP0/gpu
+  else
+    BF16_BASE="--bf16-base"; FOUR_BIT=""; EXP=$EXP0
+    LABELS="$LABELS0 gemma-4-12b-H12"  # score_lora_runs rewrites scores.json: keep every 12B run
+  fi
 }
+EXP0=$EXP LABELS0=$LABELS
 
-
-notify "Runde 6 startet: C2 = CPT über den ganzen Oshiwambo-Korpus (21,2 Mio. Tokens statt 10,65 Mio., ca. 20 h), danach C2-T4 mit identischem T4-Training wie C1-T4; je mit allen Tests."
-T4F="$OUTD/sft_T4_train.jsonl"
-if [ "$TINY" = 1 ]; then  # tiny stand-ins for what round 4 produced
+notify "Runde 7 startet: Größen-Test. Gleiche Daten (menschliche Übersetzungen + Replay + Tools) auf Gemma 4 12B (H12) und 31B (H31, 4-bit)."
+T4H="$OUTD/sft_T4h_train.jsonl"
+if [ "$TINY" = 1 ]; then  # tiny stand-ins
+  [ -d data/private/models-tiny/gemma4-31b-tiny ] || docker run --rm --user 1000:1000 -e HOME=/tmp -e USER=nexus \
+    -e LOGNAME=nexus -e CUDA_VISIBLE_DEVICES= -v "$HOME/models/gemma-4-31b-it-bf16:/models/gemma-4-31b-it-bf16:ro" \
+    -v "$PWD:/work" -w /work "$IMG" python3 scripts/make_tiny_model.py /models/gemma-4-31b-it-bf16 \
+    data/private/models-tiny/gemma4-31b-tiny 2>&1 | tail -1
   run ongiini-eval-toolreplay yes python3 scripts/build_tool_replay.py --out "$TOOLR" --model "$MODEL" $TOOL_ARGS 2>&1 | tail -1
-  run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4F" --bt-n 0 --vocab-n 50 --replay "$REPLAY" \
-    --tool-replay "$TOOLR" 2>&1 | tail -1
+  run ongiini-build no python3 scripts/build_sft_t4.py --out "$T4H" --bt-n 0 --vocab-n 0 --human-repeat 1 --replay "$REPLAY" \
+    --tool-replay "$TOOLR" --tool-n 800 2>&1 | tail -1
+  # the automatic retry after a divergence (train_lora.py): force a trip, expect two kept runs and a failed stage
+  log "TINY: forced divergence"
+  # 40 rows at batch 2 = 20 steps, so a loss gets logged (every 10 steps) and trips the guard
+  DIVERGENCE_LIMIT=0 DIVERGENCE_AFTER=0 SFT_LIMIT=40 SFT_BATCH="--batch 2 --accum 1" BF16_BASE="--bf16-base" \
+    sft divtest "$T4H" 1 --lr 2e-4 2>&1 | grep -E "^DIVERGED|^RETRY" | head -4
+  [ ! -f "$LORA/divtest_12b/run.json" ] && ls -d "$LORA"/divtest_12b.diverged-lr0.0002 "$LORA"/divtest_12b.diverged-lr0.0001 \
+    >/dev/null || fail "automatic divergence retry did not behave"
+  log "TINY: forced divergence ok (retried at half lr, then failed as expected)"
 fi
-[ -s "$T4F" ] || fail "T4 mix missing: $T4F (round 4)"
-# 1. C2: CPT over the whole corpus, from the base
-C2="$LORA/C2_cpt_12b"
-C2_KEEP="--keep-steps 650"; [ "$TINY" = 1 ] && C2_KEEP="--keep-steps 2"
-if [ ! -f "$C2/run.json" ]; then
-  preflight_cpt
-  log "CPT C2 (full epoch over all 21.2M tokens, LoRA r64 attention + MLP, from the base)"
-  notify "CPT C2 startet (volle Epoche, 1.295 Schritte, ca. 20 h)."
-  # --keep-steps 650: the adapter at C1's length (held-out loss logged there too), so C2 can also be
-  # compared with C1 at the same number of steps (not a full control: the LR schedules differ)
-  run ongiini-train-C2 yes python3 scripts/train_cpt.py --model "$MODEL" --out "$C2" $CPT_ARGS $C2_KEEP 2>&1 \
-    | stdbuf -oL tr '\r' '\n' | grep --line-buffered -E '^blocks|^articles|^trainable|^kept step|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
-    | cut -c1-300 || true
-  [ -f "$C2/run.json" ] || fail "CPT C2"
-fi
-check cpt "$C2"
-notify "CPT C2 fertig: $(python3 -c "
-import json
-r = json.load(open('$C2/run.json')); c = r.get('held_out_curve') or []
-at650 = [l for s, l in c if s == 650]
-print(f\"Oshiwambo-Perplexität (zurückgehalten) {round(r['held_out_ppl_before'] or 0, 1)} -> {round(r['held_out_ppl_after'], 2)} \"
-      f\"(C1 nach 650 Schritten: 7.76); {r.get('tokens_seen', 0) / 1e6:.2f} Mio. Tokens gesehen, {r['minutes']} min\")")"
-# 2. C2-T4: the identical T4 SFT on top of C2
+[ -s "$T4H" ] || fail "T4h mix missing: $T4H (round 5)"
 SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
-extra=(--init-adapter "$C2" --lr 1e-4 --max-len 1280)
-preflight_mem C2-T4 "$T4F" "${extra[@]}"
-if sft_stage C2-T4 "$T4F" 1 "${extra[@]}"; then
-  compat_stage C2-T4
-  goal_check C2-T4 || true
-  decode_test C2-T4
+extra=(--targets all --rank 32 --alpha 32 --lr 1e-4 --max-len 1280)
+# 1. H12: the probe mix on 12B (same harness as every 12B run)
+use_model 12b
+sft_stage H12 "$T4H" 1 "${extra[@]}" || log "H12 failed"
+# 2. H31: the same on 31B in 4-bit, with its own 4-bit base
+use_model 31b
+if [ "$TINY" = 1 ] || [ ! -f "$EXP/lora/gemma-4-31b-base_oshindonga.jsonl" ]; then
+  log "benchmark 31B base (4-bit)"
+  run ongiini-eval-31base yes python3 scripts/eval_lora_generate.py --model "$MODEL" --label gemma-4-31b-base \
+    --out "$EXP/lora" --batch 16 $EVAL_LIMIT $FOUR_BIT 2>&1 | tail -1
 fi
+retention gemma-4-31b-base
+preflight_mem H31 "$T4H" "${extra[@]}"
+sft_stage H31 "$T4H" 1 "${extra[@]}" || log "H31 failed"
+# 3. compare
+msg=$(python3 - <<PY
+import json
+def get(p, l):
+    try:
+        s = json.load(open(p))[l]; return s["oshindonga_dev"]["chrf++"], s["oshindonga_blind"]["chrf++"]
+    except (OSError, KeyError):
+        return None
+h12 = get("$EXP0/lora/scores.json", "gemma-4-12b-H12"); h31 = get("$EXP0/r31/lora/scores.json", "gemma-4-31b-H31")
+b31 = get("$EXP0/r31/lora/scores.json", "gemma-4-31b-base") or (None, None)
+print(f"H12 {h12}, H31 {h31} (dev, blind); 31B-Basis 4-bit dev {b31[0]}."
+      + (f" Unterschied 31B-12B: {round(h31[0] - h12[0], 1)} Punkte (dev)." if h12 and h31 else ""))
+PY
+)
+log "round 6 probe: $msg"
+notify "Runde 7 (Größen-Test) fertig: $msg"
 log "pipeline done"
-notify "Runde 6 fertig (C2-T4). Ergebnisse im Register."

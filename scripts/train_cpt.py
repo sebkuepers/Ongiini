@@ -23,14 +23,16 @@ import argparse
 import hashlib
 import json
 import math
+import random
 import time
 from collections import defaultdict
 from pathlib import Path
 
 import torch
 from datasets import Dataset, load_from_disk
+from torch.utils.data import SequentialSampler
 from peft import LoraConfig, get_peft_model
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainerCallback, TrainingArguments
 
 from train_lora import TARGETS_ALL, load_model
 
@@ -68,6 +70,24 @@ def blocks(texts: list[str], tok, size: int) -> Dataset:
     return ds.map(group, batched=True, batch_size=2000, remove_columns=["ids"], num_proc=8)
 
 
+def sha256(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def provenance(args, cache: Path) -> dict:
+    """What a rerun needs to reproduce the data: corpus and tokenizer hashes, versions."""
+    import datasets, peft, torch, transformers
+    return {"corpus_sha256": sha256(Path(args.corpus)), "tokenizer_sha256": sha256(Path(args.model, "tokenizer.json")),
+            "block_cache": str(cache), "versions": {"transformers": transformers.__version__, "peft": peft.__version__,
+                                                     "torch": torch.__version__, "datasets": datasets.__version__}}
+
+
 def last_complete_checkpoint(out: str) -> str | None:
     """Newest checkpoint that was fully written. A run killed while saving
     leaves a checkpoint folder without trainer_state.json; resuming from it
@@ -96,6 +116,9 @@ def main(argv=None) -> int:
     ap.add_argument("--max-steps", type=int, default=-1, help="stop after N optimizer steps (preflight)")
     ap.add_argument("--limit-docs", type=int, default=0, help="only the first N training articles (tests)")
     ap.add_argument("--save-steps", type=int, default=100)
+    ap.add_argument("--seed", type=int, default=42, help="block order (our own permutation, logged)")
+    ap.add_argument("--keep-steps", type=int, nargs="*", default=[],
+                    help="also save the adapter (and the held-out loss) at these steps, kept as <out>/step-N")
     args = ap.parse_args(argv)
 
     t0 = time.time()
@@ -115,6 +138,13 @@ def main(argv=None) -> int:
     print(f"blocks of {args.block}: train {len(train_ds)} ({len(train_ds) * args.block / 1e6:.1f}M tokens), "
           f"held-out {len(held_ds)}; prepared in {time.time() - t0:.0f}s", flush=True)
 
+    # Our own, logged block order (2026-10-10): with the Trainer's internal shuffle it was not
+    # recorded which half of the blocks C1 saw. Now the permutation is ours, the Trainer reads
+    # sequentially, and run.json/blocks_order.json say exactly which blocks were trained.
+    order = list(range(len(train_ds)))
+    random.Random(args.seed).shuffle(order)
+    train_ds = train_ds.select(order)
+
     model = load_model(args.model, four_bit=False)
     model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.05,
                                              target_modules=TARGETS_ALL, task_type="CAUSAL_LM"))
@@ -128,8 +158,23 @@ def main(argv=None) -> int:
         save_steps=args.save_steps, save_total_limit=2, bf16=True, gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False}, report_to=[], seed=42,
         remove_unused_columns=False)
-    trainer = Trainer(model=model, args=cfg, train_dataset=train_ds, eval_dataset=held_ds,
+    class InOrder(Trainer):
+        def _get_train_sampler(self, *a, **k):
+            return SequentialSampler(self.train_dataset)
+    trainer = InOrder(model=model, args=cfg, train_dataset=train_ds, eval_dataset=held_ds,
                       data_collator=DataCollatorForLanguageModeling(tok, mlm=False))
+
+    class Keep(TrainerCallback):  # e.g. C2 at C1's 650 steps: same steps, more data still ahead
+        def on_step_end(self, a, state, control, **kw):
+            if state.global_step in args.keep_steps and not Path(args.out, f"step-{state.global_step}").exists():
+                d = Path(args.out, f"step-{state.global_step}")
+                trainer.model.save_pretrained(str(d))
+                loss = trainer.evaluate()["eval_loss"]
+                (d / "held_out.json").write_text(json.dumps({"step": state.global_step, "held_out_loss": loss,
+                                                             "held_out_ppl": math.exp(loss)}))
+                print(f"kept step {state.global_step}: held-out loss {loss:.4f}", flush=True)
+    if args.keep_steps:
+        trainer.add_callback(Keep())
     last = last_complete_checkpoint(args.out)
     if last:
         print(f"resuming from {last}", flush=True)
@@ -144,6 +189,12 @@ def main(argv=None) -> int:
            "sec_per_step": round(tr.metrics["train_runtime"] / max(1, trainer.state.global_step), 2),
            "steps_per_epoch": math.ceil(len(train_ds) / (args.batch * args.accum)),
            "minutes": round((time.time() - t0) / 60, 1)}
+    seen = min(len(order), trainer.state.global_step * args.batch * args.accum)
+    res |= {"blocks_seen": seen, "tokens_seen": seen * args.block,
+            "held_out_curve": [[h["step"], round(h["eval_loss"], 4)] for h in trainer.state.log_history if "eval_loss" in h],
+            "provenance": provenance(args, cache)}
+    Path(args.out, "blocks_order.json").write_text(json.dumps({"seed": args.seed, "blocks_seen": seen,
+                                                               "order": order}))
     Path(args.out, "run.json").write_text(json.dumps(res, indent=2))
     print(json.dumps(res), flush=True)
     return 0
