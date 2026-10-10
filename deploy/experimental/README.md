@@ -8,7 +8,7 @@ environment and links to the regular AI assistant.
 Cloudflare tunnel  experimental.ongiini.ai → 127.0.0.1:8447
 ongiini-experimental-web   nginx: page + /v1/chat, /v1/chat/clear only
 ongiini-experimental       backend (webhook image), ./data-experimental, no stats loop / alerts / learn
-ongiini-eval-experimental  vLLM 0.31: Gemma 4 12B + adapter "ongiini-experimental", 127.0.0.1:8201
+ongiini-eval-experimental  vLLM 0.31: Gemma 4 12B + adapter "ongiini-experimental", docker bridge :8201
 ```
 
 It needs ~36 GB of GPU memory, so it never runs next to training: the memory brake

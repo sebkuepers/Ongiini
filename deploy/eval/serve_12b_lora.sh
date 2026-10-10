@@ -22,9 +22,10 @@ for spec in "$@"; do
   mods+=("$name=/adapters/$name")
 done
 NAME=${EVAL_NAME:-ongiini-eval-vllm12b} PORT=${EVAL_PORT:-8200}
+BIND=${EVAL_BIND:-127.0.0.1}  # experimental.ongiini.ai: the docker bridge, so containers (not the LAN) reach it
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" --restart "${EVAL_RESTART:-no}" --gpus all --ipc host --shm-size 16g \
-  -p 127.0.0.1:$PORT:8000 \
+  -p "$BIND:$PORT:8000" \
   -v "$MODEL_DIR:/models/gemma-4-12b:ro" -v "$PWD/$TEMPLATE:/templates/chat.jinja:ro" "${mounts[@]}" \
   --entrypoint vllm "$IMAGE" serve /models/gemma-4-12b \
   --model-impl "${EVAL_MODEL_IMPL:-auto}" \
@@ -38,7 +39,7 @@ docker run -d --name "$NAME" --restart "${EVAL_RESTART:-no}" --gpus all --ipc ho
   --enable-lora --max-lora-rank 64 --max-loras 2 --lora-modules "${mods[@]}"
 echo "waiting for :$PORT"
 for _ in $(seq 1 90); do
-  curl -sf -m 5 localhost:$PORT/v1/models >/dev/null && { echo "ready"; curl -s localhost:$PORT/v1/models | python3 -c "import json,sys; print([m['id'] for m in json.load(sys.stdin)['data']])"; exit 0; }
+  curl -sf -m 5 "$BIND:$PORT/v1/models" >/dev/null && { echo "ready"; curl -s "$BIND:$PORT/v1/models" | python3 -c "import json,sys; print([m['id'] for m in json.load(sys.stdin)['data']])"; exit 0; }
   docker ps -q -f name=^$NAME$ | grep -q . || { echo "container exited"; docker logs --tail 30 "$NAME" 2>&1; exit 1; }
   sleep 10
 done
