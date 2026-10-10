@@ -15,6 +15,7 @@ set -u -o pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 IMG=ongiini-train:latest
 SUF=12b
+BF16_BASE="--bf16-base"; FOUR_BIT=""  # 12B defaults until use_model(); set -u killed the TINY retention without them (2026-10-10)
 MODEL=/models/gemma-4-12b-it-bf16
 D=data/private/corpus/osheng_v1
 TINY=${TINY:-0}
