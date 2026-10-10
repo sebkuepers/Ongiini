@@ -50,7 +50,9 @@ for spec in "${mods[@]}"; do m=${spec%%=*}
     || { log "measurement for $m missing — stop"; notify "Regler-Test: Messung für $m fehlt — abgebrochen (Log: lora_scale.log)."; exit 1; }
 done
 log "score"
-"${C[@]}" python3 - "${mods[@]}" > "$OUT/summary.txt" 2>&1 <<'PY'
+# -i: the scoring script comes on stdin (without it the summary of 2026-10-10 was empty)
+docker run --rm -i --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus -v "$PWD:/work" -w /work \
+  ongiini-evalsuite:latest python3 - "${mods[@]}" > "$OUT/summary.txt" 2>&1 <<'PY'
 import json, sys
 sys.path.insert(0, "scripts"); sys.path.insert(0, "scripts/third_party")
 import compat_suite as C, tool_suite as T
