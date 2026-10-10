@@ -25,7 +25,13 @@ docker compose --profile experimental up -d --build experimental experimental-we
 Switching to a newer adapter: rerun the first two lines (the nginx serves the new
 page right away; the backend needs no restart).
 
-## One-time tunnel setup (sudo)
+## Status
+
+Live since 2026-10-10 21:19 (Namibian time) with Gemma 4 12B + T4b. The production oshiwambo
+skill is replaced here (`skills/oshiwambo/SKILL.md`, via `ONGIINI_SKILLS_OVERRIDE_DIR`): the
+trained model answers and translates in Oshiwambo instead of switching to English.
+
+## One-time tunnel setup (sudo) — done 2026-10-10 (backup: config.yml.bak-2026-10-10)
 
 Add before the catch-all rule in `/etc/cloudflared/config.yml`:
 
