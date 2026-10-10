@@ -27,6 +27,8 @@ import logging
 import re
 from pathlib import Path
 
+import os
+
 import yaml
 
 from owela import Skill, SkillRegistry
@@ -117,6 +119,25 @@ def load_skills(skills_dir: Path | None = None) -> SkillRegistry:
         except ValueError as exc:
             log.warning("failed to load skill %s: %s", skill_dir.name, exc)
             continue
+
+    # experimental.ongiini.ai runs a model trained on Oshiwambo: there the production
+    # oshiwambo skill ("you do not speak it, switch to English, never translate") would
+    # hide exactly what is being tested. ONGIINI_SKILLS_OVERRIDE_DIR (unset in production)
+    # holds <name>/SKILL.md files that replace the same-named default skills.
+    override = os.environ.get("ONGIINI_SKILLS_OVERRIDE_DIR", "")
+    if override and skills_dir is None and Path(override).is_dir():
+        by_name = {s.name: s for s in skills}
+        for skill_dir in sorted(Path(override).iterdir()):
+            md_path = skill_dir / "SKILL.md"
+            if skill_dir.is_dir() and md_path.exists():
+                try:
+                    sk = _parse_skill_file(md_path)
+                except ValueError as exc:
+                    log.warning("failed to load override skill %s: %s", skill_dir.name, exc)
+                    continue
+                by_name[sk.name] = sk
+                log.info("skill %s overridden from %s", sk.name, override)
+        skills = list(by_name.values())
 
     registry = SkillRegistry(skills)
     log.info(

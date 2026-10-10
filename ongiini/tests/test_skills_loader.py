@@ -231,3 +231,32 @@ def test_real_oshiwambo_skill_loads(tmp_path: Path) -> None:  # pragma: no cover
     assert "Ongiini" in osh.content
     assert "Kandi udite ko" in osh.content
     assert "Wa lele po" in osh.content
+
+
+# ── experimental.ongiini.ai: skill override directory ───────────────────
+
+def test_override_dir_replaces_same_named_default_skill(tmp_path, monkeypatch):
+    override = tmp_path / "override"
+    _write_skill(override, "oshiwambo", '''---
+name: oshiwambo
+description: Experimental model — reply in Oshiwambo.
+load: always
+---
+
+Reply in Oshiwambo.
+''')
+    monkeypatch.setenv("ONGIINI_SKILLS_OVERRIDE_DIR", str(override))
+    reg = load_skills()  # default dir + override
+    skill = reg.get("oshiwambo")
+    assert skill is not None and skill.content == "Reply in Oshiwambo."
+    assert "contribute" in reg.names()  # other default skills stay
+
+
+def test_override_ignored_without_env_or_with_explicit_dir(tmp_path, monkeypatch):
+    monkeypatch.delenv("ONGIINI_SKILLS_OVERRIDE_DIR", raising=False)
+    default = load_skills()
+    assert "do NOT speak it fluently" in default.get("oshiwambo").content
+    other = tmp_path / "skills"
+    _write_skill(other, "x", "---\nname: x\ndescription: d\n---\nbody\n")
+    monkeypatch.setenv("ONGIINI_SKILLS_OVERRIDE_DIR", str(tmp_path / "missing"))
+    assert load_skills(other).names() == ["x"]

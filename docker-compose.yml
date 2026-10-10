@@ -143,6 +143,8 @@ services:
       MEM0_TELEMETRY: "False"
       HF_HOME: /data/hf_cache
       SENTENCE_TRANSFORMERS_HOME: /data/hf_cache/sentence_transformers
+      # the production oshiwambo skill says "you do not speak it" — wrong for this model
+      ONGIINI_SKILLS_OVERRIDE_DIR: /app/skills-override
     user: "1000:1000"
     cap_drop: [ALL]
     security_opt:
@@ -152,6 +154,7 @@ services:
       - /tmp:size=64M,mode=1777
     volumes:
       - ./data-experimental:/data
+      - ./deploy/experimental/skills:/app/skills-override:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     mem_limit: 4g
