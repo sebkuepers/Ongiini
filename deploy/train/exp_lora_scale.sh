@@ -18,6 +18,11 @@ others=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' 
 mkdir -p "$OUT" "$SC"
 C=(docker run --rm --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus -e PYTHONUNBUFFERED=1
    -v "$PWD:/work" -w /work ongiini-evalsuite:latest)
+crun() {  # crun <container name> <cmd...>: like C, with a name (it must come before the image)
+  local n=$1; shift
+  docker run --rm --name "$n" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus \
+    -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest "$@"
+}
 mods=("t4b=data/private/lora/T4b_12b" "c1t4=data/private/lora/C1-T4_12b")
 for s in $SCALES; do
   d="$SC/C1-T4_s$s"
@@ -31,15 +36,19 @@ EVAL_GPU_MEM_UTIL=0.45 EVAL_MAX_SEQS=32 bash deploy/eval/serve_12b_lora.sh "${mo
 for spec in "${mods[@]}"; do
   m=${spec%%=*}
   log "measure $m"
-  [ -f "$OUT/report_$m.json" ] || "${C[@]}" --name "ongiini-eval-scale-chrf-$m" python3 scripts/exp_inference_tricks.py \
+  [ -f "$OUT/report_$m.json" ] || crun "ongiini-eval-scale-chrf-$m" python3 scripts/exp_inference_tricks.py \
     --model "$m" --conditions greedy --out "$OUT" --concurrency 32 2>&1 | grep -vE "HTTP Request|Warning" | tail -1
-  "${C[@]}" --name "ongiini-eval-scale-ifeval-$m" python3 scripts/compat_suite.py generate --model "$m" --label "scale_$m" \
+  crun "ongiini-eval-scale-ifeval-$m" python3 scripts/compat_suite.py generate --model "$m" --label "scale_$m" \
     --sections ifeval --concurrency 32 2>&1 | grep -vE "HTTP Request|Warning" | tail -1
-  "${C[@]}" --name "ongiini-eval-scale-tools-$m" python3 scripts/tool_suite.py generate --model "$m" --label "scale_$m" \
+  crun "ongiini-eval-scale-tools-$m" python3 scripts/tool_suite.py generate --model "$m" --label "scale_$m" \
     --concurrency 16 2>&1 | grep -vE "HTTP Request|Warning" | tail -1
 done
 docker logs --tail 200 ongiini-eval-vllm12b > "$OUT/vllm.log" 2>&1
 docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
+for spec in "${mods[@]}"; do m=${spec%%=*}
+  [ -f "$OUT/report_$m.json" ] && [ -s "data/private/compat/out_scale_$m.jsonl" ] && [ -s "data/private/compat/tools_scale_$m.jsonl" ] \
+    || { log "measurement for $m missing — stop"; notify "Regler-Test: Messung für $m fehlt — abgebrochen (Log: lora_scale.log)."; exit 1; }
+done
 log "score"
 "${C[@]}" python3 - "${mods[@]}" > "$OUT/summary.txt" 2>&1 <<'PY'
 import json, sys
