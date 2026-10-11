@@ -376,8 +376,10 @@ if [ "$TINY" = 1 ]; then  # tiny stand-ins
   # 40 rows at batch 2 = 20 steps, so a loss gets logged (every 10 steps) and trips the guard
   DIVERGENCE_LIMIT=0 DIVERGENCE_AFTER=0 SFT_LIMIT=40 SFT_BATCH="--batch 2 --accum 1" BF16_BASE="--bf16-base" \
     sft divtest "$T4H" 1 --lr 2e-4 2>&1 | grep -E "^DIVERGED|^RETRY" | head -4
-  [ ! -f "$LORA/divtest_12b/run.json" ] && ls -d "$LORA"/divtest_12b.diverged-lr0.0002 "$LORA"/divtest_12b.diverged-lr0.0001 \
-    >/dev/null || fail "automatic divergence retry did not behave"
+  # expected: the first attempt kept as .diverged-lr0.0002, the retry (lr 1e-4, forced to diverge
+  # again with no retries left) stays in divtest_12b without run.json
+  [ ! -f "$LORA/divtest_12b/run.json" ] && [ -d "$LORA/divtest_12b.diverged-lr0.0002" ] && [ -d "$LORA/divtest_12b" ] \
+    || fail "automatic divergence retry did not behave"
   log "TINY: forced divergence ok (retried at half lr, then failed as expected)"
 fi
 [ -s "$T4H" ] || fail "T4h mix missing: $T4H (round 5)"
