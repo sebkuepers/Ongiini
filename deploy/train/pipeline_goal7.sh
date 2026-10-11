@@ -351,6 +351,9 @@ use_model() {  # use_model 12b|31b: model, 4-bit flags, experiment dir, label se
   MODEL=/models/gemma-4-${SUF}-it-bf16
   if [ "$SUF" = 31b ]; then
     BF16_BASE=""; FOUR_BIT="--four-bit"; EXP=$EXP0/r31
+    # 31B in 4-bit at batch 4 x 1280 tokens left only 17 GB (preflight 2026-10-11, need >= 25):
+    # half the micro-batch, same effective batch of 16
+    SFT_BATCH="--batch 2 --accum 8 --group-by-length"
     LABELS="gemma-4-31b-H31"  # own scores.json in r31
     mkdir -p "$EXP/lora" "$EXP/retention"
     [ -e "$EXP/gpu" ] || ln -s ../gpu "$EXP/gpu"  # the watchdog watches $EXP0/gpu
