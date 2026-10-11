@@ -284,6 +284,7 @@ fi
 preflight_mem() {  # preflight_mem <tag> <file> <train_lora args...>: 20 steps on the 320 longest examples
   local tag=$1 file=$2; shift 2
   [ -f "$LORA/${tag}_12b/run.json" ] && return 0
+  [ "${SKIP_PREFLIGHT_MEM:-0}" = 1 ] && { log "preflight memory $tag skipped (SKIP_PREFLIGHT_MEM=1, numbers known)"; return 0; }
   log "preflight memory $tag"
   local P=$EXP/preflight PL=$LORA/preflight
   rm -rf "$P" "$PL"; mkdir -p "$P" "$PL"
