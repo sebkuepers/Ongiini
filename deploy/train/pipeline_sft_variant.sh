@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# SFT variant pipeline (2026-10-11): one parametrised pipeline for every "T4-recipe" experiment
-# instead of a copy per round. The variant comes from the environment:
-#   VARIANT_TAG        adapter/label tag, e.g. T4b1 (label gemma-4-12b-T4b1)
+# SFT variant pipeline (2026-10-11/12): one parametrised pipeline for every "T4-recipe" experiment,
+# on the 12B or (since the size probe H31 − H12 = +4.9 chrF) the 31B. From the environment:
+#   VARIANT_TAG        adapter/label tag, e.g. T4b1 (label gemma-4-<model>-<TAG>)
 #   VARIANT_EXTRA      train_lora.py args, e.g. "--targets all --rank 32 --alpha 32 --lr 1e-4 --max-len 1280"
 #   VARIANT_INIT       optional: adapter dir to continue from (--init-adapter); TINY uses a stand-in
 #   VARIANT_EPOCHS     default 1
@@ -10,16 +10,20 @@
 #   VARIANT_MODEL_DIR  optional: a different base model directory (variant M: Gemma 4 with the CPT
 #                      adapter merged in, scripts/merge_adapter.py); used for training, HF evals
 #                      and the eval vLLM; comparisons stay against gemma-4-12b-base
-# Stages (as in rounds 4-6): memory preflight, SFT (retry on divergence), benchmark, retention,
-# compat + tool suite (eval vLLM, one restart on errors), goal check, decoding test (MBR).
-# A3: VARIANT_TAG=T4b1 VARIANT_INIT=data/private/lora/T4b_12b VARIANT_EXTRA="--lr 5e-5 --max-len 1280"
-# A4: VARIANT_TAG=T4k60 VARIANT_BUILD_ARGS="--bt-n 60000 --vocab-n 3000" VARIANT_EXTRA="--targets all --rank 32 --alpha 32 --lr 1e-4 --max-len 1280"
-# Shared helpers copied from pipeline_goal6.sh (round history in the earlier pipelines' headers).
+#   VARIANT_MODEL      12b (default) or 31b: the 31B trains and is evaluated in 4-bit, micro-batch
+#                      2 x accum 8 (preflight 2026-10-11: 66 GB free while training), results in
+#                      experiments/r31; compat/tool/decoding stages need a 31B eval vLLM and are
+#                      skipped for now (benchmark + retention run).
+# Stages: memory preflight, SFT (retry on divergence), benchmark, retention, compat + tool suite
+# (eval vLLM, one restart on errors), goal check, decoding test (MBR).
+# Shared helpers copied from pipeline_goal7.sh (round history in the earlier pipelines' headers).
 #   setsid nohup bash deploy/train/pipeline_sft_variant.sh >> data/private/experiments/pipeline_sft_variant.log 2>&1 < /dev/null &
 # TINY=1 runs it end-to-end with the tiny model.
 set -u -o pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 IMG=ongiini-train:latest
+SUF=12b
+BF16_BASE="--bf16-base"; FOUR_BIT=""  # 12B defaults until use_model(); set -u killed the TINY retention without them (2026-10-10)
 MODEL=/models/gemma-4-12b-it-bf16
 D=data/private/corpus/osheng_v1
 TINY=${TINY:-0}
@@ -57,7 +61,7 @@ else
   CPT_ARGS="${CPT_ARGS:-}"  # e.g. "--max-steps 650" for half an epoch (2026-10-04: 58.7 s/step, full epoch 21 h)
   PRE_CPT_ARGS="--max-steps 20 --save-steps 1000"
 fi
-LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4 gemma-4-12b-C2-T4 gemma-4-12b-${VARIANT_TAG}"
+LABELS="gemma-4-12b-A gemma-4-12b-B10k gemma-4-12b-B50k gemma-4-12b-B50kG gemma-4-12b-B10kR gemma-4-12b-C1-B10kR gemma-4-12b-B10kR-r64 gemma-4-12b-C2r gemma-4-12b-B10kR-r64rep gemma-4-12b-G64t gemma-4-12b-G64trep gemma-4-12b-G16t2 gemma-4-12b-T1 gemma-4-12b-T2 gemma-4-12b-T3 gemma-4-12b-T4 gemma-4-12b-T4h gemma-4-12b-T4b gemma-4-12b-T4bh gemma-4-12b-C1-T4"
 mkdir -p "$EXP/lora" "$EXP/gpu" "$EXP/retention" "$LORA"
 log() { echo "$(date '+%F %T') $*"; }
 notify() { if [ "$TINY" = 1 ]; then echo "notify (tiny, not sent): $*"; else bash deploy/train/notify.sh "$*" | tail -1; fi; }
@@ -97,8 +101,8 @@ memwatch() {  # memwatch <container> <out file>: lowest MemAvailable (GB) while 
 
 sft() {  # sft <tag> <train file> <epochs> <extra train_lora args...>
   local tag=$1 file=$2 epochs=$3; shift 3
-  run "ongiini-train-${tag//\//-}" yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
-    --train "$file" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "$LORA/${tag}_12b" \
+  run "ongiini-train-${tag//\//-}" yes python3 scripts/train_lora.py --model "$MODEL" $BF16_BASE \
+    --train "$file" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "$LORA/${tag}_${SUF}" \
     --epochs "$epochs" ${SFT_BATCH:---batch 8 --accum 2} --chat-format "${SFT_FORMAT:-rendered}" --limit "$SFT_LIMIT" "$@"
 }
 retention() {  # retention <label> [adapter dir]
@@ -106,11 +110,11 @@ retention() {  # retention <label> [adapter dir]
   [ -f "$EXP/retention/$label.json" ] && return 0
   log "retention $label"
   local a=(); [ -n "$adapter" ] && a=(--adapter "$adapter")
-  run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" "${a[@]}" --label "$label" $RET_QUICK \
+  run "ongiini-ret-$label" yes python3 scripts/retention_suite.py --model "$MODEL" "${a[@]}" --label "$label" $RET_QUICK $FOUR_BIT \
     2>&1 | grep -v "^Loading" | tail -2
   [ -f "$EXP/retention/$label.json" ] || fail "retention $label wrote no result"
   if [ -n "$adapter" ]; then
-    run ongiini-judge no python3 scripts/retention_judge.py gemma-4-12b-base "$label" $JUDGE_LIMIT 2>&1 | tail -1
+    run ongiini-judge no python3 scripts/retention_judge.py "gemma-4-${SUF}-base" "$label" $JUDGE_LIMIT 2>&1 | tail -1
     check retention "$label" --judged
   else
     check retention "$label"
@@ -125,7 +129,7 @@ S = json.load(open(f"{exp}/lora/scores.json"))
 s = S[label]
 def nd(l):
     return S[l]["oshindonga_dev"]["chrf++"] if l in S else None
-others = ", ".join(f"{l.replace('gemma-4-12b-', '')} {nd(l)}" for l in S if l != label and nd(l) is not None)
+others = ", ".join(f"{l.split('-', 3)[-1]} {nd(l)}" for l in S if l != label and nd(l) is not None)
 lines = [f"Ndonga {s['oshindonga_dev']['chrf++']} (blind {s['oshindonga_blind']['chrf++']}, "
          f"+{s['oshindonga_dev']['delta_vs_base']} vs Basis). Zum Vergleich: {others}.",
          f"Kwanyama {s['oshikwanyama_dev']['chrf++']}; Drift Kwanyama-Ausgaben vs Ndonga-Referenz "
@@ -145,16 +149,16 @@ evaluate() {  # evaluate <tag> <adapter dir>: benchmark, scores, checks, retenti
   local tag=$1 out=$2
   log "benchmark $tag"
   run "ongiini-eval-$tag" yes python3 scripts/eval_lora_generate.py --model "$MODEL" \
-    --adapter "$out" --label "gemma-4-12b-$tag" --out "$EXP/lora" --batch 16 $EVAL_LIMIT 2>&1 | grep -v "^Loading" | tail -1 \
+    --adapter "$out" --label "gemma-4-${SUF}-$tag" --out "$EXP/lora" --batch 16 $EVAL_LIMIT $FOUR_BIT 2>&1 | grep -v "^Loading" | tail -1 \
     || fail "benchmark $tag"
-  run ongiini-score no python3 scripts/score_lora_runs.py --base gemma-4-12b-base $LABELS 2>&1 | tail -10
-  check bench "gemma-4-12b-$tag"
-  retention "gemma-4-12b-$tag" "$out"
-  notify "$tag fertig: $(summary "gemma-4-12b-$tag" 2>&1)"
+  run ongiini-score no python3 scripts/score_lora_runs.py --base "gemma-4-${SUF}-base" $LABELS 2>&1 | tail -10
+  check bench "gemma-4-${SUF}-$tag"
+  retention "gemma-4-${SUF}-$tag" "$out"
+  notify "$tag fertig: $(summary "gemma-4-${SUF}-$tag" 2>&1)"
 }
 sft_stage() {  # sft_stage <tag> <train file> <epochs> <extra train_lora args...>
   local tag=$1 file=$2 epochs=$3; shift 3
-  local out="$LORA/${tag}_12b"
+  local out="$LORA/${tag}_${SUF}"
   if [ ! -f "$out/run.json" ]; then
     log "train $tag ($(wc -l < "$file") examples, $epochs epochs, $*)"
     notify "Training $tag startet."
@@ -254,7 +258,7 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
 }
 
 : "${VARIANT_TAG:?VARIANT_TAG missing}" "${VARIANT_EXTRA:?VARIANT_EXTRA missing}"
-log "sft variant $VARIANT_TAG start (TINY=$TINY): extra=[$VARIANT_EXTRA] init=[${VARIANT_INIT:-}] build=[${VARIANT_BUILD_ARGS:-}]"
+log "sft variant $VARIANT_TAG start (TINY=$TINY, model ${VARIANT_MODEL:-12b}): extra=[$VARIANT_EXTRA] init=[${VARIANT_INIT:-}] build=[${VARIANT_BUILD_ARGS:-}]"
 if [ "$TINY" != 1 ]; then
   others=$(docker ps --format '{{.Names}}' | grep -E '^ongiini-(train|eval|ret)-' | tr '\n' ' ')
   [ -z "$others" ] || fail "other GPU jobs still running: $others"
@@ -278,7 +282,7 @@ fi
 [ -s "$REPLAY2" ] || fail "replay v2 missing: $REPLAY2"
 preflight_mem() {  # preflight_mem <tag> <file> <train_lora args...>: 20 steps on the 320 longest examples
   local tag=$1 file=$2; shift 2
-  [ -f "$LORA/${tag}_12b/run.json" ] && return 0
+  [ -f "$LORA/${tag}_${SUF}/run.json" ] && return 0
   [ "${SKIP_PREFLIGHT_MEM:-0}" = 1 ] && { log "preflight memory $tag skipped (SKIP_PREFLIGHT_MEM=1, numbers known)"; return 0; }
   log "preflight memory $tag"
   local P=$EXP/preflight PL=$LORA/preflight
@@ -292,7 +296,7 @@ rows.sort(key=lambda l: -size(json.loads(l)))
 open('$P/longest.jsonl', 'w').writelines(rows[:320])"
   memwatch "ongiini-train-preflight-mem" "$P/mem" &
   sft preflight/mem "$P/longest.jsonl" 1 --limit 320 "$@" 2>&1 | tr '\r' '\n' | grep -E 'DIVERGED|Error|Traceback' | cut -c1-200 || true
-  [ -f "$PL/mem_12b/run.json" ] || fail "preflight memory $tag"
+  [ -f "$PL/mem_${SUF}/run.json" ] || fail "preflight memory $tag"
   local mem memt; mem=$(cat "$P/mem" 2>/dev/null || echo 0); memt=$(cat "$P/mem.train" 2>/dev/null || echo 999)
   [ "$memt" = 999 ] && memt=$mem
   log "preflight memory $tag: min available ${mem} GB (during training steps ${memt} GB)"
@@ -302,12 +306,12 @@ open('$P/longest.jsonl', 'w').writelines(rows[:320])"
 }
 goal_check() {  # goal_check <tag>: report against the round-1 criteria (no stop: round 4 aims at > 50)
   local out
-  if out=$(ONGIINI_EXP_DIR="$EXP" python3 scripts/check_stage.py goal "gemma-4-12b-$1"); then
+  if out=$(ONGIINI_EXP_DIR="$EXP" python3 scripts/check_stage.py goal "gemma-4-${SUF}-$1"); then
     log "round-1 goal criteria met by $1"
-    notify "$1: alle Kriterien erfüllt (chrF >= 42, kein Vergessen). $(summary "gemma-4-12b-$1" 2>&1)"
+    notify "$1: alle Kriterien erfüllt (chrF >= 42, kein Vergessen). $(summary "gemma-4-${SUF}-$1" 2>&1)"
   else
     log "round-1 goal criteria not met by $1: $out"
-    notify "$1 verfehlt Kriterien: ${out#*FAILED: }. $(summary "gemma-4-12b-$1" 2>&1)"
+    notify "$1 verfehlt Kriterien: ${out#*FAILED: }. $(summary "gemma-4-${SUF}-$1" 2>&1)"
   fi
 }
 
@@ -360,28 +364,34 @@ print(f\"Tool-Test {tb['all']}/{tt['all']} % (Websuche {tb.get('web_search')}/{t
 }
 
 
-decode_test() {  # decode_test <tag>: MBR / retrieved few-shot through the eval vLLM, Ndonga dev
-  [ "$COMPAT" = 1 ] || { log "decoding test skipped (tiny)"; return 0; }
-  local tag=$1 lc; lc=$(echo "$1" | tr 'A-Z' 'a-z')
-  local R="$EXP/inference_tricks/report_$lc.json"
-  [ -f "$R" ] && return 0
-  [ -f "$LORA/${tag}_12b/run.json" ] || { log "decoding test $tag: no adapter"; return 0; }
-  log "decoding test $tag"
-  EVAL_GPU_MEM_UTIL=0.45 EVAL_MAX_SEQS=32 bash deploy/eval/serve_12b_lora.sh "$lc=$LORA/${tag}_12b" || fail "eval vLLM for $tag"
-  # client container: host network (vLLM on 127.0.0.1:8200), evalsuite image (sacrebleu, openai)
-  docker run --rm --name "ongiini-eval-decode-$lc" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus \
-    -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest \
-    python3 scripts/exp_inference_tricks.py --model "$lc" --out "$EXP/inference_tricks" --concurrency 32 2>&1 \
-    | grep --line-buffered -vE "HTTP Request|Warning" | tail -6
-  docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
-  [ -f "$R" ] || fail "decoding report $tag missing"
-  notify "Decoding-Test $tag (Ndonga dev): $(python3 -c "
-import json; r=json.load(open('$R')); print(', '.join(f\"{k} {v['chrf']}\" + (f\" ({v['delta_vs_greedy']:+}, CI {v['ci95']})\" if 'delta_vs_greedy' in v else '') for k, v in r.items() if isinstance(v, dict)))")"
+
+
+
+use_model() {  # use_model 12b|31b: model, 4-bit flags, experiment dir, label set
+  SUF=$1
+  if [ "$TINY" = 1 ]; then
+    MODEL_DIR="$PWD/data/private/models-tiny/gemma4-tiny"
+    [ "$SUF" = 31b ] && MODEL_DIR="$PWD/data/private/models-tiny/gemma4-31b-tiny"
+  else
+    MODEL_DIR="$HOME/models/gemma-4-${SUF}-it-bf16"
+  fi
+  MODEL=/models/gemma-4-${SUF}-it-bf16
+  if [ "$SUF" = 31b ]; then
+    BF16_BASE=""; FOUR_BIT="--four-bit"; EXP=$EXP0/r31
+    # 31B in 4-bit at batch 4 x 1280 tokens left only 17 GB (preflight 2026-10-11, need >= 25):
+    # half the micro-batch, same effective batch of 16
+    SFT_BATCH="--batch 2 --accum 8 --group-by-length"
+    LABELS="gemma-4-31b-H31 gemma-4-31b-${VARIANT_TAG}"  # own scores.json in r31
+    mkdir -p "$EXP/lora" "$EXP/retention"
+    [ -e "$EXP/gpu" ] || ln -s ../gpu "$EXP/gpu"  # the watchdog watches $EXP0/gpu
+  else
+    BF16_BASE="--bf16-base"; FOUR_BIT=""; EXP=$EXP0
+    LABELS="$LABELS0 gemma-4-12b-${VARIANT_TAG}"  # score_lora_runs rewrites scores.json: keep every 12B run
+  fi
 }
 
-
-
-notify "Variante $VARIANT_TAG startet: $VARIANT_EXTRA${VARIANT_INIT:+ (weiter von $(basename "$VARIANT_INIT"))}${VARIANT_BUILD_ARGS:+ (Mix: $VARIANT_BUILD_ARGS)}. Danach alle Tests."
+EXP0=$EXP LABELS0=$LABELS
+notify "Variante $VARIANT_TAG (${VARIANT_MODEL:-12b}) startet: $VARIANT_EXTRA${VARIANT_INIT:+ (weiter von $(basename "$VARIANT_INIT"))}${VARIANT_BUILD_ARGS:+ (Mix: $VARIANT_BUILD_ARGS)}. Danach alle Tests."
 T4F="$OUTD/sft_T4_train.jsonl"
 SC="$OUTD/bt_scores_A.jsonl"
 INIT=${VARIANT_INIT:-}
@@ -397,6 +407,7 @@ if [ "$TINY" = 1 ]; then  # tiny stand-ins: tool replay, T4 mix, an init adapter
     INIT="$LORA/tinyinit_12b"
   fi
 fi
+use_model "${VARIANT_MODEL:-12b}"
 if [ "$TINY" != 1 ] && [ -n "${VARIANT_MODEL_DIR:-}" ]; then
   [ -f "$VARIANT_MODEL_DIR/config.json" ] || fail "VARIANT_MODEL_DIR has no config.json: $VARIANT_MODEL_DIR"
   MODEL_DIR=$(cd "$VARIANT_MODEL_DIR" && pwd); MODEL="/models/$(basename "$MODEL_DIR")"
@@ -411,14 +422,18 @@ if [ -n "$BUILD_ARGS" ]; then
 fi
 [ -s "$TRAIN" ] || fail "training file missing: $TRAIN"
 log "training file $TRAIN ($(wc -l < "$TRAIN") rows)"
-SFT_FORMAT=rendered; SFT_BATCH=$SFT_BATCH_T4
+SFT_FORMAT=rendered; [ "$SUF" = 12b ] && SFT_BATCH=$SFT_BATCH_T4
 extra=($VARIANT_EXTRA)
 [ -n "$INIT" ] && extra+=(--init-adapter "$INIT")
 preflight_mem "$VARIANT_TAG" "$TRAIN" "${extra[@]}"
 if sft_stage "$VARIANT_TAG" "$TRAIN" "${VARIANT_EPOCHS:-1}" "${extra[@]}"; then
-  compat_stage "$VARIANT_TAG"
-  goal_check "$VARIANT_TAG" || true
-  decode_test "$VARIANT_TAG"
+  if [ "$SUF" = 12b ]; then
+    compat_stage "$VARIANT_TAG"
+    goal_check "$VARIANT_TAG" || true
+    decode_test "$VARIANT_TAG"
+  else
+    log "compat / tool / decoding stages skipped on $SUF (no 31B eval vLLM yet) — benchmark + retention done"
+  fi
 fi
 log "pipeline done"
 notify "Variante $VARIANT_TAG fertig. Ergebnisse im Register."
