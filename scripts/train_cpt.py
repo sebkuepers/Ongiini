@@ -132,6 +132,8 @@ def main(argv=None) -> int:
                     help="train on this random fraction of the Oshiwambo blocks (C1 saw ~0.5 via --max-steps)")
     ap.add_argument("--kua-weight", type=int, default=1, help="repeat mostly-Oshikwanyama articles this many times")
     ap.add_argument("--replay-corpus", default="", help="English replay jsonl; also the source of the English held-out")
+    ap.add_argument("--four-bit", action="store_true",
+                    help="4-bit base (QLoRA): the 31B in bf16 (62.5 GB) does not fit next to production")
     ap.add_argument("--replay-share", type=float, default=0.0,
                     help="share of replay blocks in the training sequence (0.25 = one in four)")
     ap.add_argument("--epochs", type=float, default=1)
@@ -201,7 +203,11 @@ def main(argv=None) -> int:
           f"+ {len(rep_sel)} replay blocks ({len(rep_sel) / max(1, len(seq)):.1%}); English held-out {len(en_held) if en_held is not None else 0}",
           flush=True)
 
-    model = load_model(args.model, four_bit=False)
+    model = load_model(args.model, four_bit=args.four_bit)
+    if args.four_bit:
+        from peft import prepare_model_for_kbit_training
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True,
+                                                gradient_checkpointing_kwargs={"use_reentrant": False})
     model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=args.alpha or 2 * args.rank, lora_dropout=0.05,
                                              target_modules=TARGETS_ALL, task_type="CAUSAL_LM"))
     model.print_trainable_parameters()
