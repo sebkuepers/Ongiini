@@ -28,6 +28,7 @@ TINY=${TINY:-0}
 # (T1 41/42, T2 40/40, T4b 44/44, C1-T4 44/44, T4b1 44/44, C1 34/33), so the old 25 GB rule
 # (brake 12 GB + 13 GB guess) was over-conservative and cost the first H31 run (min 17 GB).
 PREFLIGHT_MIN_GB=${PREFLIGHT_MIN_GB:-15}
+LOAD_MIN_GB=${LOAD_MIN_GB:-14}  # the loading transient only has to stay clear of the 12 GB brake
 if [ "$TINY" = 1 ]; then
   MODEL_DIR="$PWD/data/private/models-tiny/gemma4-tiny"
   EXP=data/private/experiments/tinytest
@@ -79,12 +80,18 @@ check() {
   elif [ "$TINY" = 1 ]; then log "TINY (not fatal): $out"
   else fail "$out"; fi
 }
-memwatch() {  # memwatch <container> <out file>: lowest MemAvailable (GB) while the container runs
-  local c=$1 f=$2 m=999 a
+memwatch() {  # memwatch <container> <out file>: lowest MemAvailable (GB) while the container runs;
+  # <out file>.train = lowest once the GPU is busy (>= 50 %), i.e. during training steps. The 31B
+  # preflight (2026-10-11) bottomed at 18 GB while LOADING the checkpoint (RSS 57 GB) and then
+  # trained with 66 GB free: the load is a transient, the training minimum is what matters.
+  local c=$1 f=$2 m=999 mt=999 a g started=0
   sleep 5
   while docker ps -q -f "name=^$c\$" | grep -q .; do
     a=$(awk '/^MemAvailable:/{printf "%d", $2/1048576}' /proc/meminfo); [ "$a" -lt "$m" ] && m=$a
-    echo "$m" > "$f"; sleep 3
+    g=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+    [ "${g:-0}" -ge 50 ] 2>/dev/null && started=1
+    if [ "$started" = 1 ] && [ "$a" -lt "$mt" ]; then mt=$a; fi
+    echo "$m" > "$f"; echo "$mt" > "$f.train"; sleep 3
   done
 }
 
@@ -227,7 +234,10 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
   local mem eta; mem=$(cat "$P/mem_cpt" 2>/dev/null || echo 0)
   eta=$(python3 -c "import json;r=json.load(open('$PL/cpt/run.json'));print(round(r['sec_per_step']*r['steps_per_epoch']/3600,1))")
   log "preflight CPT: min available memory ${mem} GB, $(( $(date +%s) - t0 )) s incl. data prep and load, projected CPT epoch ${eta} h"
-  if [ "$TINY" != 1 ] && [ "$mem" -lt "$PREFLIGHT_MIN_GB" ]; then fail "CPT needs too much memory: min ${mem} GB available (need >= $PREFLIGHT_MIN_GB)"; fi
+  local memt; memt=$(cat "$P/mem_cpt.train" 2>/dev/null || echo 999); [ "$memt" = 999 ] && memt=$mem
+  log "preflight CPT: min available during training steps ${memt} GB"
+  if [ "$TINY" != 1 ] && { [ "$memt" -lt "$PREFLIGHT_MIN_GB" ] || [ "$mem" -lt "$LOAD_MIN_GB" ]; }; then
+    fail "CPT needs too much memory: min ${memt} GB during training (need >= $PREFLIGHT_MIN_GB), ${mem} GB while loading (need >= $LOAD_MIN_GB)"; fi
   notify "CPT-Vorabtest: min. ${mem} GB Speicher frei, CPT-Dauer hochgerechnet ${eta} h."
   log "preflight SFT on top of CPT"
   memwatch ongiini-train-pre-sft "$P/mem_sft" &
@@ -282,9 +292,11 @@ open('$P/longest.jsonl', 'w').writelines(rows[:320])"
   memwatch "ongiini-train-preflight-mem" "$P/mem" &
   sft preflight/mem "$P/longest.jsonl" 1 --limit 320 "$@" 2>&1 | tr '\r' '\n' | grep -E 'DIVERGED|Error|Traceback' | cut -c1-200 || true
   [ -f "$PL/mem_12b/run.json" ] || fail "preflight memory $tag"
-  local mem; mem=$(cat "$P/mem" 2>/dev/null || echo 0)
-  log "preflight memory $tag: min available ${mem} GB"
-  if [ "$TINY" != 1 ] && [ "$mem" -lt "$PREFLIGHT_MIN_GB" ]; then fail "$tag needs too much memory: min ${mem} GB available (need >= $PREFLIGHT_MIN_GB)"; fi
+  local mem memt; mem=$(cat "$P/mem" 2>/dev/null || echo 0); memt=$(cat "$P/mem.train" 2>/dev/null || echo 999)
+  [ "$memt" = 999 ] && memt=$mem
+  log "preflight memory $tag: min available ${mem} GB (during training steps ${memt} GB)"
+  if [ "$TINY" != 1 ] && { [ "$memt" -lt "$PREFLIGHT_MIN_GB" ] || [ "$mem" -lt "$LOAD_MIN_GB" ]; }; then
+    fail "$tag needs too much memory: min ${memt} GB during training (need >= $PREFLIGHT_MIN_GB), ${mem} GB while loading (need >= $LOAD_MIN_GB)"; fi
   rm -rf "$P" "$PL"
 }
 goal_check() {  # goal_check <tag>: report against the round-1 criteria (no stop: round 4 aims at > 50)
