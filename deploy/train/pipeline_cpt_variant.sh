@@ -225,11 +225,16 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
   if [ "$TINY" != 1 ] && [ "$mem" -lt 25 ]; then fail "CPT needs too much memory: min ${mem} GB available (need >= 25)"; fi
   notify "CPT-Vorabtest: min. ${mem} GB Speicher frei, CPT-Dauer hochgerechnet ${eta} h."
   log "preflight SFT on top of CPT"
+  # variant CB: the CPT preflight ran on the pretrained base; the SFT loads that adapter onto
+  # the instruct model, exactly as the real stages will
+  local cpt_model_dir=$MODEL_DIR cpt_model=$MODEL
+  if [ -n "${PRE_SFT_MODEL_DIR:-}" ]; then MODEL_DIR=$PRE_SFT_MODEL_DIR; MODEL=$PRE_SFT_MODEL; fi
   memwatch ongiini-train-pre-sft "$P/mem_sft" &
   run ongiini-train-pre-sft yes python3 scripts/train_lora.py --model "$MODEL" --bf16-base \
     --train "$D/sft_B10k_train.jsonl" --val "$D/sft_A_parallel_ndo_val.jsonl" --out "$PL/sft" \
     --epochs 1 --batch 8 --accum 2 --chat-format rendered --limit 320 --init-adapter "$PL/cpt" 2>&1 \
     | tr '\r' '\n' | grep -E '^loss on|^input:|^\{"eval_loss|Error|Traceback' | cut -c1-300 || true
+  MODEL_DIR=$cpt_model_dir; MODEL=$cpt_model
   [ -f "$PL/sft/run.json" ] || fail "preflight SFT on CPT adapter"
   log "preflight SFT on CPT: min available memory $(cat "$P/mem_sft" 2>/dev/null) GB"
   grep -q '"r": 64' "$PL/sft/adapter_config.json" || fail "preflight SFT adapter is not the r64 CPT adapter"
@@ -380,6 +385,7 @@ if [ ! -f "$CPT/run.json" ]; then
   if [ "$TINY" != 1 ] && [ -n "${CPT_MODEL_DIR:-}" ]; then
     [ -f "$CPT_MODEL_DIR/config.json" ] || fail "CPT_MODEL_DIR has no config.json: $CPT_MODEL_DIR"
     MODEL_DIR=$(cd "$CPT_MODEL_DIR" && pwd); MODEL="/models/$(basename "$MODEL_DIR")"
+    PRE_SFT_MODEL_DIR=$IT_MODEL_DIR; PRE_SFT_MODEL=$IT_MODEL
     log "CPT stage on base model $MODEL_DIR (adapter is applied to $IT_MODEL_DIR afterwards)"
   fi
   preflight_cpt
