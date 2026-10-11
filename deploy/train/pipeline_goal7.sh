@@ -19,6 +19,11 @@ BF16_BASE="--bf16-base"; FOUR_BIT=""  # 12B defaults until use_model(); set -u k
 MODEL=/models/gemma-4-12b-it-bf16
 D=data/private/corpus/osheng_v1
 TINY=${TINY:-0}
+# Memory preflight threshold. Calibrated 2026-10-11 against every logged run: the preflight on
+# the 320 longest examples predicted the real run's minimum available memory within +-1 GB
+# (T1 41/42, T2 40/40, T4b 44/44, C1-T4 44/44, T4b1 44/44, C1 34/33), so the old 25 GB rule
+# (brake 12 GB + 13 GB guess) was over-conservative and cost the first H31 run (min 17 GB).
+PREFLIGHT_MIN_GB=${PREFLIGHT_MIN_GB:-15}
 if [ "$TINY" = 1 ]; then
   MODEL_DIR="$PWD/data/private/models-tiny/gemma4-tiny"
   EXP=data/private/experiments/tinytest
@@ -218,7 +223,7 @@ preflight_cpt() {  # before CPT: memory and speed at full size, then SFT continu
   local mem eta; mem=$(cat "$P/mem_cpt" 2>/dev/null || echo 0)
   eta=$(python3 -c "import json;r=json.load(open('$PL/cpt/run.json'));print(round(r['sec_per_step']*r['steps_per_epoch']/3600,1))")
   log "preflight CPT: min available memory ${mem} GB, $(( $(date +%s) - t0 )) s incl. data prep and load, projected CPT epoch ${eta} h"
-  if [ "$TINY" != 1 ] && [ "$mem" -lt 25 ]; then fail "CPT needs too much memory: min ${mem} GB available (need >= 25)"; fi
+  if [ "$TINY" != 1 ] && [ "$mem" -lt "$PREFLIGHT_MIN_GB" ]; then fail "CPT needs too much memory: min ${mem} GB available (need >= $PREFLIGHT_MIN_GB)"; fi
   notify "CPT-Vorabtest: min. ${mem} GB Speicher frei, CPT-Dauer hochgerechnet ${eta} h."
   log "preflight SFT on top of CPT"
   memwatch ongiini-train-pre-sft "$P/mem_sft" &
@@ -275,7 +280,7 @@ open('$P/longest.jsonl', 'w').writelines(rows[:320])"
   [ -f "$PL/mem_${SUF}/run.json" ] || fail "preflight memory $tag"
   local mem; mem=$(cat "$P/mem" 2>/dev/null || echo 0)
   log "preflight memory $tag: min available ${mem} GB"
-  if [ "$TINY" != 1 ] && [ "$mem" -lt 25 ]; then fail "$tag needs too much memory: min ${mem} GB available (need >= 25)"; fi
+  if [ "$TINY" != 1 ] && [ "$mem" -lt "$PREFLIGHT_MIN_GB" ]; then fail "$tag needs too much memory: min ${mem} GB available (need >= $PREFLIGHT_MIN_GB)"; fi
   rm -rf "$P" "$PL"
 }
 goal_check() {  # goal_check <tag>: report against the round-1 criteria (no stop: round 4 aims at > 50)
