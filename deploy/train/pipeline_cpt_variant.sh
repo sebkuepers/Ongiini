@@ -5,6 +5,11 @@
 #   CPT_VARIANT_ARGS  train_cpt.py args, e.g. "--ow-fraction 0.5 --replay-corpus data/private/corpora/replay_en/fineweb_edu_4M.jsonl --replay-share 0.25"
 #                     (--max-steps is NOT needed: --ow-fraction 0.5 = C1's half of the blocks, each once)
 #   CPT_VARIANT_SFT   optional train_lora.py args for the SFT, default "--lr 1e-4 --max-len 1280" (= C1-T4)
+#   CPT_MODEL_DIR     optional: run the CPT stage on a different base, e.g. the PRETRAINED
+#                     google/gemma-4-12B (variant CB, "chat vector" with LoRA: Jindal et al. 2024 /
+#                     Huang et al. 2024 — CPT on the instruct model erodes instruction following,
+#                     CPT on the base + re-applied instruct delta does not); the SFT stage then loads
+#                     the adapter onto the instruct model as usual
 # Stages: CPT preflight (memory, speed), CPT with logged block order + English held-out, check,
 # WhatsApp with Oshiwambo/English held-out; memory preflight; SFT (retry on divergence);
 # benchmark, retention, compat + tool suite, goal check, decoding test.
@@ -371,6 +376,12 @@ fi
 # 1. CPT variant
 CPT="$LORA/${CPT_VARIANT_TAG}_cpt_12b"
 if [ ! -f "$CPT/run.json" ]; then
+  IT_MODEL_DIR=$MODEL_DIR; IT_MODEL=$MODEL
+  if [ "$TINY" != 1 ] && [ -n "${CPT_MODEL_DIR:-}" ]; then
+    [ -f "$CPT_MODEL_DIR/config.json" ] || fail "CPT_MODEL_DIR has no config.json: $CPT_MODEL_DIR"
+    MODEL_DIR=$(cd "$CPT_MODEL_DIR" && pwd); MODEL="/models/$(basename "$MODEL_DIR")"
+    log "CPT stage on base model $MODEL_DIR (adapter is applied to $IT_MODEL_DIR afterwards)"
+  fi
   preflight_cpt
   log "CPT $CPT_VARIANT_TAG: $CPT_V_ARGS"
   notify "CPT $CPT_VARIANT_TAG startet."
@@ -378,6 +389,7 @@ if [ ! -f "$CPT/run.json" ]; then
     | stdbuf -oL tr '\r' '\n' | grep --line-buffered -E '^blocks|^articles|^replay blocks|^training sequence|^trainable|^kept step|^english held-out|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
     | cut -c1-300 || true
   [ -f "$CPT/run.json" ] || fail "CPT $CPT_VARIANT_TAG"
+  MODEL_DIR=$IT_MODEL_DIR; MODEL=$IT_MODEL
 fi
 check cpt "$CPT"
 notify "CPT $CPT_VARIANT_TAG fertig: $(python3 -c "
