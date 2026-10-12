@@ -13,7 +13,9 @@ cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 # The production image (vLLM 0.20.2) cannot serve the dense 12B (gemma4_unified);
 # vLLM 0.31.0 supports Gemma4UnifiedForConditionalGeneration natively (2026-10-08).
 IMAGE=${EVAL_VLLM_IMAGE:-vllm/vllm-openai:v0.31.0-aarch64}
-MODEL_DIR="${EVAL_MODEL_DIR:-$HOME/models/gemma-4-12b-it-bf16}"  # e.g. a merged model (variant M)
+MODEL_DIR="${EVAL_MODEL_DIR:-$HOME/models/gemma-4-12b-it-bf16}"  # e.g. a merged model (variant M) or the 31B
+SERVED=${EVAL_SERVED_NAME:-gemma-4-12b}   # the base model's name for the compat suite (31B: gemma-4-31b)
+QUANT=(); [ -n "${EVAL_QUANT:-}" ] && QUANT=(--quantization "$EVAL_QUANT")  # 31B bf16 = 62.5 GB: fp8 at load halves it
 TEMPLATE=deploy/spark/tool_chat_template_gemma4.jinja
 mods=() mounts=()
 for spec in "$@"; do
@@ -26,10 +28,10 @@ BIND=${EVAL_BIND:-127.0.0.1}  # experimental.ongiini.ai: the docker bridge, so c
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" --restart "${EVAL_RESTART:-no}" --gpus all --ipc host --shm-size 16g \
   -p "$BIND:$PORT:8000" \
-  -v "$MODEL_DIR:/models/gemma-4-12b:ro" -v "$PWD/$TEMPLATE:/templates/chat.jinja:ro" "${mounts[@]}" \
-  --entrypoint vllm "$IMAGE" serve /models/gemma-4-12b \
+  -v "$MODEL_DIR:/models/$SERVED:ro" -v "$PWD/$TEMPLATE:/templates/chat.jinja:ro" "${mounts[@]}" \
+  --entrypoint vllm "$IMAGE" serve "/models/$SERVED" "${QUANT[@]}" \
   --model-impl "${EVAL_MODEL_IMPL:-auto}" \
-  --served-model-name gemma-4-12b \
+  --served-model-name "$SERVED" \
   --host 0.0.0.0 --port 8000 \
   --max-model-len 32768 --max-num-seqs "${EVAL_MAX_SEQS:-16}" --max-num-batched-tokens 8192 \
   --gpu-memory-utilization "${EVAL_GPU_MEM_UTIL:-0.30}" \
