@@ -451,6 +451,42 @@ if [ "$TINY" != 1 ] && [ -n "${VARIANT_MODEL_DIR:-}" ]; then
   export EVAL_MODEL_DIR=$MODEL_DIR
   log "base model for this variant: $MODEL_DIR"
 fi
+# optional CPT stage first (2026-10-13, CPT on the 31B): VARIANT_CPT_ARGS = train_cpt.py args; the SFT
+# then continues that adapter (as C1-T4 did). Memory preflight: 20 CPT steps at full size.
+if [ -n "${VARIANT_CPT_ARGS:-}" ]; then
+  CPTD="$LORA/${VARIANT_TAG}_cpt_${SUF}"
+  ca=($VARIANT_CPT_ARGS $FOUR_BIT); [ "$TINY" = 1 ] && ca+=($CPT_ARGS)
+  if [ ! -f "$CPTD/run.json" ]; then
+    if [ "$TINY" != 1 ] && [ "${SKIP_PREFLIGHT_MEM:-0}" != 1 ]; then
+      log "preflight memory CPT $VARIANT_TAG"
+      rm -rf "$LORA/preflight_cpt" "$EXP/cptpre_mem"*
+      memwatch "ongiini-train-${VARIANT_TAG}cptpre" "$EXP/cptpre_mem" & mwp=$!
+      run "ongiini-train-${VARIANT_TAG}cptpre" yes python3 scripts/train_cpt.py --model "$MODEL" --out "$LORA/preflight_cpt" \
+        "${ca[@]}" --max-steps 20 --save-steps 1000 2>&1 | tr '\r' '\n' | grep -E 'Error|Traceback' | cut -c1-200 || true
+      wait "$mwp"   # only the watcher: the pipeline's watchdog also runs in the background
+      cm=$(cat "$EXP/cptpre_mem" 2>/dev/null || echo 0); cmt=$(cat "$EXP/cptpre_mem.train" 2>/dev/null || echo 999)
+      [ "$cmt" = 999 ] && cmt=$cm
+      log "preflight memory CPT $VARIANT_TAG: min available ${cm} GB (during training steps ${cmt} GB)"
+      { [ "$cmt" -lt "$PREFLIGHT_MIN_GB" ] || [ "$cm" -lt "$LOAD_MIN_GB" ]; } \
+        && fail "CPT $VARIANT_TAG needs too much memory: ${cmt} GB during training (need >= $PREFLIGHT_MIN_GB), ${cm} GB loading"
+      rm -rf "$LORA/preflight_cpt"
+    fi
+    log "CPT $VARIANT_TAG: ${ca[*]}"
+    notify "CPT $VARIANT_TAG ($SUF) startet: ${ca[*]}"
+    run "ongiini-train-${VARIANT_TAG}cpt" yes python3 scripts/train_cpt.py --model "$MODEL" --out "$CPTD" "${ca[@]}" 2>&1 \
+      | stdbuf -oL tr '\r' '\n' | grep --line-buffered -E '^blocks|^articles|^replay blocks|^training sequence|^trainable|^kept step|^english held-out|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
+      | cut -c1-300 || true
+    [ -f "$CPTD/run.json" ] || fail "CPT $VARIANT_TAG"
+  fi
+  check cpt "$CPTD"
+  notify "CPT $VARIANT_TAG fertig: $(python3 -c "
+import json, math
+r = json.load(open('$CPTD/run.json'))
+eb, ea = r.get('english_held_out_before'), r.get('english_held_out_after')
+en = f'Englisch-Held-out {round(math.exp(eb), 2)} -> {round(math.exp(ea), 2)}' if eb is not None and ea is not None else 'kein Englisch-Held-out'
+print(f\"Oshiwambo-Perplexität {round(r['held_out_ppl_before'] or 0, 1)} -> {round(r['held_out_ppl_after'], 2)}, {en}, {r['minutes']} min\")")"
+  INIT=$CPTD
+fi
 TRAIN=$T4F
 if [ -n "$BUILD_ARGS" ]; then
   TRAIN="$OUTD/sft_${VARIANT_TAG}_train.jsonl"
@@ -468,8 +504,15 @@ if sft_stage "$VARIANT_TAG" "$TRAIN" "${VARIANT_EPOCHS:-1}" "${extra[@]}"; then
     compat_stage "$VARIANT_TAG"
     goal_check "$VARIANT_TAG" || true
     decode_test "$VARIANT_TAG"
+  elif [ "$COMPAT" = 1 ]; then
+    # 31B: the live-check suite on an fp8 eval vLLM (same serving as experimental; base31b answers reused)
+    log "31B tests $VARIANT_TAG (compat, tools, greedy vs MBR, ow→en)"
+    EVAL_MAX_SEQS=16 EXP_MODEL=31b bash deploy/experimental/serve_model.sh "$LORA/${VARIANT_TAG}_31b" || fail "31B eval vLLM for $VARIANT_TAG"
+    CHECK_CONCURRENCY=16 bash deploy/experimental/check_live.sh 31b "$VARIANT_TAG" 2>&1 | grep -E "vs base31b:|ow→en:|does not serve" | cut -c1-600
+    docker rm -f ongiini-eval-experimental >/dev/null 2>&1
+    [ -f "data/private/compat/report_${VARIANT_TAG}_vs_base31b.json" ] || fail "31B compat report $VARIANT_TAG missing"
   else
-    log "compat / tool / decoding stages skipped on $SUF (no 31B eval vLLM yet) — benchmark + retention done"
+    log "31B tests skipped (tiny)"
   fi
 fi
 log "pipeline done"

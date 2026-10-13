@@ -6,12 +6,15 @@
 # The baseline is the plain base model, served by the same vLLM next to the adapter.
 #   setsid nohup bash deploy/experimental/check_live.sh 31b T4b31 > data/private/experiments/check_live.log 2>&1 < /dev/null &
 # Outputs as compat_31b.sh: data/private/compat/{out,report,tools}_*; decoding in
-# data/private/experiments/r31/inference_tricks/.
+# data/private/experiments/r31/inference_tricks/{report_,}<LABEL>*; understanding (ow→en) in
+# data/private/experiments/ow_en/. Also the 31B test stage of pipeline_sft_variant.sh
+# (CHECK_CONCURRENCY=16, no visitors then).
 set -u
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 SIZE=$1 LABEL=$2 BASE=base$1 BASEMODEL=gemma-4-$1
 C=${CHECK_CONCURRENCY:-4}
 EXP=data/private/experiments
+DEC=$EXP/r${SIZE%b}/inference_tricks   # r31, like the other 31B results
 log() { echo "$(date '+%F %T') $*"; }
 notify() { bash deploy/train/notify.sh "$*" | tail -1; }
 BRIDGE=$(ip -4 -o addr show docker0 | awk '{print $4}' | cut -d/ -f1)
@@ -30,8 +33,18 @@ log "tool suite"
   || crun tools-base python3 scripts/tool_suite.py generate --model "$BASEMODEL" --label "$BASE" --concurrency "$C"
 crun tools-adapter python3 scripts/tool_suite.py generate --model ongiini-experimental --label "$LABEL" --concurrency "$C"
 log "decoding test (greedy vs MBR)"
-crun decode python3 scripts/exp_inference_tricks.py --model ongiini-experimental --server "$SERVER" \
-  --out "$EXP/r$SIZE/inference_tricks" --conditions greedy mbr --concurrency "$C"
+if [ ! -f "$DEC/report_$LABEL.json" ]; then
+  crun decode python3 scripts/exp_inference_tricks.py --model ongiini-experimental --server "$SERVER" \
+    --out "$DEC" --conditions greedy mbr --concurrency "$C"
+  # the served name is the same for every adapter: file the results under the label
+  for f in "$DEC"/*ongiini-experimental*; do [ -e "$f" ] && mv "$f" "${f/ongiini-experimental/$LABEL}"; done
+fi
+log "understanding (ow→en)"
+[ -s "$EXP/ow_en/${BASE}_oshikwanyama.jsonl" ] \
+  || crun owen-base python3 scripts/eval_ow_en.py generate --model "$BASEMODEL" --label "$BASE" --server "$SERVER" --concurrency "$C"
+crun owen python3 scripts/eval_ow_en.py generate --model ongiini-experimental --label "$LABEL" --server "$SERVER" --concurrency "$C"
+owl=("$LABEL"); [ "$LABEL" != T4b31 ] && [ -s "$EXP/ow_en/T4b31_oshikwanyama.jsonl" ] && owl=(T4b31 "$LABEL")
+owen=$(crun owen-score python3 scripts/eval_ow_en.py score --base "$BASE" --labels "${owl[@]}" | tail -1)
 log "scoring"
 crun score python3 scripts/compat_suite.py score --labels "$BASE" "$LABEL"
 crun tscore python3 scripts/tool_suite.py score --labels "$BASE" "$LABEL"
@@ -40,7 +53,7 @@ import json, glob
 r = json.load(open("data/private/compat/report_${LABEL}_vs_${BASE}.json")); b, t = r["$BASE"], r["$LABEL"]; p = r["pairwise_${LABEL}_vs_${BASE}"]
 T = json.load(open("data/private/compat/tools_report_${LABEL}_vs_${BASE}.json")); tb, tt, tp = T["$BASE"], T["$LABEL"], T["paired"]
 try:
-    f = sorted(glob.glob("$EXP/r$SIZE/inference_tricks/report*.json"))[-1]; d = json.load(open(f))
+    d = json.load(open("$DEC/report_$LABEL.json"))
     dec = f"Decoding: greedy {d['greedy']['chrf']}, MBR {d['mbr']['chrf']} ({d['mbr']['delta_vs_greedy']:+}, CI {d['mbr']['ci95']})."
 except Exception as e:
     dec = f"Decoding fehlt ({e})."
@@ -50,4 +63,5 @@ print(f"Tool-Test {tb['all']}/{tt['all']} % (p {tp['sign_test_p']}), GSM8K {b['g
 PY
 )
 log "$LABEL vs $BASE: $msg"
-notify "Live-Check $LABEL (experimental) vs Gemma 4 $SIZE: $msg"
+log "ow→en: $owen"
+notify "Live-Check $LABEL vs Gemma 4 $SIZE: $msg Verstehen OW→EN: $owen"
