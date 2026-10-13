@@ -163,6 +163,12 @@ class Settings:
     # vLLM time. When reached, /v1/chat returns 429 with a "session
     # full, refresh to start a fresh one" message.
     chat_session_token_cap: int = int(os.getenv("ONGIINI_CHAT_SESSION_TOKEN_CAP", "50000"))
+    # experimental.ongiini.ai only: visitors rate the Oshiwambo of each reply
+    # (/v1/chat/feedback). A rating stores the PII-scrubbed question + answer in
+    # DATA_DIR/feedback/language_ratings.jsonl — evaluation data, never training data.
+    chat_feedback_enabled: bool = (
+        os.getenv("ONGIINI_CHAT_FEEDBACK", "0").lower() in ("1", "true", "yes")
+    )
     # Per-IP sliding-window rate limit. Conservative default because
     # the endpoint is publicly POSTable; first-line of defence behind
     # Cloudflare's WAF/Bot Management.

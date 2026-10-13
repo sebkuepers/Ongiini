@@ -139,6 +139,8 @@ services:
       ONGIINI_LEARN_ENABLED: "0"
       ONGIINI_CHAT_ENABLED: "1"
       ONGIINI_CHAT_ALLOWED_ORIGINS: https://experimental.ongiini.ai
+      # one-click rating of each reply's Oshiwambo -> ./data-experimental/feedback/
+      ONGIINI_CHAT_FEEDBACK: "1"
       MEM0_DIR: /data/mem0
       MEM0_TELEMETRY: "False"
       HF_HOME: /data/hf_cache

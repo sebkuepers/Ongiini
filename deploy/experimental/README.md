@@ -17,14 +17,27 @@ may stop the model, and the training pipelines refuse to start while it runs.
 ## Deploy / switch the model (on the Spark)
 
 ```sh
+# all in one, waits for a free GPU, smoke-tests, reports by WhatsApp:
+setsid nohup bash deploy/experimental/go_live.sh 31b data/private/lora/<ADAPTER> "Ongiini Ombuto" \
+  "Gemma 4 31B + Oshiwambo training <ADAPTER> (<date>)" > data/private/experiments/go_live.log 2>&1 < /dev/null &
+# or by hand:
 bash deploy/experimental/serve_model.sh data/private/lora/<ADAPTER>                 # 12B adapter
 EXP_MODEL=31b bash deploy/experimental/serve_model.sh data/private/lora/<ADAPTER>   # 31B adapter
-python3 scripts/build_experimental_chat.py --model-note "Gemma 4 31B + <ADAPTER> (<date>)"
+python3 scripts/build_experimental_chat.py --model-name "Ongiini Ombuto" --model-note "Gemma 4 31B + <ADAPTER> (<date>)"
 docker compose --profile experimental up -d --build experimental experimental-web
 ```
 
 Switching to a newer adapter: rerun the first two lines (the nginx serves the new
 page right away; the backend needs no restart).
+
+## Language ratings
+
+Under every reply visitors rate its Oshiwambo with one click (correct / small mistakes / wrong).
+The backend (`ONGIINI_CHAT_FEEDBACK=1`, `/v1/chat/feedback` in `ongiini/api/chat.py`) appends
+the rating with the PII-scrubbed question and answer from the server-side session to
+`data-experimental/feedback/language_ratings.jsonl`; `model.txt` next to it names the live model
+(written by `go_live.sh`). A changed rating is a new row; the last row per (session, turn) counts.
+These are evaluation data, never training data. The start page tells visitors what is kept.
 
 ## Check the live model
 

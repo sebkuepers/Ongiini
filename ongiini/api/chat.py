@@ -33,11 +33,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import hashlib
+import json
 import logging
 import re
+import threading
 import time
 from dataclasses import asdict
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -94,6 +98,29 @@ class ChatResponse(BaseModel):
 
 class ClearRequest(BaseModel):
     session_id: str = Field(..., min_length=36, max_length=36)
+
+
+class FeedbackRequest(BaseModel):
+    """A visitor's rating of the Oshiwambo in one reply (experimental only)."""
+    session_id: str = Field(..., min_length=36, max_length=36)
+    turn: int = Field(..., ge=0, le=1000)   # 0 = the first reply of this session
+    rating: Literal["correct", "minor_errors", "wrong"]
+
+
+_feedback_lock = threading.Lock()
+
+
+def _write_feedback(row: dict[str, Any]) -> None:
+    """Append one rating. The model behind the reply is read from
+    feedback/model.txt, written when a model goes live."""
+    folder = settings.data_dir / "feedback"
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        row["model"] = (folder / "model.txt").read_text().strip()
+    except OSError:
+        row["model"] = ""
+    with _feedback_lock, open(folder / "language_ratings.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _validate_session_id(session_id: str) -> None:
@@ -368,5 +395,39 @@ def build_router(
         _validate_session_id(req.session_id)
         removed = store.delete(req.session_id)
         return JSONResponse({"ok": True, "removed": removed})
+
+    if settings.chat_feedback_enabled:
+        @router.post("/chat/feedback")
+        async def feedback(req: FeedbackRequest) -> JSONResponse:
+            """Store a rating together with the rated reply and the message
+            before it, both PII-scrubbed. The text comes from the server-side
+            session, not from the client, so only real replies can be rated.
+            A changed rating is a new row; the last row per (session, turn) wins."""
+            _validate_session_id(req.session_id)
+            history = store.snapshot_history(req.session_id)
+            pairs = [
+                (history[i - 1].get("content", "") if i and history[i - 1].get("role") == "user" else "",
+                 turn.get("content", ""))
+                for i, turn in enumerate(history) if turn.get("role") == "assistant"
+            ]
+            if req.turn >= len(pairs):
+                raise HTTPException(status_code=404, detail="That reply is no longer in this session.")
+            question, answer = pairs[req.turn]
+            scrub = pii_sanitiser or (lambda s: s)
+            row = {
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "session": hashlib.sha256(req.session_id.encode()).hexdigest()[:16],
+                "turn": req.turn,
+                "rating": req.rating,
+                "question": scrub(question),
+                "answer": scrub(answer),
+            }
+            try:
+                await asyncio.to_thread(_write_feedback, row)
+            except OSError as exc:
+                log.warning("feedback: write failed: %s", exc)
+                raise HTTPException(status_code=500, detail="Could not save the rating.") from exc
+            log.info("feedback: session=%s turn=%d rating=%s", row["session"][:8], req.turn, req.rating)
+            return JSONResponse({"ok": True})
 
     return router
