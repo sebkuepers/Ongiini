@@ -21,7 +21,7 @@ def _client(tmp_path, monkeypatch, enabled=True):
     store.append_turn(SID, "Translate: good morning", "Wa lele po")
     store.append_turn(SID, "Mail me at jane@example.com", "Ondi ku shangela")
     app = FastAPI()
-    app.include_router(build_router(store, shared=None, pii_sanitiser=pii.sanitize))
+    app.include_router(build_router(store, shared=None, pii_sanitiser=pii.sanitize), prefix="/v1")  # as mounted in main.py
     return TestClient(app)
 
 
