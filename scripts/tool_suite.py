@@ -20,12 +20,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 from collections import defaultdict
 from math import comb
 from pathlib import Path
 
 OUT = Path("data/private/compat")
-SERVER = "http://localhost:8200/v1"
+# ONGIINI_EVAL_SERVER: run against another vLLM, e.g. the live experimental one
+SERVER = os.environ.get("ONGIINI_EVAL_SERVER", "http://localhost:8200/v1")
 SAMPLES = [(0.0, 0), (0.7, 1), (0.7, 2)]  # (temperature, seed)
 
 WEB = ("web_search",)

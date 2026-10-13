@@ -40,9 +40,9 @@ docker run -d --name "$NAME" --restart "${EVAL_RESTART:-no}" --gpus all --ipc ho
   --limit-mm-per-prompt '{"image": 4, "audio": 0}' --mm-processor-kwargs '{"max_soft_tokens": 280}' \
   --enable-lora --max-lora-rank 64 --max-loras 2 --lora-modules "${mods[@]}"
 echo "waiting for :$PORT"
-for _ in $(seq 1 90); do
+for _ in $(seq 1 180); do  # 30 min: the 31B with fp8 at load is slow to start
   curl -sf -m 5 "$BIND:$PORT/v1/models" >/dev/null && { echo "ready"; curl -s "$BIND:$PORT/v1/models" | python3 -c "import json,sys; print([m['id'] for m in json.load(sys.stdin)['data']])"; exit 0; }
   docker ps -q -f name=^$NAME$ | grep -q . || { echo "container exited"; docker logs --tail 30 "$NAME" 2>&1; exit 1; }
   sleep 10
 done
-echo "not ready after 15 min"; exit 1
+echo "not ready after 30 min"; exit 1

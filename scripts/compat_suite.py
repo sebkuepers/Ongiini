@@ -27,6 +27,7 @@ import asyncio
 import base64
 import io
 import json
+import os
 import random
 import re
 import sys
@@ -38,7 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "third_party"))
 
 OUT = Path("data/private/compat")
 ITEMS = OUT / "items.jsonl"
-SERVER = "http://localhost:8200/v1"
+# ONGIINI_EVAL_SERVER: run against another vLLM, e.g. the live experimental one
+SERVER = os.environ.get("ONGIINI_EVAL_SERVER", "http://localhost:8200/v1")
 MAX_NEW = {"gsm": 768, "ifeval": 1280, "open": 1024, "ongiini": 768, "safety": 512, "images": 128, "owchat": 512}
 JUDGE = "anthropic/claude-opus-5"
 

@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# The model behind experimental.ongiini.ai: Gemma 4 12B + one LoRA adapter on vLLM
-# 0.31 (docker bridge :8201), served under the name "ongiini-experimental" — the name
-# the experimental backend asks for (VLLM_MODEL). Switching to a newer adapter is
-# just running this again; the backend needs no restart.
-#   bash deploy/experimental/serve_model.sh data/private/lora/T2_12b
-# Named ongiini-eval-* on purpose: it needs ~36 GB, so it must never run next to
-# training — the memory brake may stop it, and the training pipelines refuse to
-# start while it runs. Stop it before a training round:
+# The model behind experimental.ongiini.ai: Gemma 4 (12B or 31B) + one LoRA adapter on
+# vLLM 0.31 (docker bridge :8201), served under the name "ongiini-experimental" — the name
+# the experimental backend asks for (VLLM_MODEL). Switching to a newer adapter is just
+# running this again; the backend needs no restart.
+#   bash deploy/experimental/serve_model.sh data/private/lora/T4b_12b          # 12B
+#   EXP_MODEL=31b bash deploy/experimental/serve_model.sh data/private/lora/T4b_31b
+# The 31B (62.5 GB in bf16) is quantised to fp8 at load (~32 GB weights) and gets 0.40 of
+# the memory (~48 GB incl. KV cache); the 12B needs ~36 GB. The base model stays selectable
+# as gemma-4-12b / gemma-4-31b, so the compat and tool suites can run against this server
+# (ONGIINI_EVAL_SERVER=http://<bridge>:8201/v1).
+# Named ongiini-eval-* on purpose: it must never run next to training — the memory brake
+# may stop it, and the training pipelines refuse to start while it runs. Stop it before a
+# training round:
 #   docker rm -f ongiini-eval-experimental
 set -euo pipefail
 cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
@@ -15,6 +20,12 @@ cd "${ONGIINI_ROOT:-$HOME/dev/Ongiini}"
 # the LAN does not (127.0.0.1 is unreachable from containers)
 BRIDGE=$(ip -4 -o addr show docker0 | awk '{print $4}' | cut -d/ -f1)
 [ -n "$BRIDGE" ] || { echo "no docker0 address"; exit 1; }
+case "${EXP_MODEL:-12b}" in
+  12b) export EVAL_GPU_MEM_UTIL=${EVAL_GPU_MEM_UTIL:-0.30} ;;
+  31b) export EVAL_MODEL_DIR="$HOME/models/gemma-4-31b-it-bf16" EVAL_SERVED_NAME=gemma-4-31b EVAL_QUANT=fp8 \
+              EVAL_GPU_MEM_UTIL=${EVAL_GPU_MEM_UTIL:-0.40} ;;
+  *) echo "EXP_MODEL must be 12b or 31b"; exit 1 ;;
+esac
 EVAL_NAME=ongiini-eval-experimental EVAL_PORT=8201 EVAL_RESTART=unless-stopped EVAL_BIND=$BRIDGE \
-EVAL_GPU_MEM_UTIL=${EVAL_GPU_MEM_UTIL:-0.30} EVAL_MAX_SEQS=${EVAL_MAX_SEQS:-8} \
+EVAL_MAX_SEQS=${EVAL_MAX_SEQS:-8} \
   bash deploy/eval/serve_12b_lora.sh "ongiini-experimental=$1"
