@@ -13,7 +13,12 @@ Builds on the T1/T2 recipe (many templates + unique self-distilled replay) and a
 - vocabulary tasks from the dictionary in both directions, excluding the words of the
   retention vocabulary test so that test stays meaningful;
 - optionally native tool-call replay (--tool-replay), pre-rendered rows that keep
-  the adapter calling tools like the base model (T2 lost that, tool_suite.py).
+  the adapter calling tools like the base model (T2 lost that, tool_suite.py);
+- optionally (T5, 2026-10-13) READING: --flip-n back-translations reversed, so the
+  authentic corpus Oshindonga is the input and the teacher English the answer
+  (T4 had only dictionary words in that direction; ow→en did not improve, eval_ow_en.py),
+  and Kwanyama (--kua-bt, DeepSeek back-translations of the corpus's Kwanyama sentences;
+  T4 had no Kwanyama row at all and Kwanyama reading dropped 4–6 chrF) in both directions.
 
     python3 scripts/build_sft_t4.py --out data/private/corpus/osheng_v1/sft_T4_train.jsonl
 """
@@ -51,22 +56,35 @@ def grams(t: str, n: int = 6) -> set[str]:
     return {" ".join(w[i:i + n]) for i in range(len(w) - n + 1)}
 
 
-def render_pair(rng, src: str, tgt: str, pool, lex, args, tag: str = "") -> dict:
+FLIP_ASK = ["Translate into English: {s}", "What does this {L} sentence mean in English?\n\n{s}",
+            "Translate the following {L} text into English.\n\n{s}", "{s}\n\nWhat does that mean in English?",
+            "Please translate this from {L} into English:\n{s}", "{L}: {s}\nEnglish:"]
+
+
+def render_flip(rng, ow: str, en: str, dialect: str) -> dict:
+    """Reading row: authentic Oshiwambo in, English out (no BT tag — the input side is real text)."""
+    msgs = [{"role": "user", "content": rng.choice(FLIP_ASK).format(L=rng.choice(NAMES[dialect]), s=ow)}]
+    if rng.random() < 0.2:
+        msgs = [{"role": "system", "content": rng.choice(SYSTEMS)}] + msgs
+    return {"messages": msgs + [{"role": "assistant", "content": en}]}
+
+
+def render_pair(rng, src: str, tgt: str, pool, lex, args, tag: str = "", dialect: str = "oshindonga") -> dict:
     """One translation row in a random template; optional dictionary hints and BT tag."""
-    L = rng.choice(NAMES["oshindonga"])
+    L = rng.choice(NAMES[dialect])
     hints = ""
-    if rng.random() < args.glossary_share:
+    if dialect == "oshindonga" and rng.random() < args.glossary_share:  # the Viljoen index is Ndonga
         g = [e for e in glossary(src, lex) if e[0] not in HINT_STOP]
         if g:
             hints = ("Dictionary entries that may help (use one only if its meaning fits; inflect as needed):\n"
                      + "\n".join(f"- {en}: {ow}" + (f" ({note})" if note else "") for en, ow, note in g) + "\n\n")
     r = rng.random()
     if r < args.keep_share:
-        user = render(PAPER_ZEROSHOT_ID, "oshindonga", src)
+        user = render(PAPER_ZEROSHOT_ID, dialect, src)
         if hints:
             user = user.replace("English: ", hints + "English: ", 1)
         msgs = [{"role": "user", "content": user}]
-    elif r < args.keep_share + args.fewshot_share and pool:
+    elif r < args.keep_share + args.fewshot_share and pool and dialect == "oshindonga":
         shots = "".join(f"English: {s}\n{L}: {t}\n\n" for s, t in rng.sample(pool, rng.choice([1, 2, 3])))
         msgs = [{"role": "user", "content": hints + FEWSHOT.format(L=L, shots=shots, s=src)}]
     else:
@@ -95,6 +113,10 @@ def main(argv=None) -> int:
     ap.add_argument("--tool-replay", nargs="*", default=[],
                     help="pre-rendered native tool-call replay (build_tool_replay.py); rendered format only")
     ap.add_argument("--tool-n", type=int, default=0, help="use only the first N tool-replay rows (0 = all)")
+    ap.add_argument("--flip-n", type=int, default=0, help="reversed BT rows (Oshindonga in, English out)")
+    ap.add_argument("--kua-bt", default="", help="Kwanyama back-translations (backtranslate_corpus.py --dialect Oshikwanyama)")
+    ap.add_argument("--kua-n", type=int, default=0, help="Kwanyama BT pairs; each is used en→kua (tagged) and kua→en")
+    ap.add_argument("--kua-min-lid", type=float, default=0.7, help="LID confidence floor for Kwanyama sentences")
     ap.add_argument("--seed", type=int, default=17)
     args = ap.parse_args(argv)
     rng = random.Random(args.seed)
@@ -128,6 +150,19 @@ def main(argv=None) -> int:
     for _ in range(args.human_repeat):
         rows += [render_pair(rng, s, t, pool, lex, args) for s, t in human]
     rows += [render_pair(rng, r["en"].strip(), r["text"].strip(), pool, lex, args, tag="<bt> ") for r in chosen]
+    # reading: the best-scored BT pairs reversed (beyond --bt-n first, so the two directions use different sentences)
+    flips = [bt[i] for i in cand[args.bt_n: args.bt_n + args.flip_n]]
+    if len(flips) < args.flip_n:
+        flips += [bt[i] for i in cand[: args.flip_n - len(flips)]]
+    rows += [render_flip(rng, r["text"].strip(), r["en"].strip(), "oshindonga") for r in flips]
+    kua = []
+    if args.kua_bt and args.kua_n:
+        kua = [r for r in map(json.loads, open(args.kua_bt)) if r.get("en") and r.get("lid_prob", 0) >= args.kua_min_lid]
+        kua = [r for r in kua if ok(r)]
+        rng.shuffle(kua)
+        kua = kua[: args.kua_n]
+        rows += [render_pair(rng, r["en"].strip(), r["text"].strip(), pool, lex, args, tag="<bt> ", dialect="oshikwanyama") for r in kua]
+        rows += [render_flip(rng, r["text"].strip(), r["en"].strip(), "oshikwanyama") for r in kua]
 
     # vocabulary tasks (both directions), excluding the retention word test
     test = json.load(open("data/private/retention/wordtest_500.json"))
@@ -156,7 +191,7 @@ def main(argv=None) -> int:
     rng.shuffle(rows)
     Path(args.out).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     print(json.dumps({"human_pairs": len(human), "dict_examples": len(dict_ex), "human_rows": len(human) * args.human_repeat,
-                      "bt_selected": len(chosen), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3) if chosen else None,
+                      "bt_selected": len(chosen), "flip": len(flips), "kua_pairs": len(kua), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3) if chosen else None,
                       "vocab": min(args.vocab_n, len(entries)), "replay": len(replay), "tool_replay": len(tools),
                       "replay_share": round((len(replay) + len(tools)) / len(rows), 3), "rows": len(rows)}))
     return 0
