@@ -27,6 +27,7 @@ EXP_MODEL=$MODEL bash deploy/experimental/serve_model.sh "$ADAPTER" || {
 log "model served; memory available: $(free -g | awk '/^Speicher:|^Mem:/{print $7}') GB"
 python3 scripts/build_experimental_chat.py --model-name "$NAME" --model-note "$NOTE" || fail "Seite ließ sich nicht bauen"
 mkdir -p data-experimental/feedback && echo "$NAME — $NOTE (adapter $ADAPTER)" > data-experimental/feedback/model.txt
+docker rm -f ongiini-experimental-maintenance >/dev/null 2>&1   # the go_down.sh page holds :8447
 docker compose --profile experimental up -d --build experimental experimental-web || fail "docker compose up schlug fehl"
 sleep 20
 SID=00000000-0000-4000-8000-00000000c0de  # a valid UUID v4, as the chat API requires

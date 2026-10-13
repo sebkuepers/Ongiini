@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Training a new model — Ongiini AI</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#f5efe4" />
+  <link rel="icon" type="image/png" sizes="32x32" href="https://ongiini.ai/assets/favicon-32-v2.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="https://ongiini.ai/assets/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --sand: #e8dfcd; --bone: #f5efe4; --ink: #2a2522; --ink-soft: #6a625d;
+      --terracotta: #c46c3f; --terracotta-deep: #9a4f2d; --rule: #d1c8b9;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --sand: #1f1b18; --bone: #2a2522; --ink: #f0e8dc; --ink-soft: #b3a99f;
+        --terracotta: #d98a5f; --terracotta-deep: #e8a57f; --rule: #3d3631;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--sand); color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+    }
+    main {
+      max-width: 520px; width: 100%; background: var(--bone); border: 1px solid var(--rule);
+      border-radius: 18px; padding: 36px 28px; text-align: center;
+    }
+    .brand img { width: 44px; height: 44px; border-radius: 10px; }
+    .kicker {
+      margin: 18px 0 8px; font: 500 12px/1.3 'Geist Mono', ui-monospace, monospace;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--terracotta-deep);
+    }
+    h1 { margin: 0 0 14px; font: italic 400 38px/1.1 'Instrument Serif', serif; }
+    p { margin: 0 0 14px; line-height: 1.55; color: var(--ink-soft); }
+    .thanks { color: var(--ink); }
+    a.btn {
+      display: inline-block; margin-top: 10px; padding: 11px 20px; border-radius: 999px;
+      background: var(--terracotta); color: #fff; text-decoration: none; font-weight: 500;
+    }
+    a.btn:hover { background: var(--terracotta-deep); }
+    .dots { display: inline-flex; gap: 6px; margin-top: 8px; }
+    .dots span {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--terracotta);
+      animation: pulse 1.4s infinite ease-in-out;
+    }
+    .dots span:nth-child(2) { animation-delay: .2s; } .dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .dots span { animation: none; opacity: .6; } }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="brand" href="https://ongiini.ai/"><img src="https://ongiini.ai/assets/ongiini-icon-192-v2.png" alt="Ongiini AI" /></a>
+    <p class="kicker">Test environment &middot; paused</p>
+    <h1>We are training a new model</h1>
+    <p>The experimental Oshiwambo model is offline for now while we train an improved version for Oshindonga and Oshikwanyama.</p>
+    <p class="thanks">Thank you to everyone who tested it and rated the answers. Your ratings show us exactly where the model still struggles. This page will be back soon with the new model.</p>
+    <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <p style="margin-top:18px">Until then, Ongiini AI keeps working as usual:</p>
+    <a class="btn" href="https://chat.ongiini.ai/">Chat with Ongiini AI</a>
+  </main>
+</body>
+</html>
