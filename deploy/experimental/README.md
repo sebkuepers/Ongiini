@@ -51,9 +51,11 @@ ONGIINI_EVAL_SERVER=http://$BRIDGE:8201/v1 python3 scripts/tool_suite.py generat
 
 ## Status
 
-Live since 2026-10-10 21:19 (Namibian time) with Gemma 4 12B + T4b. The production oshiwambo
-skill is replaced here (`skills/oshiwambo/SKILL.md`, via `ONGIINI_SKILLS_OVERRIDE_DIR`): the
-trained model answers and translates in Oshiwambo instead of switching to English.
+Live since 2026-10-13 12:49 with **Ongiini Ombuto** = Gemma 4 31B (fp8 at load) + T4b31
+(0.48 of the memory: 33.6 GiB weights, 23.1 GiB KV cache = 47.9k tokens). Before: 2026-10-10 to
+2026-10-11 with Gemma 4 12B + T4b. The production oshiwambo skill is replaced here
+(`skills/oshiwambo/SKILL.md`, via `ONGIINI_SKILLS_OVERRIDE_DIR`): the trained model answers and
+translates in Oshiwambo instead of switching to English.
 
 ## One-time tunnel setup (sudo) — done 2026-10-10 (backup: config.yml.bak-2026-10-10)
 
