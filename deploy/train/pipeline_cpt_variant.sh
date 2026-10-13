@@ -372,13 +372,27 @@ decode_test() {  # decode_test <tag>: MBR / retrieved few-shot through the eval 
   [ -f "$R" ] && return 0
   [ -f "$LORA/${tag}_12b/run.json" ] || { log "decoding test $tag: no adapter"; return 0; }
   log "decoding test $tag"
-  EVAL_GPU_MEM_UTIL=0.45 EVAL_MAX_SEQS=32 bash deploy/eval/serve_12b_lora.sh "$lc=$LORA/${tag}_12b" || fail "eval vLLM for $tag"
+  # T4b is served next to the candidate as the ow→en comparison (once; files are reused)
+  local extra=(); [ -f "$LORA/T4b_12b/adapter_config.json" ] && extra=("t4b=$LORA/T4b_12b")
+  EVAL_GPU_MEM_UTIL=0.45 EVAL_MAX_SEQS=32 bash deploy/eval/serve_12b_lora.sh "$lc=$LORA/${tag}_12b" "${extra[@]}" || fail "eval vLLM for $tag"
   # client container: host network (vLLM on 127.0.0.1:8200), evalsuite image (sacrebleu, openai)
   docker run --rm --name "ongiini-eval-decode-$lc" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus \
     -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest \
     python3 scripts/exp_inference_tricks.py --model "$lc" --out "$EXP/inference_tricks" --concurrency 32 2>&1 \
     | grep --line-buffered -vE "HTTP Request|Warning" | tail -6
+  # understanding (2026-10-13, after the experimental ratings): human Oshiwambo refs → English
+  local O=(docker run --rm --name "ongiini-eval-owen-$lc" --network host --user 1000:1000 -e HOME=/tmp -e USER=nexus -e LOGNAME=nexus
+           -e PYTHONUNBUFFERED=1 -v "$PWD:/work" -w /work ongiini-evalsuite:latest python3 scripts/eval_ow_en.py)
+  local owl=("$tag") m
+  for m in base12b:gemma-4-12b T4b:t4b "$tag:$lc"; do
+    [ "${m%%:*}" = T4b ] && { [ ${#extra[@]} -gt 0 ] || continue; owl=(T4b "$tag"); }
+    [ -s "$EXP/ow_en/${m%%:*}_oshikwanyama.jsonl" ] && [ "${m%%:*}" != "$tag" ] && continue
+    "${O[@]}" generate --model "${m#*:}" --label "${m%%:*}" 2>&1 | grep -vE "HTTP Request|Warning|INFO" | tail -2
+  done
   docker rm -f ongiini-eval-vllm12b >/dev/null 2>&1
+  local owen; owen=$("${O[@]}" score --base base12b --labels "${owl[@]}" 2>&1 | grep -vE "HTTP Request|Warning|INFO" | tail -3)
+  log "ow→en (understanding): $owen"
+  notify "Verstehen OW→EN $tag: $(echo "$owen" | tail -1)"
   [ -f "$R" ] || fail "decoding report $tag missing"
   notify "Decoding-Test $tag (Ndonga dev): $(python3 -c "
 import json; r=json.load(open('$R')); print(', '.join(f\"{k} {v['chrf']}\" + (f\" ({v['delta_vs_greedy']:+}, CI {v['ci95']})\" if 'delta_vs_greedy' in v else '') for k, v in r.items() if isinstance(v, dict)))")"
