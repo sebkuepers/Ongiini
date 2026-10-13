@@ -457,6 +457,14 @@ if [ -n "${VARIANT_CPT_ARGS:-}" ]; then
   CPTD="$LORA/${VARIANT_TAG}_cpt_${SUF}"
   ca=($VARIANT_CPT_ARGS $FOUR_BIT); [ "$TINY" = 1 ] && ca+=($CPT_ARGS)
   if [ ! -f "$CPTD/run.json" ]; then
+    # VARIANT_CPT_MODEL_DIR: CPT on another checkpoint, e.g. the PRETRAINED ~/models/gemma-4-31b-base-bf16
+    # (same tensor names/shapes as the IT model); the adapter is then trained on in the IT model
+    IT_MODEL_DIR=$MODEL_DIR; IT_MODEL=$MODEL
+    if [ "$TINY" != 1 ] && [ -n "${VARIANT_CPT_MODEL_DIR:-}" ]; then
+      [ -f "$VARIANT_CPT_MODEL_DIR/config.json" ] || fail "VARIANT_CPT_MODEL_DIR has no config.json: $VARIANT_CPT_MODEL_DIR"
+      MODEL_DIR=$(cd "$VARIANT_CPT_MODEL_DIR" && pwd); MODEL="/models/$(basename "$MODEL_DIR")"
+      log "CPT stage on $MODEL_DIR (adapter continues on $IT_MODEL_DIR)"
+    fi
     if [ "$TINY" != 1 ] && [ "${SKIP_PREFLIGHT_MEM:-0}" != 1 ]; then
       log "preflight memory CPT $VARIANT_TAG"
       rm -rf "$LORA/preflight_cpt" "$EXP/cptpre_mem"*
@@ -477,6 +485,7 @@ if [ -n "${VARIANT_CPT_ARGS:-}" ]; then
       | stdbuf -oL tr '\r' '\n' | grep --line-buffered -E '^blocks|^articles|^replay blocks|^training sequence|^trainable|^kept step|^english held-out|^\{.eval_loss|^resuming|^\{"model|Error|Traceback' \
       | cut -c1-300 || true
     [ -f "$CPTD/run.json" ] || fail "CPT $VARIANT_TAG"
+    MODEL_DIR=$IT_MODEL_DIR; MODEL=$IT_MODEL
   fi
   check cpt "$CPTD"
   notify "CPT $VARIANT_TAG fertig: $(python3 -c "
