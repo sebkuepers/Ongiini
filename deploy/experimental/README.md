@@ -11,7 +11,7 @@ ongiini-experimental       backend (webhook image), ./data-experimental, no stat
 ongiini-eval-experimental  vLLM 0.31: Gemma 4 12B or 31B (fp8) + adapter "ongiini-experimental", docker bridge :8201
 ```
 
-It needs ~36 GB (12B) or ~48 GB (31B, fp8 at load) of GPU memory, so it never runs next to training: the memory brake
+It needs ~36 GB (12B) or ~58 GB (31B, fp8 at load) of GPU memory, so it never runs next to training: the memory brake
 may stop the model, and the training pipelines refuse to start while it runs.
 
 ## Deploy / switch the model (on the Spark)
