@@ -10,6 +10,9 @@
 #   VARIANT_MODEL_DIR  optional: a different base model directory (variant M: Gemma 4 with the CPT
 #                      adapter merged in, scripts/merge_adapter.py); used for training, HF evals
 #                      and the eval vLLM; comparisons stay against gemma-4-12b-base
+#   VARIANT_CPT_ARGS   optional CPT stage first (train_cpt.py args); with --full (all weights, the OkaLM
+#                      recipe) the SFT base becomes IT + (CPT − CPT start), scripts/merge_chat_vector.py
+#   VARIANT_CPT_MODEL_DIR  optional: the checkpoint the CPT starts from (e.g. the pretrained model)
 #   VARIANT_MODEL      12b (default) or 31b: the 31B trains and is evaluated in 4-bit, micro-batch
 #                      2 x accum 8 (preflight 2026-10-11: 66 GB free while training), results in
 #                      experiments/r31; compat/tool/decoding stages need a 31B eval vLLM and are
@@ -456,6 +459,8 @@ fi
 if [ -n "${VARIANT_CPT_ARGS:-}" ]; then
   CPTD="$LORA/${VARIANT_TAG}_cpt_${SUF}"
   ca=($VARIANT_CPT_ARGS $FOUR_BIT); [ "$TINY" = 1 ] && ca+=($CPT_ARGS)
+  CPT_BASE_DIR=$MODEL_DIR  # what the CPT starts from: the chat-vector merge subtracts it
+  [ "$TINY" != 1 ] && [ -n "${VARIANT_CPT_MODEL_DIR:-}" ] && CPT_BASE_DIR=$(cd "$VARIANT_CPT_MODEL_DIR" && pwd)
   if [ ! -f "$CPTD/run.json" ]; then
     # VARIANT_CPT_MODEL_DIR: CPT on another checkpoint, e.g. the PRETRAINED ~/models/gemma-4-31b-base-bf16
     # (same tensor names/shapes as the IT model); the adapter is then trained on in the IT model
@@ -495,6 +500,22 @@ eb, ea = r.get('english_held_out_before'), r.get('english_held_out_after')
 en = f'Englisch-Held-out {round(math.exp(eb), 2)} -> {round(math.exp(ea), 2)}' if eb is not None and ea is not None else 'kein Englisch-Held-out'
 print(f\"Oshiwambo-Perplexität {round(r['held_out_ppl_before'] or 0, 1)} -> {round(r['held_out_ppl_after'], 2)}, {en}, {r['minutes']} min\")")"
   INIT=$CPTD
+  # all-weights CPT (--full, 2026-10-16, the OkaLM recipe): no adapter to continue. The chat model
+  # is IT + (CPT − CPT start) (scripts/merge_chat_vector.py); the SFT trains a fresh adapter on it,
+  # and the evals and the eval vLLM use it as their base (EVAL_MODEL_DIR).
+  if [[ " $VARIANT_CPT_ARGS " == *" --full "* ]]; then
+    CV="data/private/models/${VARIANT_TAG}_cv_${SUF}"; [ "$TINY" = 1 ] && CV="$LORA/${VARIANT_TAG}_cv"
+    if [ ! -f "$CV/merged_from.json" ]; then
+      log "chat vector $VARIANT_TAG: $MODEL_DIR + (CPT − $CPT_BASE_DIR)"
+      docker run --rm --name "ongiini-build-cv-$VARIANT_TAG" --user 1000:1000 -e HOME=/tmp -e PYTHONUNBUFFERED=1 \
+        -v "$CPT_BASE_DIR:/cvbase:ro" -v "$MODEL_DIR:/cvit:ro" -v "$PWD:/work" -w /work "$IMG" \
+        python3 scripts/merge_chat_vector.py --base /cvbase --it /cvit --cpt "$CPTD" --out "$CV" 2>&1 | tail -2
+      [ -f "$CV/merged_from.json" ] || fail "chat vector merge $VARIANT_TAG"
+    fi
+    MODEL_DIR="$PWD/$CV"; MODEL="/models/$(basename "$CV")"; export EVAL_MODEL_DIR=$MODEL_DIR
+    INIT=""
+    log "SFT base for $VARIANT_TAG: $MODEL_DIR ($(cat "$CV/merged_from.json" | tr -d '\n ' | cut -c1-200))"
+  fi
 fi
 TRAIN=$T4F
 if [ -n "$BUILD_ARGS" ]; then

@@ -16,6 +16,14 @@ The eval set was guarded out of the corpus by prepare_osheng_corpus.py.
 
     python3 scripts/train_cpt.py --model /models/gemma-4-12b-it-bf16 \\
         --out data/private/lora/C1_cpt_12b_r64
+
+--full (2026-10-16, the OkaLM recipe: all weights, lr 1e-5): no LoRA; every language-model
+weight trains except the token embeddings (tied to the output layer; 1B parameters whose
+optimizer transients would not fit), vision and audio stay frozen. No fp32 master copy fits
+next to a 12B on the Spark, and at lr 1e-5 most updates are smaller than half a bf16 step,
+so the optimizer is Adafactor (factored second moment, no momentum) with stochastic rounding
+into the bf16 weights. The result is lm_weights-*.safetensors (trained tensors under their
+checkpoint names), which scripts/merge_chat_vector.py turns into a chat model.
 """
 from __future__ import annotations
 
@@ -24,6 +32,7 @@ import hashlib
 import json
 import math
 import random
+import shutil
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -106,6 +115,84 @@ def provenance(args, cache: Path) -> dict:
                                                      "torch": torch.__version__, "datasets": datasets.__version__}}
 
 
+def sr_bf16(x: torch.Tensor) -> torch.Tensor:
+    """fp32 -> bf16 with stochastic rounding: random low 16 bits added before truncation, so an
+    update of a tenth of a bf16 step lands with probability 0.1 instead of never."""
+    bits = x.contiguous().view(torch.int32)
+    bits = (bits + torch.randint_like(bits, 0, 1 << 16)) & -65536
+    return bits.view(torch.float32).to(torch.bfloat16)
+
+
+class SRAdafactor(torch.optim.Optimizer):
+    """Adafactor (Shazeer & Stern 2018: factored second moment, beta1 = 0, update clipping 1.0) at a
+    fixed learning rate, writing bf16 weights with stochastic rounding. State: one row and one
+    column vector per matrix, so all-weights CPT of the 12B fits (weights + bf16 grads ~ 45 GB)."""
+
+    def __init__(self, params, lr: float, beta2: float = 0.999, eps: float = 1e-30, clip: float = 1.0):
+        super().__init__(params, dict(lr=lr, beta2=beta2, eps=eps, clip=clip))
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        for g in self.param_groups:
+            for p in g["params"]:
+                if p.grad is None:
+                    continue
+                grad = p.grad.float()
+                st = self.state[p]
+                if not st:
+                    st["step"] = 0
+                    if grad.dim() >= 2:
+                        st["row"] = torch.zeros(grad.shape[:-1], device=grad.device)
+                        st["col"] = torch.zeros(grad.shape[:-2] + grad.shape[-1:], device=grad.device)
+                    else:
+                        st["v"] = torch.zeros_like(grad)
+                st["step"] += 1
+                b2 = g["beta2"]; bc = 1 - b2 ** st["step"]
+                sq = grad.square().add_(g["eps"])
+                if grad.dim() >= 2:
+                    st["row"].mul_(b2).add_(sq.mean(-1), alpha=1 - b2)
+                    st["col"].mul_(b2).add_(sq.mean(-2), alpha=1 - b2)
+                    r = st["row"] / bc
+                    v = (r / r.mean(-1, keepdim=True)).unsqueeze(-1) * (st["col"] / bc).unsqueeze(-2)
+                else:
+                    st["v"].mul_(b2).add_(sq, alpha=1 - b2)
+                    v = st["v"] / bc
+                del sq
+                u = grad.mul_(v.rsqrt_())
+                u.div_((u.square().mean().sqrt() / g["clip"]).clamp_(min=1.0))
+                new = p.float().add_(u, alpha=-g["lr"])
+                p.copy_(sr_bf16(new) if p.dtype == torch.bfloat16 else new)
+        return None
+
+
+def checkpoint_name(name: str) -> str:
+    """Parameter name -> its name in the original Gemma 4 checkpoint (model.language_model.<rest>),
+    whichever class (ForCausalLM or ForConditionalGeneration) loaded it."""
+    rest = name.split("language_model.", 1)[1] if "language_model." in name else name.removeprefix("model.")
+    return "model.language_model." + rest
+
+
+def save_trained(model, out: Path, shard_gb: float = 4.0) -> int:
+    """The trained tensors (requires_grad) under their checkpoint names, in ~4 GB shards so
+    serialising never copies the whole model at once. Returns the number of tensors."""
+    from safetensors.torch import save_file
+    out.mkdir(parents=True, exist_ok=True)
+    for f in out.glob("lm_weights-*.safetensors"):
+        f.unlink()
+    shard, size, k, n = {}, 0, 0, 0
+    for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        shard[checkpoint_name(name)] = p.detach().to("cpu", copy=True).contiguous()
+        size += p.numel() * p.element_size(); n += 1
+        if size >= shard_gb * 1e9:
+            save_file(shard, str(out / f"lm_weights-{k:03d}.safetensors"), metadata={"format": "pt"})
+            shard, size, k = {}, 0, k + 1
+    if shard:
+        save_file(shard, str(out / f"lm_weights-{k:03d}.safetensors"), metadata={"format": "pt"})
+    return n
+
+
 def last_complete_checkpoint(out: str) -> str | None:
     """Newest checkpoint that was fully written. A run killed while saving
     leaves a checkpoint folder without trainer_state.json; resuming from it
@@ -114,7 +201,7 @@ def last_complete_checkpoint(out: str) -> str | None:
         return None
     cps = sorted(Path(out).glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[-1]), reverse=True)
     for cp in cps:
-        if (cp / "trainer_state.json").exists() and any(cp.glob("adapter_model.*")):
+        if (cp / "trainer_state.json").exists() and (any(cp.glob("adapter_model.*")) or any(cp.glob("model*.safetensors"))):
             return str(cp)
         print(f"skipping incomplete {cp}", flush=True)
     return None
@@ -146,7 +233,12 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=42, help="block order (our own permutation, logged)")
     ap.add_argument("--keep-steps", type=int, nargs="*", default=[],
                     help="also save the adapter (and the held-out loss) at these steps, kept as <out>/step-N")
+    ap.add_argument("--full", action="store_true",
+                    help="all language-model weights except the embeddings, SR-Adafactor (the OkaLM recipe, use --lr 1e-5)")
+    ap.add_argument("--warmup", type=int, default=30)
     args = ap.parse_args(argv)
+    if args.full and args.four_bit:
+        ap.error("--full trains the bf16 weights; it cannot be combined with --four-bit")
 
     t0 = time.time()
     tok = AutoTokenizer.from_pretrained(args.model)
@@ -208,23 +300,35 @@ def main(argv=None) -> int:
         from peft import prepare_model_for_kbit_training
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True,
                                                 gradient_checkpointing_kwargs={"use_reentrant": False})
-    model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=args.alpha or 2 * args.rank, lora_dropout=0.05,
-                                             target_modules=TARGETS_ALL, task_type="CAUSAL_LM"))
-    model.print_trainable_parameters()
+    opt = None
+    if args.full:
+        multimodal = any("language_model" in n for n, _ in model.named_parameters())
+        for name, p in model.named_parameters():
+            frozen = any(s in name for s in ("embed", "vision", "audio", "lm_head"))
+            p.requires_grad_(not frozen and ("language_model" in name or not multimodal))
+        model.enable_input_require_grads()  # frozen embeddings + gradient checkpointing
+        trained = [p for p in model.parameters() if p.requires_grad]
+        total = sum(p.numel() for p in model.parameters())
+        print(f"trainable params: {sum(p.numel() for p in trained):,} || all params: {total:,} (full, embeddings frozen)", flush=True)
+        opt = SRAdafactor(trained, lr=args.lr)
+    else:
+        model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=args.alpha or 2 * args.rank, lora_dropout=0.05,
+                                                 target_modules=TARGETS_ALL, task_type="CAUSAL_LM"))
+        model.print_trainable_parameters()
 
     cfg = TrainingArguments(
         output_dir=args.out, num_train_epochs=args.epochs, max_steps=args.max_steps, learning_rate=args.lr,
         per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
-        gradient_accumulation_steps=args.accum, lr_scheduler_type="cosine", warmup_steps=30,
+        gradient_accumulation_steps=args.accum, lr_scheduler_type="cosine", warmup_steps=args.warmup,
         logging_steps=10, eval_strategy="steps", eval_steps=args.save_steps, save_strategy="steps",
-        save_steps=args.save_steps, save_total_limit=2, bf16=True, gradient_checkpointing=True,
+        save_steps=args.save_steps, save_total_limit=1 if args.full else 2, bf16=True, gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False}, report_to=[], seed=42,
         remove_unused_columns=False)
     class InOrder(Trainer):
         def _get_train_sampler(self, *a, **k):
             return SequentialSampler(self.train_dataset)
     trainer = InOrder(model=model, args=cfg, train_dataset=train_ds, eval_dataset=held_ds,
-                      data_collator=DataCollatorForLanguageModeling(tok, mlm=False))
+                      data_collator=DataCollatorForLanguageModeling(tok, mlm=False), optimizers=(opt, None))
 
     en_curve: list[list[float]] = []
 
@@ -246,7 +350,10 @@ def main(argv=None) -> int:
         def on_step_end(self, a, state, control, **kw):
             if state.global_step in args.keep_steps and not Path(args.out, f"step-{state.global_step}").exists():
                 d = Path(args.out, f"step-{state.global_step}")
-                trainer.model.save_pretrained(str(d))
+                if args.full:
+                    save_trained(trainer.model, d)
+                else:
+                    trainer.model.save_pretrained(str(d))
                 loss = trainer.evaluate()["eval_loss"]; el = en_loss()
                 (d / "held_out.json").write_text(json.dumps({"step": state.global_step, "held_out_loss": loss,
                                                              "held_out_ppl": math.exp(loss), "english_held_out_loss": el}))
@@ -259,7 +366,12 @@ def main(argv=None) -> int:
     before = trainer.evaluate()["eval_loss"] if not last else None
     en_before = en_loss() if not last else None
     tr = trainer.train(resume_from_checkpoint=last)
-    trainer.save_model(args.out)
+    if args.full:  # the trained tensors only; merge_chat_vector.py builds the model from them
+        print(f"saved {save_trained(trainer.model, Path(args.out))} trained tensors", flush=True)
+        for cp in Path(args.out).glob("checkpoint-*"):  # 24 GB each, only needed to resume
+            shutil.rmtree(cp)
+    else:
+        trainer.save_model(args.out)
     after = trainer.evaluate()["eval_loss"]
     en_after = en_loss()
     res = {**vars(args), "held_out_loss_before": before, "held_out_loss_after": after,
