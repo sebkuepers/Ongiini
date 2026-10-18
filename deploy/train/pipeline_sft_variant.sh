@@ -538,9 +538,11 @@ if sft_stage "$VARIANT_TAG" "$TRAIN" "${VARIANT_EPOCHS:-1}" "${extra[@]}"; then
     # 31B: the live-check suite on an fp8 eval vLLM (same serving as experimental; base31b answers reused)
     log "31B tests $VARIANT_TAG (compat, tools, greedy vs MBR, ow→en)"
     EVAL_MAX_SEQS=16 EXP_MODEL=31b bash deploy/experimental/serve_model.sh "$LORA/${VARIANT_TAG}_31b" || fail "31B eval vLLM for $VARIANT_TAG"
-    CHECK_CONCURRENCY=16 bash deploy/experimental/check_live.sh 31b "$VARIANT_TAG" 2>&1 | grep -E "vs base31b:|ow→en:|does not serve" | cut -c1-600
+    # label TAG31 (as T4b31): the 12B run of the same tag owns data/private/compat/out_TAG and the
+    # suites resume from existing files, so a shared label silently reused the 12B answers (T5, 2026-10-18)
+    CHECK_CONCURRENCY=16 bash deploy/experimental/check_live.sh 31b "${VARIANT_TAG}31" 2>&1 | grep -E "vs base31b:|ow→en:|does not serve" | cut -c1-600
     docker rm -f ongiini-eval-experimental >/dev/null 2>&1
-    [ -f "data/private/compat/report_${VARIANT_TAG}_vs_base31b.json" ] || fail "31B compat report $VARIANT_TAG missing"
+    [ -f "data/private/compat/report_${VARIANT_TAG}31_vs_base31b.json" ] || fail "31B compat report ${VARIANT_TAG}31 missing"
   else
     log "31B tests skipped (tiny)"
   fi
