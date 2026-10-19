@@ -32,6 +32,7 @@ Design:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from owela import ClassifierResult, DEPTH_SHALLOW, InboundMessage, VERDICT_NONE
@@ -138,6 +139,11 @@ class StateGatedClassifier:
         if not verdict or not verdict.startswith("CONTRIBUTE_"):
             return result
 
+        # experimental.ongiini.ai (ONGIINI_CONTRIBUTE_DISABLED=1): people there test the model, so no
+        # contribute flow at all — it answered translation requests with the dataset invite (2026-10-19)
+        if os.environ.get("ONGIINI_CONTRIBUTE_DISABLED") == "1":
+            return self._redirect(result, verdict, "contribute_disabled", "-")
+
         # State-independent contribute verdicts also pass through.
         if verdict in _PASS_THROUGH_CONTRIBUTE:
             return result
@@ -161,10 +167,13 @@ class StateGatedClassifier:
         if _verdict_allowed(verdict, state):
             return result
 
-        reason = _why_blocked(verdict, state)
+        return self._redirect(result, verdict, _why_blocked(verdict, state), h[:8])
+
+    @staticmethod
+    def _redirect(result: ClassifierResult, verdict: str, reason: str, user: str) -> ClassifierResult:
         log.info(
             "state-gate redirect %s→NONE: user=%s reason=%s",
-            verdict, h[:8], reason,
+            verdict, user, reason,
         )
 
         # Preserve the original verdict + classifier attrs in the redirected

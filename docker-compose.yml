@@ -149,6 +149,8 @@ services:
       ONGIINI_SKILLS_OVERRIDE_DIR: /app/skills-override
       # no WhatsApp suggestion line on the first reply (the AI disclosure stays)
       ONGIINI_FIRST_WELCOME: "0"
+      # no contribute flow: the classifier answered translation requests with the dataset invite
+      ONGIINI_CONTRIBUTE_DISABLED: "1"
     user: "1000:1000"
     cap_drop: [ALL]
     security_opt:

@@ -254,3 +254,12 @@ async def test_redirect_preserves_token_counts_for_billing():
     assert result.tokens_in == 100
     assert result.tokens_out == 50
     assert result.cached_tokens == 80
+
+
+@pytest.mark.asyncio
+async def test_contribute_disabled_redirects_invite(monkeypatch):
+    monkeypatch.setenv("ONGIINI_CONTRIBUTE_DISABLED", "1")
+    inner = _FakeInner(ClassifierResult(verdict="CONTRIBUTE_INVITE", depth=DEPTH_SHALLOW))
+    result = await StateGatedClassifier(inner).classify(_msg())
+    assert result.verdict == "NONE"
+    assert result.attrs["redirect_reason"] == "contribute_disabled"
