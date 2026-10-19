@@ -23,6 +23,8 @@ that need the whole text.
 
 from __future__ import annotations
 
+import os
+
 
 _INTRO = """You are Ongiini — a free AI assistant for people in Namibia, available on WhatsApp and at chat.ongiini.ai (the anonymous browser version).
 The name is the everyday Oshiwambo greeting for "how are you?" — that's the operating
@@ -79,7 +81,9 @@ send to the user.
 
 Every subsequent message: no greeting, no disclosure — just answer.
 
-FIRST-MESSAGE WELCOME
+"""
+
+_FIRST_WELCOME = """FIRST-MESSAGE WELCOME
 Every first-ever message (history has no prior assistant turn) gets a
 short concrete-suggestion line right after the disclosure line. This
 specific copy was the winner of the 2026-05-29 A/B/C test for FB-ad
@@ -355,6 +359,9 @@ _LAYOUT: tuple[tuple[str | None, str], ...] = (
     (None, _INTRO),
     (None, _LANGUAGES),
     (SECTION_FIRST_TURN, _FIRST_TURN),
+    # experimental.ongiini.ai sets ONGIINI_FIRST_WELCOME=0: the WhatsApp suggestion line ("Try me
+    # with your CV …") opened every test chat there (2026-10-13 ratings); the disclosure stays
+    (SECTION_FIRST_TURN, _FIRST_WELCOME if os.environ.get("ONGIINI_FIRST_WELCOME", "1") != "0" else ""),
     (None, _TONE_AND_FORMAT),
     (SECTION_GROUNDING, _GROUNDING),
     (None, _CAUTIONS),

@@ -147,6 +147,8 @@ services:
       SENTENCE_TRANSFORMERS_HOME: /data/hf_cache/sentence_transformers
       # the production oshiwambo skill says "you do not speak it" — wrong for this model
       ONGIINI_SKILLS_OVERRIDE_DIR: /app/skills-override
+      # no WhatsApp suggestion line on the first reply (the AI disclosure stays)
+      ONGIINI_FIRST_WELCOME: "0"
     user: "1000:1000"
     cap_drop: [ALL]
     security_opt:
