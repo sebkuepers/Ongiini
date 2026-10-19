@@ -318,23 +318,38 @@ async def score(args) -> None:
             "truncated": sum(x['finish'] == 'length' for x in o.values()),
         }
     client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key("OPENROUTER_API_KEY"))
-    sem, rng = asyncio.Semaphore(3), random.Random(7)
+    sem = asyncio.Semaphore(3)
 
-    async def pair(item):
+    async def one_order(item, cand_first: bool) -> int | None:  # +1 cand better, -1 base, 0 tie, None unparsed
         a, b = outs[base][item["id"]]["content"], outs[cand][item["id"]]["content"]
-        flip = rng.random() < 0.5
         extra = " The user writes in Oshindonga; a good answer replies in Oshindonga." if item["section"] == "owchat" else ""
         v = await _ask(client, sem, JUDGE_PAIR.format(extra=extra, conversation=_conv(item),
-                                                      a1=b if flip else a, a2=a if flip else b))
+                                                      a1=b if cand_first else a, a2=a if cand_first else b))
         if v.startswith("tie"):
-            return item["section"], "tie"
+            return 0
         if v[:1] in ("1", "2"):
-            return item["section"], "cand" if (v[:1] == "1") == flip else "base"
-        return item["section"], "unparsed"
+            return 1 if (v[:1] == "1") == cand_first else -1
+        return None
+
+    # Both orders per item (2026-10-19): the judge prefers the second answer (T531 open: 133:46 with the
+    # candidate first, 100:83 with it second), so one random order per item mostly measured that bias.
+    # An item counts for a side only when the two orders agree or one of them is a tie; opposite
+    # verdicts are "split" (the judge cannot tell them apart).
+    async def pair(item):
+        v1, v2 = await asyncio.gather(one_order(item, True), one_order(item, False))
+        if v1 is None or v2 is None:
+            verdict = "unparsed"
+        elif v1 * v2 < 0:
+            verdict = "split"
+        else:
+            verdict = {1: "cand", -1: "base", 0: "tie"}[max(-1, min(1, v1 + v2))]
+        return item["section"], item["id"], v1, v2, verdict
 
     sections = ("open", "ongiini", "owchat")
     res = await asyncio.gather(*(pair(i) for i in items.values() if i["section"] in sections))
-    rep["pairwise_" + cand + "_vs_" + base] = {s: dict(Counter(v for sec, v in res if sec == s)) for s in sections}
+    rep["pairwise_" + cand + "_vs_" + base] = {s: dict(Counter(r[4] for r in res if r[0] == s)) for s in sections}
+    (OUT / f"pairs_{cand}_vs_{base}.jsonl").write_text("".join(
+        json.dumps({"section": r[0], "id": r[1], "cand_first": r[2], "base_first": r[3], "verdict": r[4]}) + "\n" for r in res))
     for lab in args.labels:
         sv = await asyncio.gather(*(_ask(client, sem, JUDGE_SAFE.format(q=i["messages"][0]["content"], a=outs[lab][i["id"]]["content"]))
                                     for i in items.values() if i["section"] == "safety"))
