@@ -14,6 +14,8 @@ Builds on the T1/T2 recipe (many templates + unique self-distilled replay) and a
   retention vocabulary test so that test stays meaningful;
 - optionally native tool-call replay (--tool-replay), pre-rendered rows that keep
   the adapter calling tools like the base model (T2 lost that, tool_suite.py);
+- optionally (T7, 2026-10-19) --consensus: English chat sentences translated by an ensemble of
+  adapters, the consensus output as target (scripts/consensus_distill.py)
 - optionally (T5, 2026-10-13) READING: --flip-n back-translations reversed, so the
   authentic corpus Oshindonga is the input and the teacher English the answer
   (T4 had only dictionary words in that direction; ow→en did not improve, eval_ow_en.py),
@@ -117,6 +119,8 @@ def main(argv=None) -> int:
     ap.add_argument("--kua-bt", default="", help="Kwanyama back-translations (backtranslate_corpus.py --dialect Oshikwanyama)")
     ap.add_argument("--kua-n", type=int, default=0, help="Kwanyama BT pairs; each is used en→kua (tagged) and kua→en")
     ap.add_argument("--kua-min-lid", type=float, default=0.7, help="LID confidence floor for Kwanyama sentences")
+    ap.add_argument("--consensus", default="", help="consensus_distill.py select output (T7): ensemble-translated English")
+    ap.add_argument("--consensus-n", type=int, default=0, help="best-agreement consensus pairs, en→Ndonga, untagged")
     ap.add_argument("--seed", type=int, default=17)
     args = ap.parse_args(argv)
     rng = random.Random(args.seed)
@@ -164,6 +168,12 @@ def main(argv=None) -> int:
         rows += [render_pair(rng, r["en"].strip(), r["text"].strip(), pool, lex, args, tag="<bt> ", dialect="oshikwanyama") for r in kua]
         rows += [render_flip(rng, r["text"].strip(), r["en"].strip(), "oshikwanyama") for r in kua]
 
+    cons = []
+    if args.consensus and args.consensus_n:  # sorted by agreement: the most reliable targets first
+        cons = [r for r in map(json.loads, open(args.consensus)) if not (grams(r["en"]) & evg or grams(r["text"]) & evg)]
+        cons = cons[: args.consensus_n]
+        rows += [render_pair(rng, r["en"], r["text"], pool, lex, args) for r in cons]
+
     # vocabulary tasks (both directions), excluding the retention word test
     test = json.load(open("data/private/retention/wordtest_500.json"))
     banned = {w["form"].lower() for w in test} | {w["lemma"].lower() for w in test}
@@ -191,7 +201,7 @@ def main(argv=None) -> int:
     rng.shuffle(rows)
     Path(args.out).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     print(json.dumps({"human_pairs": len(human), "dict_examples": len(dict_ex), "human_rows": len(human) * args.human_repeat,
-                      "bt_selected": len(chosen), "flip": len(flips), "kua_pairs": len(kua), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3) if chosen else None,
+                      "bt_selected": len(chosen), "flip": len(flips), "kua_pairs": len(kua), "consensus": len(cons), "bt_nll_cutoff": round(scores[cand[min(len(cand), args.bt_n) - 1]], 3) if chosen else None,
                       "vocab": min(args.vocab_n, len(entries)), "replay": len(replay), "tool_replay": len(tools),
                       "replay_share": round((len(replay) + len(tools)) / len(rows), 3), "rows": len(rows)}))
     return 0
