@@ -109,7 +109,8 @@ def select(args) -> None:
               for a in range(len(c))]
         a = max(range(len(c)), key=lambda k: sc[k])
         n_en, n_ow = len(en.split()), len(c[a].split())
-        if sc[a] < args.min_agreement or not (0.5 <= n_ow / n_en <= 2.5):
+        copied = CHRF.sentence_score(c[a], [en]).score > 60  # the systems left it (mostly) in English
+        if sc[a] < args.min_agreement or copied or not (0.5 <= n_ow / n_en <= 2.5):
             dropped += 1
             continue
         rows.append({"en": en, "text": c[a], "agreement": round(sc[a], 1)})
