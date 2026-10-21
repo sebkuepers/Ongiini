@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Off-machine copy of the rating snapshots (scripts/backup_ratings.sh on the Spark):
+     every 30 min while the Mac is awake, never deleting anything here.
+     Install: cp deploy/mac/com.ongiini.ratings-backup.plist ~/Library/LaunchAgents/ &&
+              launchctl load ~/Library/LaunchAgents/com.ongiini.ratings-backup.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ongiini.ratings-backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string><string>-c</string>
+    <string>mkdir -p "$HOME/Backups/ongiini-ratings" &amp;&amp; /usr/bin/rsync -a -e "ssh -o BatchMode=yes -o ConnectTimeout=30" nexus@100.101.126.33:backups/ratings/ "$HOME/Backups/ongiini-ratings/" &amp;&amp; date "+%F %T ok" >> "$HOME/Backups/ongiini-ratings/pull.log"</string>
+  </array>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/ongiini-ratings-backup.err</string>
+</dict>
+</plist>

@@ -20,6 +20,9 @@ Most raters get their link themselves by asking Ongiini AI on WhatsApp
 reference translator, who must not rate her own translations;
 block-number works before the number ever asks.
 
+Review answers are protected: delete-rater, delete-round and reset-test
+refuse while they would delete any, unless --delete-review-answers is given.
+
 delete-rater removes a rater and all their ratings; delete-round removes a
 round's items and their ratings; reset-test wipes everything (test phase
 only — refuses without --yes).
@@ -47,12 +50,26 @@ from ongiini import contributions, ratings  # noqa: E402
 BASE_URL = "https://ongiini.ai/rate/"
 
 
+def review_answers(con, where: str = "1", params: tuple = ()) -> int:
+    """Review answers a destructive command would delete — those must never go by accident."""
+    return con.execute("SELECT COUNT(*) FROM ratings r JOIN items i USING (item_key) "
+                       f"WHERE i.grp = 'review' AND {where}", params).fetchone()[0]
+
+
+def refuse(n: int) -> int:
+    print(f"REFUSED: this would delete {n} review answers. Back them up first "
+          "(scripts/backup_ratings.sh) and re-run with --delete-review-answers.")
+    return 1
+
+
 def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__)
         return 1
     con = ratings.connect()
     cmd, args = argv[0], argv[1:]
+    force = "--delete-review-answers" in args
+    args = [a for a in args if a != "--delete-review-answers"]
     if cmd == "add-rater" and len(args) >= 2:
         dialects = args[1:]
         bad = [d for d in dialects if d not in ("oshindonga", "oshikwanyama")]
@@ -103,11 +120,17 @@ def main(argv: list[str]) -> int:
             con.execute("UPDATE raters SET active = 0 WHERE rater_id = ?", (int(args[0]),))
         print("deactivated")
     elif cmd == "delete-rater" and len(args) == 1:
+        if not force and (n := review_answers(con, "r.rater_id = ?", (int(args[0]),))):
+            return refuse(n)
         ratings.delete_rater(con, int(args[0]))
         print("deleted rater and their ratings")
     elif cmd == "delete-round" and len(args) == 1:
+        if not force and (n := review_answers(con, "i.round = ?", (args[0],))):
+            return refuse(n)
         print(f"{ratings.delete_round(con, args[0])} items deleted (with their ratings)")
     elif cmd == "reset-test" and args == ["--yes"]:
+        if not force and (n := review_answers(con)):
+            return refuse(n)
         with con:
             for t in ("ratings", "items", "raters"):
                 con.execute(f"DELETE FROM {t}")
