@@ -28,6 +28,7 @@ REPLIES = {
     "returning": "Here's your new link (the old one no longer works):\n{url}",
     "whatsapp_only": "Checking translations works on WhatsApp — message Ongiini AI there.",
     "blocked": "Sorry, this isn't open to you. Happy to help with anything else!",
+    "paused": "Thank you for offering! Checking translations is paused at the moment — please ask again later.",
     "error": "Sorry, I couldn't create your link right now. Please try again later.",
 }
 
@@ -45,7 +46,7 @@ def _with_reply(ctx: ToolContext, result: dict) -> str:
     description=(
         "FORCED by classifier verdict RATE_INVITE — the user wants to help "
         "CHECK (rate) existing Oshiwambo translations on ongiini.ai/rate. "
-        "Returns JSON: status ('ok' | 'whatsapp_only' | 'blocked' | 'error'), "
+        "Returns JSON: status ('ok' | 'whatsapp_only' | 'blocked' | 'paused' | 'error'), "
         "url (their personal link — quote it exactly), returning (bool: they "
         "had a link before; the old one no longer works), done (ratings so far), "
         "reply (the finished message, sent as-is)."

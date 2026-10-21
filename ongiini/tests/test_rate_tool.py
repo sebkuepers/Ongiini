@@ -68,3 +68,10 @@ async def test_reply_is_short_and_carries_the_exact_link():
 async def test_first_ever_message_leads_with_ai_disclosure():
     r = json.loads(await rate_link(_ctx()))
     assert r["reply"].startswith("Ongiini! I'm an AI assistant.\n\nGreat!")
+
+
+@pytest.mark.asyncio
+async def test_paused_open_rating_gives_no_link():
+    ratings.set_open_rating(ratings.connect(), False)
+    out = json.loads(await rate_link(_ctx()))
+    assert out["status"] == "paused" and "paused" in out["reply"] and "url" not in out

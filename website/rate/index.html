@@ -564,6 +564,7 @@
   });
 
   function begin(s) {
+    if (s.paused) { msg("Checking is paused right now.", "Tangi unene for your help so far! Please check back later."); return; }
     review = !!s.review; document.body.classList.toggle("review", review);
     prog = s.progress; count();
     if (s.needs_profile) { show("v-profile"); return; }

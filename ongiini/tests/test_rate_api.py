@@ -69,3 +69,20 @@ def test_reviewer_session_progress_and_undo(tmp_path, monkeypatch):
     u = c.post("/v1/rate/undo", json={"token": token}).json()
     assert u["progress"]["done"] == 0 and u["item"]["item_key"] == first
     assert c.post("/v1/rate/undo", json={"token": open_token}).status_code == 400
+
+
+def test_paused_open_rater_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    app = FastAPI()
+    app.include_router(build_router(), prefix="/v1/rate")
+    c = TestClient(app)
+    con = ratings.connect()
+    ratings.load_items(con, [{"round": "r1", "dialect": "oshindonga", "english": "Hello", "item_key": "a",
+                              "sentence_id": 1, "text": "Wa lalapo", "grp": "random_ref", "kind": "ref",
+                              "source": "kaarina"}])
+    token = ratings.add_rater(con, "Open", ["oshindonga"])
+    ratings.set_open_rating(con, False)
+    con.close()
+    s = c.post("/v1/rate/session", json={"token": token}).json()
+    assert s["paused"] and "item" not in s
+    assert c.post("/v1/rate/answer", json={"token": token, "item_key": "a", "verdict": "good"}).status_code == 400

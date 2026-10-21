@@ -320,3 +320,20 @@ def test_reviewer_undo_returns_last_item(con):
 def test_add_reviewer_needs_items(con):
     with pytest.raises(ValueError):
         ratings.add_reviewer(con, "Rev", "oshindonga", "v1_review")
+
+
+def test_paused_open_rating_leaves_only_reviewers(con):
+    ratings.load_items(con, full_set() + review_set())
+    _, r = rater(con)
+    _, rv = reviewer(con)
+    assert ratings.open_rating_enabled(con)
+    ratings.set_open_rating(con, False)
+    assert ratings.paused_for(con, r) and not ratings.paused_for(con, rv)
+    assert ratings.next_item(con, r) is None
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "ref0", "good")
+    assert ratings.link_for_contributor(con, "h" * 64) == {"status": "paused"}
+    assert con.execute("SELECT COUNT(*) FROM raters WHERE contributor_hash IS NOT NULL").fetchone()[0] == 0
+    assert len(run(con, rv, 5)) == 5
+    ratings.set_open_rating(con, True)
+    assert ratings.next_item(con, r) is not None

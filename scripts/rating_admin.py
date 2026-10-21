@@ -5,6 +5,7 @@
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py load /data/private/rating_items_r1.json
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py add-reviewer "Ndapewa" oshikwanyama v1_review
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py review-progress v1_review
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py open-rating off
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py report
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py raters
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py deactivate 3
@@ -25,6 +26,9 @@ only — refuses without --yes).
 
 add-reviewer invites a native speaker to check EVERY review item of one
 dialect in a round (build items with scripts/build_review_items.py).
+
+open-rating off pauses the open rating (no new WhatsApp links, open raters
+get no items) so only reviewers work; open-rating on resumes it.
 
 add-rater prints the personal invite link once — send it via WhatsApp.
 Only a hash of the token is stored; a lost link is replaced by a new rater.
@@ -64,6 +68,9 @@ def main(argv: list[str]) -> int:
             print(exc)
             return 1
         print(f"{args[0]} (review {args[2]}, {args[1]}):\n  {BASE_URL}#t={token}")
+    elif cmd == "open-rating" and args in (["on"], ["off"]):
+        ratings.set_open_rating(con, args[0] == "on")
+        print(f"open rating {args[0]} (reviewers are not affected)")
     elif cmd == "review-progress" and len(args) == 1:
         for r in con.execute(
                 "SELECT ra.rater_id, ra.label, ra.dialects, COUNT(r.rating_id) done, "

@@ -11,6 +11,9 @@ body (never in a URL the server logs):
   * ``/undo``    — reviewers only: take back the last answer and return
     that item again
 
+While the open rating is paused, open raters get ``paused`` and no item;
+reviewers carry on.
+
 Real items never reveal whether a translation is the human reference, a
 model or a control. See ongiini/ratings.py for assignment and storage.
 """
@@ -57,7 +60,10 @@ def build_router() -> APIRouter:
     def state(con, rater) -> dict:
         out = {"label": rater["label"], "dialects": [d for d in rater["dialects"].split(",") if d],
                "progress": ratings.progress(con, rater["rater_id"]),
-               "needs_profile": ratings.needs_profile(rater), "review": bool(rater["review_round"])}
+               "needs_profile": ratings.needs_profile(rater), "review": bool(rater["review_round"]),
+               "paused": ratings.paused_for(con, rater)}
+        if out["paused"]:
+            return out
         if not out["needs_profile"]:
             out |= {"practice": ratings.practice_items(con, rater), "item": ratings.next_item(con, rater)}
         return out

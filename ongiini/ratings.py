@@ -29,6 +29,8 @@ e.g. all 600 of the translator's sentences). They get only that round's
 items, each once, in a fixed per-reviewer shuffle — no practice, controls,
 model outputs or repeats — see their total, and may undo their last answer.
 Review items never reach the open raters: they include the blind split.
+The open rating can be paused (set_open_rating) so that only reviewers
+work: no new WhatsApp links, and open raters get no items and can't answer.
 
 Every session mixes the groups in fixed proportions (weighted round
 robin), so an early drop-out still leaves a usable random sample.
@@ -94,6 +96,10 @@ CREATE TABLE IF NOT EXISTS items (
   pair_of     TEXT,                       -- claude_pair: the reference item
   severity    INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS config (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ratings (
   rating_id   INTEGER PRIMARY KEY,
   item_key    TEXT NOT NULL REFERENCES items(item_key),
@@ -151,6 +157,22 @@ def add_rater(con: sqlite3.Connection, label: str, dialects: list[str]) -> str:
     return token
 
 
+def open_rating_enabled(con: sqlite3.Connection) -> bool:
+    row = con.execute("SELECT value FROM config WHERE key = 'open_rating'").fetchone()
+    return row is None or row["value"] == "on"
+
+
+def set_open_rating(con: sqlite3.Connection, on: bool) -> None:
+    with con:
+        con.execute("INSERT INTO config (key, value) VALUES ('open_rating', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value", ("on" if on else "off",))
+
+
+def paused_for(con: sqlite3.Connection, rater: sqlite3.Row) -> bool:
+    """An open rater while the open rating is paused (reviewers never are)."""
+    return not rater["review_round"] and not open_rating_enabled(con)
+
+
 def add_reviewer(con: sqlite3.Connection, label: str, dialect: str, round_: str) -> str:
     """Create a reviewer for one dialect of a review round; the profile is
     set here (invited native speaker), so the link opens on the welcome."""
@@ -173,7 +195,9 @@ def link_for_contributor(con: sqlite3.Connection, contributor_hash: str) -> dict
     A returning rater keeps their id and ratings but gets a NEW token —
     only token hashes are stored, so the old link cannot be re-sent; it
     stops working. Blocked numbers (e.g. the reference translator) get
-    no link."""
+    no link. While the open rating is paused nobody gets one."""
+    if not open_rating_enabled(con):
+        return {"status": "paused"}
     row = con.execute("SELECT * FROM raters WHERE contributor_hash = ?", (contributor_hash,)).fetchone()
     if row is not None and (row["blocked"] or not row["active"]):
         return {"status": "blocked"}
@@ -287,6 +311,8 @@ def next_item(con: sqlite3.Connection, rater: sqlite3.Row) -> dict | None:
     pairing rules allow. A reviewer gets the next unrated review item."""
     if rater["review_round"]:
         return _next_review(con, rater)
+    if paused_for(con, rater):
+        return None
     rid = rater["rater_id"]
     dialects = rater["dialects"].split(",")
     marks = ",".join("?" * len(dialects))
@@ -380,6 +406,8 @@ def record(con: sqlite3.Connection, rater: sqlite3.Row, item_key: str, verdict: 
     item = con.execute("SELECT dialect, grp, round FROM items WHERE item_key = ?", (item_key,)).fetchone()
     if not item or item["dialect"] not in rater["dialects"].split(",") or item["grp"] == "practice":
         raise ValueError("unknown item")
+    if paused_for(con, rater):
+        raise ValueError("paused")
     reviewing = (item["grp"], item["round"]) == ("review", rater["review_round"])
     if (item["grp"] == "review") != reviewing or (rater["review_round"] and not reviewing):
         raise ValueError("unknown item")
