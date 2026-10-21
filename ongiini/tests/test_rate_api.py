@@ -43,3 +43,29 @@ def test_session_and_answer_flow(tmp_path, monkeypatch):
     ok = c.post("/v1/rate/answer", json={"token": token, "item_key": "a", "verdict": "almost",
                                          "issues": ["word_choice"], "suggestion": "Wa lala po"}).json()
     assert ok["progress"] == {"done": 1, "everyone": 1} and ok["item"] is None
+
+
+def test_reviewer_session_progress_and_undo(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    app = FastAPI()
+    app.include_router(build_router(), prefix="/v1/rate")
+    c = TestClient(app)
+    con = ratings.connect()
+    ratings.load_items(con, [
+        {"round": "v1_review", "dialect": "oshikwanyama", "english": f"en {i}", "item_key": f"k{i}",
+         "sentence_id": i, "text": f"okw {i}", "grp": "review", "kind": "ref", "source": "kaarina"}
+        for i in range(3)])
+    token = ratings.add_reviewer(con, "Rev", "oshikwanyama", "v1_review")
+    open_token = ratings.add_rater(con, "Open", ["oshikwanyama"])
+    con.close()
+
+    s = c.post("/v1/rate/session", json={"token": token}).json()
+    assert s["review"] and not s["needs_profile"] and s["practice"] == []
+    assert s["progress"] == {"done": 0, "total": 3}
+    first = s["item"]["item_key"]
+    a = c.post("/v1/rate/answer", json={"token": token, "item_key": first, "verdict": "wrong",
+                                        "issues": ["meaning"], "suggestion": "fixed"}).json()
+    assert a["progress"] == {"done": 1, "total": 3} and a["item"]["item_key"] != first
+    u = c.post("/v1/rate/undo", json={"token": token}).json()
+    assert u["progress"]["done"] == 0 and u["item"]["item_key"] == first
+    assert c.post("/v1/rate/undo", json={"token": open_token}).status_code == 400

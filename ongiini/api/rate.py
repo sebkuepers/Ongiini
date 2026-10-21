@@ -8,6 +8,8 @@ body (never in a URL the server logs):
   * ``/profile`` — store dialect(s), first language and home dialect, then as /session
   * ``/answer``  — store one verdict (+ optional issues, better
     translation, or a can't-judge reason) and return the next item
+  * ``/undo``    — reviewers only: take back the last answer and return
+    that item again
 
 Real items never reveal whether a translation is the human reference, a
 model or a control. See ongiini/ratings.py for assignment and storage.
@@ -55,7 +57,7 @@ def build_router() -> APIRouter:
     def state(con, rater) -> dict:
         out = {"label": rater["label"], "dialects": [d for d in rater["dialects"].split(",") if d],
                "progress": ratings.progress(con, rater["rater_id"]),
-               "needs_profile": ratings.needs_profile(rater)}
+               "needs_profile": ratings.needs_profile(rater), "review": bool(rater["review_round"])}
         if not out["needs_profile"]:
             out |= {"practice": ratings.practice_items(con, rater), "item": ratings.next_item(con, rater)}
         return out
@@ -95,6 +97,20 @@ def build_router() -> APIRouter:
                 raise HTTPException(status_code=400, detail=str(exc)) from None
             return {"progress": ratings.progress(con, rater["rater_id"]),
                     "item": ratings.next_item(con, rater)}
+        finally:
+            con.close()
+
+    @router.post("/undo")
+    def undo(body: SessionIn) -> dict:
+        con = ratings.connect()
+        try:
+            rater = rater_or_401(con, body.token)
+            try:
+                item = ratings.undo_last(con, rater)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from None
+            return {"progress": ratings.progress(con, rater["rater_id"]),
+                    "item": item or ratings.next_item(con, rater)}
         finally:
             con.close()
 

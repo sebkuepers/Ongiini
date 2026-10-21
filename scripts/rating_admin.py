@@ -3,6 +3,8 @@
 
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py add-rater "Ndapewa" oshikwanyama
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py load /data/private/rating_items_r1.json
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py add-reviewer "Ndapewa" oshikwanyama v1_review
+    docker exec -i ongiini-webhook python3 /data/private/rating_admin.py review-progress v1_review
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py report
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py raters
     docker exec -i ongiini-webhook python3 /data/private/rating_admin.py deactivate 3
@@ -20,6 +22,9 @@ block-number works before the number ever asks.
 delete-rater removes a rater and all their ratings; delete-round removes a
 round's items and their ratings; reset-test wipes everything (test phase
 only — refuses without --yes).
+
+add-reviewer invites a native speaker to check EVERY review item of one
+dialect in a round (build items with scripts/build_review_items.py).
 
 add-rater prints the personal invite link once — send it via WhatsApp.
 Only a hash of the token is stored; a lost link is replaced by a new rater.
@@ -52,6 +57,23 @@ def main(argv: list[str]) -> int:
             return 1
         token = ratings.add_rater(con, args[0], dialects)
         print(f"{args[0]} ({', '.join(dialects)}):\n  {BASE_URL}#t={token}")
+    elif cmd == "add-reviewer" and len(args) == 3:
+        try:
+            token = ratings.add_reviewer(con, args[0], args[1], args[2])
+        except ValueError as exc:
+            print(exc)
+            return 1
+        print(f"{args[0]} (review {args[2]}, {args[1]}):\n  {BASE_URL}#t={token}")
+    elif cmd == "review-progress" and len(args) == 1:
+        for r in con.execute(
+                "SELECT ra.rater_id, ra.label, ra.dialects, COUNT(r.rating_id) done, "
+                "(SELECT COUNT(*) FROM items i WHERE i.round = ra.review_round AND i.grp = 'review' "
+                " AND i.dialect = ra.dialects) total, "
+                "SUM(r.verdict = 'good') good, SUM(r.verdict = 'almost') almost, SUM(r.verdict = 'wrong') wrong, "
+                "SUM(r.verdict = 'cant_judge') cant, datetime(MAX(r.created_at), 'unixepoch') last "
+                "FROM raters ra LEFT JOIN ratings r USING (rater_id) WHERE ra.review_round = ? "
+                "GROUP BY ra.rater_id", (args[0],)):
+            print(dict(r))
     elif cmd == "load" and len(args) == 1:
         n = ratings.load_items(con, json.loads(Path(args[0]).read_text()))
         print(f"{n} items in the database")

@@ -144,6 +144,10 @@
     .slow strong { display: block; font-size: 17px; margin-bottom: 2px; }
     @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
     @media (prefers-reduced-motion: reduce) { .slow { animation: none; } }
+    .meterbar { height: 6px; border-radius: 999px; background: var(--rule-faint); overflow: hidden; margin-bottom: 8px; }
+    .meterbar div { height: 100%; background: var(--terracotta); transition: width .3s; }
+    .hint { font-size: 14px; color: var(--ink-soft); margin: 4px 0 0; }
+    body:not(.review) .rv-only { display: none !important; }
     .hidden { display: none !important; }
     .err { color: var(--bad); }
   </style>
@@ -206,6 +210,21 @@
       <p class="fine" style="margin-top:22px">We store your answers under a random ID — never your phone number itself. <a href="/privacy/">Privacy policy</a></p>
     </section>
 
+    <!-- welcome for invited reviewers: every sentence of one dialect -->
+    <section id="v-rwelcome" class="hidden">
+      <p class="eyebrow">Review · <span class="w-d"></span></p>
+      <h2 class="h1">Tangi unene<span class="rw-name-wrap">, <em class="rw-name"></em></span>.</h2>
+      <p>Please review <strong>all <span id="rw-total"></span> <span class="w-d"></span> translations</strong> of our test set, one at a time. For each one: <strong>is it a correct <span class="w-d"></span> translation of the English?</strong></p>
+      <ul class="steps">
+        <li><span class="n">1</span><span><strong>Yes</strong> if it is correct and natural <span class="w-d"></span>.</span></li>
+        <li><span class="n">2</span><span><strong>Almost</strong> or <strong>No</strong>: correct it in the box. Change only what is wrong and keep the rest as it is.</span></li>
+        <li><span class="n">3</span><span>Words from another dialect count as a mistake — please write it in <span class="w-d"></span>.</span></li>
+      </ul>
+      <p>Your progress is saved after every sentence. Stop whenever you like and continue later with the same link.</p>
+      <div class="row"><button class="btn" id="rw-go">Start <span>→</span></button></div>
+      <p class="fine" style="margin-top:22px">These sentences are part of an unpublished test set — please don't share them. <a href="/privacy/">Privacy policy</a></p>
+    </section>
+
     <!-- tip after practice -->
     <section id="v-tip" class="hidden">
       <div class="stepbar" id="tip-bar"></div>
@@ -219,6 +238,7 @@
     <!-- task (also used for practice) -->
     <section id="v-task" class="hidden">
       <div class="stepbar" id="bar"></div>
+      <div class="meterbar hidden" id="rbar"><div id="rbar-fill"></div></div>
       <p class="steplabel" id="bar-label"></p>
       <div class="card" style="margin-bottom:10px">
         <div class="label">English</div>
@@ -228,7 +248,7 @@
         <div class="label" id="t-lang"></div>
         <p class="tgt" id="t-text"></p>
       </div>
-      <p class="q">Does it say the same as the English?</p>
+      <p class="q" id="t-q">Does it say the same as the English?</p>
       <p class="slow hidden" id="slow" role="alert"><strong>Slow down a little.</strong> Take your time — check it against the English.</p>
       <div class="answers" id="answers">
         <button class="answer" type="button" data-v="good" aria-pressed="false"><span class="icon i-good">✓</span><span><strong>Yes</strong><small>Same meaning</small></span></button>
@@ -243,13 +263,15 @@
         <button class="change" type="button" data-change>← Change answer</button>
         <div class="label">What is off? (optional)</div>
         <div class="chips" id="issues">
+          <button class="chip rv-only" type="button" data-i="meaning" aria-pressed="false">Meaning</button>
           <button class="chip" type="button" data-i="word_choice" aria-pressed="false">Word choice</button>
           <button class="chip" type="button" data-i="spelling_grammar" aria-pressed="false">Spelling / grammar</button>
           <button class="chip" type="button" data-i="unnatural" aria-pressed="false">Sounds unnatural</button>
           <button class="chip" type="button" data-i="other_dialect" aria-pressed="false">Other dialect</button>
         </div>
-        <div class="label" style="margin-top:16px">How would you say it? (optional)</div>
+        <div class="label" style="margin-top:16px" id="s-label">How would you say it? (optional)</div>
         <textarea id="s-text" placeholder="Write your translation here"></textarea>
+        <p class="hint rv-only" id="s-hint">Correct the translation above — change only what is wrong.</p>
         <div class="actions"><button class="btn" id="next">Next <span>→</span></button></div>
       </div>
 
@@ -262,7 +284,8 @@
           <button class="chip" type="button" data-c="other">Something else</button>
         </div>
       </div>
-      <div class="actions" id="cant-row"><button class="skip" id="skip">I can't judge this one</button></div>
+      <div class="actions" id="cant-row"><button class="skip" id="skip">I can't judge this one</button>
+        <button class="skip rv-only hidden" id="undo" type="button">← Previous sentence</button></div>
       <p class="err" id="t-err"></p>
     </section>
 
@@ -292,12 +315,18 @@
   var ROUND = 5, FAST_MS = 3000;   // 3 answers in a row under 3 s → slow-down hint, every time
   var token = null, item = null, next = null, verdict = null, shownAt = 0, session = 0, busy = false;
   var practiced = false, fastRun = 0, practice = [], pIdx = -1, prog = { done: 0, everyone: 0 };
+  // Invited reviewers (s.review) check every sentence of one dialect: a
+  // progress meter instead of rounds of 5, a break page every REVIEW_BREAK,
+  // a required correction after Almost/No, and an undo.
+  var review = false, REVIEW_BREAK = 25;
   var $ = function (id) { return document.getElementById(id); };
-  var VIEWS = ["v-msg", "v-start", "v-profile", "v-welcome", "v-tip", "v-task", "v-break"];
+  var VIEWS = ["v-msg", "v-start", "v-profile", "v-welcome", "v-rwelcome", "v-tip", "v-task", "v-break"];
   function show(id) { VIEWS.forEach(function (v) { $(v).classList.toggle("hidden", v !== id); }); window.scrollTo(0, 0); }
   function msg(title, text) { $("msg-title").textContent = title; $("msg-text").textContent = text || ""; show("v-msg"); }
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
-  function count() { $("count").textContent = prog.done ? prog.done + " checked" : ""; }
+  function count() {
+    $("count").textContent = review ? prog.done + " / " + prog.total : prog.done ? prog.done + " checked" : "";
+  }
   function press(host, sel, on) { host.querySelectorAll(sel).forEach(function (b) { b.setAttribute("aria-pressed", b === on ? "true" : "false"); }); }
 
   var m = location.hash.match(/t=([A-Za-z0-9_\-]+)/);
@@ -351,6 +380,16 @@
     $("cant-row").classList.toggle("hidden", isPractice);
     $("t-en").textContent = it.english; $("t-text").textContent = it.text;
     $("t-lang").textContent = NAMES[it.dialect] || it.dialect;
+    $("bar").classList.toggle("hidden", review); $("rbar").classList.toggle("hidden", !review);
+    if (review) {
+      $("rbar-fill").style.width = (prog.done / Math.max(1, prog.total) * 100) + "%";
+      $("bar-label").textContent = "Sentence " + (prog.done + 1) + " of " + prog.total; $("bar-label").classList.remove("practice");
+      $("undo").classList.toggle("hidden", prog.done === 0);
+      $("s-label").textContent = "Corrected translation";
+      $("t-q").textContent = "Is it correct " + (NAMES[it.dialect] || it.dialect) + " for the English?";
+      if (fastRun >= 3) { $("slow").classList.remove("hidden"); fastRun = 0; }
+      shownAt = Date.now(); show("v-task"); return;
+    }
     var P = isPractice || (practiced && session < ROUND) ? practice.length : 0;
     if (isPractice) stepbar("bar", "bar-label", P, pIdx, "Practice " + (pIdx + 1) + " of " + P, true);
     else stepbar("bar", "bar-label", P, P + session % ROUND, "Sentence " + (session % ROUND + 1) + " of " + ROUND, false);
@@ -392,6 +431,23 @@
     var num = document.createElement("span"); num.className = "num"; num.textContent = String(prog.done);
     var lbl = document.createElement("small"); lbl.textContent = "checked";
     inner.appendChild(num); inner.appendChild(lbl); badge.appendChild(inner);
+    if (review) {
+      $("b-stars").classList.add("hidden"); $("b-together").classList.add("hidden");
+      lbl.textContent = "of " + prog.total;
+      if (kind === "done") {
+        $("b-eyebrow").textContent = "All done"; $("b-title").textContent = "All " + prog.total + " sentences reviewed!";
+        $("b-text").textContent = "Tangi unene — that's the whole set. We'll be in touch.";
+        $("b-actions").classList.add("hidden");
+      } else {
+        $("b-eyebrow").textContent = prog.done + " of " + prog.total;
+        $("b-title").textContent = (prog.total - prog.done) + " to go.";
+        $("b-text").textContent = "Tangi unene! Take a break whenever you like — your progress is saved.";
+        $("b-more").innerHTML = "Continue <span>→</span>"; $("b-actions").classList.remove("hidden");
+      }
+      show("v-break"); badge.classList.remove("pop"); void badge.offsetWidth; badge.classList.add("pop");
+      if (kind === "done") confetti();
+      return;
+    }
     if (kind === "done") {
       $("b-eyebrow").textContent = "All done"; $("b-title").textContent = "That's every sentence for now!";
       $("b-text").textContent = "Tangi unene — we'll let you know when there are new ones.";
@@ -437,7 +493,7 @@
     post("/answer", Object.assign({ token: token, item_key: item.item_key, duration_ms: ms }, payload))
       .then(function (r) {
         session += 1; prog = r.progress; count(); $("next").disabled = false;
-        if (session % ROUND === 0 && r.item) {
+        if (review ? prog.done % REVIEW_BREAK === 0 && r.item : session % ROUND === 0 && r.item) {
           item = r.item; reward("round"); return;
         }
         render(r.item);
@@ -458,10 +514,21 @@
         return;
       }
       if (verdict === "good") { send({ verdict: "good" }); return; }
+      if (review) { if (!$("s-text").value) $("s-text").value = item.text; corrected(); }
       $("follow").classList.remove("hidden");
       $("answers").classList.add("chosen"); $("follow").classList.remove("hidden"); focusOn(b);
     });
   });
+  function corrected() {                        // reviewers must change the text after Almost/No
+    if (review) $("next").disabled = !$("s-text").value.trim() || $("s-text").value.trim() === item.text.trim();
+  }
+  $("s-text").addEventListener("input", corrected);
+  $("undo").addEventListener("click", function () {
+    if (busy) return; busy = true;
+    post("/undo", { token: token }).then(function (r) { prog = r.progress; count(); render(r.item); })
+      .catch(function () { busy = false; $("t-err").textContent = "That didn't work — please check your connection and try again."; });
+  });
+  $("rw-go").addEventListener("click", function () { render(item); });
   document.querySelectorAll("[data-change]").forEach(function (b) { b.addEventListener("click", unchoose); });
   $("issues").querySelectorAll(".chip").forEach(function (b) {
     b.addEventListener("click", function () { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true"); });
@@ -497,6 +564,7 @@
   });
 
   function begin(s) {
+    review = !!s.review; document.body.classList.toggle("review", review);
     prog = s.progress; count();
     if (s.needs_profile) { show("v-profile"); return; }
     var d = s.dialects.map(function (x) { return NAMES[x] || x; }).join(" and ");
@@ -504,6 +572,12 @@
     $("w-name").textContent = named ? s.label : ""; $("w-name-wrap").classList.toggle("hidden", !named);
     document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
     item = s.item;
+    if (review) {
+      document.querySelectorAll(".rw-name").forEach(function (e) { e.textContent = s.label; });
+      $("rw-total").textContent = prog.total;
+      if (prog.done > 0) render(item); else show("v-rwelcome");
+      return;
+    }
     practice = (s.practice || []).filter(function (p) { return p.dialect === s.dialects[0]; }).slice(0, 2);
     if (go || prog.done > 0) render(item); else show("v-welcome");
   }

@@ -149,7 +149,7 @@ def test_record_validation_and_scrubbing(con):
     with pytest.raises(ValueError):
         ratings.record(con, r, "ref1", "great")
     with pytest.raises(ValueError):
-        ratings.record(con, r, "ref1", "wrong", issues=["meaning"])
+        ratings.record(con, r, "ref1", "wrong", issues=["bogus"])
     with pytest.raises(ValueError):
         ratings.record(con, r, "ref1", "cant_judge", cant_reason="tired")
     ratings.record(con, r, "ref1", "wrong", issues=["word_choice", "unnatural"],
@@ -262,3 +262,61 @@ def test_migration_adds_columns_to_old_schema(tmp_path):
     row = c.execute("SELECT * FROM raters").fetchone()
     assert row["blocked"] == 0 and ratings.needs_profile(row)      # admin raters answer once
     c.close()
+
+
+def review_set(n=30):
+    return [{**item(f"rv{d[4]}{s}", s, "review", dialect=d), "round": "v1_review", "source": "kaarina"}
+            for s in range(n) for d in ratings.DIALECTS]
+
+
+def reviewer(con, dialect="oshikwanyama"):
+    token = ratings.add_reviewer(con, "Rev", dialect, "v1_review")
+    return token, ratings.rater_for(con, token)
+
+
+def test_reviewer_gets_every_review_item_of_their_dialect_once(con):
+    ratings.load_items(con, full_set() + review_set())
+    _, r = reviewer(con)
+    assert not ratings.needs_profile(r) and ratings.practice_items(con, r) == []
+    assert ratings.progress(con, r["rater_id"]) == {"done": 0, "total": 30}
+    served = run(con, r, 100)
+    assert len(served) == len(set(served)) == 30
+    assert all(k.startswith("rvk") for k in served)
+    assert served != sorted(served, key=lambda k: int(k[3:]))       # shuffled, not in id order
+    assert ratings.progress(con, r["rater_id"]) == {"done": 30, "total": 30}
+    with pytest.raises(ValueError):
+        ratings.record(con, r, served[0], "good")                    # no repeats for reviewers
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "ref0", "good")                       # nothing outside the round
+
+
+def test_open_raters_never_see_review_items(con):
+    ratings.load_items(con, full_set() + review_set())
+    _, r = rater(con, dialects=("oshikwanyama", "oshindonga"))
+    served = run(con, r, 500)
+    assert served and not any(k.startswith("rv") for k in served)
+    with pytest.raises(ValueError):
+        ratings.record(con, r, "rvk0", "good")
+    _, rv = reviewer(con)
+    run(con, rv, 3)
+    assert ratings.progress(con, r["rater_id"])["everyone"] == len(served)
+
+
+def test_reviewer_undo_returns_last_item(con):
+    ratings.load_items(con, review_set(5))
+    _, r = reviewer(con, "oshindonga")
+    first = ratings.next_item(con, r)
+    ratings.record(con, r, first["item_key"], "almost", issues=["meaning"], suggestion="better")
+    assert ratings.progress(con, r["rater_id"])["done"] == 1
+    assert ratings.undo_last(con, r)["item_key"] == first["item_key"]
+    assert ratings.progress(con, r["rater_id"])["done"] == 0
+    assert ratings.next_item(con, r)["item_key"] == first["item_key"]
+    assert ratings.undo_last(con, r) is None
+    _, open_rater = rater(con)
+    with pytest.raises(ValueError):
+        ratings.undo_last(con, open_rater)
+
+
+def test_add_reviewer_needs_items(con):
+    with pytest.raises(ValueError):
+        ratings.add_reviewer(con, "Rev", "oshindonga", "v1_review")

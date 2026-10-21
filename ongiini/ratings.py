@@ -23,6 +23,13 @@ Items are one translation of one sentence, in a group:
 A rater also gets a few REPEATS of items they rated at least REPEAT_GAP
 tasks earlier, to measure consistency.
 
+REVIEWERS (add_reviewer) are the exception: an invited native speaker who
+checks EVERY reference of one dialect in a review round (grp "review",
+e.g. all 600 of the translator's sentences). They get only that round's
+items, each once, in a fixed per-reviewer shuffle — no practice, controls,
+model outputs or repeats — see their total, and may undo their last answer.
+Review items never reach the open raters: they include the blind split.
+
 Every session mixes the groups in fixed proportions (weighted round
 robin), so an early drop-out still leaves a usable random sample.
 
@@ -52,7 +59,7 @@ DIALECTS = ("oshindonga", "oshikwanyama")
 FIRST_LANGUAGE = ("yes", "second")
 HOME_DIALECT = ("oshindonga", "oshikwanyama", "both")  # asked only of raters who check both
 RATE_URL = "https://ongiini.ai/rate/"
-ISSUES = ("word_choice", "spelling_grammar", "unnatural", "other_dialect")
+ISSUES = ("word_choice", "spelling_grammar", "unnatural", "other_dialect", "meaning")
 CANT_REASONS = ("english", "unfamiliar_word", "other")
 PAIR_GAP = 5
 REPEAT_GAP = 15
@@ -110,7 +117,8 @@ def db_path() -> Path:
 
 # Columns added after the first schema; connect() adds whichever are missing.
 _RATER_COLUMNS = {"contributor_hash": "TEXT", "first_language": "TEXT",
-                  "blocked": "INTEGER NOT NULL DEFAULT 0", "home_dialect": "TEXT"}
+                  "blocked": "INTEGER NOT NULL DEFAULT 0", "home_dialect": "TEXT",
+                  "review_round": "TEXT"}
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -140,6 +148,22 @@ def add_rater(con: sqlite3.Connection, label: str, dialects: list[str]) -> str:
     with con:
         con.execute("INSERT INTO raters (token_hash, label, dialects, created_at) VALUES (?,?,?,?)",
                     (hash_token(token), label, ",".join(dialects), time.time()))
+    return token
+
+
+def add_reviewer(con: sqlite3.Connection, label: str, dialect: str, round_: str) -> str:
+    """Create a reviewer for one dialect of a review round; the profile is
+    set here (invited native speaker), so the link opens on the welcome."""
+    if dialect not in DIALECTS:
+        raise ValueError("unknown dialect")
+    if not con.execute("SELECT 1 FROM items WHERE round = ? AND grp = 'review' AND dialect = ?",
+                       (round_, dialect)).fetchone():
+        raise ValueError(f"no review items for {round_} / {dialect}")
+    token = secrets.token_urlsafe(24)
+    with con:
+        con.execute("INSERT INTO raters (token_hash, label, dialects, created_at, first_language, "
+                    "home_dialect, review_round) VALUES (?,?,?,?,?,?,?)",
+                    (hash_token(token), label, dialect, time.time(), "yes", dialect, round_))
     return token
 
 
@@ -232,11 +256,19 @@ def set_profile(con: sqlite3.Connection, rater: sqlite3.Row, dialects: list[str]
 
 def progress(con: sqlite3.Connection, rater_id: int) -> dict:
     mine = con.execute("SELECT COUNT(*) FROM ratings WHERE rater_id = ?", (rater_id,)).fetchone()[0]
-    everyone = con.execute("SELECT COUNT(*) FROM ratings").fetchone()[0]
+    rater = con.execute("SELECT review_round, dialects FROM raters WHERE rater_id = ?", (rater_id,)).fetchone()
+    if rater is not None and rater["review_round"]:
+        total = con.execute("SELECT COUNT(*) FROM items WHERE round = ? AND grp = 'review' AND dialect = ?",
+                            (rater["review_round"], rater["dialects"])).fetchone()[0]
+        return {"done": mine, "total": total}
+    everyone = con.execute("SELECT COUNT(*) FROM ratings r JOIN items i USING (item_key) "
+                           "WHERE i.grp != 'review'").fetchone()[0]
     return {"done": mine, "everyone": everyone}
 
 
 def practice_items(con: sqlite3.Connection, rater: sqlite3.Row) -> list[dict]:
+    if rater["review_round"]:
+        return []
     dialects = rater["dialects"].split(",")
     rows = con.execute(f"SELECT dialect, english, text, expected, explanation FROM items "
                        f"WHERE grp = 'practice' AND dialect IN ({','.join('?' * len(dialects))}) "
@@ -252,7 +284,9 @@ def _public(row: sqlite3.Row) -> dict:
 def next_item(con: sqlite3.Connection, rater: sqlite3.Row) -> dict | None:
     """Pick the rater's next item: the group furthest behind its share,
     then within the group the least-rated / most severe item that the
-    pairing rules allow."""
+    pairing rules allow. A reviewer gets the next unrated review item."""
+    if rater["review_round"]:
+        return _next_review(con, rater)
     rid = rater["rater_id"]
     dialects = rater["dialects"].split(",")
     marks = ",".join("?" * len(dialects))
@@ -272,7 +306,8 @@ def next_item(con: sqlite3.Connection, rater: sqlite3.Row) -> dict | None:
 
     rows = con.execute(f"""
       SELECT i.*, (SELECT COUNT(DISTINCT rater_id) FROM ratings x WHERE x.item_key = i.item_key) AS n
-      FROM items i WHERE i.dialect IN ({marks}) AND i.grp != 'practice'""", dialects).fetchall()
+      FROM items i WHERE i.dialect IN ({marks}) AND i.grp NOT IN ('practice', 'review')""",
+                       dialects).fetchall()
 
     def eligible(it) -> bool:
         key = (it["sentence_id"], it["dialect"])
@@ -312,11 +347,41 @@ def next_item(con: sqlite3.Connection, rater: sqlite3.Row) -> dict | None:
     return _public(best)
 
 
+def _review_order(rater_id: int, item_key: str) -> str:
+    return hashlib.sha256(f"{rater_id}:{item_key}".encode()).hexdigest()
+
+
+def _next_review(con: sqlite3.Connection, rater: sqlite3.Row) -> dict | None:
+    rows = con.execute(
+        "SELECT * FROM items i WHERE round = ? AND grp = 'review' AND dialect = ? AND NOT EXISTS "
+        "(SELECT 1 FROM ratings r WHERE r.item_key = i.item_key AND r.rater_id = ?)",
+        (rater["review_round"], rater["dialects"], rater["rater_id"])).fetchall()
+    if not rows:
+        return None
+    return _public(min(rows, key=lambda it: _review_order(rater["rater_id"], it["item_key"])))
+
+
+def undo_last(con: sqlite3.Connection, rater: sqlite3.Row) -> dict | None:
+    """Reviewers only: delete their latest answer and return that item again."""
+    if not rater["review_round"]:
+        raise ValueError("undo is for reviewers")
+    last = con.execute("SELECT rating_id, item_key FROM ratings WHERE rater_id = ? ORDER BY seq DESC LIMIT 1",
+                       (rater["rater_id"],)).fetchone()
+    if last is None:
+        return None
+    with con:
+        con.execute("DELETE FROM ratings WHERE rating_id = ?", (last["rating_id"],))
+    return _public(con.execute("SELECT * FROM items WHERE item_key = ?", (last["item_key"],)).fetchone())
+
+
 def record(con: sqlite3.Connection, rater: sqlite3.Row, item_key: str, verdict: str, *,
            cant_reason: str | None = None, issues: list[str] | None = None,
            suggestion: str | None = None, duration_ms: int | None = None) -> None:
-    item = con.execute("SELECT dialect, grp FROM items WHERE item_key = ?", (item_key,)).fetchone()
+    item = con.execute("SELECT dialect, grp, round FROM items WHERE item_key = ?", (item_key,)).fetchone()
     if not item or item["dialect"] not in rater["dialects"].split(",") or item["grp"] == "practice":
+        raise ValueError("unknown item")
+    reviewing = (item["grp"], item["round"]) == ("review", rater["review_round"])
+    if (item["grp"] == "review") != reviewing or (rater["review_round"] and not reviewing):
         raise ValueError("unknown item")
     if verdict not in VERDICTS:
         raise ValueError("unknown verdict")
@@ -328,7 +393,7 @@ def record(con: sqlite3.Connection, rater: sqlite3.Row, item_key: str, verdict: 
     rid = rater["rater_id"]
     prior = con.execute("SELECT is_repeat FROM ratings WHERE item_key = ? AND rater_id = ?",
                         (item_key, rid)).fetchall()
-    if len(prior) >= 2:
+    if len(prior) >= (1 if reviewing else 2):
         raise ValueError("already rated")
     is_repeat = 1 if prior else 0
     seq = con.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM ratings WHERE rater_id = ?",
