@@ -18,8 +18,12 @@ most notes cover both dialects, so each note goes into both notes columns.
 Items where the translator broke a label while typing on the phone are
 resolved by hand in a <docx>.fixes.json sidecar ({"<id>": {"odg"|"okw"|
 "notes": "..."}}), kept next to the docx because it contains reference
-text. Any other irregular block aborts the import so a new document never
-gets silently mis-parsed.
+text. A sidecar entry also covers an item whose block the parser missed
+(label typed over), "n/a" marks a dialect the translator left empty, and
+"english": "ok" accepts a translator's edit of the English source (commas,
+typos) after checking the translation still renders the TSV sentence. Any
+other irregular block aborts the import so a new document never gets
+silently mis-parsed.
 
     python3 scripts/import_eval_translations.py --translator kaarina \
         data/private/ongiini-eval-kaarina-2026-09.docx
@@ -157,13 +161,14 @@ def main(argv: list[str] | None = None) -> int:
     n_done = n_skipped = 0
     for r in rows:
         i = int(r["id"])
-        if i not in blocks:
+        if i not in blocks and i not in fixes:
             continue
-        b = blocks[i]
-        if "english" in b and clean(b["english"]) != clean(r["english"]):
+        b = blocks.get(i, {"odg": [], "okw": [], "notes": [], "stray": []})
+        fix = fixes.get(i, {})
+        if ("english" in b and clean(b["english"]) != clean(r["english"])
+                and fix.get("english") != "ok"):
             errors.append(f"id {i}: English in the doc differs from the TSV")
             continue
-        fix = fixes.get(i, {})
         odg = fix.get("odg") or (b["odg"][0] if len(b["odg"]) == 1 else None)
         okw = fix.get("okw") or (b["okw"][0] if len(b["okw"]) == 1 else None)
         # Stray text is only tolerated when a fix covers the item, or when
@@ -177,6 +182,10 @@ def main(argv: list[str] | None = None) -> int:
             odg = ""
         if "okw" in b.get("na", ()):
             okw = ""
+        for key, label in (("odg", "oshindonga"), ("okw", "oshikwanyama")):
+            if NA.match(fix.get(key, "")):
+                b["notes"].append(f"{label}: not translated")
+                odg, okw = ("", okw) if key == "odg" else (odg, "")
         if odg is None or okw is None or (stray and not fix):
             errors.append(f"id {i}: odg={b['odg']} okw={b['okw']} stray={stray}")
             continue
@@ -197,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
         w = csv.DictWriter(f, fieldnames=cols, delimiter="\t")
         w.writeheader()
         w.writerows(rows)
-    n_notes = sum(1 for r in rows if int(r["id"]) in blocks and r[f"{t}_oshindonga_notes"])
+    n_notes = sum(1 for r in rows if int(r["id"]) in blocks | fixes and r[f"{t}_oshindonga_notes"])
     print(f"imported {n_done} items ({n_notes} with notes, {n_skipped} not yet "
           f"translated) into {args.tsv}", file=sys.stderr)
     return 0
