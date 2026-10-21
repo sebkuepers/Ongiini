@@ -574,7 +574,9 @@
     document.querySelectorAll(".w-d").forEach(function (e) { e.textContent = d; });
     item = s.item;
     if (review) {
-      document.querySelectorAll(".rw-name").forEach(function (e) { e.textContent = s.label; });
+      var rnamed = !/^(wa|rev)-/.test(s.label);          // "rev-…" = reviewer invited without a name
+      document.querySelectorAll(".rw-name").forEach(function (e) { e.textContent = rnamed ? s.label : ""; });
+      document.querySelectorAll(".rw-name-wrap").forEach(function (e) { e.classList.toggle("hidden", !rnamed); });
       $("rw-total").textContent = prog.total;
       if (prog.done > 0) render(item); else show("v-rwelcome");
       return;
